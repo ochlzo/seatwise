@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     if (currentSession && currentSession !== sessionId) {
       return NextResponse.json(
         { error: "Another tab is active for this account." },
-        { status: 409 },
+        { status: 409 }
       );
     }
 
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   await redis.zadd(presenceKey, { score: now, member });
 
   const lineKey = queueKeys.line(pageId);
-  const existingScore = await redis.zscore<number>(lineKey, member);
+  const existingScore = await redis.zscore(lineKey, member);
 
   if (existingScore == null) {
     const seq = await redis.incr(queueKeys.seq(pageId));
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     }),
     {
       ex: 7200,
-    },
+    }
   );
 
   await promoteNext(pageId);

@@ -32,7 +32,7 @@ export async function promoteNext(pageId: string) {
     const members = await redis.zrange<string[]>(lineKey, 0, 49);
 
     for (const member of members) {
-      const ghostScore = await redis.zscore<number>(ghostKey, member);
+      const ghostScore = await redis.zscore(ghostKey, member);
       if (ghostScore != null) {
         if (ghostScore <= now) {
           await redis.zrem(ghostKey, member);
@@ -44,7 +44,7 @@ export async function promoteNext(pageId: string) {
         continue;
       }
 
-      const lastSeen = await redis.zscore<number>(presenceKey, member);
+      const lastSeen = await redis.zscore(presenceKey, member);
       if (lastSeen != null && lastSeen > now - PRESENCE_STALE_MS) {
         const hold: HoldRecord = {
           member,
@@ -84,7 +84,7 @@ export async function pruneExpiredGhosts(pageId: string, now = getNow()) {
     expired.map(async (member) => {
       await redis.zrem(ghostKey, member);
       await redis.zrem(lineKey, member);
-    }),
+    })
   );
 }
 

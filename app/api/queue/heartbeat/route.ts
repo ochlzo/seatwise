@@ -60,10 +60,10 @@ export async function POST(req: Request) {
   const frontMembers = await redis.zrange<string[]>(lineKey, 0, 49);
   if (frontMembers.length) {
     const presenceScores = await Promise.all(
-      frontMembers.map((m) => redis.zscore<number>(presenceKey, m)),
+      frontMembers.map((m) => redis.zscore(presenceKey, m))
     );
     const ghostScores = await Promise.all(
-      frontMembers.map((m) => redis.zscore<number>(ghostKey, m)),
+      frontMembers.map((m) => redis.zscore(ghostKey, m))
     );
 
     await Promise.all(
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
             member: m,
           });
         }
-      }),
+      })
     );
   }
 
@@ -101,20 +101,19 @@ export async function POST(req: Request) {
   }
 
   const ghostMembers = new Set(
-    await redis.zrange<string[]>(ghostKey, "-inf", "+inf", { byScore: true }),
+    await redis.zrange<string[]>(ghostKey, "-inf", "+inf", { byScore: true })
   );
   const fullLine = await redis.zrange<string[]>(lineKey, 0, -1);
 
   const liveCount = await redis.zcount(
     presenceKey,
     now - PRESENCE_STALE_MS,
-    "+inf",
+    "+inf"
   );
 
   if (hold && hold.member === member) {
     const ttl = await redis.pttl(queueKeys.hold(pageId));
-    const msLeft =
-      ttl && ttl > 0 ? ttl : Math.max(0, hold.expiresAt - now);
+    const msLeft = ttl && ttl > 0 ? ttl : Math.max(0, hold.expiresAt - now);
     const response: QueueState = {
       state: "active",
       msLeft,
