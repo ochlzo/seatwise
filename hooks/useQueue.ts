@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -27,9 +27,11 @@ type HeartbeatResponse = {
   msLeft?: number;
 };
 
+type JoinOutcome = "active" | "waiting" | null;
+
 type UseQueueResult = {
   status: QueueDisplayState;
-  join: () => Promise<void>;
+  join: () => Promise<JoinOutcome>;
   leave: () => Promise<void>;
   joined: boolean;
   sessionId: string | null;
@@ -38,7 +40,10 @@ type UseQueueResult = {
   hasSnapshot: boolean;
 };
 
-export function useQueue(pageId: string, user: LocalUser | null): UseQueueResult {
+export function useQueue(
+  pageId: string,
+  user: LocalUser | null
+): UseQueueResult {
   const detailRef = useRef<{
     pageId: string;
     userId: string;
@@ -46,9 +51,15 @@ export function useQueue(pageId: string, user: LocalUser | null): UseQueueResult
     name: string;
   } | null>(null);
 
-  const snapshotRef = useRef<{ payload: HeartbeatResponse; receivedAt: number } | null>(null);
+  const snapshotRef = useRef<{
+    payload: HeartbeatResponse;
+    receivedAt: number;
+  } | null>(null);
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [status, setStatus] = useState<QueueDisplayState>({ state: "idle", liveCount: 0 });
+  const [status, setStatus] = useState<QueueDisplayState>({
+    state: "idle",
+    liveCount: 0,
+  });
   const [joined, setJoined] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -87,35 +98,32 @@ export function useQueue(pageId: string, user: LocalUser | null): UseQueueResult
     setSessionId(sessionId);
   }, [pageId, user]);
 
-  const applySnapshot = useCallback(
-    (payload: HeartbeatResponse) => {
-      const receivedAt = Date.now();
-      snapshotRef.current = { payload, receivedAt };
-      setHasSnapshot(true);
+  const applySnapshot = useCallback((payload: HeartbeatResponse) => {
+    const receivedAt = Date.now();
+    snapshotRef.current = { payload, receivedAt };
+    setHasSnapshot(true);
 
-      setStatus((prev) => {
-        if (payload.state === "idle") {
-          return { state: "idle", liveCount: payload.liveCount };
-        }
+    setStatus((prev) => {
+      if (payload.state === "idle") {
+        return { state: "idle", liveCount: payload.liveCount };
+      }
 
-        if (payload.state === "waiting") {
-          return {
-            state: "waiting",
-            position: payload.position ?? 1,
-            etaMs: payload.etaMs ?? 0,
-            liveCount: payload.liveCount,
-          };
-        }
-
+      if (payload.state === "waiting") {
         return {
-          state: "active",
-          msLeft: payload.msLeft ?? 0,
+          state: "waiting",
+          position: payload.position ?? 1,
+          etaMs: payload.etaMs ?? 0,
           liveCount: payload.liveCount,
         };
-      });
-    },
-    [],
-  );
+      }
+
+      return {
+        state: "active",
+        msLeft: payload.msLeft ?? 0,
+        liveCount: payload.liveCount,
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const tick = () => {
@@ -207,6 +215,10 @@ export function useQueue(pageId: string, user: LocalUser | null): UseQueueResult
       return;
     }
 
+    if (!detailRef.current) {
+      return;
+    }
+
     void sendHeartbeat();
 
     if (heartbeatTimerRef.current) {
@@ -223,13 +235,13 @@ export function useQueue(pageId: string, user: LocalUser | null): UseQueueResult
         heartbeatTimerRef.current = null;
       }
     };
-  }, [joined, sendHeartbeat]);
+  }, [joined, sessionId, sendHeartbeat]);
 
   const join = useCallback(async () => {
     const details = detailRef.current;
     if (!details) {
       setError("Missing user information.");
-      return;
+      return null;
     }
 
     try {
@@ -248,22 +260,28 @@ export function useQueue(pageId: string, user: LocalUser | null): UseQueueResult
 
       if (res.status === 409) {
         setError("Another tab is active for this account.");
-        return;
+        return null;
       }
 
       if (!res.ok) {
         setError(`Join failed (${res.status})`);
-        return;
+        return null;
       }
+
+      const payload = (await res.json()) as { ok: boolean; active?: boolean };
+      const becameActive = Boolean(payload.active);
 
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem(joinedFlagKey, "1");
       }
 
       setJoined(true);
+      setError(null);
       await sendHeartbeat();
+      return becameActive ? "active" : "waiting";
     } catch (err) {
       setError((err as Error).message);
+      return null;
     }
   }, [joinedFlagKey, sendHeartbeat]);
 

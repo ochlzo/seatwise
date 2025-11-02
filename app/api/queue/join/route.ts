@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { makeMember, promoteNext } from "@/lib/queue";
+import { getHold, makeMember, promoteNext } from "@/lib/queue";
 import { getNow, queueKeys, redis, userKeys } from "@/lib/redis";
 
 export const runtime = "edge";
@@ -65,5 +65,8 @@ export async function POST(req: Request) {
 
   await promoteNext(pageId);
 
-  return NextResponse.json({ ok: true });
+  const hold = await getHold(pageId);
+  const isActive = hold?.member === member;
+
+  return NextResponse.json({ ok: true, active: isActive });
 }

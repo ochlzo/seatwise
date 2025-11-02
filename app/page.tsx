@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -72,8 +72,14 @@ export default function LandingPage() {
 
     ensureSessionId();
     setJoining(true);
-    await queue.join();
+    const outcome = await queue.join();
     setJoining(false);
+
+    if (outcome === "active") {
+      router.replace("/reservation");
+    } else if (outcome === "waiting") {
+      router.push("/reservation");
+    }
   };
 
   const joined = queue.joined || queue.status.state !== "idle";
@@ -86,8 +92,8 @@ export default function LandingPage() {
             Seatwise Reservation Queue
           </h1>
           <p className="text-sm text-slate-600">
-            This proof of concept shows a whole-page reservation queue backed by Upstash
-            Redis on the edge runtime.
+            This proof of concept shows a whole-page reservation queue backed by
+            Upstash Redis on the edge runtime.
           </p>
         </header>
 
@@ -112,7 +118,10 @@ export default function LandingPage() {
         {!loadingUser && !user && (
           <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
             You're not signed in.{" "}
-            <Link href="/login" className="font-medium text-slate-900 underline">
+            <Link
+              href="/login"
+              className="font-medium text-slate-900 underline"
+            >
               Go to login
             </Link>{" "}
             to choose a user ID.
@@ -122,7 +131,9 @@ export default function LandingPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
           <div className="flex flex-col gap-4">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">Test queue</h2>
+              <h2 className="text-xl font-semibold text-slate-900">
+                Test queue
+              </h2>
               <p className="text-sm text-slate-600">
                 Click the button to join the reservation queue for this page.
               </p>
@@ -137,7 +148,10 @@ export default function LandingPage() {
               </button>
               {user && (
                 <p className="text-xs text-slate-500">
-                  Signed in as <span className="font-medium text-slate-700">{user.name}</span>
+                  Signed in as{" "}
+                  <span className="font-medium text-slate-700">
+                    {user.name}
+                  </span>
                 </p>
               )}
             </div>
@@ -148,13 +162,19 @@ export default function LandingPage() {
               <QueueStatus
                 state={queue.status.state}
                 position={
-                  queue.status.state === "waiting" ? queue.status.position : undefined
+                  queue.status.state === "waiting"
+                    ? queue.status.position
+                    : undefined
                 }
                 etaMs={
-                  queue.status.state === "waiting" ? queue.status.etaMs : undefined
+                  queue.status.state === "waiting"
+                    ? queue.status.etaMs
+                    : undefined
                 }
                 msLeft={
-                  queue.status.state === "active" ? queue.status.msLeft : undefined
+                  queue.status.state === "active"
+                    ? queue.status.msLeft
+                    : undefined
                 }
                 liveCount={queue.status.liveCount}
               />
