@@ -7,7 +7,7 @@ export async function signUpWithEmail(email: string, password: string) {
     const firebaseUser = result.user;
     const idToken = await firebaseUser.getIdToken();
 
-    await fetch('/api/auth/complete', {
+    await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),

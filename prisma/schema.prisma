@@ -20,3 +20,11 @@ model Test {
   createdAt DateTime @default(now())
 }
 
+model User {
+  user_id      Int           @id @default(autoincrement())
+  firebase_uid String        @unique
+  email        String?       @unique
+  username     String?       @unique
+  first_name   String?
+  last_name    String?
+}
