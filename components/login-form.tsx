@@ -19,13 +19,20 @@ import { useGoogleLogin } from "@/hooks/useGoogleLogin"
 export function LoginForm({
   className,
   imageSrc,
+  onLoginStart,
+  onLoginError,
   ...props
-}: React.ComponentProps<"div"> & { imageSrc?: string }) {
+}: React.ComponentProps<"div"> & {
+  imageSrc?: string;
+  onLoginStart?: () => void;
+  onLoginError?: () => void;
+}) {
   const [isSignUp, setIsSignUp] = useState(false)
   const dispatch = useAppDispatch()
   const { signInWithGoogle } = useGoogleLogin()
 
   const handleGoogleLogin = async () => {
+    onLoginStart?.()
     try {
       const user = await signInWithGoogle()
       console.log("User details:", user)
@@ -39,6 +46,7 @@ export function LoginForm({
       }))
     } catch (error) {
       console.error("Google login failed:", error)
+      onLoginError?.()
     }
   }
 

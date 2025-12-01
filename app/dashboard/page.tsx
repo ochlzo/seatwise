@@ -14,9 +14,29 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export default function Page() {
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { adminAuth } from '@/lib/firebaseAdmin'
+
+import LoadingPage from "@/app/LoadingPage"
+
+export default async function Page() {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get('session')?.value
+
+  if (!sessionCookie) {
+    redirect('/login')
+  }
+
+  try {
+    await adminAuth.verifySessionCookie(sessionCookie, true)
+  } catch (error) {
+    redirect('/login')
+  }
+
   return (
     <SidebarProvider>
+      <LoadingPage />
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">

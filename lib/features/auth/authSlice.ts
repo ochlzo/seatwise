@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 
 interface User {
     uid: string;
@@ -17,9 +17,18 @@ interface AuthState {
 const initialState: AuthState = {
     user: null,
     isAuthenticated: false,
-    isLoading: false,
+    isLoading: true, // Start loading to check auth on mount
     error: null,
 };
+
+export const checkAuth = createAsyncThunk('auth/checkAuth', async () => {
+    const response = await fetch('/api/auth/me');
+    if (!response.ok) {
+        throw new Error('Not authenticated');
+    }
+    const data = await response.json();
+    return data.user;
+});
 
 const authSlice = createSlice({
     name: 'auth',
@@ -44,6 +53,22 @@ const authSlice = createSlice({
             state.isLoading = false;
             state.error = null;
         },
+    },
+    extraReducers: (builder) => {
+        builder
+            .addCase(checkAuth.pending, (state) => {
+                state.isLoading = true;
+            })
+            .addCase(checkAuth.fulfilled, (state, action) => {
+                state.user = action.payload;
+                state.isAuthenticated = true;
+                state.isLoading = false;
+            })
+            .addCase(checkAuth.rejected, (state) => {
+                state.user = null;
+                state.isAuthenticated = false;
+                state.isLoading = false;
+            });
     },
 });
 
