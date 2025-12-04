@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 
 export async function POST(req: NextRequest) {
     try {
-        const { idToken } = await req.json();
+        const { idToken, username, firstName: reqFirstName, lastName: reqLastName } = await req.json();
         if (!idToken) {
             return NextResponse.json({ error: 'Missing token' }, { status: 400 });
         }
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
         const uid = decoded.uid;
 
         // 2. Create Session Cookie
-        const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 days
+        const expiresIn = 60 * 60 * 24 * 14 * 1000; // 14 days
         const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
 
         const cookieStore = await cookies();
@@ -31,22 +31,32 @@ export async function POST(req: NextRequest) {
 
         // 3. Upsert user in MySQL DB
         const email = decoded.email ?? null;
-        const name = decoded.name ?? '';
-        const [firstName, ...rest] = name.split(' ');
-        const lastName = rest.join(' ') || null;
+
+        // Use provided names or fallback to decoded token
+        let finalFirstName = reqFirstName;
+        let finalLastName = reqLastName;
+
+        if (!finalFirstName && decoded.name) {
+            const [fName, ...rest] = decoded.name.split(' ');
+            finalFirstName = fName;
+            finalLastName = rest.join(' ') || null;
+        }
 
         const user = await prisma.user.upsert({
             where: { firebase_uid: uid },
             update: {
                 email,
-                first_name: firstName || null,
-                last_name: lastName,
+                first_name: finalFirstName || null,
+                last_name: finalLastName || null,
+                username: username || undefined, // Only update username if provided
+                // Do NOT update role here, or it will reset to default
             },
             create: {
                 firebase_uid: uid,
                 email,
-                first_name: firstName || null,
-                last_name: lastName,
+                first_name: finalFirstName || null,
+                last_name: finalLastName || null,
+                username: username || null,
             },
         });
 

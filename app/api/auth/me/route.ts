@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
                 uid: user.firebase_uid,
                 email: user.email,
                 displayName: `${user.first_name || ''} ${user.last_name || ''}`.trim(),
-                // Add other fields as needed
+                role: user.role,
             }
         });
     } catch (error) {

@@ -30,6 +30,11 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
+import { useRouter } from "next/navigation"
+import { useAppDispatch } from "@/lib/hooks"
+import { logout } from "@/lib/features/auth/authSlice"
+import { setLoading } from "@/lib/features/loading/isLoadingSlice"
+
 export function NavUser({
   user,
 }: {
@@ -40,6 +45,20 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const dispatch = useAppDispatch()
+
+  const handleLogout = async () => {
+    dispatch(setLoading(true))
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      dispatch(logout())
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout failed', error)
+      dispatch(setLoading(false))
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -102,7 +121,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut />
               Log out
             </DropdownMenuItem>

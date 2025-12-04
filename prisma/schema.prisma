@@ -27,4 +27,11 @@ model User {
   username     String?       @unique
   first_name   String?
   last_name    String?
+
+  role         Role          @default(USER)  
+}
+
+enum Role {
+  USER
+  ADMIN
 }
