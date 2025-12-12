@@ -1,19 +1,19 @@
-"use client"
-import { LoginForm } from "@/components/login-form"
-import { useAppDispatch } from "@/lib/hooks"
-import { setLoading } from "@/lib/features/loading/isLoadingSlice"
-import LoadingPage from "../LoadingPage"
+"use client";
+import { LoginForm } from "@/components/login-form";
+import { useAppDispatch } from "@/lib/hooks";
+import { setLoading } from "@/lib/features/loading/isLoadingSlice";
+import LoadingPage from "../LoadingPage";
 
 export default function LoginPage() {
-  const dispatch = useAppDispatch()
+  const dispatch = useAppDispatch();
 
   const handleLoginStart = () => {
-    dispatch(setLoading(true))
-  }
+    dispatch(setLoading(true));
+  };
 
   const handleLoginError = () => {
-    dispatch(setLoading(false))
-  }
+    dispatch(setLoading(false));
+  };
 
   return (
     <div className="bg-muted flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
@@ -26,5 +26,5 @@ export default function LoginPage() {
         />
       </div>
     </div>
-  )
+  );
 }
