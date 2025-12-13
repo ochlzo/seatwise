@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
-import { prisma } from "@/lib/prisma";
 import { cookies } from "next/headers";
+import { lambdaUpsertUser } from "@/lib/usersLambda";
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,67 +57,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const user = await prisma.$transaction(async (tx) => {
-      const existingByUid = await tx.user.findUnique({
-        where: { firebase_uid: uid },
-      });
-
-      if (existingByUid) {
-        return tx.user.update({
-          where: { firebase_uid: uid },
-          data: {
-            first_name: finalFirstName ?? undefined,
-            last_name: finalLastName ?? undefined,
-            username: username || undefined,
-            email: email || undefined,
-            // Do NOT update role here, or it will reset to default
-          },
-        });
-      }
-
-      // If a user already exists with this email, attach the Firebase UID instead
-      // of creating a new row (prevents User_email_key unique constraint errors).
-      if (email) {
-        const existingByEmail = await tx.user.findUnique({
-          where: { email },
-        });
-
-        if (existingByEmail) {
-          return tx.user.update({
-            where: { email },
-            data: {
-              firebase_uid: uid,
-              first_name: finalFirstName ?? undefined,
-              last_name: finalLastName ?? undefined,
-              username: username || undefined,
-            },
-          });
-        }
-      }
-
-      return tx.user.create({
-        data: {
-          firebase_uid: uid,
-          email,
-          first_name: finalFirstName || null,
-          last_name: finalLastName || null,
-          username: username || null,
-        },
-      });
+    const user = await lambdaUpsertUser({
+      firebase_uid: uid,
+      email,
+      first_name: finalFirstName || null,
+      last_name: finalLastName || null,
+      username: username || null,
     });
 
     return NextResponse.json({ user });
   } catch (err) {
-    console.error("Login error:", err);
+    const message = err instanceof Error ? err.message : "Authentication failed";
 
-    const message =
-      err instanceof Error ? err.message : "Authentication failed";
-
-    const isUniqueConstraint =
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code?: unknown }).code === "P2002";
+    if (process.env.NODE_ENV !== "production") {
+      const code =
+        typeof err === "object" && err !== null && "code" in err
+          ? String((err as { code?: unknown }).code)
+          : undefined;
+      console.warn("Login error", { message, code });
+    }
 
     const isServerConfigIssue =
       message.toLowerCase().includes("missing firebase admin credentials") ||
@@ -125,17 +83,16 @@ export async function POST(req: NextRequest) {
       message.toLowerCase().includes("credential");
 
     // Default to 401 for auth failures, but surface config/runtime issues as 500.
-    const status = isUniqueConstraint ? 409 : isServerConfigIssue ? 500 : 401;
+    const status = isServerConfigIssue ? 500 : message.includes("Users service") ? 502 : 401;
 
     return NextResponse.json(
       {
         error:
-          status === 409
-            ? "A user with this email already exists"
-            : status === 500
+          status === 500
             ? "Server authentication is not configured correctly"
+            : status === 502
+            ? "User service is unavailable"
             : "Invalid token",
-        ...(process.env.NODE_ENV !== "production" ? { details: message } : {}),
       },
       { status }
     );

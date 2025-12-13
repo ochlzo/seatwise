@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth } from "@/lib/firebaseAdmin";
-import { prisma } from "@/lib/prisma";
+import { lambdaGetUserByFirebaseUid } from "@/lib/usersLambda";
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
@@ -18,10 +18,7 @@ export async function GET(req: NextRequest) {
     );
     const uid = decodedClaims.uid;
 
-    // Fetch user details from Prisma
-    const user = await prisma.user.findUnique({
-      where: { firebase_uid: uid },
-    });
+    const user = await lambdaGetUserByFirebaseUid(uid);
 
     if (!user) {
       return NextResponse.json({ isAuthenticated: false }, { status: 401 });
@@ -30,10 +27,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       isAuthenticated: true,
       user: {
-        uid: user.firebase_uid,
-        email: user.email,
-        displayName: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
-        role: user.role,
+        uid: (user.firebase_uid as string) || uid,
+        email: (user.email as string | null) ?? null,
+        displayName: `${(user.first_name as string | null) || ""} ${
+          (user.last_name as string | null) || ""
+        }`.trim(),
+        role: (user.role as string | null) ?? "USER",
       },
     });
   } catch (error) {
