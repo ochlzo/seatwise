@@ -13,7 +13,6 @@ export function useGoogleLogin() {
     const firebaseUser = result.user;
     const idToken = await firebaseUser.getIdToken();
 
-    // send token to your backend
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -21,24 +20,19 @@ export function useGoogleLogin() {
     });
 
     if (!response.ok) {
-      let errorDetails = "";
+      let serverMessage = "";
       try {
         const contentType = response.headers.get("content-type") || "";
         if (contentType.includes("application/json")) {
           const body = await response.json();
-          const parts: string[] = [];
-          if (body?.error) parts.push(String(body.error));
-          if (body?.details) parts.push(String(body.details));
-          errorDetails = parts.length ? `: ${parts.join(" — ")}` : "";
-        } else {
-          const bodyText = await response.text();
-          errorDetails = bodyText ? `: ${bodyText}` : "";
+          if (typeof body?.error === "string") serverMessage = body.error;
         }
       } catch {
         // ignore parse errors
       }
+
       throw new Error(
-        `Failed to authenticate with backend (HTTP ${response.status})${errorDetails}`
+        serverMessage || `Failed to authenticate with backend (HTTP ${response.status})`
       );
     }
 

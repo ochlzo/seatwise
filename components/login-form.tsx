@@ -51,9 +51,6 @@ export function LoginForm({
     onLoginStart?.();
     try {
       const user = await signInWithGoogle();
-      console.log("User details:", user);
-      console.log("Firebase UID:", user.uid);
-
       if (!user.username) {
         setIsGoogleSetup(true);
         if (user.email) setEmail(user.email);
