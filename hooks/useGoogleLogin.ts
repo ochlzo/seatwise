@@ -1,10 +1,12 @@
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
 import { useRouter } from "next/navigation";
-import { User } from "@/lib/features/auth/authSlice";
+import { User, setUser } from "@/lib/features/auth/authSlice";
+import { useAppDispatch } from "@/lib/hooks";
 
 export function useGoogleLogin() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
 
   const signInWithGoogle = async (): Promise<User> => {
     const provider = new GoogleAuthProvider();
@@ -20,6 +22,7 @@ export function useGoogleLogin() {
     });
 
     if (!response.ok) {
+      // ... existing error handling ...
       let serverMessage = "";
       try {
         const contentType = response.headers.get("content-type") || "";
@@ -48,7 +51,7 @@ export function useGoogleLogin() {
       }
     }
 
-    return {
+    const user: User = {
       uid: firebaseUser.uid,
       email: firebaseUser.email,
       displayName: firebaseUser.displayName,
@@ -56,6 +59,10 @@ export function useGoogleLogin() {
       role: role,
       username: username,
     };
+
+    dispatch(setUser(user));
+
+    return user;
   };
 
   return { signInWithGoogle };
