@@ -25,29 +25,21 @@ import {
     SidebarHeader,
     SidebarRail,
 } from "@/components/ui/sidebar"
+import { useAppSelector } from "@/lib/hooks"
+import { RootState } from "@/lib/store"
 
 // This is sample data.
 const data = {
-    user: {
-        name: "shadcn",
-        email: "m@example.com",
-        avatar: "/armchair.png",
-    },
     teams: [
         {
-            name: "Acme Inc",
-            logo: GalleryVerticalEnd,
-            plan: "Enterprise",
+            name: "user",
+            logo: (props: React.ComponentProps<"img">) => <img src="/user.png" alt="user" {...props} />,
+            plan: "",
         },
         {
-            name: "Acme Corp.",
-            logo: AudioWaveform,
-            plan: "Startup",
-        },
-        {
-            name: "Evil Corp.",
-            logo: Command,
-            plan: "Free",
+            name: "admin",
+            logo: (props: React.ComponentProps<"img">) => <img src="/admin.png" alt="admin" {...props} />,
+            plan: "",
         },
     ],
     navMain: [
@@ -157,19 +149,20 @@ const data = {
 }
 
 export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+    const user = useAppSelector((state: RootState) => state.auth.user);
     return (
         <Sidebar collapsible="icon" {...props}>
             <SidebarHeader>
-                <TeamSwitcher teams={data.teams} />
+                <TeamSwitcher teams={data.teams} logo="/logo.png" logoMini="/logo-mini.png" currentTeam="admin" />
             </SidebarHeader>
             <SidebarContent>
                 <NavMain items={data.navMain} />
                 <NavProjects projects={data.projects} />
             </SidebarContent>
             <SidebarFooter>
-                <NavUser user={data.user} />
+                <NavUser user={user} />
             </SidebarFooter>
             <SidebarRail />
-        </Sidebar>
+        </Sidebar >
     )
 }
