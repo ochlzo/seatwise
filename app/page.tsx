@@ -1,144 +1,193 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
-import { motion } from "framer-motion";
+import React, { Suspense, useRef, useLayoutEffect, useEffect } from "react";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { Environment, Float, PerspectiveCamera, Center, useProgress, Html, ContactShadows } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
+import { GLTFLoader } from "three-stdlib";
+import * as THREE from "three";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useAppDispatch } from "@/lib/hooks";
+import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 
-const fadeInUp = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] }
-} as const;
+gsap.registerPlugin(ScrollTrigger);
 
-const staggerContainer = {
-  animate: {
-    transition: {
-      staggerChildren: 0.1
+// --- 3D Scene Component ---
+function SeatModel() {
+  const meshRef = useRef<THREE.Group>(null);
+  const obj = useLoader(GLTFLoader, "/seatwise-3d-logo.glb");
+
+  // Apply premium metallic material to all children
+  useEffect(() => {
+    if (!obj) return;
+    obj.scene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.material = new THREE.MeshStandardMaterial({
+          color: "#3b82f6", // Blue primary
+          metalness: 0.5,   // Low metalness for matte plastic/fabric feel
+          roughness: 0.5,   // High roughness for a matte finish
+          envMapIntensity: 1, // Subtle environment reflection
+          flatShading: true,
+        });
+        child.castShadow = false;
+        child.receiveShadow = false;
+      }
+    });
+  }, [obj]);
+
+  useLayoutEffect(() => {
+    if (!meshRef.current) return;
+    // Position the seat on the right to complement the hero title
+    gsap.set(meshRef.current.scale, { x: 3.1, y: 3.1, z: 3.1 });
+    gsap.set(meshRef.current.position, { x: 3, y: -0.2, z: 0 });
+    gsap.set(meshRef.current.rotation, {
+      y: -Math.PI / 3, // 60 degrees turn
+      x: 0.2,          // Slight forward tilt
+      z: 0             // No roll
+    });
+  }, []);
+
+  return (
+    <group ref={meshRef}>
+      <Center>
+        <primitive object={obj.scene} />
+      </Center>
+    </group>
+  );
+}
+
+function Scene() {
+  return (
+    <>
+      <PerspectiveCamera makeDefault position={[0, 0, 10]} fov={40} />
+      <Environment preset="city" />
+      <ambientLight intensity={0.8} />
+
+      {/* High-quality SpotLight shadow */}
+      <spotLight
+        position={[10, 10, 10]}
+        angle={0.15}
+        penumbra={1}
+        intensity={3}
+        color="#3b82f6"
+      />
+
+      <rectAreaLight width={10} height={10} position={[5, 5, 5]} intensity={5} color="#3b82f6" />
+      <pointLight position={[-10, -10, -10]} intensity={2} color="#60a5fa" />
+
+
+
+      <SeatModel />
+
+      <EffectComposer enableNormalPass={false}>
+        <Bloom
+          luminanceThreshold={1}
+          mipmapBlur
+          intensity={1.2}
+          radius={0.4}
+        />
+      </EffectComposer>
+    </>
+  );
+}
+
+// --- Loading Handler Component ---
+function LoadingHandler() {
+  const { progress } = useProgress();
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    if (progress < 100) {
+      dispatch(setLoading(true));
+    } else {
+      const timer = setTimeout(() => {
+        dispatch(setLoading(false));
+      }, 500);
+      return () => clearTimeout(timer);
     }
-  }
-} as const;
+  }, [progress, dispatch]);
 
+  return null;
+}
+
+// --- Main Page Component ---
 export default function Home() {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-50 selection:bg-blue-100 dark:selection:bg-blue-900/30">
+    <main className="relative bg-white text-zinc-900 selection:bg-blue-200">
+      {/* Fixed 3D Canvas Background */}
+      <div className="fixed inset-0 h-screen w-full z-0 pointer-events-none">
+        <Canvas shadows dpr={[1, 2]} camera={{ position: [0, 0, 10], fov: 45 }} gl={{ alpha: true }}>
+          <Suspense fallback={null}>
+            <LoadingHandler />
+            <Scene />
+          </Suspense>
+        </Canvas>
+      </div>
 
-      {/* 1. HERO SECTION */}
-      <main className="flex flex-col items-center justify-center px-6 py-32 text-center lg:py-48 overflow-hidden">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-          className="relative will-change-transform"
-        >
-          {/* Decorative background glow - reduced blur for performance */}
-          <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-blue-500/10 blur-[80px] rounded-full -z-10 transform-gpu" />
-
-          <motion.h1
-            {...fadeInUp}
-            className="max-w-4xl text-5xl font-bold tracking-tight sm:text-7xl"
-          >
-            Seatwise: Smarter Seating for <span className="text-blue-600 dark:text-blue-400">Every Event</span>
-          </motion.h1>
-
-          <motion.p
-            {...fadeInUp}
-            transition={{ ...fadeInUp.transition, delay: 0.2 }}
-            className="mt-8 max-w-2xl text-lg leading-8 text-zinc-600 dark:text-zinc-400 mx-auto"
-          >
-            Streamline your campus and community events. Eliminate manual check-in bottlenecks, prevent double bookings, and manage attendance with secure QR tickets.
-          </motion.p>
-
-          <motion.div
-            {...fadeInUp}
-            transition={{ ...fadeInUp.transition, delay: 0.4 }}
-            className="mt-10 flex items-center justify-center gap-x-6"
-          >
-            <Link
-              href="/dashboard"
-              className="group relative rounded-full bg-zinc-900 dark:bg-white px-8 py-4 text-sm font-semibold text-white dark:text-black shadow-lg hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5"
-            >
-              Get Started
-            </Link>
-            <Link
-              href="#features"
-              className="text-sm font-semibold leading-6 text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-            >
-              Learn more <span aria-hidden="true" className="inline-block transition-transform group-hover:translate-x-1">→</span>
-            </Link>
-          </motion.div>
-        </motion.div>
-      </main>
-
-      {/* 2. FEATURE HIGHLIGHTS SECTION */}
-      <section id="features" className="py-24 bg-white dark:bg-zinc-900/50 transition-colors duration-500 transform-gpu">
-        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="mx-auto max-w-2xl text-center"
-          >
-            <h2 className="text-base font-semibold leading-7 text-blue-600 dark:text-blue-400 uppercase tracking-wider">Why Seatwise?</h2>
-            <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-4xl">
-              Everything you need to manage venue crowds
-            </p>
-          </motion.div>
-
-          <motion.div
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, margin: "-50px" }}
-            className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none"
-          >
-            <dl className="grid max-w-xl grid-cols-1 gap-x-12 gap-y-16 lg:max-w-none lg:grid-cols-3">
-
-              {[
-                {
-                  title: "Interactive Seat Maps",
-                  description: "Design custom layouts for your venue. Attendees can visualize the space and pick their exact spot, eliminating confusion on event day."
-                },
-                {
-                  title: "Secure QR Entry",
-                  description: "Say goodbye to paper lists. Validate tickets instantly with our secure scanner that prevents duplicate usage and tracks entry/exit logs."
-                },
-                {
-                  title: "Smart Queue System",
-                  description: "Fairness built-in. Our 5-minute hold system protects selections while users checkout, preventing race conditions and frustration."
-                }
-              ].map((feature, index) => (
-                <motion.div
-                  key={index}
-                  variants={fadeInUp}
-                  className="flex flex-col p-8 rounded-3xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-700/50 hover:border-blue-500/50 transition-colors duration-300"
-                >
-                  <dt className="flex items-center gap-x-3 text-lg font-semibold leading-7 text-zinc-900 dark:text-white">
-                    <div className="h-2 w-2 rounded-full bg-blue-600" />
-                    {feature.title}
-                  </dt>
-                  <dd className="mt-4 flex flex-auto flex-col text-base leading-7 text-zinc-600 dark:text-zinc-400">
-                    <p className="flex-auto italic font-light">
-                      {feature.description}
-                    </p>
-                  </dd>
-                </motion.div>
-              ))}
-
-            </dl>
-          </motion.div>
+      {/* Content Overlay */}
+      <section className="relative h-screen flex flex-col justify-center px-10 md:px-20 z-10 pointer-events-none">
+        <div className="max-w-4xl pointer-events-auto">
+          <h1 className="text-7xl md:text-9xl font-black italic tracking-tighter leading-none mb-6">
+            SEAT<span className="text-blue-500">WISE</span>
+          </h1>
+          <p className="text-xl md:text-2xl font-light text-zinc-500 max-w-xl mb-10 leading-relaxed">
+            The future of venue management. Precision, speed, and intelligence in every seat.
+          </p>
+          <button className="px-8 py-4 bg-zinc-900 text-white font-bold uppercase tracking-widest hover:bg-blue-500 transition-colors duration-300">
+            Explorer Venue
+          </button>
         </div>
       </section>
 
-      {/* Footer Placeholder */}
-      <footer className="py-20 text-center text-sm text-zinc-500 dark:text-zinc-500">
-        <p className="font-medium">&copy; 2026 Seatwise. All rights reserved.</p>
-        <div className="mt-4 flex justify-center gap-6">
-          <Link href="#" className="hover:text-blue-600 transition-colors">Privacy Policy</Link>
-          <Link href="#" className="hover:text-blue-600 transition-colors">Terms of Service</Link>
+      <section className="relative h-screen flex flex-col justify-center items-end px-10 md:px-20 z-10 pointer-events-none">
+        <div className="max-w-xl text-right pointer-events-auto">
+          <h2 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
+            INTELLIGENT <br /> <span className="text-blue-500">OPTIMIZATION</span>
+          </h2>
+          <p className="text-lg md:text-xl text-zinc-500 font-light mb-8">
+            Real-time heatmaps and occupancy tracking that automatically balances your venue load. No more bottlenecks, just pure efficiency.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 border border-zinc-200 bg-zinc-50/50 backdrop-blur-md">
+              <span className="block text-3xl font-bold text-blue-500">99%</span>
+              <span className="text-xs uppercase tracking-widest text-zinc-400">Efficiency</span>
+            </div>
+            <div className="p-4 border border-zinc-200 bg-zinc-50/50 backdrop-blur-md">
+              <span className="block text-3xl font-bold text-blue-500">0.2s</span>
+              <span className="text-xs uppercase tracking-widest text-zinc-400">Latency</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="relative h-screen flex flex-col justify-center px-10 md:px-20 z-10 pointer-events-none">
+        <div className="max-w-2xl pointer-events-auto">
+          <h2 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight uppercase">
+            Ready to <span className="text-blue-500">Scale?</span>
+          </h2>
+          <p className="text-lg md:text-xl text-zinc-500 font-light mb-10">
+            From local theaters to olympic stadiums, Seatwise scales with your ambition. Secure, fast, and remarkably simple.
+          </p>
+          <div className="flex gap-4">
+            <button className="px-8 py-4 bg-blue-500 text-white font-bold uppercase tracking-widest hover:bg-zinc-900 transition-colors duration-300">
+              Get Started
+            </button>
+            <button className="px-8 py-4 border border-zinc-300 text-zinc-900 font-bold uppercase tracking-widest hover:border-zinc-900 transition-colors duration-300">
+              Contact Sales
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer (small) */}
+      <footer className="relative py-10 px-10 border-t border-zinc-100 z-10 flex justify-between items-center text-zinc-500 text-xs uppercase tracking-widest">
+        <p>&copy; 2026 SEATWISE INDUSTRIES</p>
+        <div className="flex gap-8">
+          <a href="#" className="hover:text-zinc-900 transition-colors">Privacy</a>
+          <a href="#" className="hover:text-zinc-900 transition-colors">Terms</a>
         </div>
       </footer>
-
-    </div>
+    </main>
   );
 }
