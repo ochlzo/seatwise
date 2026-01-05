@@ -7,6 +7,7 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
 import { useAppDispatch } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 
@@ -37,16 +38,62 @@ function SeatModel() {
     });
   }, [scene]);
 
-  useLayoutEffect(() => {
+  useGSAP(() => {
     if (!meshRef.current) return;
-    // Position the seat on the right to complement the hero title
+
+    // Initial state: Section 1 (Hero)
     gsap.set(meshRef.current.scale, { x: 3.1, y: 3.1, z: 3.1 });
-    gsap.set(meshRef.current.position, { x: 3, y: -0.2, z: 0 });
-    gsap.set(meshRef.current.rotation, {
-      y: -Math.PI / 3, // 60 degrees turn
-      x: 0.2,          // Slight forward tilt
-      z: 0             // No roll
+    gsap.set(meshRef.current.position, { x: 3.2, y: -0.2, z: 0 });
+    gsap.set(meshRef.current.rotation, { y: -Math.PI / 3, x: 0.2, z: 0 });
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: "main",
+        start: "top top",
+        end: "bottom bottom",
+        scrub: 1.5,
+      },
     });
+
+    // Transition to Section 2: Intelligent Optimization (Left Side, Profile View)
+    tl.to(meshRef.current.position, {
+      x: -3.5,
+      y: 0,
+      z: 0,
+      ease: "power2.inOut",
+    })
+      .to(meshRef.current.rotation, {
+        y: Math.PI / 2, // Profile view
+        x: 0,
+        z: 0,
+        ease: "power2.inOut",
+      }, "<")
+      .to(meshRef.current.scale, {
+        x: 3.8,
+        y: 3.8,
+        z: 3.8,
+        ease: "power2.inOut",
+      }, "<");
+
+    // Transition to Section 3: Ready to Scale? (Center, Top-down, Immersive)
+    tl.to(meshRef.current.position, {
+      x: 0,
+      y: -0.5,
+      z: -2,
+      ease: "power2.inOut",
+    })
+      .to(meshRef.current.rotation, {
+        x: Math.PI / 2, // Top-down perspective
+        y: 0,
+        z: 0,
+        ease: "power2.inOut",
+      }, "<")
+      .to(meshRef.current.scale, {
+        x: 5.5,
+        y: 5.5,
+        z: 5.5,
+        ease: "power2.inOut",
+      }, "<");
   }, []);
 
   return (
