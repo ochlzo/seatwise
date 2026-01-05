@@ -1,10 +1,9 @@
 "use client";
 
 import React, { Suspense, useRef, useLayoutEffect, useEffect } from "react";
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { Environment, Float, PerspectiveCamera, Center, useProgress, Html, ContactShadows } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Environment, Float, PerspectiveCamera, Center, useProgress, Html, ContactShadows, useGLTF } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { GLTFLoader } from "three-stdlib";
 import * as THREE from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -16,25 +15,27 @@ gsap.registerPlugin(ScrollTrigger);
 // --- 3D Scene Component ---
 function SeatModel() {
   const meshRef = useRef<THREE.Group>(null);
-  const obj = useLoader(GLTFLoader, "/seatwise-3d-logo.glb");
+  const { scene } = useGLTF("/seatwise-3d-logo_compressed.glb", "https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
 
   // Apply premium metallic material to all children
   useEffect(() => {
-    if (!obj) return;
-    obj.scene.traverse((child) => {
+    if (!scene) return;
+    scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        child.material = new THREE.MeshStandardMaterial({
+        child.material = new THREE.MeshPhysicalMaterial({
           color: "#3b82f6", // Blue primary
-          metalness: 0.5,   // Low metalness for matte plastic/fabric feel
-          roughness: 0.5,   // High roughness for a matte finish
-          envMapIntensity: 1, // Subtle environment reflection
-          flatShading: true,
+          metalness: 0.2,
+          roughness: 0.3,
+          clearcoat: 1.0,
+          clearcoatRoughness: 0.1,
+          envMapIntensity: 1.5,
+          flatShading: false,
         });
         child.castShadow = false;
         child.receiveShadow = false;
       }
     });
-  }, [obj]);
+  }, [scene]);
 
   useLayoutEffect(() => {
     if (!meshRef.current) return;
@@ -51,7 +52,7 @@ function SeatModel() {
   return (
     <group ref={meshRef}>
       <Center>
-        <primitive object={obj.scene} />
+        <primitive object={scene} />
       </Center>
     </group>
   );
