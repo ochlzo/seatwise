@@ -20,7 +20,12 @@ import { adminAuth } from '@/lib/firebaseAdmin'
 
 import LoadingPage from "@/app/LoadingPage"
 
-export default async function Page() {
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ username: string }>;
+}) {
+  const { username } = await params;
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get('session')?.value
 
