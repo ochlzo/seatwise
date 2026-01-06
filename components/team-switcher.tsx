@@ -3,6 +3,7 @@
 import * as React from "react"
 
 import { ChevronsUpDown } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
 
@@ -21,7 +22,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { RootState } from "@/lib/store";
-import { useAppSelector } from "@/lib/hooks";
+import { useAppSelector, useAppDispatch } from "@/lib/hooks";
+import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 
 export function TeamSwitcher({
   teams,
@@ -31,7 +33,7 @@ export function TeamSwitcher({
 }: {
   teams: {
     name: string
-    logo: React.ElementType
+    logo: any
     plan: string
   }[]
   logo?: string
@@ -41,6 +43,8 @@ export function TeamSwitcher({
   const { isMobile, state } = useSidebar()
   const user = useAppSelector((state: RootState) => state.auth.user);
   const isAdmin = user?.role === "ADMIN";
+  const router = useRouter()
+  const dispatch = useAppDispatch()
 
   const [activeTeam, setActiveTeam] = React.useState(
     teams.find(t => t.name === currentTeam) || teams[0]
@@ -90,31 +94,40 @@ export function TeamSwitcher({
               <DropdownMenuLabel className="text-muted-foreground text-xs">
                 User Mode
               </DropdownMenuLabel>
-              {teams.map((team, index) => (
-                <DropdownMenuItem
-                  key={team.name}
-                  onClick={() => {
-                    if (team.name !== currentTeam) {
-                      setActiveTeam(team)
-                    }
-                  }}
-                  className={cn(
-                    "gap-2 p-2 group cursor-pointer",
-                    team.name === currentTeam && "opacity-50 cursor-default"
-                  )}
-                >
-                  <div className="flex size-6 items-center justify-center rounded-md border">
-                    <team.logo className="size-3.5 shrink-0" />
-                  </div>
-                  {team.name}
-                  <span className={cn(
-                    "ml-auto text-xs text-muted-foreground transition-opacity",
-                    team.name === currentTeam ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                  )}>
-                    {team.name === currentTeam ? "current" : "switch"}
-                  </span>
-                </DropdownMenuItem>
-              ))}
+              {teams.map((team, index) => {
+                const Logo = team.logo
+                return (
+                  <DropdownMenuItem
+                    key={team.name}
+                    onClick={() => {
+                      if (team.name !== currentTeam) {
+                        setActiveTeam(team)
+                        dispatch(setLoading(true))
+                        if (team.name === "admin") {
+                          router.push("/admin")
+                        } else if (team.name === "user") {
+                          router.push("/dashboard")
+                        }
+                      }
+                    }}
+                    className={cn(
+                      "gap-2 p-2 group cursor-pointer",
+                      team.name === currentTeam && "opacity-50 cursor-default"
+                    )}
+                  >
+                    <div className="flex size-6 items-center justify-center rounded-md border">
+                      <Logo className="size-3.5 shrink-0" />
+                    </div>
+                    {team.name}
+                    <span className={cn(
+                      "ml-auto text-xs text-muted-foreground transition-opacity",
+                      team.name === currentTeam ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    )}>
+                      {team.name === currentTeam ? "current" : "switch"}
+                    </span>
+                  </DropdownMenuItem>
+                )
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (

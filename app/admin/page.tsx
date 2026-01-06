@@ -16,6 +16,7 @@ import {
 
 import { verifyAdmin } from '@/lib/auth/admin'
 import LoadingPage from "@/app/LoadingPage"
+import AdminShield from "@/components/AdminShield"
 
 export default async function Page() {
     await verifyAdmin();
@@ -45,6 +46,9 @@ export default async function Page() {
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
+                    </div>
+                    <div className="ml-auto px-4 flex items-center">
+                        <AdminShield />
                     </div>
                 </header>
                 <div className="flex flex-1 flex-col gap-4 p-4 pt-0">

@@ -2,16 +2,10 @@
 
 import * as React from "react"
 import {
-    AudioWaveform,
     BookOpen,
-    Bot,
-    Command,
-    Frame,
-    GalleryVerticalEnd,
-    Map,
-    PieChart,
     Settings2,
-    SquareTerminal,
+    Theater,
+    Armchair
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -44,108 +38,68 @@ const data = {
     ],
     navMain: [
         {
-            title: "Playground",
+            title: "System",
             url: "#",
-            icon: SquareTerminal,
+            icon: Settings2,
             isActive: true,
             items: [
-                {
-                    title: "History",
-                    url: "#",
-                },
-                {
-                    title: "Starred",
-                    url: "#",
-                },
                 {
                     title: "Settings",
                     url: "#",
                 },
+                {
+                    title: "Dashboard",
+                    url: "#",
+                },
+                {
+                    title: "Users",
+                    url: "#",
+                },
+                {
+                    title: "Admin Access",
+                    url: "#",
+                },
             ],
         },
         {
-            title: "Models",
+            title: "Shows",
             url: "#",
-            icon: Bot,
+            icon: Theater,
             items: [
                 {
-                    title: "Genesis",
+                    title: "Shows List",
                     url: "#",
                 },
                 {
-                    title: "Explorer",
+                    title: "Create Show",
                     url: "#",
                 },
                 {
-                    title: "Quantum",
+                    title: "Calendar",
                     url: "#",
                 },
             ],
         },
         {
-            title: "Documentation",
+            title: "Seat Map",
             url: "#",
-            icon: BookOpen,
+            icon: Armchair,
             items: [
                 {
-                    title: "Introduction",
+                    title: "Templates",
                     url: "#",
                 },
                 {
-                    title: "Get Started",
+                    title: "Add Template",
                     url: "#",
                 },
                 {
-                    title: "Tutorials",
-                    url: "#",
-                },
-                {
-                    title: "Changelog",
+                    title: "Venues",
                     url: "#",
                 },
             ],
-        },
-        {
-            title: "Settings",
-            url: "#",
-            icon: Settings2,
-            items: [
-                {
-                    title: "General",
-                    url: "#",
-                },
-                {
-                    title: "Team",
-                    url: "#",
-                },
-                {
-                    title: "Billing",
-                    url: "#",
-                },
-                {
-                    title: "Limits",
-                    url: "#",
-                },
-            ],
-        },
-    ],
-    projects: [
-        {
-            name: "Design Engineering",
-            url: "#",
-            icon: Frame,
-        },
-        {
-            name: "Sales & Marketing",
-            url: "#",
-            icon: PieChart,
-        },
-        {
-            name: "Travel",
-            url: "#",
-            icon: Map,
-        },
-    ],
+        }
+    ]
 }
 
 export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -157,7 +111,6 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
             </SidebarHeader>
             <SidebarContent>
                 <NavMain items={data.navMain} />
-                <NavProjects projects={data.projects} />
             </SidebarContent>
             <SidebarFooter>
                 <NavUser user={user} />

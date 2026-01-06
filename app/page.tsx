@@ -22,10 +22,18 @@ import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { createPortal } from "react-dom";
 
+// @ts-ignore - types are not correctly resolved for this extension
+import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib";
+
 gsap.registerPlugin(ScrollTrigger);
 
+// Initialize the uniforms library for RectAreaLight to avoid console warnings
+if (typeof window !== "undefined") {
+  RectAreaLightUniformsLib.init();
+}
+
 // --- 3D Scene Component ---
-function SeatModel() {
+function SeatModel({ onReady }: { onReady: () => void }) {
   const meshRef = useRef<THREE.Group>(null);
   const { scene } = useGLTF(
     "/seatwise-3d-logo_compressed.glb",
@@ -89,7 +97,7 @@ function SeatModel() {
               initialPosition: { x: 0, y: -1.0, z: 0 },
               initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
               sec2: {
-                position: { x: 0, y: 0.8, z: 0 },
+                position: { x: 0, y: 0.2, z: 0 },
                 rotation: { y: -Math.PI * 0.8 },
                 scale: 1.8,
               },
@@ -172,6 +180,8 @@ function SeatModel() {
               },
               "<"
             );
+
+          onReady();
         }
       );
 
@@ -189,7 +199,7 @@ function SeatModel() {
   );
 }
 
-function Scene() {
+function Scene({ onReady }: { onReady: () => void }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 0, 10]} fov={40} />
@@ -214,7 +224,7 @@ function Scene() {
       />
       <pointLight position={[-10, -10, -10]} intensity={2} color="#60a5fa" />
 
-      <SeatModel />
+      <SeatModel onReady={onReady} />
 
       <EffectComposer enableNormalPass={false}>
         <Bloom luminanceThreshold={1} mipmapBlur intensity={1.2} radius={0.4} />
@@ -225,6 +235,7 @@ function Scene() {
 
 function FixedCanvasLayer() {
   const [mounted, setMounted] = useState(false);
+  const [modelReady, setModelReady] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -234,7 +245,7 @@ function FixedCanvasLayer() {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 h-screen w-full z-0 pointer-events-none">
+    <div className={`fixed inset-0 h-screen w-full z-[-10] bg-white pointer-events-none ${isMobile ? "blur-[4px]" : ""}`}>
       <Canvas
         shadows
         dpr={[1, 2]}
@@ -242,8 +253,8 @@ function FixedCanvasLayer() {
         gl={{ alpha: true }}
       >
         <Suspense fallback={null}>
-          <LoadingHandler />
-          <Scene />
+          <LoadingHandler modelReady={modelReady} />
+          <Scene onReady={() => setModelReady(true)} />
         </Suspense>
       </Canvas>
     </div>,
@@ -252,20 +263,22 @@ function FixedCanvasLayer() {
 }
 
 // --- Loading Handler Component ---
-function LoadingHandler() {
+function LoadingHandler({ modelReady }: { modelReady: boolean }) {
   const { progress } = useProgress();
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    if (progress < 100) {
+    // We stay in loading state as long as assets are downloading OR the model isn't initialized
+    if (progress < 100 || !modelReady) {
       dispatch(setLoading(true));
     } else {
+      // Small artificial delay to ensure the canvas has swapped from white/clear to fully rendered
       const timer = setTimeout(() => {
         dispatch(setLoading(false));
-      }, 500);
+      }, 800);
       return () => clearTimeout(timer);
     }
-  }, [progress, dispatch]);
+  }, [progress, modelReady, dispatch]);
 
   return null;
 }
@@ -273,17 +286,17 @@ function LoadingHandler() {
 // --- Main Page Component ---
 export default function Home() {
   return (
-    <main className="relative z-0 snap-y snap-mandatory bg-transparent text-zinc-900 selection:bg-blue-200">
+    <main className="relative z-10 snap-y snap-mandatory bg-transparent text-zinc-900 selection:bg-blue-200">
       {/* Fixed 3D Canvas Background */}
       <FixedCanvasLayer />
 
       {/* Content Overlay */}
-      <section className="relative h-screen snap-start flex flex-col justify-center px-10 md:px-20 z-20 pointer-events-none">
+      <section className="relative h-screen snap-start flex flex-col justify-center px-6 md:px-20 z-20 pointer-events-none">
         <div className="max-w-4xl pointer-events-auto">
-          <h1 className="text-7xl md:text-9xl font-black italic tracking-tighter leading-none mb-6">
-            SEAT<span className="text-blue-500">WISE</span>
+          <h1 className="text-7xl md:text-9xl font-extrabold font-brand leading-none mb-6 break-words">
+            seat<span className="text-blue-500">wise</span>
           </h1>
-          <p className="text-xl md:text-2xl font-light text-zinc-500 max-w-xl mb-10 leading-relaxed">
+          <p className="text-xl md:text-2xl font-medium md:font-light text-zinc-800 md:text-zinc-500 max-w-xl mb-10 leading-relaxed drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
             The future of venue management. Precision, speed, and intelligence
             in every seat.
           </p>
@@ -293,13 +306,13 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="relative h-screen snap-start flex flex-col justify-center items-start md:items-end px-10 md:px-20 z-20 pointer-events-none">
+      <section className="relative h-screen snap-start flex flex-col justify-center items-start md:items-end px-6 md:px-20 z-20 pointer-events-none">
         <div className="max-w-xl text-left md:text-right pointer-events-auto">
-          <h2 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
-            INTELLIGENT <br />{" "}
-            <span className="text-blue-500">OPTIMIZATION</span>
+          <h2 className="text-4xl md:text-7xl font-bold font-brand mb-6 tracking-tight break-words">
+            intelligent <br />{" "}
+            <span className="text-blue-500">optimization</span>
           </h2>
-          <p className="text-lg md:text-xl text-zinc-500 font-light mb-8">
+          <p className="text-lg md:text-xl text-zinc-800 md:text-zinc-500 font-medium md:font-light mb-8 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
             Real-time heatmaps and occupancy tracking that automatically
             balances your venue load. No more bottlenecks, just pure efficiency.
           </p>
@@ -324,12 +337,12 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="relative h-screen snap-start flex flex-col justify-center px-10 md:px-20 z-20 pointer-events-none">
+      <section className="relative h-screen snap-start flex flex-col justify-center px-6 md:px-20 z-20 pointer-events-none">
         <div className="max-w-2xl pointer-events-auto">
-          <h2 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight uppercase">
+          <h2 className="text-4xl md:text-7xl font-bold font-brand mb-6 tracking-tight uppercase break-words">
             Ready to <span className="text-blue-500">Scale?</span>
           </h2>
-          <p className="text-lg md:text-xl text-zinc-500 font-light mb-10">
+          <p className="text-lg md:text-xl text-zinc-800 md:text-zinc-500 font-medium md:font-light mb-10 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
             From local theaters to olympic stadiums, Seatwise scales with your
             ambition. Secure, fast, and remarkably simple.
           </p>
@@ -345,7 +358,7 @@ export default function Home() {
       </section>
 
       {/* Footer (small) */}
-      <footer className="relative py-10 px-10 border-t border-zinc-100 z-20 flex justify-between items-center text-zinc-500 text-xs uppercase tracking-widest">
+      <footer className="relative py-10 px-6 md:px-20 border-t border-zinc-100 z-20 flex flex-col md:flex-row justify-between items-center text-zinc-500 text-xs uppercase tracking-widest gap-4">
         <p>&copy; 2026 SEATWISE INDUSTRIES</p>
         <div className="flex gap-8">
           <a href="#" className="hover:text-zinc-900 transition-colors">

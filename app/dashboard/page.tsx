@@ -13,6 +13,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import AdminShield from "@/components/AdminShield"
 
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -64,6 +65,9 @@ export default async function Page({
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
+          </div>
+          <div className="ml-auto px-4 flex items-center">
+            <AdminShield />
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
