@@ -19,6 +19,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import { useAppDispatch } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { createPortal } from "react-dom";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -51,89 +52,133 @@ function SeatModel() {
     });
   }, [scene]);
 
-  useGSAP(() => {
-    if (!meshRef.current) return;
+  useGSAP(
+    () => {
+      if (!meshRef.current || !scene) return;
 
-    const initialScale = { x: 3.1, y: 3.1, z: 3.1 };
-    const initialPosition = { x: 3.2, y: -0.2, z: 0 };
-    const initialRotation = { y: -Math.PI / 3, x: 0.2, z: 0 };
+      const mm = gsap.matchMedia();
 
-    // Initial state: Section 1 (Hero)
-    gsap.set(meshRef.current.scale, initialScale);
-    gsap.set(meshRef.current.position, initialPosition);
-    gsap.set(meshRef.current.rotation, initialRotation);
-
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: "main",
-        start: "top top",
-        end: "bottom bottom",
-        scrub: 0.6,
-      },
-    });
-
-    // Transition to Section 2: Intelligent Optimization (Left position, rotate)
-    tl.to(meshRef.current.position, {
-      x: -3.5,
-      y: initialPosition.y - 0.1,
-      z: initialPosition.z,
-      duration: 1.1,
-      ease: "power2.inOut",
-    })
-      .to(
-        meshRef.current.rotation,
+      mm.add(
         {
-          y: -Math.PI * 0.6, // Slightly more than left-facing profile
-          x: initialRotation.x,
-          z: initialRotation.z,
-          duration: 1.1,
-          ease: "power2.inOut",
+          isDesktop: "(min-width: 768px)",
+          isMobile: "(max-width: 767px)",
         },
-        "<"
-      )
-      .to(
-        meshRef.current.scale,
-        {
-          x: 2.7,
-          y: 2.7,
-          z: 2.7,
-          duration: 1.1,
-          ease: "power2.inOut",
-        },
-        "<"
+        (context) => {
+          const { isDesktop } = context.conditions as any;
+
+          // Configuration based on screen size
+          const config = isDesktop
+            ? {
+              initialScale: { x: 3.1, y: 3.1, z: 3.1 },
+              initialPosition: { x: 3.2, y: -0.2, z: 0 },
+              initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
+              sec2: {
+                position: { x: -3.5, y: -0.3, z: 0 },
+                rotation: { y: -Math.PI * 0.6 },
+                scale: 2.7,
+              },
+              sec3: {
+                position: { x: 3.2, y: 0.3, z: 0 },
+                rotation: { x: Math.PI / 3, y: -Math.PI / 1.9 },
+                scale: 2.4,
+              },
+            }
+            : {
+              // Mobile specific values
+              initialScale: { x: 2.2, y: 2.2, z: 2.2 },
+              initialPosition: { x: 0, y: -1.0, z: 0 },
+              initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
+              sec2: {
+                position: { x: 0, y: 0.8, z: 0 },
+                rotation: { y: -Math.PI * 0.8 },
+                scale: 1.8,
+              },
+              sec3: {
+                position: { x: 0, y: -0.5, z: 0 },
+                rotation: { x: Math.PI / 3, y: -Math.PI / 1.1 },
+                scale: 1.6,
+              },
+            };
+
+          // Initial state: Section 1 (Hero)
+          gsap.set(meshRef.current!.scale, config.initialScale);
+          gsap.set(meshRef.current!.position, config.initialPosition);
+          gsap.set(meshRef.current!.rotation, config.initialRotation);
+
+          const tl = gsap.timeline({
+            scrollTrigger: {
+              trigger: "main",
+              start: "top top",
+              end: "bottom bottom",
+              scrub: 1, // Smoother scrub
+            },
+          });
+
+          // Transition to Section 2: Intelligent Optimization
+          tl.to(meshRef.current!.position, {
+            x: config.sec2.position.x,
+            y: config.sec2.position.y,
+            z: config.sec2.position.z,
+            duration: 1.1,
+            ease: "power2.inOut",
+          })
+            .to(
+              meshRef.current!.rotation,
+              {
+                y: config.sec2.rotation.y,
+                duration: 1.1,
+                ease: "power2.inOut",
+              },
+              "<"
+            )
+            .to(
+              meshRef.current!.scale,
+              {
+                x: config.sec2.scale,
+                y: config.sec2.scale,
+                z: config.sec2.scale,
+                duration: 1.1,
+                ease: "power2.inOut",
+              },
+              "<"
+            );
+
+          // Transition to Section 3: Ready to Scale?
+          tl.to(meshRef.current!.position, {
+            x: config.sec3.position.x,
+            y: config.sec3.position.y,
+            z: config.sec3.position.z,
+            duration: 1.3,
+            ease: "power2.inOut",
+          })
+            .to(
+              meshRef.current!.rotation,
+              {
+                x: config.sec3.rotation.x,
+                y: config.sec3.rotation.y,
+                duration: 1.3,
+                ease: "power2.inOut",
+              },
+              "<"
+            )
+            .to(
+              meshRef.current!.scale,
+              {
+                x: config.sec3.scale,
+                y: config.sec3.scale,
+                z: config.sec3.scale,
+                duration: 1.3,
+                ease: "power2.inOut",
+              },
+              "<"
+            );
+        }
       );
 
-    // Transition to Section 3: Ready to Scale? (Center, Top-down, Immersive)
-    tl.to(meshRef.current.position, {
-      x: initialPosition.x,
-      y: initialPosition.y + 0.5,
-      z: initialPosition.z,
-      duration: 1.3,
-      ease: "power2.inOut",
-    })
-      .to(
-        meshRef.current.rotation,
-        {
-          x: Math.PI / 3, // Reveal more of the top surface
-          y: -Math.PI / 1.9,
-          z: initialRotation.z,
-          duration: 1.3,
-          ease: "power2.inOut",
-        },
-        "<"
-      )
-      .to(
-        meshRef.current.scale,
-        {
-          x: 2.4,
-          y: 2.4,
-          z: 2.4,
-          duration: 1.3,
-          ease: "power2.inOut",
-        },
-        "<"
-      );
-  }, []);
+      return () => mm.revert();
+    },
+    { dependencies: [scene] }
+  );
 
   return (
     <group ref={meshRef}>
@@ -180,6 +225,7 @@ function Scene() {
 
 function FixedCanvasLayer() {
   const [mounted, setMounted] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     setMounted(true);
@@ -188,7 +234,7 @@ function FixedCanvasLayer() {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 h-screen w-full -z-20 pointer-events-none">
+    <div className="fixed inset-0 h-screen w-full z-0 pointer-events-none">
       <Canvas
         shadows
         dpr={[1, 2]}
@@ -227,7 +273,7 @@ function LoadingHandler() {
 // --- Main Page Component ---
 export default function Home() {
   return (
-    <main className="relative isolate z-0 snap-y snap-mandatory bg-transparent text-zinc-900 selection:bg-blue-200">
+    <main className="relative z-0 snap-y snap-mandatory bg-transparent text-zinc-900 selection:bg-blue-200">
       {/* Fixed 3D Canvas Background */}
       <FixedCanvasLayer />
 
@@ -247,8 +293,8 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="relative h-screen snap-start flex flex-col justify-center items-end px-10 md:px-20 z-20 pointer-events-none">
-        <div className="max-w-xl text-right pointer-events-auto">
+      <section className="relative h-screen snap-start flex flex-col justify-center items-start md:items-end px-10 md:px-20 z-20 pointer-events-none">
+        <div className="max-w-xl text-left md:text-right pointer-events-auto">
           <h2 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
             INTELLIGENT <br />{" "}
             <span className="text-blue-500">OPTIMIZATION</span>
