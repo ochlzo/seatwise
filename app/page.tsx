@@ -40,25 +40,39 @@ function SeatModel({ onReady }: { onReady: () => void }) {
     "https://www.gstatic.com/draco/versioned/decoders/1.5.6/"
   );
 
+  // Material optimization based on device
+  const isMobile = useIsMobile();
+
   // Apply premium metallic material to all children
   useEffect(() => {
     if (!scene) return;
     scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        child.material = new THREE.MeshPhysicalMaterial({
-          color: "#3b82f6", // Blue primary
-          metalness: 0.2,
-          roughness: 0.3,
-          clearcoat: 1.0,
-          clearcoatRoughness: 0.1,
-          envMapIntensity: 1.5,
-          flatShading: false,
-        });
+        if (isMobile) {
+          // Lighter material for mobile
+          child.material = new THREE.MeshStandardMaterial({
+            color: "#3b82f6",
+            metalness: 0.1,
+            roughness: 0.4,
+            flatShading: false,
+          });
+        } else {
+          // Premium material for desktop
+          child.material = new THREE.MeshPhysicalMaterial({
+            color: "#3b82f6",
+            metalness: 0.2,
+            roughness: 0.3,
+            clearcoat: 1.0,
+            clearcoatRoughness: 0.1,
+            envMapIntensity: 1.5,
+            flatShading: false,
+          });
+        }
         child.castShadow = false;
         child.receiveShadow = false;
       }
     });
-  }, [scene]);
+  }, [scene, isMobile]);
 
   useGSAP(
     () => {
@@ -200,11 +214,12 @@ function SeatModel({ onReady }: { onReady: () => void }) {
 }
 
 function Scene({ onReady }: { onReady: () => void }) {
+  const isMobile = useIsMobile();
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 0, 10]} fov={40} />
       <Environment preset="city" />
-      <ambientLight intensity={0.8} />
+      <ambientLight intensity={isMobile ? 1.2 : 0.8} />
 
       {/* High-quality SpotLight shadow */}
       <spotLight
@@ -215,20 +230,25 @@ function Scene({ onReady }: { onReady: () => void }) {
         color="#3b82f6"
       />
 
-      <rectAreaLight
-        width={10}
-        height={10}
-        position={[5, 5, 5]}
-        intensity={5}
-        color="#3b82f6"
-      />
-      <pointLight position={[-10, -10, -10]} intensity={2} color="#60a5fa" />
+      {!isMobile && (
+        <rectAreaLight
+          width={10}
+          height={10}
+          position={[5, 5, 5]}
+          intensity={5}
+          color="#3b82f6"
+        />
+      )}
+
+      <pointLight position={[-10, -10, -10]} intensity={isMobile ? 1 : 2} color="#60a5fa" />
 
       <SeatModel onReady={onReady} />
 
-      <EffectComposer enableNormalPass={false}>
-        <Bloom luminanceThreshold={1} mipmapBlur intensity={1.2} radius={0.4} />
-      </EffectComposer>
+      {!isMobile && (
+        <EffectComposer enableNormalPass={false}>
+          <Bloom luminanceThreshold={1} mipmapBlur intensity={1.2} radius={0.4} />
+        </EffectComposer>
+      )}
     </>
   );
 }
@@ -245,12 +265,19 @@ function FixedCanvasLayer() {
   if (!mounted) return null;
 
   return createPortal(
-    <div className={`fixed inset-0 h-screen w-full z-[-10] bg-white pointer-events-none ${isMobile ? "blur-[4px]" : ""}`}>
+    <div className="fixed inset-0 h-screen w-full z-[-10] bg-white pointer-events-none">
+      {/* Subtle overlay for mobile instead of expensive CSS blur */}
+      {isMobile && <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-[1]" />}
+
       <Canvas
-        shadows
-        dpr={[1, 2]}
+        shadows={!isMobile}
+        dpr={isMobile ? 1 : [1, 2]}
         camera={{ position: [0, 0, 10], fov: 45 }}
-        gl={{ alpha: true }}
+        gl={{
+          alpha: true,
+          antialias: !isMobile,
+          powerPreference: "high-performance"
+        }}
       >
         <Suspense fallback={null}>
           <LoadingHandler modelReady={modelReady} />
