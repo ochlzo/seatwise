@@ -6,17 +6,18 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../lib/generated/prisma"
+  engineType = "library"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
   user_id         String      @id @default(cuid())
   firebase_uid    String      @unique
-  username        String      @unique
+  username        String?     @unique
   email           String      @unique
   first_name      String
   last_name       String

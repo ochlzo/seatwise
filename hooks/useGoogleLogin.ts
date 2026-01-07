@@ -42,14 +42,7 @@ export function useGoogleLogin() {
     const data = await response.json();
     const role = data.user?.role || "USER";
     const username = data.user?.username || null;
-
-    if (username) {
-      if (role === "ADMIN") {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
-      }
-    }
+    const hasPassword = data.user?.hasPassword ?? true;
 
     const user: User = {
       uid: firebaseUser.uid,
@@ -58,9 +51,17 @@ export function useGoogleLogin() {
       photoURL: firebaseUser.photoURL,
       role: role,
       username: username,
+      hasPassword: hasPassword,
     };
 
-    dispatch(setUser(user));
+    if (username && hasPassword) {
+      dispatch(setUser(user));
+      if (role === "ADMIN") {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
+    }
 
     return user;
   };

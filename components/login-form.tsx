@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ export function LoginForm({
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [isGoogleSetup, setIsGoogleSetup] = useState(false);
+  const [isPasswordRequired, setIsPasswordRequired] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -43,6 +44,7 @@ export function LoginForm({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -54,8 +56,9 @@ export function LoginForm({
     onLoginStart?.();
     try {
       const user = await signInWithGoogle();
-      if (!user.username) {
+      if (!user.username || !user.hasPassword) {
         setIsGoogleSetup(true);
+        setIsPasswordRequired(!user.hasPassword);
         if (user.email) setEmail(user.email);
         if (user.displayName) {
           const [f, ...l] = user.displayName.split(" ");
@@ -100,7 +103,8 @@ export function LoginForm({
       return;
     }
 
-    if (password.length < 6) {
+    const skipPasswordCheck = isGoogleSetup && !isPasswordRequired;
+    if (!skipPasswordCheck && password.length < 6) {
       setValidationError("Password must be at least 6 characters long.");
       return;
     }
@@ -112,7 +116,7 @@ export function LoginForm({
       let user;
 
       if (isGoogleSetup) {
-        if (auth.currentUser) {
+        if (auth.currentUser && isPasswordRequired) {
           await updatePassword(auth.currentUser, password);
         }
 
@@ -139,6 +143,7 @@ export function LoginForm({
           photoURL: auth.currentUser?.photoURL ?? null,
           role: data.user?.role || "USER",
           username: data.user?.username ?? null,
+          hasPassword: data.user?.hasPassword ?? true,
         };
 
         if (user.role === "ADMIN") {
@@ -157,7 +162,20 @@ export function LoginForm({
       } else {
         user = await signInWithEmail(email, password);
       }
-      dispatch(setUser(user));
+
+      if (!user.username) {
+        setIsGoogleSetup(true);
+        setIsPasswordRequired(false);
+        if (user.email) setEmail(user.email);
+        if (user.displayName) {
+          const [f, ...l] = user.displayName.split(" ");
+          setFirstName(f);
+          setLastName(l.join(" "));
+        }
+        onLoginError?.();
+      } else {
+        dispatch(setUser(user));
+      }
     } catch (error: any) {
       console.error("Login/Setup failed:", error);
       if (
@@ -193,8 +211,9 @@ export function LoginForm({
   return (
     <div
       className={cn(
-        "flex flex-col gap-6",
+        "flex flex-col gap-6 transition-all duration-300",
         (isForgotPassword || isGoogleSetup) && "max-w-md mx-auto",
+        isSignUp && "md:max-w-5xl mx-auto",
         className
       )}
       {...props}
@@ -220,13 +239,23 @@ export function LoginForm({
                   : "login"
           }
           className={cn(
-            "grid p-0 animate-appear",
-            isForgotPassword || isGoogleSetup ? "grid-cols-1" : "md:grid-cols-2"
+            "grid p-0 animate-appear transition-all duration-300",
+            isForgotPassword
+              ? resetEmailSent ? "md:h-[440px]" : "md:h-[330px]"
+              : "md:h-[540px]",
+            isForgotPassword || isGoogleSetup
+              ? "grid-cols-1"
+              : isSignUp
+                ? "md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"
+                : "md:grid-cols-2"
           )}
         >
           {isSignUp && ImageSection}
-          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
-            <FieldGroup>
+          <form className="p-6 md:p-8 flex flex-col h-full overflow-hidden" onSubmit={handleSubmit}>
+            <FieldGroup className={cn(
+              "flex-1 flex flex-col pr-1",
+              isForgotPassword ? "overflow-hidden" : "overflow-y-auto"
+            )}>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">
                   {isForgotPassword
@@ -241,7 +270,9 @@ export function LoginForm({
                   {isForgotPassword
                     ? "Enter your email to receive a password reset link."
                     : isGoogleSetup
-                      ? "Set a username and password to complete your account."
+                      ? isPasswordRequired
+                        ? "Set a username and password to complete your account."
+                        : "Set a username to complete your account."
                       : isSignUp
                         ? "Sign up for Seatwise"
                         : "Login to your Seatwise Account"}
@@ -249,45 +280,56 @@ export function LoginForm({
               </div>
 
               {isForgotPassword ? (
-                <>
-                  {!resetEmailSent ? (
-                    <Field>
-                      <FieldLabel htmlFor="email">Email</FieldLabel>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="m@example.com"
-                        required
-                        value={email}
-                        onChange={(e) => {
-                          setEmail(e.target.value);
-                          if (validationError) setValidationError(null);
-                        }}
-                      />
-                      {validationError && (
-                        <p className="text-sm text-red-500 mt-1">
-                          {validationError}
-                        </p>
-                      )}
-                    </Field>
-                  ) : (
-                    <div className="text-center my-4 flex flex-col items-center">
-                      <img
-                        src="/check.png"
-                        alt="Success"
-                        className="w-12 h-12 mb-2"
-                      />
-                      <p className="text-green-600 font-medium">
-                        Password reset email sent! Check your inbox.
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        If you don't see it, check your <span className="font-bold">spam folder</span>.
-                      </p>
-                    </div>
-                  )}
-                  <div className="flex flex-col gap-2">
+                <div className="flex flex-col flex-1">
+                  <div className="flex-1 flex flex-col justify-start pt-2">
+                    {!resetEmailSent ? (
+                      <Field>
+                        <FieldLabel htmlFor="email">Email</FieldLabel>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="seatwise@example.com"
+                          required
+                          value={email}
+                          onChange={(e) => {
+                            setEmail(e.target.value);
+                            if (validationError) setValidationError(null);
+                          }}
+                        />
+                        {validationError && (
+                          <p className="text-sm text-red-500 mt-1">
+                            {validationError}
+                          </p>
+                        )}
+                      </Field>
+                    ) : (
+                      <div className="flex flex-col items-center text-center space-y-4">
+                        <div className="rounded-full bg-green-100 p-3">
+                          <img
+                            src="/check.png"
+                            alt="Success"
+                            className="w-10 h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-green-600 font-semibold text-lg leading-tight">
+                            Password reset email sent!
+                            <br />
+                            Check your inbox.
+                          </p>
+                          <p className="text-sm text-muted-foreground px-4">
+                            If you don&apos;t see it, please check your{" "}
+                            <span className="font-bold text-foreground">
+                              spam folder
+                            </span>.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-2 flex flex-col gap-2">
                     {!resetEmailSent && (
-                      <Button type="submit" disabled={isSubmitting}>
+                      <Button type="submit" disabled={isSubmitting} className="w-full">
                         {isSubmitting ? (
                           <Loader2 className="animate-spin" />
                         ) : (
@@ -299,6 +341,7 @@ export function LoginForm({
                       variant="ghost"
                       type="button"
                       disabled={isSubmitting}
+                      className="w-full text-muted-foreground hover:text-foreground"
                       onClick={() => {
                         setIsForgotPassword(false);
                         setResetEmailSent(false);
@@ -308,205 +351,299 @@ export function LoginForm({
                       Back to Login
                     </Button>
                   </div>
-                </>
+                </div>
               ) : isGoogleSetup ? (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="username">Username</FieldLabel>
-                    <Input
-                      id="username"
-                      type="text"
-                      placeholder="username"
-                      required
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                    />
-                  </Field>
-                  <Field>
-                    <FieldLabel htmlFor="password">Password</FieldLabel>
-                    <Input
-                      id="password"
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        if (validationError) setValidationError(null);
-                      }}
-                    />
-                    {validationError && (
-                      <p className="text-sm text-red-500 mt-1">
-                        {validationError}
-                      </p>
+                <div className="flex flex-col flex-1">
+                  <div className="flex-1 space-y-4">
+                    <Field>
+                      <FieldLabel htmlFor="username">Username</FieldLabel>
+                      <Input
+                        id="username"
+                        type="text"
+                        placeholder="username"
+                        required
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                      />
+                    </Field>
+                    {isPasswordRequired && (
+                      <FieldGroup className="space-y-2">
+                        <FieldLabel htmlFor="password">Password</FieldLabel>
+                        <div className="relative">
+                          <Input
+                            id="password"
+                            type={showPassword ? "text" : "password"}
+                            required
+                            value={password}
+                            onChange={(e) => {
+                              setPassword(e.target.value);
+                              if (validationError) setValidationError(null);
+                            }}
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                        {validationError && (
+                          <p className="text-sm text-red-500 mt-1">
+                            {validationError}
+                          </p>
+                        )}
+                      </FieldGroup>
                     )}
-                  </Field>
-                  <Field>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? (
-                        <Loader2 className="animate-spin" />
-                      ) : (
-                        "Complete Setup"
-                      )}
-                    </Button>
-                  </Field>
-                </>
+                  </div>
+                  <div className="mt-auto pt-4">
+                    <Field>
+                      <Button type="submit" disabled={isSubmitting} className="w-full">
+                        {isSubmitting ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          "Complete Setup"
+                        )}
+                      </Button>
+                    </Field>
+                  </div>
+                </div>
               ) : (
-                <>
-                  {isSignUp && (
-                    <>
-                      <Field>
-                        <FieldLabel htmlFor="username">Username</FieldLabel>
-                        <Input
-                          id="username"
-                          type="text"
-                          placeholder="username"
-                          required
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="firstname">First Name</FieldLabel>
-                        <Input
-                          id="firstname"
-                          type="text"
-                          placeholder="First Name"
-                          required
-                          value={firstName}
-                          onChange={(e) => setFirstName(e.target.value)}
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="lastname">Last Name</FieldLabel>
-                        <Input
-                          id="lastname"
-                          type="text"
-                          placeholder="Last Name"
-                          required
-                          value={lastName}
-                          onChange={(e) => setLastName(e.target.value)}
-                        />
-                      </Field>
-                    </>
-                  )}
-
-                  <Field>
-                    <FieldLabel htmlFor="email">Email</FieldLabel>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="m@example.com"
-                      required
-                      value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (validationError) setValidationError(null);
-                      }}
-                    />
-                  </Field>
-                  <Field>
-                    <div className="flex items-center">
-                      <FieldLabel htmlFor="password">Password</FieldLabel>
-                      {!isSignUp && (
-                        <a
-                          href="#"
-                          className="ml-auto text-sm underline-offset-2 hover:underline"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setIsForgotPassword(true);
-                            setValidationError(null);
-                          }}
-                        >
-                          Forgot your password?
-                        </a>
-                      )}
-                    </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(e) => {
-                        setPassword(e.target.value);
-                        if (validationError) setValidationError(null);
-                      }}
-                    />
-                    {validationError && (
-                      <p className="text-sm text-red-500 mt-1">
-                        {validationError}
-                      </p>
+                <div className="flex flex-col flex-1">
+                  <div className="space-y-4 mb-2">
+                    {isSignUp && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Field>
+                            <FieldLabel htmlFor="username">Username</FieldLabel>
+                            <Input
+                              id="username"
+                              type="text"
+                              placeholder="username"
+                              required
+                              value={username}
+                              onChange={(e) => setUsername(e.target.value)}
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="email">Email</FieldLabel>
+                            <Input
+                              id="email"
+                              type="email"
+                              placeholder="seatwise@example.com"
+                              required
+                              value={email}
+                              onChange={(e) => {
+                                setEmail(e.target.value);
+                                if (validationError) setValidationError(null);
+                              }}
+                            />
+                          </Field>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Field>
+                            <FieldLabel htmlFor="firstname">First Name</FieldLabel>
+                            <Input
+                              id="firstname"
+                              type="text"
+                              placeholder="First Name"
+                              required
+                              value={firstName}
+                              onChange={(e) => setFirstName(e.target.value)}
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="lastname">Last Name</FieldLabel>
+                            <Input
+                              id="lastname"
+                              type="text"
+                              placeholder="Last Name"
+                              required
+                              value={lastName}
+                              onChange={(e) => setLastName(e.target.value)}
+                            />
+                          </Field>
+                        </div>
+                        <Field>
+                          <FieldLabel htmlFor="password">Password</FieldLabel>
+                          <div className="relative">
+                            <Input
+                              id="password"
+                              type={showPassword ? "text" : "password"}
+                              required
+                              value={password}
+                              onChange={(e) => {
+                                setPassword(e.target.value);
+                                if (validationError) setValidationError(null);
+                              }}
+                              className="pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                          {validationError && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {validationError}
+                            </p>
+                          )}
+                        </Field>
+                      </div>
                     )}
-                  </Field>
-                  <Field>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? (
-                        <Loader2 className="animate-spin" />
-                      ) : isSignUp ? (
-                        "Sign Up"
-                      ) : (
-                        "Login"
-                      )}
-                    </Button>
-                  </Field>
-                  <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                    Or continue with
-                  </FieldSeparator>
-                  <Field>
-                    <Button
-                      variant="outline"
-                      type="button"
-                      className="w-full"
-                      onClick={handleGoogleLogin}
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <Loader2 className="animate-spin" />
+
+                    {!isSignUp && (
+                      <div className="space-y-4">
+                        <Field>
+                          <FieldLabel htmlFor="email">Email</FieldLabel>
+                          <Input
+                            id="email"
+                            type="email"
+                            placeholder="seatwise@example.com"
+                            required
+                            value={email}
+                            onChange={(e) => {
+                              setEmail(e.target.value);
+                              if (validationError) setValidationError(null);
+                            }}
+                          />
+                        </Field>
+                        <Field>
+                          <div className="flex items-center">
+                            <FieldLabel htmlFor="password">Password</FieldLabel>
+                            <a
+                              href="#"
+                              className="ml-auto text-sm underline-offset-2 hover:underline"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setIsForgotPassword(true);
+                                setValidationError(null);
+                              }}
+                            >
+                              Forgot your password?
+                            </a>
+                          </div>
+                          <div className="relative">
+                            <Input
+                              id="password"
+                              type={showPassword ? "text" : "password"}
+                              required
+                              value={password}
+                              onChange={(e) => {
+                                setPassword(e.target.value);
+                                if (validationError) setValidationError(null);
+                              }}
+                              className="pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                          {validationError && (
+                            <p className="text-sm text-red-500 mt-1">
+                              {validationError}
+                            </p>
+                          )}
+                        </Field>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-auto space-y-3 pt-2">
+                    <Field>
+                      <Button type="submit" disabled={isSubmitting} className="w-full">
+                        {isSubmitting ? (
+                          <Loader2 className="animate-spin" />
+                        ) : isSignUp ? (
+                          "Sign Up"
+                        ) : (
+                          "Login"
+                        )}
+                      </Button>
+                    </Field>
+                    <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card -mt-2 pb-2">
+                      Or continue with
+                    </FieldSeparator>
+                    <Field className="mt-1">
+                      <Button
+                        variant="outline"
+                        type="button"
+                        className="w-full"
+                        onClick={handleGoogleLogin}
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? (
+                          <Loader2 className="animate-spin" />
+                        ) : (
+                          <div className="flex items-center justify-center gap-2">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              className="w-4 h-4"
+                            >
+                              <path
+                                d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+                                fill="currentColor"
+                              />
+                            </svg>
+                            <span>Google</span>
+                          </div>
+                        )}
+                      </Button>
+                    </Field>
+                    <FieldDescription className="text-center">
+                      {isSignUp ? (
+                        <>
+                          Already have an account?{" "}
+                          <a
+                            href="#"
+                            className="underline"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setIsSignUp(false);
+                            }}
+                          >
+                            Login
+                          </a>
+                        </>
                       ) : (
                         <>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
+                          Don&apos;t have an account?{" "}
+                          <a
+                            href="#"
+                            className="underline"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setIsSignUp(true);
+                            }}
                           >
-                            <path
-                              d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                          <span className="sr-only">Login with Google</span>
+                            Sign up
+                          </a>
                         </>
                       )}
-                    </Button>
-                  </Field>
-                  <FieldDescription className="text-center">
-                    {isSignUp ? (
-                      <>
-                        Already have an account?
-                        <a
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setIsSignUp(false);
-                          }}
-                        >
-                          Login
-                        </a>
-                      </>
-                    ) : (
-                      <>
-                        Don&apos;t have an account?{" "}
-                        <a
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setIsSignUp(true);
-                          }}
-                        >
-                          Sign up
-                        </a>
-                      </>
-                    )}
-                  </FieldDescription>
-                </>
+                    </FieldDescription>
+                  </div>
+                </div>
               )}
             </FieldGroup>
           </form>
@@ -517,6 +654,6 @@ export function LoginForm({
         By clicking continue, you agree to our <a href="#">Terms of Service</a>
         and <a href="#">Privacy Policy</a>.
       </FieldDescription>
-    </div>
+    </div >
   );
 }

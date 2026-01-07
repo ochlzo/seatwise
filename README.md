@@ -18,12 +18,12 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Users service (AWS Lambda)
+## Users service (Prisma + Neon)
 
-This app fetches/updates users via an AWS Lambda Function URL (to avoid direct RDS connections from Vercel).
+This app fetches/updates users directly via Prisma with Neon.
 
-- Configure `USERS_LAMBDA_URL` (defaults to the current Lambda URL in `lib/usersLambda.ts`).
-- Configure `USERS_LAMBDA_API_KEY` (API key for the Lambda header).
+- Configure `DATABASE_URL` (Neon pooled URL) and `DIRECT_URL` (Neon direct URL).
+- Run migrations or `npx prisma db push`.
 - Fetch users via `GET /api/users`.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

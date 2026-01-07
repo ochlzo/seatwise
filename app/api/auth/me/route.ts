@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth } from "@/lib/firebaseAdmin";
-import { lambdaGetUserByFirebaseUid } from "@/lib/usersLambda";
+import { getUserByFirebaseUid } from "@/lib/usersDb";
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     );
     const uid = decodedClaims.uid;
 
-    const user = await lambdaGetUserByFirebaseUid(uid);
+    const user = await getUserByFirebaseUid(uid);
 
     if (!user) {
       return NextResponse.json({ isAuthenticated: false }, { status: 401 });

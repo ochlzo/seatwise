@@ -7,6 +7,7 @@ export interface User {
   photoURL: string | null;
   role: "USER" | "ADMIN" | null;
   username: string | null;
+  hasPassword?: boolean;
 }
 
 interface AuthState {

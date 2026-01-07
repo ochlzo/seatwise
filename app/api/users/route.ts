@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { lambdaGetUsers } from "@/lib/usersLambda";
+import { getUsers } from "@/lib/usersDb";
 
 export async function GET() {
   try {
-    const payload = await lambdaGetUsers();
+    const payload = await getUsers();
     return NextResponse.json(payload);
   } catch {
     return NextResponse.json(

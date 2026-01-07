@@ -1,7 +1,7 @@
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { lambdaGetUserByFirebaseUid } from "@/lib/usersLambda";
+import { getUserByFirebaseUid } from "@/lib/usersDb";
 
 export async function verifyAdmin() {
   const cookieStore = await cookies();
@@ -17,7 +17,7 @@ export async function verifyAdmin() {
       true
     );
 
-    const user = await lambdaGetUserByFirebaseUid(decodedToken.uid);
+    const user = await getUserByFirebaseUid(decodedToken.uid);
 
     if (!user || user.role !== "ADMIN") {
       redirect("/dashboard");

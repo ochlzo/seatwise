@@ -94,6 +94,7 @@ export function useEmailPass() {
         photoURL: firebaseUser.photoURL,
         role: role,
         username: username,
+        hasPassword: true,
       };
     } catch (error) {
       throw new Error(getAuthErrorMessage(error));
@@ -121,11 +122,14 @@ export function useEmailPass() {
 
       const data = await response.json();
       const role = data.user?.role || "USER";
+      const username = data.user?.username || null;
 
-      if (role === "ADMIN") {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
+      if (username) {
+        if (role === "ADMIN") {
+          router.push("/admin");
+        } else {
+          router.push("/dashboard");
+        }
       }
 
       return {
@@ -135,6 +139,7 @@ export function useEmailPass() {
         photoURL: firebaseUser.photoURL,
         role: role,
         username: data.user?.username || null,
+        hasPassword: data.user?.hasPassword ?? true,
       };
     } catch (error) {
       throw new Error(getAuthErrorMessage(error));
