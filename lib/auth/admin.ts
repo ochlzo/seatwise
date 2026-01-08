@@ -1,7 +1,7 @@
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getUserByFirebaseUid } from "@/lib/usersDb";
+import { getUserByFirebaseUid } from "@/lib/db/Users";
 
 export async function verifyAdmin() {
   const cookieStore = await cookies();

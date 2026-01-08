@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { cookies } from "next/headers";
-import { getUserByFirebaseUid, upsertUser } from "@/lib/usersDb";
+import { getUserByFirebaseUid, upsertUser } from "@/lib/db/Users";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
         lastName: reqLastName,
       } = await req.json());
     } catch {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid request body" },
+        { status: 400 }
+      );
     }
 
     if (!idToken) {
@@ -33,7 +36,8 @@ export async function POST(req: NextRequest) {
       existingUser = null;
     }
 
-    const email = decoded.email || (existingUser?.email as string | null) || null;
+    const email =
+      decoded.email || (existingUser?.email as string | null) || null;
 
     const expiresIn = 60 * 60 * 24 * 14 * 1000; // 14 days
     const sessionCookie = await adminAuth.createSessionCookie(idToken, {
@@ -50,9 +54,12 @@ export async function POST(req: NextRequest) {
     });
 
     const requestedUsername =
-      typeof username === "string" && username.trim() !== "" ? username.trim() : null;
+      typeof username === "string" && username.trim() !== ""
+        ? username.trim()
+        : null;
     const existingUsername =
-      typeof existingUser?.username === "string" && existingUser.username.trim() !== ""
+      typeof existingUser?.username === "string" &&
+      existingUser.username.trim() !== ""
         ? existingUser.username.trim()
         : null;
 
@@ -61,16 +68,16 @@ export async function POST(req: NextRequest) {
         ? reqFirstName.trim()
         : typeof existingUser?.first_name === "string" &&
           (existingUser.first_name as string).trim() !== ""
-          ? (existingUser.first_name as string).trim()
-          : null;
+        ? (existingUser.first_name as string).trim()
+        : null;
 
     let finalLastName =
       typeof reqLastName === "string" && reqLastName.trim() !== ""
         ? reqLastName.trim()
         : typeof existingUser?.last_name === "string" &&
           (existingUser.last_name as string).trim() !== ""
-          ? (existingUser.last_name as string).trim()
-          : null;
+        ? (existingUser.last_name as string).trim()
+        : null;
 
     if ((!finalFirstName || finalFirstName === "") && decoded.name) {
       const [fName, ...rest] = decoded.name.split(" ");
@@ -100,7 +107,8 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Authentication failed";
+    const message =
+      err instanceof Error ? err.message : "Authentication failed";
 
     if (process.env.NODE_ENV !== "production") {
       const code =
@@ -115,12 +123,11 @@ export async function POST(req: NextRequest) {
       message.toLowerCase().includes("failed to parse private key") ||
       message.toLowerCase().includes("credential");
 
-    const status =
-      isServerConfigIssue
-        ? 500
-        : message.includes("Missing email")
-          ? 400
-          : 401;
+    const status = isServerConfigIssue
+      ? 500
+      : message.includes("Missing email")
+      ? 400
+      : 401;
 
     return NextResponse.json(
       {
@@ -128,8 +135,8 @@ export async function POST(req: NextRequest) {
           status === 500
             ? "Server authentication is not configured correctly"
             : status === 400
-              ? "Missing email"
-              : "Invalid token",
+            ? "Missing email"
+            : "Invalid token",
       },
       { status }
     );

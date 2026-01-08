@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth } from "@/lib/firebaseAdmin";
-import { getUserByFirebaseUid } from "@/lib/usersDb";
+import { getUserByFirebaseUid } from "@/lib/db/Users";
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();

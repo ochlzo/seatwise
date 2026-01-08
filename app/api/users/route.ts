@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getUsers } from "@/lib/usersDb";
+import { getUsers } from "@/lib/db/Users";
 
 export async function GET() {
   try {
@@ -12,4 +12,3 @@ export async function GET() {
     );
   }
 }
-
