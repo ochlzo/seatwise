@@ -18,7 +18,11 @@ import { useAppDispatch } from "@/lib/hooks";
 import { setUser } from "@/lib/features/auth/authSlice";
 import { useGoogleLogin } from "@/hooks/useGoogleLogin";
 import { useEmailPass } from "@/hooks/useEmail&Pass";
-import { updatePassword } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  reauthenticateWithPopup,
+  updatePassword,
+} from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
 
 export function LoginForm({
@@ -117,7 +121,17 @@ export function LoginForm({
 
       if (isGoogleSetup) {
         if (auth.currentUser && isPasswordRequired) {
-          await updatePassword(auth.currentUser, password);
+          try {
+            await updatePassword(auth.currentUser, password);
+          } catch (error: any) {
+            if (error?.code === "auth/requires-recent-login") {
+              const provider = new GoogleAuthProvider();
+              await reauthenticateWithPopup(auth.currentUser, provider);
+              await updatePassword(auth.currentUser, password);
+            } else {
+              throw error;
+            }
+          }
         }
 
         const idToken = await auth.currentUser?.getIdToken();
@@ -242,7 +256,9 @@ export function LoginForm({
             "grid p-0 animate-appear transition-all duration-300",
             isForgotPassword
               ? resetEmailSent ? "md:h-[440px]" : "md:h-[330px]"
-              : "md:h-[540px]",
+              : isGoogleSetup
+                ? "md:h-[440px]"
+                : "md:h-[540px]",
             isForgotPassword || isGoogleSetup
               ? "grid-cols-1"
               : isSignUp
@@ -367,7 +383,7 @@ export function LoginForm({
                       />
                     </Field>
                     {isPasswordRequired && (
-                      <FieldGroup className="space-y-2">
+                      <FieldGroup className="space-y-1">
                         <FieldLabel htmlFor="password">Password</FieldLabel>
                         <div className="relative">
                           <Input
@@ -469,7 +485,7 @@ export function LoginForm({
                             />
                           </Field>
                         </div>
-                        <Field>
+                        <Field className="space-y-1">
                           <FieldLabel htmlFor="password">Password</FieldLabel>
                           <div className="relative">
                             <Input
@@ -520,7 +536,7 @@ export function LoginForm({
                             }}
                           />
                         </Field>
-                        <Field>
+                        <Field className="space-y-1">
                           <div className="flex items-center">
                             <FieldLabel htmlFor="password">Password</FieldLabel>
                             <a

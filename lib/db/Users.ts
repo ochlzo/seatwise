@@ -73,25 +73,60 @@ export async function upsertUser(input: {
     throw new Error("Missing email");
   }
 
-  const username = normalizeString(input.username);
+  const normalizedUsername = normalizeString(input.username);
+  const derivedUsername =
+    normalizedUsername ??
+    email.split("@")[0] ??
+    normalizeString(input.firebase_uid);
+  if (!derivedUsername) {
+    throw new Error("Missing username");
+  }
 
-  const createFirstName = normalizeString(input.first_name) ?? "";
-  const createLastName = normalizeString(input.last_name) ?? "";
+  const updateData = {
+    email,
+    first_name: normalizeString(input.first_name) ?? undefined,
+    last_name: normalizeString(input.last_name) ?? undefined,
+    username: normalizedUsername ?? undefined,
+  };
 
-  const user = await prisma.user.upsert({
+  const existingByUid = await prisma.user.findUnique({
     where: { firebase_uid: input.firebase_uid },
-    update: {
-      email,
-      first_name: normalizeString(input.first_name) ?? undefined,
-      last_name: normalizeString(input.last_name) ?? undefined,
-      username: normalizeString(input.username) ?? undefined,
-    },
-    create: {
+    select: userSelect,
+  });
+
+  if (existingByUid) {
+    const updated = await prisma.user.update({
+      where: { firebase_uid: input.firebase_uid },
+      data: updateData,
+      select: userSelect,
+    });
+    return toDbUser(updated);
+  }
+
+  const existingByEmail = await prisma.user.findUnique({
+    where: { email },
+    select: userSelect,
+  });
+
+  if (existingByEmail) {
+    const updated = await prisma.user.update({
+      where: { email },
+      data: {
+        ...updateData,
+        firebase_uid: input.firebase_uid,
+      },
+      select: userSelect,
+    });
+    return toDbUser(updated);
+  }
+
+  const user = await prisma.user.create({
+    data: {
       firebase_uid: input.firebase_uid,
       email,
-      username: username as any,
-      first_name: createFirstName,
-      last_name: createLastName,
+      username: derivedUsername,
+      first_name: normalizeString(input.first_name) ?? "",
+      last_name: normalizeString(input.last_name) ?? "",
       status: "ACTIVE",
       role: "USER",
     },

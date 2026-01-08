@@ -1,15 +1,12 @@
 "use client";
 
 import React, { Suspense, useRef, useEffect, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import {
   Environment,
-  Float,
   PerspectiveCamera,
   Center,
   useProgress,
-  Html,
-  ContactShadows,
   useGLTF,
 } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
@@ -35,6 +32,7 @@ if (typeof window !== "undefined") {
 // --- 3D Scene Component ---
 function SeatModel({ onReady }: { onReady: () => void }) {
   const meshRef = useRef<THREE.Group>(null);
+  const { invalidate } = useThree();
   const { scene } = useGLTF(
     "/seatwise-3d-logo_compressed.glb",
     "https://www.gstatic.com/draco/versioned/decoders/1.5.6/"
@@ -133,6 +131,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
               start: "top top",
               end: "bottom bottom",
               scrub: 1, // Smoother scrub
+              onUpdate: () => invalidate(),
             },
           });
 
@@ -195,6 +194,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
               "<"
             );
 
+          invalidate();
           onReady();
         }
       );
@@ -218,7 +218,7 @@ function Scene({ onReady }: { onReady: () => void }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 0, 10]} fov={40} />
-      <Environment preset="city" />
+      {!isMobile && <Environment preset="city" />}
       <ambientLight intensity={isMobile ? 1.2 : 0.8} />
 
       {/* High-quality SpotLight shadow */}
@@ -266,12 +266,13 @@ function FixedCanvasLayer() {
 
   return createPortal(
     <div className="fixed inset-0 h-screen w-full z-[-10] bg-white pointer-events-none">
-      {/* Subtle overlay for mobile instead of expensive CSS blur */}
-      {isMobile && <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-[1]" />}
+      {/* Subtle overlay for mobile without expensive blur */}
+      {isMobile && <div className="absolute inset-0 bg-white/40 z-[1]" />}
 
       <Canvas
         shadows={!isMobile}
-        dpr={isMobile ? 1 : [1, 2]}
+        dpr={isMobile ? 1 : 1.5}
+        frameloop="demand"
         camera={{ position: [0, 0, 10], fov: 45 }}
         gl={{
           alpha: true,
