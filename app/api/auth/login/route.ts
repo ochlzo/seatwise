@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { cookies } from "next/headers";
-import { getUserByFirebaseUid, upsertUser } from "@/lib/db/Users";
+import { getUserByFirebaseUid, upsertUser, isNewUser, updateUserAvatar } from "@/lib/db/Users";
+import { uploadGoogleAvatar } from "@/lib/actions/uploadGoogleAvatar";
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
         : null;
     const existingUsername =
       typeof existingUser?.username === "string" &&
-      existingUser.username.trim() !== ""
+        existingUser.username.trim() !== ""
         ? existingUser.username.trim()
         : null;
 
@@ -68,16 +69,16 @@ export async function POST(req: NextRequest) {
         ? reqFirstName.trim()
         : typeof existingUser?.first_name === "string" &&
           (existingUser.first_name as string).trim() !== ""
-        ? (existingUser.first_name as string).trim()
-        : null;
+          ? (existingUser.first_name as string).trim()
+          : null;
 
     let finalLastName =
       typeof reqLastName === "string" && reqLastName.trim() !== ""
         ? reqLastName.trim()
         : typeof existingUser?.last_name === "string" &&
           (existingUser.last_name as string).trim() !== ""
-        ? (existingUser.last_name as string).trim()
-        : null;
+          ? (existingUser.last_name as string).trim()
+          : null;
 
     if ((!finalFirstName || finalFirstName === "") && decoded.name) {
       const [fName, ...rest] = decoded.name.split(" ");
@@ -95,6 +96,19 @@ export async function POST(req: NextRequest) {
       username: requestedUsername ?? existingUsername,
     });
 
+    const newlyCreated = isNewUser(
+      user,
+      decoded.firebase?.sign_in_provider as string | undefined
+    );
+
+    // If new Google user, upload their profile picture to R2
+    if (newlyCreated && decoded.picture) {
+      const avatarKey = await uploadGoogleAvatar(uid, decoded.picture);
+      if (avatarKey) {
+        await updateUserAvatar(uid, avatarKey);
+      }
+    }
+
     const firebaseUser = await adminAuth.getUser(uid);
     const hasPassword = firebaseUser.providerData.some(
       (p) => p.providerId === "password"
@@ -104,6 +118,7 @@ export async function POST(req: NextRequest) {
       user: {
         ...user,
         hasPassword,
+        isNewUser: newlyCreated,
       },
     });
   } catch (err) {
@@ -126,8 +141,8 @@ export async function POST(req: NextRequest) {
     const status = isServerConfigIssue
       ? 500
       : message.includes("Missing email")
-      ? 400
-      : 401;
+        ? 400
+        : 401;
 
     return NextResponse.json(
       {
@@ -135,8 +150,8 @@ export async function POST(req: NextRequest) {
           status === 500
             ? "Server authentication is not configured correctly"
             : status === 400
-            ? "Missing email"
-            : "Invalid token",
+              ? "Missing email"
+              : "Invalid token",
       },
       { status }
     );

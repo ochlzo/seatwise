@@ -9,7 +9,25 @@ export type DbUser = {
   username: string | null;
   role: string | null;
   status: string | null;
+  avatarKey: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 };
+
+/**
+ * Helper to determine if a user account was just created.
+ * Compares createdAt and updatedAt timestamps.
+ * Optionally checks if they signed up using a specific provider (e.g., 'google.com').
+ */
+export function isNewUser(user: DbUser, provider?: string): boolean {
+  const isCreatedNow = user.createdAt.getTime() === user.updatedAt.getTime();
+
+  if (provider === "google.com") {
+    return isCreatedNow && provider === "google.com";
+  }
+
+  return isCreatedNow;
+}
 
 const userSelect = {
   firebase_uid: true,
@@ -19,6 +37,9 @@ const userSelect = {
   username: true,
   role: true,
   status: true,
+  avatar_key: true,
+  createdAt: true,
+  updatedAt: true,
 } as const;
 
 type UserRecord = Prisma.UserGetPayload<{ select: typeof userSelect }>;
@@ -38,6 +59,9 @@ function toDbUser(user: UserRecord): DbUser {
     username: user.username ?? null,
     role: user.role ?? null,
     status: user.status ?? null,
+    avatarKey: user.avatar_key ?? null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
   };
 }
 
@@ -134,4 +158,16 @@ export async function upsertUser(input: {
   });
 
   return toDbUser(user);
+}
+
+export async function updateUserAvatar(
+  firebaseUid: string,
+  avatarKey: string
+): Promise<DbUser> {
+  const updated = await prisma.user.update({
+    where: { firebase_uid: firebaseUid },
+    data: { avatar_key: avatarKey },
+    select: userSelect,
+  });
+  return toDbUser(updated);
 }

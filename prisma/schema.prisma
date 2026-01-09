@@ -24,19 +24,11 @@ model User {
   status          UserStatus
   role            UserRole
 
-  pfp_public_id   String?
-  profilePic      ProfilePic? @relation(fields: [pfp_public_id], references: [pfp_public_id])
+  avatar_key       String?
 
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-}
-
-model ProfilePic {
-  pfp_public_id   String   @id
-  pfp_url         String
-
-  users           User[]
 }
 
 enum UserRole {

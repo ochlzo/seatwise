@@ -29,9 +29,8 @@ Read in order:
 
 1. `.codex/agents/backend-agent.md`
 2. `.codex/rules/api.md`
-3. `.codex/rules/nextjs.md`
-4. `.codex/rules/ecurity.md`
-5. `.codex/rules/conventions.md`
+3. `.codex/rules/security.md`
+4. `.codex/rules/conventions.md`
 
 ---
 
@@ -47,9 +46,8 @@ Use for:
 Read in order:
 
 1. `.codex/agents/frontend-agent.md`
-2. `.codex/rules/nextjs.md`
-3. `.codex/rules/conventions.md`
-4. `.codex/rules/security.md`
+2. `.codex/rules/conventions.md`
+3. `.codex/rules/security.md`
 
 ---
 
@@ -65,9 +63,8 @@ Use for:
 Read in order:
 
 1. `.codex/rules/data-fetching.md`
-2. `.codex/rules/nextjs.md`
-3. `.codex/rules/api.md`
-4. `.codex/rules/conventions.md`
+2. `.codex/rules/api.md`
+3. `.codex/rules/conventions.md`
 
 ---
 
@@ -99,9 +96,8 @@ Use for:
 Read in order:
 
 1. `.codex/agents/auth-agent.md`
-2. `.codex/rules/firebase-auth.md`
-3. `.codex/rules/security.md`
-4. `.codex/rules/api.md`
+2. `.codex/rules/security.md`
+3. `.codex/rules/api.md`
 
 ---
 
@@ -116,9 +112,8 @@ Use for:
 Read in order:
 
 1. `.codex/agents/qa-agent.md`
-2. `.codex/rules/testing.md`
-3. `.codex/rules/security.md`
-4. `.codex/rules/api.md`
+2. `.codex/rules/security.md`
+3. `.codex/rules/api.md`
 
 ---
 

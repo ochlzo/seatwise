@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 import { useAppDispatch } from "@/lib/hooks";
 import { logout, User } from "@/lib/features/auth/authSlice";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
+import { usePathname } from "next/navigation";
 
 export function NavUser({
   user,
@@ -40,6 +41,7 @@ export function NavUser({
   const { isMobile } = useSidebar();
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const pathname = usePathname();
 
   const handleLogout = async () => {
     dispatch(setLoading(true));
@@ -57,6 +59,13 @@ export function NavUser({
   const email = user?.email || "";
   const avatar = user?.photoURL || undefined;
   const initials = name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const handleProfileClick = () => {
+    if (pathname !== "/profile") {
+      dispatch(setLoading(true));
+    }
+    router.push("/profile");
+  };
 
   return (
     <SidebarMenu>
@@ -85,7 +94,7 @@ export function NavUser({
             sideOffset={4}
           >
             <DropdownMenuGroup>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleProfileClick}>
                 <UserIcon />
                 Profile
               </DropdownMenuItem>
