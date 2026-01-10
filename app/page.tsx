@@ -18,6 +18,7 @@ import { useAppDispatch } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { createPortal } from "react-dom";
+import ScrollReveal from "@/components/ui/scroll-reveal";
 
 // @ts-ignore - types are not correctly resolved for this extension
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib";
@@ -47,11 +48,11 @@ function SeatModel({ onReady }: { onReady: () => void }) {
     scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         if (isMobile) {
-          // Lighter material for mobile
+          // Improved material for mobile to reflect environment
           child.material = new THREE.MeshStandardMaterial({
             color: "#3b82f6",
-            metalness: 0.1,
-            roughness: 0.4,
+            metalness: 0.4,
+            roughness: 0.2,
             flatShading: false,
           });
         } else {
@@ -108,36 +109,36 @@ function SeatModel({ onReady }: { onReady: () => void }) {
           // Configuration based on screen size
           const config = isDesktop
             ? {
-                initialScale: { x: 3.1, y: 3.1, z: 3.1 },
-                initialPosition: { x: 3.2, y: -0.2, z: 0 },
-                initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
-                sec2: {
-                  position: { x: -3.5, y: -0.3, z: 0 },
-                  rotation: { y: -Math.PI * 0.6 },
-                  scale: 2.7,
-                },
-                sec3: {
-                  position: { x: 3.2, y: 0.3, z: 0 },
-                  rotation: { x: Math.PI / 3, y: -Math.PI / 1.9 },
-                  scale: 2.4,
-                },
-              }
+              initialScale: { x: 3.1, y: 3.1, z: 3.1 },
+              initialPosition: { x: 3.2, y: -0.2, z: 0 },
+              initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
+              sec2: {
+                position: { x: -3.5, y: -0.3, z: 0 },
+                rotation: { y: -Math.PI * 0.6 },
+                scale: 2.7,
+              },
+              sec3: {
+                position: { x: 3.2, y: 0.3, z: 0 },
+                rotation: { x: Math.PI / 3, y: -Math.PI / 1.9 },
+                scale: 2.4,
+              },
+            }
             : {
-                // Mobile specific values
-                initialScale: { x: 2.2, y: 2.2, z: 2.2 },
-                initialPosition: { x: 0, y: -1.0, z: 0 },
-                initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
-                sec2: {
-                  position: { x: 0, y: 0.2, z: 0 },
-                  rotation: { y: -Math.PI * 0.8 },
-                  scale: 1.8,
-                },
-                sec3: {
-                  position: { x: 0, y: -0.5, z: 0 },
-                  rotation: { x: Math.PI / 3, y: -Math.PI / 1.1 },
-                  scale: 1.6,
-                },
-              };
+              // Mobile specific values
+              initialScale: { x: 2.2, y: 2.2, z: 2.2 },
+              initialPosition: { x: 0, y: -1.0, z: 0 },
+              initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
+              sec2: {
+                position: { x: 0, y: 0.2, z: 0 },
+                rotation: { y: -Math.PI * 0.8 },
+                scale: 1.8,
+              },
+              sec3: {
+                position: { x: 0, y: -0.5, z: 0 },
+                rotation: { x: Math.PI / 3, y: -Math.PI / 1.1 },
+                scale: 1.6,
+              },
+            };
 
           // Initial state: Section 1 (Hero)
           gsap.set(meshRef.current!.scale, config.initialScale);
@@ -237,8 +238,8 @@ function Scene({ onReady }: { onReady: () => void }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 0, 10]} fov={40} />
-      {!isMobile && <Environment preset="city" />}
-      <ambientLight intensity={isMobile ? 1.2 : 0.8} />
+      <Environment preset="city" environmentIntensity={isMobile ? 0.5 : 1} />
+      <ambientLight intensity={isMobile ? 0.8 : 0.8} />
 
       {/* High-quality SpotLight shadow */}
       <spotLight
@@ -294,17 +295,17 @@ function FixedCanvasLayer() {
 
   return createPortal(
     <div className="fixed inset-0 h-screen w-full z-[-10] bg-white pointer-events-none">
-      {/* Subtle overlay for mobile without expensive blur */}
-      {isMobile && <div className="absolute inset-0 bg-white/40 z-[1]" />}
+      {/* Radial overlay to make the center clear while blending edges */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] z-[1] opacity-70" />
 
       <Canvas
         shadows={!isMobile}
-        dpr={isMobile ? 1 : 1.5}
+        dpr={isMobile ? [1, 2] : 1.5}
         frameloop="demand"
         camera={{ position: [0, 0, 10], fov: 45 }}
         gl={{
           alpha: true,
-          antialias: !isMobile,
+          antialias: true,
           powerPreference: "high-performance",
         }}
       >
@@ -347,75 +348,91 @@ export default function Home() {
       <FixedCanvasLayer />
 
       {/* Content Overlay */}
-      <section className="relative h-screen snap-start flex flex-col justify-center px-6 md:px-20 z-20 pointer-events-none">
+      <section className="relative h-screen snap-start flex flex-col justify-center px-6 md:px-32 z-20 pointer-events-none">
         <div className="max-w-4xl pointer-events-auto">
           <h1 className="text-7xl md:text-9xl font-extrabold font-brand leading-none mb-6 break-words">
             seat<span className="text-blue-500">wise</span>
           </h1>
-          <p className="text-xl md:text-2xl font-medium md:font-light text-zinc-800 md:text-zinc-500 max-w-xl mb-10 leading-relaxed drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
-            The future of venue management. Precision, speed, and intelligence
-            in every seat.
-          </p>
-          <button className="px-8 py-4 bg-zinc-900 text-white font-bold uppercase tracking-widest hover:bg-blue-500 transition-colors duration-300">
-            Explorer Venue
-          </button>
-        </div>
-      </section>
-
-      <section className="relative h-screen snap-start flex flex-col justify-center items-start md:items-end px-6 md:px-20 z-20 pointer-events-none">
-        <div className="max-w-xl text-left md:text-right pointer-events-auto">
-          <h2 className="text-4xl md:text-7xl font-bold font-brand mb-6 tracking-tight break-words">
-            intelligent <br />{" "}
-            <span className="text-blue-500">optimization</span>
-          </h2>
-          <p className="text-lg md:text-xl text-zinc-800 md:text-zinc-500 font-medium md:font-light mb-8 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
-            Real-time heatmaps and occupancy tracking that automatically
-            balances your venue load. No more bottlenecks, just pure efficiency.
-          </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 border border-zinc-200 bg-zinc-50/50 backdrop-blur-md">
-              <span className="block text-3xl font-bold text-blue-500">
-                99%
-              </span>
-              <span className="text-xs uppercase tracking-widest text-zinc-400">
-                Efficiency
-              </span>
-            </div>
-            <div className="p-4 border border-zinc-200 bg-zinc-50/50 backdrop-blur-md">
-              <span className="block text-3xl font-bold text-blue-500">
-                0.2s
-              </span>
-              <span className="text-xs uppercase tracking-widest text-zinc-400">
-                Latency
-              </span>
+          <ScrollReveal
+            textClassName="max-w-2xl mb-10 leading-relaxed drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+            containerClassName="!m-0 !mb-10"
+          >
+            <span className="block text-xl md:text-3xl font-medium md:font-light text-zinc-800 md:text-zinc-500 mb-6">
+              The future of venue management. Precision, speed, and intelligence
+              in every seat.
+            </span>
+            <span className="block text-sm md:text-xl font-bold text-blue-600 uppercase tracking-widest">
+              Now in Bicol University College of Arts and Letters Amphitheater
+            </span>
+          </ScrollReveal>
+          <div className="flex flex-row items-center gap-4 md:gap-8 flex-wrap">
+            <button className="px-6 md:px-8 py-3 md:py-4 bg-zinc-900 text-white font-bold uppercase tracking-widest hover:bg-blue-500 transition-colors duration-300">
+              View Events Now!
+            </button>
+            <div className="flex flex-row items-center gap-4 md:gap-8">
+              <img
+                src="/bu-logo.png"
+                alt="Bicol University Logo"
+                className="h-20 md:h-32 object-contain drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+              />
+              <img
+                src="/icon.png"
+                alt="BUCAL Logo"
+                className="h-20 md:h-32 object-contain drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+              />
             </div>
           </div>
         </div>
       </section>
 
-      <section className="relative h-screen snap-start flex flex-col justify-center px-6 md:px-20 z-20 pointer-events-none">
+      <section className="relative h-screen snap-start flex flex-col justify-center items-start md:items-end px-6 md:px-32 z-20 pointer-events-none">
+        <div className="max-w-xl text-left md:text-right pointer-events-auto">
+          <h2 className="text-4xl md:text-7xl font-bold font-brand mb-6 tracking-tight break-words">
+            pick your spot. <br />{" "}
+            <span className="text-blue-500">pay in a tap.</span>
+          </h2>
+          <ScrollReveal
+            textClassName="text-lg md:text-2xl text-zinc-800 md:text-zinc-500 font-medium md:font-light mb-8 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+            containerClassName="!m-0 !mb-8"
+            rotationEnd="center center"
+            wordAnimationEnd="center center"
+          >
+            Experience cinema-style booking. Choose your favorite seat from our
+            interactive map and secure it instantly via GCash. Fast, easy, and
+            entirely digital.
+          </ScrollReveal>
+        </div>
+      </section>
+
+      <section className="relative h-screen snap-start flex flex-col justify-center px-6 md:px-32 z-20 pointer-events-none">
         <div className="max-w-2xl pointer-events-auto">
           <h2 className="text-4xl md:text-7xl font-bold font-brand mb-6 tracking-tight uppercase break-words">
-            Ready to <span className="text-blue-500">Scale?</span>
+            Ready to <span className="text-blue-500">Try it Out?</span>
           </h2>
-          <p className="text-lg md:text-xl text-zinc-800 md:text-zinc-500 font-medium md:font-light mb-10 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
-            From local theaters to olympic stadiums, Seatwise scales with your
-            ambition. Secure, fast, and remarkably simple.
-          </p>
+          <ScrollReveal
+            textClassName="text-lg md:text-2xl text-zinc-800 md:text-zinc-500 font-medium md:font-light mb-10 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+            containerClassName="!m-0 !mb-10"
+            rotationEnd="center center"
+            wordAnimationEnd="center center"
+          >
+            Experience the new standard of venue management at Bicol University.
+            Seatwise is live and ready for your next event — join us as we
+            redefine the student experience.
+          </ScrollReveal>
           <div className="flex gap-4">
             <button className="px-8 py-4 bg-blue-500 text-white font-bold uppercase tracking-widest hover:bg-zinc-900 transition-colors duration-300">
               Get Started
             </button>
             <button className="px-8 py-4 border border-zinc-300 text-zinc-900 font-bold uppercase tracking-widest hover:border-zinc-900 transition-colors duration-300">
-              Contact Sales
+              Learn More
             </button>
           </div>
         </div>
       </section>
 
       {/* Footer (small) */}
-      <footer className="relative py-10 px-6 md:px-20 border-t border-zinc-100 z-20 flex flex-col md:flex-row justify-between items-center text-zinc-500 text-xs uppercase tracking-widest gap-4">
-        <p>&copy; 2026 SEATWISE INDUSTRIES</p>
+      <footer className="relative py-10 px-6 md:px-32 border-t border-zinc-100 z-20 flex flex-col md:flex-row justify-between items-center text-zinc-500 text-xs uppercase tracking-widest gap-4">
+        <p>&copy; 2026 SEATWISE • CHOLO CANDELARIA • SEAN ARMENTA • BUCAL</p>
         <div className="flex gap-8">
           <a href="#" className="hover:text-zinc-900 transition-colors">
             Privacy
