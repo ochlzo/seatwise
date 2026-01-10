@@ -45,6 +45,7 @@
         "three": "^0.182.0"
     },
     "devDependencies": {
+        "@gltf-transform/core": "^4.3.0",
         "@tailwindcss/postcss": "^4",
         "@types/node": "^20",
         "@types/react": "^19",
