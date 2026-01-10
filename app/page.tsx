@@ -34,7 +34,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
   const meshRef = useRef<THREE.Group>(null);
   const { invalidate } = useThree();
   const { scene } = useGLTF(
-    "/seatwise-3d-logo_compressed.glb",
+    "/seatwise_final_draco.glb",
     "https://www.gstatic.com/draco/versioned/decoders/1.5.6/"
   );
 
@@ -72,6 +72,25 @@ function SeatModel({ onReady }: { onReady: () => void }) {
     });
   }, [scene, isMobile]);
 
+  useEffect(() => {
+    if (!scene) return;
+
+    scene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const geom = child.geometry as THREE.BufferGeometry;
+        if (!geom.attributes.normal) {
+          geom.computeVertexNormals();
+          const normalAttr = geom.getAttribute(
+            "normal"
+          ) as THREE.BufferAttribute | null;
+          if (normalAttr) {
+            normalAttr.needsUpdate = true;
+          }
+        }
+      }
+    });
+  }, [scene]);
+
   useGSAP(
     () => {
       if (!meshRef.current || !scene) return;
@@ -89,36 +108,36 @@ function SeatModel({ onReady }: { onReady: () => void }) {
           // Configuration based on screen size
           const config = isDesktop
             ? {
-              initialScale: { x: 3.1, y: 3.1, z: 3.1 },
-              initialPosition: { x: 3.2, y: -0.2, z: 0 },
-              initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
-              sec2: {
-                position: { x: -3.5, y: -0.3, z: 0 },
-                rotation: { y: -Math.PI * 0.6 },
-                scale: 2.7,
-              },
-              sec3: {
-                position: { x: 3.2, y: 0.3, z: 0 },
-                rotation: { x: Math.PI / 3, y: -Math.PI / 1.9 },
-                scale: 2.4,
-              },
-            }
+                initialScale: { x: 3.1, y: 3.1, z: 3.1 },
+                initialPosition: { x: 3.2, y: -0.2, z: 0 },
+                initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
+                sec2: {
+                  position: { x: -3.5, y: -0.3, z: 0 },
+                  rotation: { y: -Math.PI * 0.6 },
+                  scale: 2.7,
+                },
+                sec3: {
+                  position: { x: 3.2, y: 0.3, z: 0 },
+                  rotation: { x: Math.PI / 3, y: -Math.PI / 1.9 },
+                  scale: 2.4,
+                },
+              }
             : {
-              // Mobile specific values
-              initialScale: { x: 2.2, y: 2.2, z: 2.2 },
-              initialPosition: { x: 0, y: -1.0, z: 0 },
-              initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
-              sec2: {
-                position: { x: 0, y: 0.2, z: 0 },
-                rotation: { y: -Math.PI * 0.8 },
-                scale: 1.8,
-              },
-              sec3: {
-                position: { x: 0, y: -0.5, z: 0 },
-                rotation: { x: Math.PI / 3, y: -Math.PI / 1.1 },
-                scale: 1.6,
-              },
-            };
+                // Mobile specific values
+                initialScale: { x: 2.2, y: 2.2, z: 2.2 },
+                initialPosition: { x: 0, y: -1.0, z: 0 },
+                initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
+                sec2: {
+                  position: { x: 0, y: 0.2, z: 0 },
+                  rotation: { y: -Math.PI * 0.8 },
+                  scale: 1.8,
+                },
+                sec3: {
+                  position: { x: 0, y: -0.5, z: 0 },
+                  rotation: { x: Math.PI / 3, y: -Math.PI / 1.1 },
+                  scale: 1.6,
+                },
+              };
 
           // Initial state: Section 1 (Hero)
           gsap.set(meshRef.current!.scale, config.initialScale);
@@ -240,13 +259,22 @@ function Scene({ onReady }: { onReady: () => void }) {
         />
       )}
 
-      <pointLight position={[-10, -10, -10]} intensity={isMobile ? 1 : 2} color="#60a5fa" />
+      <pointLight
+        position={[-10, -10, -10]}
+        intensity={isMobile ? 1 : 2}
+        color="#60a5fa"
+      />
 
       <SeatModel onReady={onReady} />
 
       {!isMobile && (
         <EffectComposer enableNormalPass={false}>
-          <Bloom luminanceThreshold={1} mipmapBlur intensity={1.2} radius={0.4} />
+          <Bloom
+            luminanceThreshold={1}
+            mipmapBlur
+            intensity={1.2}
+            radius={0.4}
+          />
         </EffectComposer>
       )}
     </>
@@ -277,7 +305,7 @@ function FixedCanvasLayer() {
         gl={{
           alpha: true,
           antialias: !isMobile,
-          powerPreference: "high-performance"
+          powerPreference: "high-performance",
         }}
       >
         <Suspense fallback={null}>
