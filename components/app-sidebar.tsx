@@ -21,9 +21,12 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { useAppSelector } from "@/lib/hooks"
 import { RootState } from "@/lib/store"
+import { usePathname } from "next/navigation"
+import { useEffect } from "react"
 
 // This is sample data.
 const data = {
@@ -147,6 +150,14 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const user = useAppSelector((state: RootState) => state.auth.user);
+  const { isMobile, setOpenMobile } = useSidebar();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [pathname, isMobile, setOpenMobile]);
 
   return (
     <Sidebar collapsible="icon" {...props}>

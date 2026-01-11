@@ -49,6 +49,7 @@ export function LoginForm({
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [setupStep, setSetupStep] = useState(1);
 
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -62,14 +63,22 @@ export function LoginForm({
       const user = await signInWithGoogle();
       if (!user.username || !user.hasPassword) {
         setIsGoogleSetup(true);
+        setSetupStep(1); // Start at step 1
         setIsPasswordRequired(!user.hasPassword);
         if (user.email) setEmail(user.email);
         if (user.displayName) {
-          const [f, ...l] = user.displayName.split(" ");
-          setFirstName(f);
-          setLastName(l.join(" "));
+          const nameParts = user.displayName.trim().split(/\s+/);
+          if (nameParts.length > 1) {
+            const l = nameParts.pop() || "";
+            const f = nameParts.join(" ");
+            setFirstName(f);
+            setLastName(l);
+          } else {
+            setFirstName(nameParts[0] || "");
+            setLastName("");
+          }
         }
-        onLoginError?.(); // Stop loading to show the setup form
+        onLoginError?.();
       } else {
         dispatch(setUser(user));
       }
@@ -179,12 +188,20 @@ export function LoginForm({
 
       if (!user.username) {
         setIsGoogleSetup(true);
+        setSetupStep(1); // Start at step 1
         setIsPasswordRequired(false);
         if (user.email) setEmail(user.email);
         if (user.displayName) {
-          const [f, ...l] = user.displayName.split(" ");
-          setFirstName(f);
-          setLastName(l.join(" "));
+          const nameParts = user.displayName.trim().split(/\s+/);
+          if (nameParts.length > 1) {
+            const l = nameParts.pop() || "";
+            const f = nameParts.join(" ");
+            setFirstName(f);
+            setLastName(l);
+          } else {
+            setFirstName(nameParts[0] || "");
+            setLastName("");
+          }
         }
         onLoginError?.();
       } else {
@@ -237,8 +254,15 @@ export function LoginForm({
           from { opacity: 0; }
           to { opacity: 1; }
         }
+        @keyframes slideIn {
+          from { transform: translateX(20px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
         .animate-appear {
-          animation: fadeIn 0.5s ease-in-out forwards;
+          animation: fadeIn 0.4s ease-out forwards;
+        }
+        .animate-slide {
+          animation: slideIn 0.3s ease-out forwards;
         }
       `}</style>
       <Card className="overflow-hidden p-0">
@@ -286,9 +310,11 @@ export function LoginForm({
                   {isForgotPassword
                     ? "Enter your email to receive a password reset link."
                     : isGoogleSetup
-                      ? isPasswordRequired
-                        ? "Set a username and password to complete your account."
-                        : "Set a username to complete your account."
+                      ? setupStep === 1
+                        ? "Confirm your First Name and Last Name."
+                        : isPasswordRequired
+                          ? "Set a username and password to complete your account."
+                          : "Set a username to complete your account."
                       : isSignUp
                         ? "Sign up for Seatwise"
                         : "Login to your Seatwise Account"}
@@ -370,63 +396,134 @@ export function LoginForm({
                 </div>
               ) : isGoogleSetup ? (
                 <div className="flex flex-col flex-1">
-                  <div className="flex-1 space-y-4">
-                    <Field>
-                      <FieldLabel htmlFor="username">Username</FieldLabel>
-                      <Input
-                        id="username"
-                        type="text"
-                        placeholder="username"
-                        required
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                      />
-                    </Field>
-                    {isPasswordRequired && (
-                      <FieldGroup className="space-y-1">
-                        <FieldLabel htmlFor="password">Password</FieldLabel>
-                        <div className="relative">
+                  <div className="flex-1 overflow-hidden relative">
+                    {setupStep === 1 ? (
+                      <div key="step-1" className="space-y-4 animate-slide">
+                        <Field>
+                          <FieldLabel htmlFor="firstname">First Name</FieldLabel>
                           <Input
-                            id="password"
-                            type={showPassword ? "text" : "password"}
+                            id="firstname"
+                            type="text"
+                            placeholder="First Name"
                             required
-                            value={password}
+                            value={firstName}
                             onChange={(e) => {
-                              setPassword(e.target.value);
+                              setFirstName(e.target.value);
                               if (validationError) setValidationError(null);
                             }}
-                            className="pr-10"
                           />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          >
-                            {showPassword ? (
-                              <EyeOff className="h-4 w-4" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="lastname">Last Name</FieldLabel>
+                          <Input
+                            id="lastname"
+                            type="text"
+                            placeholder="Last Name"
+                            required
+                            value={lastName}
+                            onChange={(e) => {
+                              setLastName(e.target.value);
+                              if (validationError) setValidationError(null);
+                            }}
+                          />
+                        </Field>
                         {validationError && (
                           <p className="text-sm text-red-500 mt-1">
                             {validationError}
                           </p>
                         )}
-                      </FieldGroup>
+                      </div>
+                    ) : (
+                      <div key="step-2" className="space-y-4 animate-slide">
+                        <Field>
+                          <FieldLabel htmlFor="username">Username</FieldLabel>
+                          <Input
+                            id="username"
+                            type="text"
+                            placeholder="username"
+                            required
+                            value={username}
+                            onChange={(e) => {
+                              setUsername(e.target.value);
+                              if (validationError) setValidationError(null);
+                            }}
+                          />
+                        </Field>
+                        {isPasswordRequired && (
+                          <Field>
+                            <FieldLabel htmlFor="password">Password</FieldLabel>
+                            <div className="relative">
+                              <Input
+                                id="password"
+                                type={showPassword ? "text" : "password"}
+                                required
+                                value={password}
+                                onChange={(e) => {
+                                  setPassword(e.target.value);
+                                  if (validationError) setValidationError(null);
+                                }}
+                                className="pr-10"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                          </Field>
+                        )}
+                        {validationError && (
+                          <p className="text-sm text-red-500 mt-1">
+                            {validationError}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <div className="mt-auto pt-4">
-                    <Field>
-                      <Button type="submit" disabled={isSubmitting} className="w-full">
-                        {isSubmitting ? (
-                          <Loader2 className="animate-spin" />
-                        ) : (
-                          "Complete Setup"
-                        )}
+                  <div className="mt-auto pt-4 flex gap-3">
+                    {setupStep === 2 && (
+                      <Button
+                        variant="outline"
+                        type="button"
+                        className="flex-1"
+                        onClick={() => {
+                          setSetupStep(1);
+                          setValidationError(null);
+                        }}
+                      >
+                        Back
                       </Button>
-                    </Field>
+                    )}
+                    <Button
+                      type={setupStep === 2 ? "submit" : "button"}
+                      disabled={isSubmitting}
+                      className="flex-1"
+                      onClick={(e) => {
+                        if (setupStep === 1) {
+                          e.preventDefault();
+                          if (!firstName.trim() || !lastName.trim()) {
+                            setValidationError("First name and last name are required.");
+                            return;
+                          }
+                          setSetupStep(2);
+                          setValidationError(null);
+                        }
+                      }}
+                    >
+                      {isSubmitting ? (
+                        <Loader2 className="animate-spin" />
+                      ) : setupStep === 1 ? (
+                        "Next"
+                      ) : (
+                        "Complete Setup"
+                      )}
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -667,7 +764,7 @@ export function LoginForm({
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        By clicking continue, you agree to our <a href="#">Terms of Service</a>
+        By clicking continue, you agree to our <a href="#">Terms of Service</a>{" "}
         and <a href="#">Privacy Policy</a>.
       </FieldDescription>
     </div >
