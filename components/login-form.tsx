@@ -694,10 +694,10 @@ export function LoginForm({
                         )}
                       </Button>
                     </Field>
-                    <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card -mt-2 pb-2">
+                    <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card my-0">
                       Or continue with
                     </FieldSeparator>
-                    <Field className="mt-1">
+                    <Field>
                       <Button
                         variant="outline"
                         type="button"
