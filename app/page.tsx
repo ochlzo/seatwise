@@ -238,8 +238,8 @@ function Scene({ onReady }: { onReady: () => void }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 0, 10]} fov={40} />
-      <Environment preset="city" environmentIntensity={isMobile ? 0.5 : 1} />
-      <ambientLight intensity={isMobile ? 0.8 : 0.8} />
+      <Environment preset="city" environmentIntensity={isMobile ? 0.3 : 1} />
+      <ambientLight intensity={isMobile ? 0.6 : 0.8} />
 
       {/* High-quality SpotLight shadow */}
       <spotLight
@@ -300,12 +300,14 @@ function FixedCanvasLayer() {
 
       <Canvas
         shadows={!isMobile}
-        dpr={isMobile ? [1, 2] : 1.5}
+        dpr={isMobile ? 1 : 1.5}
         frameloop="demand"
         camera={{ position: [0, 0, 10], fov: 45 }}
         gl={{
           alpha: true,
-          antialias: true,
+          antialias: !isMobile,
+          stencil: false,
+          depth: true,
           powerPreference: "high-performance",
         }}
       >
