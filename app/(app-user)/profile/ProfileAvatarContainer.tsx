@@ -1,0 +1,79 @@
+"use client";
+
+import { useState } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SquarePen } from "lucide-react";
+import { AvatarSelect } from "@/components/avatar-select";
+import { setAvatarAction } from "@/lib/actions/setAvatar";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { setUser } from "@/lib/features/auth/authSlice";
+
+interface ProfileAvatarContainerProps {
+    initialAvatarUrl: string;
+    fallback: string;
+    defaultAvatars: string[];
+}
+
+export function ProfileAvatarContainer({ initialAvatarUrl, fallback, defaultAvatars }: ProfileAvatarContainerProps) {
+    const dispatch = useAppDispatch();
+    const user = useAppSelector((state) => state.auth.user);
+    const [showSelect, setShowSelect] = useState(false);
+    const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+
+    const handleSelect = async (newAvatarUrl: string) => {
+        // Optimistically update the UI
+        const previousAvatarUrl = avatarUrl;
+        setAvatarUrl(newAvatarUrl);
+        setShowSelect(false);
+
+        try {
+            const result = await setAvatarAction(newAvatarUrl);
+            if (result.success) {
+                // Update global Redux state to sync sidebar and other components
+                if (user) {
+                    dispatch(setUser({
+                        ...user,
+                        photoURL: newAvatarUrl
+                    }));
+                }
+            } else {
+                // Revert on error
+                setAvatarUrl(previousAvatarUrl);
+                alert(result.error || "Failed to save avatar");
+            }
+        } catch (error) {
+            setAvatarUrl(previousAvatarUrl);
+            alert("An unexpected error occurred while saving your avatar.");
+        }
+    };
+
+    return (
+        <>
+            <div className="relative group">
+                <Avatar className="h-32 w-32 border-4 border-background shadow-lg transition-transform duration-300 group-hover:scale-[1.02]">
+                    <AvatarImage src={avatarUrl} />
+                    <AvatarFallback className="text-2xl font-bold bg-[#3b82f6] text-white">
+                        {fallback}
+                    </AvatarFallback>
+                </Avatar>
+                <button
+                    onClick={() => setShowSelect(true)}
+                    className="absolute bottom-1 right-1 p-2.5 rounded-full bg-[#3b82f6] text-white shadow-xl border-2 border-background 
+                     hover:bg-[#2563eb] transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
+                    aria-label="Edit Profile Picture"
+                >
+                    <SquarePen className="h-4 w-4" />
+                </button>
+            </div>
+
+            {showSelect && (
+                <AvatarSelect
+                    currentAvatar={avatarUrl}
+                    onClose={() => setShowSelect(false)}
+                    onSelect={handleSelect}
+                    presetAvatars={defaultAvatars}
+                />
+            )}
+        </>
+    );
+}

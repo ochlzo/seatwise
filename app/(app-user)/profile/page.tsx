@@ -6,10 +6,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { SquarePen } from "lucide-react";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -17,6 +15,8 @@ import { adminAuth } from "@/lib/firebaseAdmin";
 import { getUserByFirebaseUid, resolveAvatarUrl } from "@/lib/db/Users";
 
 import { ProfileContent } from "./ProfileContent";
+import { ProfileAvatarContainer } from "./ProfileAvatarContainer";
+import { getDefaultAvatarsFromCloudinary } from "@/lib/avatars/defaultAvatars";
 
 export default async function Page() {
   const cookieStore = await cookies();
@@ -34,7 +34,10 @@ export default async function Page() {
     redirect("/login");
   }
 
-  const dbUser = await getUserByFirebaseUid(decodedToken.uid);
+  const [dbUser, defaultAvatars] = await Promise.all([
+    getUserByFirebaseUid(decodedToken.uid),
+    getDefaultAvatarsFromCloudinary(),
+  ]);
 
   if (!dbUser) {
     redirect("/login");
@@ -64,21 +67,11 @@ export default async function Page() {
       <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 max-w-4xl mx-auto w-full overflow-hidden">
         <Card className="border-none shadow-sm bg-card/50 backdrop-blur-sm">
           <CardHeader className="flex flex-col items-center gap-4 pb-8 border-b">
-            <div className="relative group">
-              <Avatar className="h-32 w-32 border-4 border-background shadow-lg transition-transform duration-300 group-hover:scale-[1.02]">
-                <AvatarImage src={avatarUrl} />
-                <AvatarFallback className="text-2xl font-bold bg-[#3b82f6] text-white">
-                  {dbUser.first_name?.[0] || dbUser.username?.[0] || "U"}
-                </AvatarFallback>
-              </Avatar>
-              <button
-                className="absolute bottom-1 right-1 p-2.5 rounded-full bg-[#3b82f6] text-white shadow-xl border-2 border-background 
-                           hover:bg-[#2563eb] transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
-                aria-label="Edit Profile Picture"
-              >
-                <SquarePen className="h-4 w-4" />
-              </button>
-            </div>
+            <ProfileAvatarContainer
+              initialAvatarUrl={avatarUrl}
+              fallback={dbUser.first_name?.[0] || dbUser.username?.[0] || "U"}
+              defaultAvatars={defaultAvatars}
+            />
             <div className="text-center">
               <CardTitle className="text-3xl font-brand font-bold tracking-tight">
                 {dbUser.first_name} {dbUser.last_name}

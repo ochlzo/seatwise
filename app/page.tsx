@@ -312,7 +312,7 @@ function FixedCanvasLayer() {
 
       <Canvas
         shadows={!isMobile}
-        dpr={isMobile ? 1 : 1.5}
+        dpr={1}
         frameloop="demand"
         camera={{ position: [0, 0, 10], fov: 45 }}
         gl={{
