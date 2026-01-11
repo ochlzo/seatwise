@@ -151,6 +151,8 @@ function SeatModel({ onReady }: { onReady: () => void }) {
               start: "top top",
               end: "bottom bottom",
               scrub: 1, // Smoother scrub
+              invalidateOnRefresh: true, // Fix for mobile viewport changes
+              fastScrollEnd: true, // Prevent jump/flicker on fast scrolls
               onUpdate: () => invalidate(),
             },
           });
@@ -162,6 +164,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
             z: config.sec2.position.z,
             duration: 1.1,
             ease: "power2.inOut",
+            immediateRender: false,
           })
             .to(
               meshRef.current!.rotation,
