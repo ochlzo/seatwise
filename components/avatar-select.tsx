@@ -1,9 +1,10 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useEffect, useState } from "react";
-import { ChevronLeft, Plus } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
+import { ChevronLeft, Plus, Loader2 } from "lucide-react";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import { uploadCustomAvatarAction } from "@/lib/actions/uploadCustomAvatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,8 @@ interface AvatarSelectProps {
 export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }: AvatarSelectProps) {
     const [selected, setSelected] = useState(currentAvatar || presetAvatars[0] || "");
     const [mounted, setMounted] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setMounted(true);
@@ -28,6 +31,48 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }
             document.body.style.overflow = "unset";
         };
     }, []);
+
+    const handleUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Basic validation
+        if (!file.type.startsWith("image/")) {
+            alert("Please select an image file.");
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            alert("Image size should be less than 5MB.");
+            return;
+        }
+
+        setIsUploading(true);
+
+        try {
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                const base64String = reader.result as string;
+                const result = await uploadCustomAvatarAction(base64String);
+
+                if (result.success && result.url) {
+                    setSelected(result.url);
+                } else {
+                    alert(result.error || "Upload failed");
+                }
+                setIsUploading(false);
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            console.error("Error uploading file:", error);
+            alert("An error occurred during upload.");
+            setIsUploading(false);
+        }
+    };
 
     if (!mounted) return null;
 
@@ -49,7 +94,12 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }
                     <div className="absolute -inset-2 bg-[#3b82f6]/30 rounded-full blur-md animate-pulse" />
                     <div className="absolute inset-0 border-2 border-[#3b82f6] rounded-full" />
 
-                    <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-background shadow-xl bg-white">
+                    <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-background shadow-xl bg-white relative">
+                        {isUploading && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 rounded-full backdrop-blur-sm">
+                                <Loader2 className="h-10 w-10 text-white animate-spin" />
+                            </div>
+                        )}
                         <AvatarImage src={selected} className="object-cover" />
                     </Avatar>
                 </div>
@@ -59,12 +109,27 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }
                     {/* Scrollable Grid Area */}
                     <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-blue-500/20 scrollbar-track-transparent">
                         <div className="grid grid-cols-3 gap-6 relative z-10 pb-2">
+                            {/* Hidden File Input */}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                className="hidden"
+                                accept="image/*"
+                                onChange={handleFileChange}
+                            />
+
                             {/* Upload Button */}
                             <button
-                                className="aspect-square rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition-colors border border-blue-500/10"
+                                onClick={handleUploadClick}
+                                disabled={isUploading}
+                                className="aspect-square rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition-colors border border-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
                                 aria-label="Upload custom avatar"
                             >
-                                <Plus className="h-8 w-8 text-[#3b82f6]" />
+                                {isUploading ? (
+                                    <Loader2 className="h-8 w-8 text-[#3b82f6] animate-spin" />
+                                ) : (
+                                    <Plus className="h-8 w-8 text-[#3b82f6]" />
+                                )}
                             </button>
 
                             {/* Preset Avatars */}
@@ -89,9 +154,10 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }
             <div className="p-8 pb-12 shrink-0 flex justify-center">
                 <Button
                     onClick={() => onSelect(selected)}
-                    className="w-full max-w-xs h-14 rounded-2xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-lg font-bold shadow-lg shadow-[#3b82f6]/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    disabled={isUploading}
+                    className="w-full max-w-xs h-14 rounded-2xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-lg font-bold shadow-lg shadow-[#3b82f6]/30 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70"
                 >
-                    Save
+                    {isUploading ? "Uploading..." : "Save"}
                 </Button>
             </div>
         </div>,
