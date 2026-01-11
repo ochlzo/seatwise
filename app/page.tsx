@@ -243,6 +243,7 @@ function Scene({ onReady }: { onReady: () => void }) {
       <PerspectiveCamera makeDefault position={[0, 0, 10]} fov={40} />
       <Environment preset="city" environmentIntensity={isMobile ? 0.3 : 1} />
       <ambientLight intensity={isMobile ? 0.6 : 0.8} />
+      {isMobile && <fog attach="fog" args={["#f0f9ff", 3, 15]} />}
 
       {/* High-quality SpotLight shadow */}
       <spotLight
@@ -299,7 +300,15 @@ function FixedCanvasLayer() {
   return createPortal(
     <div className="fixed inset-0 h-screen w-full z-[-10] bg-white pointer-events-none">
       {/* Radial overlay to make the center clear while blending edges */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] z-[1] opacity-70" />
+      <div className={`absolute inset-0 z-[1] transition-opacity duration-1000 ${isMobile
+        ? "bg-[radial-gradient(circle_at_center,_transparent_0%,_#f0f7ff_50%,_white_100%)] opacity-94"
+        : "bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] opacity-70"
+        }`} />
+
+      {/* Mobile-only subtle blue "mist" for top and bottom to frame text */}
+      {isMobile && (
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-100/35 via-transparent to-blue-200/25 z-[2] pointer-events-none" />
+      )}
 
       <Canvas
         shadows={!isMobile}
