@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth } from "@/lib/firebaseAdmin";
-import { getUserByFirebaseUid } from "@/lib/db/Users";
+import { getUserByFirebaseUid, resolveAvatarUrl } from "@/lib/db/Users";
 
 export async function GET(req: NextRequest) {
   const cookieStore = await cookies();
@@ -29,9 +29,10 @@ export async function GET(req: NextRequest) {
       user: {
         uid: (user.firebase_uid as string) || uid,
         email: (user.email as string | null) ?? null,
-        displayName: `${(user.first_name as string | null) || ""} ${
-          (user.last_name as string | null) || ""
-        }`.trim(),
+        displayName: `${(user.first_name as string | null) || ""} ${(user.last_name as string | null) || ""
+          }`.trim(),
+        username: user.username as string | null,
+        photoURL: resolveAvatarUrl(user.avatarKey, user.username, user.email),
         role: (user.role as string | null) ?? "USER",
       },
     });

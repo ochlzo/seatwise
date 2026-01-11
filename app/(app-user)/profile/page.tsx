@@ -14,7 +14,7 @@ import { SquarePen } from "lucide-react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { adminAuth } from "@/lib/firebaseAdmin";
-import { getUserByFirebaseUid } from "@/lib/db/Users";
+import { getUserByFirebaseUid, resolveAvatarUrl } from "@/lib/db/Users";
 
 import { ProfileContent } from "./ProfileContent";
 
@@ -40,9 +40,7 @@ export default async function Page() {
     redirect("/login");
   }
 
-  const avatarUrl = dbUser.avatarKey
-    ? `${process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL}/${dbUser.avatarKey}`
-    : `https://api.dicebear.com/9.x/avataaars/svg?seed=${dbUser.username || dbUser.email}`;
+  const avatarUrl = resolveAvatarUrl(dbUser.avatarKey, dbUser.username, dbUser.email);
 
   return (
     <>
@@ -63,7 +61,7 @@ export default async function Page() {
           </Breadcrumb>
         </div>
       </header>
-      <div className="flex flex-1 flex-col gap-6 p-6 max-w-4xl mx-auto w-full">
+      <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 max-w-4xl mx-auto w-full overflow-hidden">
         <Card className="border-none shadow-sm bg-card/50 backdrop-blur-sm">
           <CardHeader className="flex flex-col items-center gap-4 pb-8 border-b">
             <div className="relative group">
@@ -95,7 +93,7 @@ export default async function Page() {
               <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                 Username
               </Label>
-              <p className="text-lg font-medium bg-secondary/30 p-3 rounded-lg border">
+              <p className="text-sm sm:text-lg font-medium bg-secondary/30 p-2 sm:p-3 rounded-lg border break-all sm:break-normal">
                 {dbUser.username}
               </p>
             </div>
@@ -103,7 +101,7 @@ export default async function Page() {
               <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                 Email Address
               </Label>
-              <p className="text-lg font-medium bg-secondary/30 p-3 rounded-lg border">
+              <p className="text-sm sm:text-lg font-medium bg-secondary/30 p-2 sm:p-3 rounded-lg border break-all">
                 {dbUser.email}
               </p>
             </div>
@@ -111,7 +109,7 @@ export default async function Page() {
               <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                 First Name
               </Label>
-              <p className="text-lg font-medium bg-secondary/30 p-3 rounded-lg border">
+              <p className="text-sm sm:text-lg font-medium bg-secondary/30 p-2 sm:p-3 rounded-lg border truncate sm:whitespace-normal sm:overflow-visible">
                 {dbUser.first_name || "—"}
               </p>
             </div>
@@ -119,21 +117,12 @@ export default async function Page() {
               <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                 Last Name
               </Label>
-              <p className="text-lg font-medium bg-secondary/30 p-3 rounded-lg border">
+              <p className="text-sm sm:text-lg font-medium bg-secondary/30 p-2 sm:p-3 rounded-lg border truncate sm:whitespace-normal sm:overflow-visible">
                 {dbUser.last_name || "—"}
               </p>
             </div>
           </CardContent>
         </Card>
-
-        <div className="bg-muted/30 rounded-xl border border-dashed p-8 flex flex-col items-center justify-center text-center space-y-2">
-          <p className="text-muted-foreground font-medium italic">
-            "Seatwise: Precision in every seat."
-          </p>
-          <p className="text-xs text-muted-foreground/60 uppercase tracking-widest">
-            Status: {dbUser.status || "ACTIVE"}
-          </p>
-        </div>
       </div>
     </>
   );

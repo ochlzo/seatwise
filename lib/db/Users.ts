@@ -29,6 +29,23 @@ export function isNewUser(user: DbUser, provider?: string): boolean {
   return isCreatedNow;
 }
 
+/**
+ * Resolves an avatar key/URL to a full, usable URL.
+ * Handles both legacy R2 keys and new Cloudinary full URLs.
+ */
+export function resolveAvatarUrl(avatarKey: string | null | undefined, username?: string | null, email?: string | null): string {
+  if (!avatarKey) {
+    return `https://api.dicebear.com/9.x/avataaars/svg?seed=${username || email || "default"}`;
+  }
+
+  if (avatarKey.startsWith("http")) {
+    return avatarKey;
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_BASE_URL || "";
+  return `${baseUrl}/${avatarKey}`;
+}
+
 const userSelect = {
   firebase_uid: true,
   email: true,

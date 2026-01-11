@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { cookies } from "next/headers";
-import { getUserByFirebaseUid, upsertUser, isNewUser, updateUserAvatar } from "@/lib/db/Users";
+import { getUserByFirebaseUid, upsertUser, isNewUser, updateUserAvatar, resolveAvatarUrl } from "@/lib/db/Users";
 import { uploadGoogleAvatar } from "@/lib/actions/uploadGoogleAvatar";
 
 export async function POST(req: NextRequest) {
@@ -81,10 +81,16 @@ export async function POST(req: NextRequest) {
           : null;
 
     if ((!finalFirstName || finalFirstName === "") && decoded.name) {
-      const [fName, ...rest] = decoded.name.split(" ");
-      finalFirstName = fName || null;
-      if ((!finalLastName || finalLastName === "") && rest.length) {
-        finalLastName = rest.join(" ") || null;
+      const nameParts = decoded.name.trim().split(/\s+/);
+      if (nameParts.length > 1) {
+        const lastName = nameParts.pop();
+        const firstName = nameParts.join(" ");
+        finalFirstName = firstName || null;
+        if (!finalLastName || finalLastName === "") {
+          finalLastName = lastName || null;
+        }
+      } else {
+        finalFirstName = nameParts[0] || null;
       }
     }
 
@@ -116,7 +122,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       user: {
-        ...user,
+        uid: user.firebase_uid,
+        email: user.email,
+        displayName: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
+        username: user.username,
+        photoURL: resolveAvatarUrl(user.avatarKey, user.username, user.email),
+        role: user.role,
         hasPassword,
         isNewUser: newlyCreated,
       },
