@@ -107,18 +107,34 @@ export async function POST(req: NextRequest) {
       decoded.firebase?.sign_in_provider as string | undefined
     );
 
-    // If new Google user, upload their profile picture to R2
-    if (newlyCreated && decoded.picture) {
-      const avatarKey = await uploadGoogleAvatar(uid, decoded.picture);
-      if (avatarKey) {
-        await updateUserAvatar(uid, avatarKey);
-      }
-    }
-
     const firebaseUser = await adminAuth.getUser(uid);
     const hasPassword = firebaseUser.providerData.some(
       (p) => p.providerId === "password"
     );
+
+    // If new Google user, upload their profile picture to Cloudinary
+    if (newlyCreated && decoded.picture) {
+      const avatarUrl = await uploadGoogleAvatar(uid, decoded.picture);
+      if (avatarUrl) {
+        await updateUserAvatar(uid, avatarUrl);
+        // Refresh the user object to get the new avatar_key
+        const refreshedUser = await getUserByFirebaseUid(uid);
+        if (refreshedUser) {
+          return NextResponse.json({
+            user: {
+              uid: refreshedUser.firebase_uid,
+              email: refreshedUser.email,
+              displayName: `${refreshedUser.first_name || ""} ${refreshedUser.last_name || ""}`.trim(),
+              username: refreshedUser.username,
+              photoURL: resolveAvatarUrl(refreshedUser.avatarKey, refreshedUser.username, refreshedUser.email),
+              role: refreshedUser.role,
+              hasPassword,
+              isNewUser: true,
+            },
+          });
+        }
+      }
+    }
 
     return NextResponse.json({
       user: {

@@ -78,22 +78,22 @@ export function useEmailPass() {
       }
 
       const data = await response.json();
-      const role = data.user?.role || "USER";
+      const serverUser = data.user;
 
       // Redirect based on role (though usually new users are USER)
-      if (role === "ADMIN") {
+      if (serverUser?.role === "ADMIN") {
         router.push("/admin");
       } else {
         router.push("/dashboard");
       }
 
       return {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: displayName,
-        photoURL: firebaseUser.photoURL,
-        role: role,
-        username: username,
+        uid: serverUser?.uid || firebaseUser.uid,
+        email: serverUser?.email || firebaseUser.email,
+        displayName: serverUser?.displayName || displayName,
+        photoURL: serverUser?.photoURL || firebaseUser.photoURL,
+        role: serverUser?.role || "USER",
+        username: serverUser?.username || username,
         hasPassword: true,
       };
     } catch (error) {
@@ -121,11 +121,10 @@ export function useEmailPass() {
       }
 
       const data = await response.json();
-      const role = data.user?.role || "USER";
-      const username = data.user?.username || null;
+      const serverUser = data.user;
 
-      if (username) {
-        if (role === "ADMIN") {
+      if (serverUser?.username) {
+        if (serverUser.role === "ADMIN") {
           router.push("/admin");
         } else {
           router.push("/dashboard");
@@ -133,13 +132,13 @@ export function useEmailPass() {
       }
 
       return {
-        uid: firebaseUser.uid,
-        email: firebaseUser.email,
-        displayName: firebaseUser.displayName,
-        photoURL: firebaseUser.photoURL,
-        role: role,
-        username: data.user?.username || null,
-        hasPassword: data.user?.hasPassword ?? true,
+        uid: serverUser?.uid || firebaseUser.uid,
+        email: serverUser?.email || firebaseUser.email,
+        displayName: serverUser?.displayName || firebaseUser.displayName,
+        photoURL: serverUser?.photoURL || firebaseUser.photoURL,
+        role: serverUser?.role || "USER",
+        username: serverUser?.username || null,
+        hasPassword: serverUser?.hasPassword ?? true,
       };
     } catch (error) {
       throw new Error(getAuthErrorMessage(error));

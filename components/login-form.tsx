@@ -159,14 +159,16 @@ export function LoginForm({
         if (!response.ok) throw new Error("Failed to update profile");
 
         const data = await response.json();
+        const serverUser = data.user;
+
         user = {
-          uid: auth.currentUser?.uid!,
-          email: auth.currentUser?.email ?? null,
-          displayName: auth.currentUser?.displayName ?? null,
-          photoURL: auth.currentUser?.photoURL ?? null,
-          role: data.user?.role || "USER",
-          username: data.user?.username ?? null,
-          hasPassword: data.user?.hasPassword ?? true,
+          uid: serverUser?.uid || auth.currentUser?.uid!,
+          email: (serverUser?.email || auth.currentUser?.email) ?? null,
+          displayName: (serverUser?.displayName || auth.currentUser?.displayName) ?? null,
+          photoURL: (serverUser?.photoURL || auth.currentUser?.photoURL) ?? null,
+          role: serverUser?.role || "USER",
+          username: serverUser?.username ?? null,
+          hasPassword: serverUser?.hasPassword ?? true,
         };
 
         if (user.role === "ADMIN") {
