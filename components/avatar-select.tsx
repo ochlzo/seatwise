@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useRef, useEffect, useState } from "react";
 import { ChevronLeft, Plus, Loader2, ArrowLeft } from "lucide-react";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import { compressImage } from "@/lib/utils/image";
 import { uploadCustomAvatarAction } from "@/lib/actions/uploadCustomAvatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -41,35 +42,48 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }
         setIsUploading(true);
         setUploadProgress({ [file.name]: 0 });
 
+        const interval = setInterval(() => {
+            // Logarithmic progress: gets slower as it gets higher
+            // (100 - current) / factor ensures it never actually hits 100 prematurely
+            setUploadProgress(prev => {
+                const current = prev[file.name] || 0;
+                const increment = Math.max(0.5, (99 - current) / 15);
+                const next = Math.min(current + increment, 99);
+                return { ...prev, [file.name]: Math.floor(next) };
+            });
+        }, 200);
+
         try {
-            // Simulate progress for the premium feel
-            const interval = setInterval(() => {
-                setUploadProgress(prev => ({
-                    ...prev,
-                    [file.name]: Math.min((prev[file.name] || 0) + 10, 90)
-                }));
-            }, 100);
+            // 1. Compress the image to stay under Vercel's 4.5MB payload limit
+            // and speed up the base64 transfer over mobile networks
+            console.log("Compressing image...");
+            const compressedBase64 = await compressImage(file, 1024, 1024, 0.7);
 
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                const base64String = reader.result as string;
-                const result = await uploadCustomAvatarAction(base64String);
+            // 2. Upload to server
+            console.log("Starting server upload...");
+            const result = await uploadCustomAvatarAction(compressedBase64);
 
-                clearInterval(interval);
+            clearInterval(interval);
+
+            if (result.success && result.url) {
                 setUploadProgress({ [file.name]: 100 });
-
-                if (result.success && result.url) {
-                    setSelected(result.url);
-                    setShowUploader(false); // Go back to grid on success
-                } else {
-                    alert(result.error || "Upload failed");
-                }
+                // Small delay to let the user see 100%
+                setTimeout(() => {
+                    setSelected(result.url!);
+                    setShowUploader(false);
+                    setIsUploading(false);
+                }, 500);
+            } else {
+                setUploadProgress({});
+                console.error("Upload failed:", result.error);
+                alert(result.error || "Upload failed");
                 setIsUploading(false);
-            };
-            reader.readAsDataURL(file);
+            }
         } catch (error) {
+            clearInterval(interval);
             console.error("Error uploading file:", error);
-            alert("An error occurred during upload.");
+            setUploadProgress({});
+            alert("Upload failed. The image might be too large or your connection is unstable.");
             setIsUploading(false);
         }
     };
