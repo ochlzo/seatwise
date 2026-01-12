@@ -40,23 +40,21 @@ export function useGoogleLogin() {
     }
 
     const data = await response.json();
-    const role = data.user?.role || "USER";
-    const username = data.user?.username || null;
-    const hasPassword = data.user?.hasPassword ?? true;
+    const serverUser = data.user;
 
     const user: User = {
-      uid: firebaseUser.uid,
-      email: firebaseUser.email,
-      displayName: firebaseUser.displayName,
-      photoURL: firebaseUser.photoURL,
-      role: role,
-      username: username,
-      hasPassword: hasPassword,
+      uid: serverUser?.uid || firebaseUser.uid,
+      email: serverUser?.email || firebaseUser.email,
+      displayName: serverUser?.displayName || firebaseUser.displayName,
+      photoURL: serverUser?.photoURL || firebaseUser.photoURL,
+      role: serverUser?.role || "USER",
+      username: serverUser?.username || null,
+      hasPassword: serverUser?.hasPassword ?? true,
     };
 
-    if (username && hasPassword) {
+    if (user.username && user.hasPassword) {
       dispatch(setUser(user));
-      if (role === "ADMIN") {
+      if (user.role === "ADMIN") {
         router.push("/admin");
       } else {
         router.push("/dashboard");
