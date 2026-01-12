@@ -2,11 +2,12 @@
 
 import { createPortal } from "react-dom";
 import { useRef, useEffect, useState } from "react";
-import { ChevronLeft, Plus, Loader2 } from "lucide-react";
+import { ChevronLeft, Plus, Loader2, ArrowLeft } from "lucide-react";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { uploadCustomAvatarAction } from "@/lib/actions/uploadCustomAvatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { FileUploader } from "@/components/ui/file-uploader";
 
 
 
@@ -21,7 +22,8 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }
     const [selected, setSelected] = useState(currentAvatar || presetAvatars[0] || "");
     const [mounted, setMounted] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+    const [showUploader, setShowUploader] = useState(false);
 
     useEffect(() => {
         setMounted(true);
@@ -32,35 +34,33 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }
         };
     }, []);
 
-    const handleUploadClick = () => {
-        fileInputRef.current?.click();
-    };
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const onUpload = async (files: File[]) => {
+        const file = files[0];
         if (!file) return;
 
-        // Basic validation
-        if (!file.type.startsWith("image/")) {
-            alert("Please select an image file.");
-            return;
-        }
-
-        if (file.size > 5 * 1024 * 1024) { // 5MB limit
-            alert("Image size should be less than 5MB.");
-            return;
-        }
-
         setIsUploading(true);
+        setUploadProgress({ [file.name]: 0 });
 
         try {
+            // Simulate progress for the premium feel
+            const interval = setInterval(() => {
+                setUploadProgress(prev => ({
+                    ...prev,
+                    [file.name]: Math.min((prev[file.name] || 0) + 10, 90)
+                }));
+            }, 100);
+
             const reader = new FileReader();
             reader.onloadend = async () => {
                 const base64String = reader.result as string;
                 const result = await uploadCustomAvatarAction(base64String);
 
+                clearInterval(interval);
+                setUploadProgress({ [file.name]: 100 });
+
                 if (result.success && result.url) {
                     setSelected(result.url);
+                    setShowUploader(false); // Go back to grid on success
                 } else {
                     alert(result.error || "Upload failed");
                 }
@@ -106,47 +106,54 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }
 
                 {/* Avatar Grid Container */}
                 <div className="w-full max-w-sm flex-1 min-h-0 p-6 rounded-[2rem] border border-[#3b82f6]/20 bg-card/30 backdrop-blur-sm relative overflow-hidden flex flex-col">
-                    {/* Scrollable Grid Area */}
-                    <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-blue-500/20 scrollbar-track-transparent">
-                        <div className="grid grid-cols-3 gap-6 relative z-10 pb-2">
-                            {/* Hidden File Input */}
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                className="hidden"
-                                accept="image/*"
-                                onChange={handleFileChange}
-                            />
-
-                            {/* Upload Button */}
-                            <button
-                                onClick={handleUploadClick}
-                                disabled={isUploading}
-                                className="aspect-square rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition-colors border border-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                                aria-label="Upload custom avatar"
-                            >
-                                {isUploading ? (
-                                    <Loader2 className="h-8 w-8 text-[#3b82f6] animate-spin" />
-                                ) : (
-                                    <Plus className="h-8 w-8 text-[#3b82f6]" />
-                                )}
-                            </button>
-
-                            {/* Preset Avatars */}
-                            {presetAvatars.map((avatar, index) => (
+                    {showUploader ? (
+                        <div className="flex-1 flex flex-col gap-4 animate-in slide-in-from-right-4 duration-300">
+                            <div className="flex items-center gap-2">
                                 <button
-                                    key={index}
-                                    onClick={() => setSelected(avatar)}
-                                    className={cn(
-                                        "aspect-square rounded-full overflow-hidden border-2 transition-all hover:scale-110 active:scale-95",
-                                        selected === avatar ? "border-[#3b82f6] ring-4 ring-[#3b82f6]/20 scale-105" : "border-transparent"
-                                    )}
+                                    onClick={() => setShowUploader(false)}
+                                    className="p-1 hover:bg-muted rounded-full transition-colors"
                                 >
-                                    <img src={avatar} alt={`Avatar ${index}`} className="w-full h-full object-cover" />
+                                    <ArrowLeft className="h-4 w-4" />
                                 </button>
-                            ))}
+                                <span className="text-sm font-medium">Upload custom avatar</span>
+                            </div>
+                            <FileUploader
+                                maxSize={5 * 1024 * 1024}
+                                maxFiles={1}
+                                onUpload={onUpload}
+                                progresses={uploadProgress}
+                                disabled={isUploading}
+                                className="h-40"
+                            />
                         </div>
-                    </div>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-blue-500/20 scrollbar-track-transparent animate-in slide-in-from-left-4 duration-300">
+                            <div className="grid grid-cols-3 gap-6 relative z-10 pb-2">
+                                {/* Upload Trigger Button */}
+                                <button
+                                    onClick={() => setShowUploader(true)}
+                                    className="aspect-square rounded-full bg-blue-50 flex items-center justify-center hover:bg-blue-100 transition-colors border border-blue-500/10"
+                                    aria-label="Toggle custom upload"
+                                >
+                                    <Plus className="h-8 w-8 text-[#3b82f6]" />
+                                </button>
+
+                                {/* Preset Avatars */}
+                                {presetAvatars.map((avatar, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => setSelected(avatar)}
+                                        className={cn(
+                                            "aspect-square rounded-full overflow-hidden border-2 transition-all hover:scale-110 active:scale-95",
+                                            selected === avatar ? "border-[#3b82f6] ring-4 ring-[#3b82f6]/20 scale-105" : "border-transparent"
+                                        )}
+                                    >
+                                        <img src={avatar} alt={`Avatar ${index}`} className="w-full h-full object-cover" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

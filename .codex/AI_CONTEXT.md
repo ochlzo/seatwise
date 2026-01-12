@@ -75,6 +75,12 @@ Your job is to help implement features, fix bugs, and refactor code while preser
   - store in `lib/store.ts`
   - typed hooks in `lib/hooks.ts`
 - Redux bootstrap/provider: `app/StoreProvider.tsx` (Redux provider + auth bootstrap).
+- Media & Assets: **Cloudinary** (configured in `lib/cloudinary.ts`):
+  - Shared default avatars stored in `seatwise/avatars/default_avatars`.
+  - User custom uploads stored in `seatwise/avatars/user_custom`.
+- Mutations: **Next.js Server Actions** (placed in `lib/actions/`):
+  - Used for updating user profiles, avatars, and other write operations.
+  - Pattern: Perform DB update in action -> `revalidatePath` -> return success/error.
 
 ---
 
@@ -106,6 +112,9 @@ When implementing new endpoints:
 - `lib/prisma.ts`: Prisma client singleton (server-only)
 - `lib/db/usersDb.ts`: user data access helpers
 - `lib/db/Users.ts`: user data access helpers (alternate/legacy naming)
+- `lib/cloudinary.ts`: Cloudinary SDK configuration
+- `lib/actions/`: Shared Next.js Server Actions (e.g., `setAvatar.ts`)
+- `lib/avatars/`: Utility functions for fetching avatar presets
 - `lib/store.ts`: Redux store
 - `lib/hooks.ts`: typed Redux hooks
 
@@ -175,3 +184,4 @@ If there is a conflict between instructions:
 - Do not change auth/session behavior without explicitly confirming.
 - Avoid adding `"use client"` unless necessary.
 - Do not expose env vars, secrets, or admin keys to client code.
+- **State Sync Pattern**: When updating data via a Server Action, always update the corresponding Redux slice (e.g., `authSlice`) on the client to ensure immediate UI consistency across sidebars, headers, and profiles.
