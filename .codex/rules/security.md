@@ -37,7 +37,7 @@ Seatwise uses Role-Based Access Control (RBAC) to restrict access to sensitive f
     - Ensure `.env` is listed in `.gitignore`.
 - **Environment Variable Scope**:
     - Variables prefixed with `NEXT_PUBLIC_` are exposed to the browser. Only public configuration (like Firebase Client config) should use this prefix.
-    - Sensitive keys (Neon, Cloudflare R2 credentials, Firebase Admin) MUST NOT have the `NEXT_PUBLIC_` prefix.
+    - Sensitive keys (Neon, Cloudinary API Secret, Firebase Admin) MUST NOT have the `NEXT_PUBLIC_` prefix.
 
 ---
 
@@ -51,14 +51,17 @@ Seatwise uses Role-Based Access Control (RBAC) to restrict access to sensitive f
 
 ---
 
-## 5. Cloud Storage Security (Cloudflare R2)
+## 5. Cloud Storage Security (Cloudinary)
 
-- **Presigned URLs**: 
-    - NEVER perform direct uploads using master credentials from the client.
-    - Use the `/api/r2/presign` endpoint to generate short-lived (60s) presigned URLs for `PUT` operations.
+- **Server-Side Uploads Only**: 
+    - NEVER perform direct uploads from the client using the `api_secret`.
+    - Always use Server Actions or API routes for uploads.
+    - Cloudinary uploads should only happen after user session verification.
 - **Path Isolation**:
-    - Enforce a strict path structure: `users/${uid}/filename`.
-    - The presign endpoint MUST verify that the requested `key` starts with the user's authenticated `uid`.
+    - Enforce a strict folder structure: `seatwise/avatars/user_custom/${uid}`.
+    - Custom avatars should use the user's `uid` as the `public_id` to prevent redundant storage.
+- **Optimized Delivery**:
+    - Always use secure HTTPS URLs (`secure_url`) returned by the Cloudinary SDK.
 
 ---
 
