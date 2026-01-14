@@ -21,8 +21,9 @@ import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 
 import { ProfileAvatarContainer } from "./ProfileAvatarContainer";
 import { getDefaultAvatarsAction } from "@/lib/actions/getDefaultAvatars";
-import { updateProfileAction } from "@/lib/actions/updateProfile";
+import { updateProfileAction, checkUsernameAction } from "@/lib/actions/updateProfile";
 import { cn } from "@/lib/utils";
+import { Field, FieldLabel } from "@/components/ui/field";
 
 export default function ProfilePage() {
   const dispatch = useAppDispatch();
@@ -32,13 +33,23 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [defaultAvatars, setDefaultAvatars] = useState<string[]>([]);
+  
 
   const [formData, setFormData] = useState({
     username: "",
     first_name: "",
     last_name: "",
   });
-  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    username: string | null;
+    first_name: string | null;
+    last_name: string | null;
+  }>({
+    username: null,
+    first_name: null,
+    last_name: null,
+  });
+  const [usernameTaken, setUsernameTaken] = useState(false);
 
   useEffect(() => {
     // Fetch default avatars
@@ -59,8 +70,61 @@ export default function ProfilePage() {
         first_name: user.firstName || "",
         last_name: user.lastName || "",
       });
+      // Clear errors when user data loads
+      setFieldErrors({
+        username: null,
+        first_name: null,
+        last_name: null,
+      });
+      setUsernameTaken(false);
     }
   }, [user]);
+
+  // Real-time username validation
+  useEffect(() => {
+    if (!isEditing) return;
+    
+    const username = formData.username.trim();
+    
+    // Clear errors if username is empty
+    if (username.length === 0) {
+      setFieldErrors(prev => ({ ...prev, username: null }));
+      setUsernameTaken(false);
+      return;
+    }
+
+    // Validate length
+    if (username.length < 2) {
+      setFieldErrors(prev => ({ ...prev, username: "Username must be at least 2 characters." }));
+      setUsernameTaken(false);
+      return;
+    }
+    if (username.length > 20) {
+      setFieldErrors(prev => ({ ...prev, username: "Username must be at most 20 characters." }));
+      setUsernameTaken(false);
+      return;
+    }
+
+    // Check uniqueness with debounce
+    const timer = setTimeout(async () => {
+      try {
+        const uid = user?.uid || undefined;
+        const result = await checkUsernameAction(username, uid);
+        if (result.taken) {
+          setFieldErrors(prev => ({ ...prev, username: "Username is already taken." }));
+          setUsernameTaken(true);
+        } else {
+          setFieldErrors(prev => ({ ...prev, username: null }));
+          setUsernameTaken(false);
+        }
+      } catch (err) {
+        console.error("Uniqueness check failed:", err);
+        setUsernameTaken(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData.username, isEditing, user?.uid]);
 
   if (authLoading || !user) {
     return (
@@ -71,25 +135,57 @@ export default function ProfilePage() {
   }
 
   const handleSave = async () => {
-    // Basic Validations
-    if (formData.username.length < 2) {
-      setError("Username must be at least 2 characters.");
-      return;
+    // Validate all fields
+    const newErrors = {
+      username: null as string | null,
+      first_name: null as string | null,
+      last_name: null as string | null,
+    };
+    let hasErrors = false;
+
+    // Validate username
+    const username = formData.username.trim();
+    if (username.length < 2) {
+      newErrors.username = "Username must be at least 2 characters.";
+      hasErrors = true;
+    } else if (username.length > 20) {
+      newErrors.username = "Username must be at most 20 characters.";
+      hasErrors = true;
+    } else if (usernameTaken) {
+      newErrors.username = "Username is already taken.";
+      hasErrors = true;
+    } else {
+      // Final uniqueness check before submission
+      try {
+        const uid = user?.uid || undefined;
+        const result = await checkUsernameAction(username, uid);
+        if (result.taken) {
+          newErrors.username = "Username is already taken.";
+          setUsernameTaken(true);
+          hasErrors = true;
+        }
+      } catch (err) {
+        console.error("Final username check failed:", err);
+      }
     }
-    if (formData.username.length > 20) {
-      setError("Username must be at most 20 characters.");
-      return;
-    }
+
+    // Validate first name
     if (!formData.first_name.trim()) {
-      setError("First name is required.");
-      return;
+      newErrors.first_name = "First name is required.";
+      hasErrors = true;
     }
+
+    // Validate last name
     if (!formData.last_name.trim()) {
-      setError("Last name is required.");
+      newErrors.last_name = "Last name is required.";
+      hasErrors = true;
+    }
+
+    setFieldErrors(newErrors);
+    if (hasErrors) {
       return;
     }
 
-    setError(null);
     setIsSubmitting(true);
 
     try {
@@ -110,10 +206,22 @@ export default function ProfilePage() {
         }));
         setIsEditing(false);
       } else {
-        setError(result.error || "Failed to update profile.");
+        // Map server errors to appropriate fields
+        const errorMessage = result.error || "Failed to update profile.";
+        if (errorMessage.toLowerCase().includes("username")) {
+          setFieldErrors(prev => ({ ...prev, username: errorMessage }));
+        } else if (errorMessage.toLowerCase().includes("first name") || errorMessage.toLowerCase().includes("firstname")) {
+          setFieldErrors(prev => ({ ...prev, first_name: errorMessage }));
+        } else if (errorMessage.toLowerCase().includes("last name") || errorMessage.toLowerCase().includes("lastname")) {
+          setFieldErrors(prev => ({ ...prev, last_name: errorMessage }));
+        } else {
+          // For other errors, show on username field as fallback
+          setFieldErrors(prev => ({ ...prev, username: errorMessage }));
+        }
       }
     } catch (err) {
-      setError("An unexpected error occurred.");
+      // For unexpected errors, show on username field
+      setFieldErrors(prev => ({ ...prev, username: "An unexpected error occurred." }));
     } finally {
       setIsSubmitting(false);
     }
@@ -169,9 +277,15 @@ export default function ProfilePage() {
                 <div className="flex gap-2 animate-in slide-in-from-right-2 duration-300">
                   <Button
                     onClick={handleSave}
-                    disabled={isSubmitting}
+                    disabled={
+                      isSubmitting || 
+                      !!fieldErrors.username || 
+                      !!fieldErrors.first_name || 
+                      !!fieldErrors.last_name || 
+                      usernameTaken
+                    }
                     size="sm"
-                    className="h-8 rounded-lg bg-primary hover:bg-primary/90 shadow-md shadow-primary/20 transition-all active:scale-95"
+                    className="h-8 rounded-lg bg-primary hover:bg-primary/90 shadow-md shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
                     Save
@@ -181,12 +295,17 @@ export default function ProfilePage() {
                     size="sm"
                     onClick={() => {
                       setIsEditing(false);
-                      setError(null);
                       setFormData({
                         username: user.username || "",
                         first_name: user.firstName || "",
                         last_name: user.lastName || "",
                       });
+                      setFieldErrors({
+                        username: null,
+                        first_name: null,
+                        last_name: null,
+                      });
+                      setUsernameTaken(false);
                     }}
                     disabled={isSubmitting}
                     className="h-8 w-8 p-0 rounded-lg hover:bg-destructive/10 hover:text-destructive"
@@ -206,31 +325,52 @@ export default function ProfilePage() {
                 </Button>
               )}
             </div>
-            {error && (
-              <div className="mb-6 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium animate-in slide-in-from-top-2">
-                {error}
-              </div>
-            )}
-
             <div className="grid gap-8 md:grid-cols-2">
               {/* Username */}
               <div className="space-y-1.5 transition-all">
-                <Label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
-                  Username
-                </Label>
                 {isEditing ? (
-                  <Input
-                    value={formData.username}
-                    onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="johndoe"
-                    className="h-12 bg-secondary/20 border-border/50 rounded-xl focus:ring-primary/20 transition-all font-medium"
-                    autoFocus
-                  />
+                  <Field data-invalid={!!fieldErrors.username || usernameTaken}>
+                    <div className="flex items-center justify-between w-full">
+                      <FieldLabel className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
+                        Username
+                      </FieldLabel>
+                      {fieldErrors.username && (
+                        <span className="text-[10px] font-medium text-destructive animate-appear">
+                          {fieldErrors.username}
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      value={formData.username}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, username: e.target.value }));
+                        if (fieldErrors.username) {
+                          setFieldErrors(prev => ({ ...prev, username: null }));
+                        }
+                        if (usernameTaken) {
+                          setUsernameTaken(false);
+                        }
+                      }}
+                      placeholder="johndoe"
+                      className={cn(
+                        "h-12 bg-secondary/20 rounded-xl transition-all font-medium border",
+                        (fieldErrors.username || usernameTaken) 
+                          ? "border-destructive" 
+                          : "border-border/50 focus:ring-primary/20 focus:ring-2"
+                      )}
+                      autoFocus
+                    />
+                  </Field>
                 ) : (
-                  <div className="h-12 flex items-center px-4 bg-secondary/10 border border-border/30 rounded-xl font-medium text-foreground relative overflow-hidden group/item">
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                    {user.username}
-                  </div>
+                  <>
+                    <Label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
+                      Username
+                    </Label>
+                    <div className="h-12 flex items-center px-4 bg-secondary/10 border border-border/30 rounded-xl font-medium text-foreground relative overflow-hidden group/item">
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                      {user.username}
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -246,41 +386,89 @@ export default function ProfilePage() {
 
               {/* First Name */}
               <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
-                  First Name
-                </Label>
                 {isEditing ? (
-                  <Input
-                    value={formData.first_name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                    placeholder="John"
-                    className="h-12 bg-secondary/20 border-border/50 rounded-xl focus:ring-primary/20 transition-all font-medium"
-                  />
+                  <Field data-invalid={!!fieldErrors.first_name}>
+                    <div className="flex items-center justify-between w-full">
+                      <FieldLabel className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
+                        First Name
+                      </FieldLabel>
+                      {fieldErrors.first_name && (
+                        <span className="text-[10px] font-medium text-destructive animate-appear">
+                          {fieldErrors.first_name}
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      value={formData.first_name}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, first_name: e.target.value }));
+                        if (fieldErrors.first_name) {
+                          setFieldErrors(prev => ({ ...prev, first_name: null }));
+                        }
+                      }}
+                      placeholder="John"
+                      className={cn(
+                        "h-12 bg-secondary/20 rounded-xl transition-all font-medium border",
+                        fieldErrors.first_name 
+                          ? "border-destructive" 
+                          : "border-border/50 focus:ring-primary/20 focus:ring-2"
+                      )}
+                    />
+                  </Field>
                 ) : (
-                  <div className="h-12 flex items-center px-4 bg-secondary/10 border border-border/30 rounded-xl font-medium text-foreground relative overflow-hidden group/item text-ellipsis whitespace-nowrap overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                    {user.firstName || "—"}
-                  </div>
+                  <>
+                    <Label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
+                      First Name
+                    </Label>
+                    <div className="h-12 flex items-center px-4 bg-secondary/10 border border-border/30 rounded-xl font-medium text-foreground relative overflow-hidden group/item text-ellipsis whitespace-nowrap overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                      {user.firstName || "—"}
+                    </div>
+                  </>
                 )}
               </div>
 
               {/* Last Name */}
               <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
-                  Last Name
-                </Label>
                 {isEditing ? (
-                  <Input
-                    value={formData.last_name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                    placeholder="Doe"
-                    className="h-12 bg-secondary/20 border-border/50 rounded-xl focus:ring-primary/20 transition-all font-medium"
-                  />
+                  <Field data-invalid={!!fieldErrors.last_name}>
+                    <div className="flex items-center justify-between w-full">
+                      <FieldLabel className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
+                        Last Name
+                      </FieldLabel>
+                      {fieldErrors.last_name && (
+                        <span className="text-[10px] font-medium text-destructive animate-appear">
+                          {fieldErrors.last_name}
+                        </span>
+                      )}
+                    </div>
+                    <Input
+                      value={formData.last_name}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, last_name: e.target.value }));
+                        if (fieldErrors.last_name) {
+                          setFieldErrors(prev => ({ ...prev, last_name: null }));
+                        }
+                      }}
+                      placeholder="Doe"
+                      className={cn(
+                        "h-12 bg-secondary/20 rounded-xl transition-all font-medium border",
+                        fieldErrors.last_name 
+                          ? "border-destructive" 
+                          : "border-border/50 focus:ring-primary/20 focus:ring-2"
+                      )}
+                    />
+                  </Field>
                 ) : (
-                  <div className="h-12 flex items-center px-4 bg-secondary/10 border border-border/30 rounded-xl font-medium text-foreground relative overflow-hidden group/item text-ellipsis whitespace-nowrap overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                    {user.lastName || "—"}
-                  </div>
+                  <>
+                    <Label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/80 font-bold ml-1">
+                      Last Name
+                    </Label>
+                    <div className="h-12 flex items-center px-4 bg-secondary/10 border border-border/30 rounded-xl font-medium text-foreground relative overflow-hidden group/item text-ellipsis whitespace-nowrap overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                      {user.lastName || "—"}
+                    </div>
+                  </>
                 )}
               </div>
             </div>

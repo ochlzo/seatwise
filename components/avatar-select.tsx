@@ -102,6 +102,7 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
     const handleUploaderBack = () => {
         setStagedBase64(null);
         setStagedFile(null);
+        setUploaderFiles([]);
         setSelected(currentAvatar || presetAvatars[0] || "");
         setShowUploader(false);
     };
