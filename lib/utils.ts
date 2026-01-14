@@ -21,3 +21,7 @@ export function formatBytes(
   return `${(bytes / Math.pow(1024, i)).toFixed(decimals)} ${sizeType === "accurate" ? accurateSizes[i] ?? "Bytest" : sizes[i] ?? "Bytes"
     }`
 }
+export function truncateText(text: string, length: number) {
+  if (text.length <= length) return text
+  return text.slice(0, length) + "..."
+}

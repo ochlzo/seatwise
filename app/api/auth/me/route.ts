@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
         email: (user.email as string | null) ?? null,
         displayName: `${(user.first_name as string | null) || ""} ${(user.last_name as string | null) || ""
           }`.trim(),
+        firstName: user.first_name as string | null,
+        lastName: user.last_name as string | null,
         username: user.username as string | null,
         photoURL: resolveAvatarUrl(user.avatarKey, user.username, user.email),
         role: (user.role as string | null) ?? "USER",
