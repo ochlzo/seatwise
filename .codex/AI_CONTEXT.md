@@ -78,110 +78,54 @@ Your job is to help implement features, fix bugs, and refactor code while preser
 - Media & Assets: **Cloudinary** (configured in `lib/cloudinary.ts`):
   - Shared default avatars stored in `seatwise/avatars/default_avatars`.
   - User custom uploads stored in `seatwise/avatars/user_custom`.
+  - **Auto-Cleanup**: When replacing a `google_avatars` entry, the server action automatically deletes the old asset from Cloudinary to prevent storage bloat.
 - Mutations: **Next.js Server Actions** (placed in `lib/actions/`):
-  - Used for updating user profiles, avatars, and other write operations.
+  - Consolidated logic: `updateAvatarAction.ts` handles both preset selection and custom Cloudinary uploads in a single transactional flow.
   - Pattern: Perform DB update in action -> `revalidatePath` -> return success/error.
 
 ---
 
-## 3) API Response Conventions
+## 3) Component Logic & UX Patterns
 
-- No global response envelope (no forced `{ ok: true, data }` wrapper).
-- Endpoints return tailored JSON and status codes.
-- Keep existing shapes for auth/user routes unless explicitly changing the API.
+### Avatar Selection Flow
+- **Staged Preview**: `AvatarSelect` uses `stagedBase64` to show a local preview immediately after file selection. 
+- **Deferred Persistence**: No database or Cloudinary writes occur until the user clicks "Save".
+- **Simulated Progress**: Two progress phases—local compression (simulated) and server upload (simulated up to 95%, then finished).
 
-When implementing new endpoints:
+### Global Progress Dialog (`UploadProgress`)
+- **Auto-Close**: The dialog automatically closes **800ms** after `totalProgress` hits 100%.
+- **Filename Truncation**: All filenames are truncated to **42 characters** using the `truncateText` utility to prevent layout distortion.
 
-- Match patterns used in existing endpoints.
-- Use correct HTTP status codes.
-- Provide consistent error structures **within the endpoint**, but do not enforce a global envelope.
-
----
-
-## 4) Known Folder / File Structure
-
-### Next.js routes
-
-- `app/api/**/route.ts`: route handlers
-- `app/**/page.tsx`, `app/**/layout.tsx`: UI routes and layout
-- `app/StoreProvider.tsx`: Redux provider + auth bootstrap
-
-### Shared libs
-
-- `lib/firebaseAdmin.ts`: Firebase Admin init (server-only)
-- `lib/prisma.ts`: Prisma client singleton (server-only)
-- `lib/db/usersDb.ts`: user data access helpers
-- `lib/db/Users.ts`: user data access helpers (alternate/legacy naming)
-- `lib/cloudinary.ts`: Cloudinary SDK configuration
-- `lib/actions/`: Shared Next.js Server Actions (e.g., `setAvatar.ts`)
-- `lib/avatars/`: Utility functions for fetching avatar presets
-- `lib/store.ts`: Redux store
-- `lib/hooks.ts`: typed Redux hooks
-
-### Redux slices
-
-- `lib/features/auth/authSlice.ts`: auth state + `checkAuth` thunk
-- `lib/features/loading/isLoadingSlice.ts`: loading state
-
-### Prisma
-
-- `prisma/schema.prisma`: schema
+### File Uploader (`FileUploader`)
+- **Overwrite Mode**: When `maxFiles` is 1, the uploader enters "Replacement Mode"—dropping a new file automatically replaces the current one instead of erroring.
+- **Hide Remove Option**: Supports a `showRemoveButton` prop to strip redundant "x" buttons in simplified selection flows.
 
 ---
 
-## 5) Change Workflow (Required Output Format)
-
-For any non-trivial change (multiple files or multi-step logic), respond using this structure:
-
-### ✅ A) Plan
-
-- Brief bullet plan (3–7 bullets max)
-
-### ✅ B) Files to touch
-
-- List exact files that will be changed/added
-
-### ✅ C) Implementation
-
-- Provide code changes
-- Keep changes minimal
-- Follow repo patterns
-
-### ✅ D) Verification
-
-Suggest relevant commands/checks, for example:
-
-- `pnpm lint`
-- `pnpm typecheck`
-- `pnpm prisma generate`
-- `pnpm prisma migrate status`
-- manual test checklist (auth flows, API responses, UI flow)
-
-### ✅ E) Edge Cases / Risks
-
-- Note auth/session pitfalls
-- Note breaking changes
-- Note performance or DB query risks
+## 4) API Response & Type Conventions
+...
+- State management: Redux Toolkit:
+  - slices under `lib/features/`
+  - store in `lib/store.ts`
+  - typed hooks in `lib/hooks.ts`
+  - **User Type**: The `User` interface (`authSlice.ts`) requires `firstName` and `lastName`. Always include these when manual user objects are constructed in auth hooks or login forms.
 
 ---
 
-## 6) Conflict Resolution Order (If Rules Disagree)
-
-If there is a conflict between instructions:
-
-1. Existing repo patterns and code style win
-2. This `AI_CONTEXT.md` wins
-3. Agent/rule files (if provided) win
-4. General best practices are last
+## 5) Known Folder / File Structure
+...
+- `lib/actions/updateAvatar.ts`: Consolidated avatar update action (server-only)
+- `lib/utils.ts`: Includes `truncateText` and `formatBytes` utilities.
 
 ---
 
-## 7) Guardrails (Prevent Common AI Mistakes)
+...
 
-- Do not invent files, folders, or APIs that do not exist.
-- Do not move large amounts of code unless requested.
-- Do not introduce new architectural layers without clear need.
-- Do not change auth/session behavior without explicitly confirming.
-- Avoid adding `"use client"` unless necessary.
-- Do not expose env vars, secrets, or admin keys to client code.
+---
+
+## 8) Guardrails (Prevent Common AI Mistakes)
+
+- **Server Action Build Safety**: To prevent "Module not found (net/tls)" errors in Turbopack, **never** import Node-only modules (like `firebase-admin`, `cloudinary`, `prisma`) at the top level of a file containing `"use server"` if that file is imported by Client Components.
+  - **Solution**: Use dynamic imports inside the action function: `const { adminAuth } = await import("@/lib/firebaseAdmin");`.
 - **State Sync Pattern**: When updating data via a Server Action, always update the corresponding Redux slice (e.g., `authSlice`) on the client to ensure immediate UI consistency across sidebars, headers, and profiles.
+- **File Uploader Reset**: When using the `FileUploader` as a pick-and-done tool, ensure the parent manages its state to clear/reset the component if needed.
