@@ -46,6 +46,8 @@ export function useGoogleLogin() {
       uid: serverUser?.uid || firebaseUser.uid,
       email: serverUser?.email || firebaseUser.email,
       displayName: serverUser?.displayName || firebaseUser.displayName,
+      firstName: serverUser?.firstName || null,
+      lastName: serverUser?.lastName || null,
       photoURL: serverUser?.photoURL || firebaseUser.photoURL,
       role: serverUser?.role || "USER",
       username: serverUser?.username || null,
