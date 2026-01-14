@@ -164,8 +164,12 @@ export function LoginForm({
         user = {
           uid: serverUser?.uid || auth.currentUser?.uid!,
           email: (serverUser?.email || auth.currentUser?.email) ?? null,
-          displayName: (serverUser?.displayName || auth.currentUser?.displayName) ?? null,
-          photoURL: (serverUser?.photoURL || auth.currentUser?.photoURL) ?? null,
+          displayName:
+            (serverUser?.displayName || auth.currentUser?.displayName) ?? null,
+          firstName: serverUser?.firstName || null,
+          lastName: serverUser?.lastName || null,
+          photoURL:
+            (serverUser?.photoURL || auth.currentUser?.photoURL) ?? null,
           role: serverUser?.role || "USER",
           username: serverUser?.username ?? null,
           hasPassword: serverUser?.hasPassword ?? true,
