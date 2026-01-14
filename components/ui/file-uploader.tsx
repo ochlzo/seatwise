@@ -192,15 +192,21 @@ export function FileUploader(props: FileUploaderProps) {
     const [isUploadDialogOpen, setIsUploadDialogOpen] = React.useState(false)
 
     React.useEffect(() => {
-        const hasActiveUploads = progresses && Object.values(progresses).some(p => p < 100)
+        const progressValues = progresses ? Object.values(progresses) : []
+        const hasActiveUploads = progressValues.some((p) => p < 100)
+        const allCompleted = progressValues.length > 0 && progressValues.every((p) => p === 100)
+
         if (hasActiveUploads) {
             setIsUploadDialogOpen(true)
-        } else if (progresses && Object.values(progresses).every(p => p === 100) && totalProgress === 100) {
+        } else if (allCompleted && totalProgress === 100) {
             // Auto close after 800ms to match the UploadProgress internal timer
             const timer = setTimeout(() => {
                 setIsUploadDialogOpen(false)
             }, 900) // Slightly longer than the internal dialog's 800ms
             return () => clearTimeout(timer)
+        } else if (progressValues.length === 0) {
+            // If progresses is cleared/empty, ensure the dialog is closed immediately
+            setIsUploadDialogOpen(false)
         }
     }, [progresses, totalProgress])
 
@@ -312,10 +318,10 @@ function FileCard({ file, onRemove, showRemoveButton = true }: FileCardProps) {
                         />
                     </div>
                 )}
-                <div className="flex flex-col gap-2 min-w-0">
+                <div className="flex flex-col gap-2 min-w-0 flex-1">
                     <div className="space-y-px">
                         <p className="truncate text-xs md:text-sm font-medium text-foreground/80">
-                            {truncateText(file.name, 42)}
+                            {file.name}
                         </p>
                         <p className="text-[10px] md:text-xs text-muted-foreground">
                             {formatBytes(file.size)}
@@ -329,7 +335,7 @@ function FileCard({ file, onRemove, showRemoveButton = true }: FileCardProps) {
                         type="button"
                         variant="outline"
                         size="icon"
-                        className="size-7"
+                        className="size-11" // Mobile-first touch target 44px
                         onClick={onRemove}
                     >
                         <X className="size-4" aria-hidden="true" />

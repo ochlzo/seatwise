@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,8 @@ import {
   updatePassword,
 } from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
+import { checkUsernameAction, checkEmailAction } from "@/lib/actions/updateProfile";
+import { abortSignUpAction } from "@/lib/actions/authActions";
 
 export function LoginForm({
   className,
@@ -50,11 +52,58 @@ export function LoginForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [setupStep, setSetupStep] = useState(1);
+  const [usernameTaken, setUsernameTaken] = useState(false);
+  const [emailTaken, setEmailTaken] = useState(false);
 
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { signInWithGoogle } = useGoogleLogin();
   const { signInWithEmail, signUpWithEmail, resetPassword } = useEmailPass();
+
+  const handleUsernameChange = (val: string) => {
+    const cleanVal = val.trim();
+    setUsername(cleanVal);
+    if (validationError) setValidationError(null);
+  };
+
+  useEffect(() => {
+    if (username.length < 2) {
+      setUsernameTaken(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const uid = auth.currentUser?.uid;
+        const result = await checkUsernameAction(username, uid);
+        setUsernameTaken(result.taken);
+      } catch (err) {
+        console.error("Uniqueness check failed:", err);
+        setUsernameTaken(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  useEffect(() => {
+    if (email.length < 5 || !email.includes('@')) {
+      setEmailTaken(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await checkEmailAction(email);
+        setEmailTaken(result.taken);
+      } catch (err) {
+        console.error("Email uniqueness check failed:", err);
+        setEmailTaken(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [email]);
 
   const handleGoogleLogin = async () => {
     setIsSubmitting(true);
@@ -121,7 +170,18 @@ export function LoginForm({
       setValidationError("Password must be at least 6 characters long.");
       return;
     }
-    setValidationError(null);
+    if (validationError) setValidationError(null);
+
+
+    // Final check before submission if username is being set
+    if (username.length >= 2) {
+      const uid = auth.currentUser?.uid;
+      const result = await checkUsernameAction(username, uid);
+      if (result.taken) {
+        setUsernameTaken(true);
+        return;
+      }
+    }
 
     onLoginStart?.();
     setIsSubmitting(true);
@@ -156,7 +216,10 @@ export function LoginForm({
           }),
         });
 
-        if (!response.ok) throw new Error("Failed to update profile");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to update profile");
+        }
 
         const data = await response.json();
         const serverUser = data.user;
@@ -215,7 +278,11 @@ export function LoginForm({
       }
     } catch (error: any) {
       console.error("Login/Setup failed:", error);
-      if (
+
+      const errorMessage = error.message || "";
+      if (errorMessage.includes("Username is already taken")) {
+        setUsernameTaken(true);
+      } else if (
         error?.code === "auth/invalid-credential" ||
         error?.code === "auth/user-not-found" ||
         error?.code === "auth/wrong-password"
@@ -229,6 +296,44 @@ export function LoginForm({
         setValidationError(error.message || "An error occurred.");
       }
       onLoginError?.();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAbort = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (
+      !window.confirm(
+        "Are you sure you want to cancel? This will abort your signup and delete your account."
+      )
+    ) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await abortSignUpAction();
+      if (result.success) {
+        // Reset everything and go back to login state
+        setIsGoogleSetup(false);
+        setSetupStep(1);
+        setEmail("");
+        setPassword("");
+        setUsername("");
+        setFirstName("");
+        setLastName("");
+        setValidationError(null);
+        // Next.js refresh or router.push('/login')
+        router.push("/login");
+        // Force a reload if necessary to clear all firebase/local state
+        window.location.reload();
+      } else {
+        setValidationError(result.error || "Failed to abort signup.");
+      }
+    } catch (err) {
+      console.error("Abort failed:", err);
+      setValidationError("An error occurred while canceling.");
     } finally {
       setIsSubmitting(false);
     }
@@ -297,12 +402,24 @@ export function LoginForm({
           )}
         >
           {isSignUp && ImageSection}
-          <form className="p-6 md:p-8 flex flex-col h-full overflow-hidden" onSubmit={handleSubmit}>
+          <form className="p-6 md:p-8 flex flex-col h-full overflow-hidden relative" onSubmit={handleSubmit}>
+            {isGoogleSetup && (
+              <a
+                href="#"
+                onClick={handleAbort}
+                className="absolute top-4 right-4 text-[8px] sm:text-[10px] font-medium text-muted-foreground hover:text-destructive transition-colors underline underline-offset-4 z-10"
+              >
+                Cancel
+              </a>
+            )}
             <FieldGroup className={cn(
-              "flex-1 flex flex-col pr-1",
+              "flex-1 flex flex-col pr-1 gap-4 sm:gap-7",
               isForgotPassword ? "overflow-hidden" : "overflow-y-auto"
             )}>
-              <div className="flex flex-col items-center gap-2 text-center">
+              <div className={cn(
+                "flex flex-col items-center gap-1 sm:gap-2 text-center",
+                isGoogleSetup && "pt-4 sm:pt-0"
+              )}>
                 <h1 className="text-2xl font-bold">
                   {isForgotPassword
                     ? "Reset Password"
@@ -441,18 +558,23 @@ export function LoginForm({
                       </div>
                     ) : (
                       <div key="step-2" className="space-y-4 animate-slide">
-                        <Field>
-                          <FieldLabel htmlFor="username">Username</FieldLabel>
+                        <Field data-invalid={usernameTaken}>
+                          <div className="flex items-center justify-between">
+                            <FieldLabel htmlFor="username">Username</FieldLabel>
+                            {usernameTaken && (
+                              <span className="text-[10px] font-medium text-destructive animate-appear">
+                                Username is already taken
+                              </span>
+                            )}
+                          </div>
                           <Input
                             id="username"
                             type="text"
                             placeholder="username"
                             required
                             value={username}
-                            onChange={(e) => {
-                              setUsername(e.target.value);
-                              if (validationError) setValidationError(null);
-                            }}
+                            aria-invalid={usernameTaken}
+                            onChange={(e) => handleUsernameChange(e.target.value)}
                           />
                         </Field>
                         {isPasswordRequired && (
@@ -508,7 +630,7 @@ export function LoginForm({
                     )}
                     <Button
                       type={setupStep === 2 ? "submit" : "button"}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || (setupStep === 2 && usernameTaken)}
                       className="flex-1"
                       onClick={(e) => {
                         if (setupStep === 1) {
@@ -538,25 +660,41 @@ export function LoginForm({
                     {isSignUp && (
                       <div className="space-y-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <Field>
-                            <FieldLabel htmlFor="username">Username</FieldLabel>
+                          <Field data-invalid={usernameTaken}>
+                            <div className="flex items-center justify-between">
+                              <FieldLabel htmlFor="username">Username</FieldLabel>
+                              {usernameTaken && (
+                                <span className="text-[10px] font-medium text-destructive animate-appear">
+                                  Username is already taken
+                                </span>
+                              )}
+                            </div>
                             <Input
                               id="username"
                               type="text"
                               placeholder="username"
                               required
                               value={username}
-                              onChange={(e) => setUsername(e.target.value)}
+                              aria-invalid={usernameTaken}
+                              onChange={(e) => handleUsernameChange(e.target.value)}
                             />
                           </Field>
-                          <Field>
-                            <FieldLabel htmlFor="email">Email</FieldLabel>
+                          <Field data-invalid={emailTaken}>
+                            <div className="flex items-center justify-between">
+                              <FieldLabel htmlFor="email">Email</FieldLabel>
+                              {emailTaken && (
+                                <span className="text-[10px] font-medium text-destructive animate-appear">
+                                  Email is already taken
+                                </span>
+                              )}
+                            </div>
                             <Input
                               id="email"
                               type="email"
                               placeholder="seatwise@example.com"
                               required
                               value={email}
+                              aria-invalid={emailTaken}
                               onChange={(e) => {
                                 setEmail(e.target.value);
                                 if (validationError) setValidationError(null);
@@ -690,7 +828,11 @@ export function LoginForm({
 
                   <div className="mt-auto space-y-3 pt-2">
                     <Field>
-                      <Button type="submit" disabled={isSubmitting} className="w-full">
+                      <Button
+                        type="submit"
+                        disabled={isSubmitting || (isSignUp && (usernameTaken || emailTaken))}
+                        className="w-full"
+                      >
                         {isSubmitting ? (
                           <Loader2 className="animate-spin" />
                         ) : isSignUp ? (

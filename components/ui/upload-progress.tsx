@@ -98,7 +98,7 @@ export function UploadProgress({
                                         <FileIcon className="h-4 w-4 md:h-5 md:w-5 text-[#3b82f6]" />
                                     </div>
                                     <div className="flex-1 min-w-0 overflow-hidden">
-                                        <p className="truncate block w-full text-xs md:text-sm font-semibold text-foreground/90">{truncateText(file.name, 42)}</p>
+                                        <p className="truncate block w-full text-xs md:text-sm font-semibold text-foreground/90">{file.name}</p>
                                         <p className="text-[10px] md:text-xs text-muted-foreground font-medium">{formatBytes(file.size)}</p>
                                     </div>
                                 </div>
