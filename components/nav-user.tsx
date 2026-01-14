@@ -67,6 +67,13 @@ export function NavUser({
     router.push("/profile");
   };
 
+  const handleAccountClick = () => {
+    if (pathname !== "/account") {
+      dispatch(setLoading(true));
+    }
+    router.push("/account");
+  };
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -98,7 +105,7 @@ export function NavUser({
                 <UserIcon />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={handleAccountClick}>
                 <BadgeCheck />
                 Account
               </DropdownMenuItem>
