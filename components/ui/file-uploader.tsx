@@ -8,7 +8,7 @@ import Dropzone, {
     type FileRejection,
 } from "react-dropzone"
 
-import { cn, formatBytes } from "@/lib/utils"
+import { cn, formatBytes, truncateText } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { UploadProgress } from "@/components/ui/upload-progress"
@@ -71,9 +71,14 @@ interface FileUploaderProps extends React.HTMLAttributes<HTMLDivElement> {
     multiple?: boolean
 
     /**
-     * Whether the uploader is disabled.
+     * Whether to show the remove button on file cards.
      * @type boolean
-     * @default false
+     * @default true
+     */
+    showRemoveButton?: boolean
+
+    /**
+     * Whether the uploader is disabled.
      */
     disabled?: boolean
 }
@@ -91,6 +96,7 @@ export function FileUploader(props: FileUploaderProps) {
         maxSize = 1024 * 1024 * 2,
         multiple = false,
         disabled = false,
+        showRemoveButton = true,
         className,
         ...dropzoneProps
     } = props
@@ -99,8 +105,15 @@ export function FileUploader(props: FileUploaderProps) {
 
     const onDrop = React.useCallback(
         (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
-            if (!multiple && acceptedFiles.length > 1) {
-                alert("Cannot upload more than 1 file at a time")
+            if (!multiple && maxFiles === 1 && acceptedFiles.length === 1) {
+                // AUTO-OVERWRITE MODE: replace the current file
+                const file = acceptedFiles[0]
+                const newFiles = [Object.assign(file, {
+                    preview: URL.createObjectURL(file),
+                })]
+                setFiles(newFiles)
+                onValueChange?.(newFiles)
+                onUpload?.(newFiles)
                 return
             }
 
@@ -159,7 +172,14 @@ export function FileUploader(props: FileUploaderProps) {
         }
     }, [])
 
-    const isDisabled = disabled || (files?.length ?? 0) >= maxFiles
+    // Sync with value prop to support controlled mode/resetting
+    React.useEffect(() => {
+        if (valueProp !== undefined && valueProp !== files) {
+            setFiles(valueProp)
+        }
+    }, [valueProp])
+
+    const isDisabled = disabled || (maxFiles > 1 && (files?.length ?? 0) >= maxFiles)
 
     // Calculate aggregate progress for the UploadProgress component
     const totalProgress = React.useMemo(() => {
@@ -175,11 +195,17 @@ export function FileUploader(props: FileUploaderProps) {
         const hasActiveUploads = progresses && Object.values(progresses).some(p => p < 100)
         if (hasActiveUploads) {
             setIsUploadDialogOpen(true)
+        } else if (progresses && Object.values(progresses).every(p => p === 100) && totalProgress === 100) {
+            // Auto close after 800ms to match the UploadProgress internal timer
+            const timer = setTimeout(() => {
+                setIsUploadDialogOpen(false)
+            }, 900) // Slightly longer than the internal dialog's 800ms
+            return () => clearTimeout(timer)
         }
-    }, [progresses])
+    }, [progresses, totalProgress])
 
     return (
-        <div className="relative flex flex-col gap-6 overflow-hidden">
+        <div className="relative flex flex-col gap-2 overflow-hidden">
             <UploadProgress
                 isOpen={isUploadDialogOpen}
                 totalProgress={totalProgress}
@@ -244,12 +270,13 @@ export function FileUploader(props: FileUploaderProps) {
                 )}
             </Dropzone>
             {files?.length ? (
-                <div className="h-fit max-h-48 w-full overflow-y-auto space-y-4">
+                <div className="h-fit max-h-48 w-full overflow-y-auto space-y-2">
                     {files?.map((file, index) => (
                         <FileCard
                             key={index}
                             file={file}
                             onRemove={() => onRemove(index)}
+                            showRemoveButton={showRemoveButton}
                         />
                     ))}
                 </div>
@@ -261,12 +288,13 @@ export function FileUploader(props: FileUploaderProps) {
 interface FileCardProps {
     file: File
     onRemove: () => void
+    showRemoveButton?: boolean
 }
 
-function FileCard({ file, onRemove }: FileCardProps) {
+function FileCard({ file, onRemove, showRemoveButton = true }: FileCardProps) {
     return (
-        <div className="relative flex items-center space-x-2 md:space-x-4 pr-10 md:pr-12">
-            <div className="flex flex-1 items-center space-x-4">
+        <div className="relative flex items-center space-x-2 md:space-x-4">
+            <div className="flex flex-1 items-center space-x-4 min-w-0">
                 {isFileWithPreview(file) ? (
                     <Image
                         src={file.preview}
@@ -277,17 +305,17 @@ function FileCard({ file, onRemove }: FileCardProps) {
                         className="aspect-square size-8 md:size-12 shrink-0 rounded-md object-cover"
                     />
                 ) : (
-                    <div className="flex size-8 md:size-10 items-center justify-center rounded-md bg-muted/20">
+                    <div className="flex size-8 md:size-10 items-center justify-center rounded-md bg-muted/20 shrink-0">
                         <FileText
                             className="size-4 md:size-5 text-muted-foreground"
                             aria-hidden="true"
                         />
                     </div>
                 )}
-                <div className="flex w-full flex-col gap-2">
+                <div className="flex flex-col gap-2 min-w-0">
                     <div className="space-y-px">
-                        <p className="line-clamp-1 text-xs md:text-sm font-medium text-foreground/80">
-                            {file.name}
+                        <p className="truncate text-xs md:text-sm font-medium text-foreground/80">
+                            {truncateText(file.name, 42)}
                         </p>
                         <p className="text-[10px] md:text-xs text-muted-foreground">
                             {formatBytes(file.size)}
@@ -295,18 +323,20 @@ function FileCard({ file, onRemove }: FileCardProps) {
                     </div>
                 </div>
             </div>
-            <div className="flex items-center gap-2">
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="size-7"
-                    onClick={onRemove}
-                >
-                    <X className="size-4" aria-hidden="true" />
-                    <span className="sr-only">Remove file</span>
-                </Button>
-            </div>
+            {showRemoveButton && (
+                <div className="flex items-center shrink-0">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="size-7"
+                        onClick={onRemove}
+                    >
+                        <X className="size-4" aria-hidden="true" />
+                        <span className="sr-only">Remove file</span>
+                    </Button>
+                </div>
+            )}
         </div>
     )
 }

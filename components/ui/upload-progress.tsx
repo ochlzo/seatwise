@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { cn, formatBytes } from "@/lib/utils"
+import { cn, formatBytes, truncateText } from "@/lib/utils"
 
 interface UploadProgressProps {
     isOpen: boolean
@@ -28,6 +28,15 @@ export function UploadProgress({
     onDone,
 }: UploadProgressProps) {
     const isComplete = totalProgress === 100
+
+    React.useEffect(() => {
+        if (isComplete && onDone) {
+            const timer = setTimeout(() => {
+                onDone()
+            }, 800)
+            return () => clearTimeout(timer)
+        }
+    }, [isComplete, onDone])
 
     return (
         <Dialog open={isOpen}>
@@ -50,12 +59,12 @@ export function UploadProgress({
                         )}
                         <div>
                             <DialogTitle className="text-lg font-bold font-brand">
-                                {isComplete ? "Upload Complete" : "Uploading Assets"}
+                                {isComplete ? "Success!" : "Uploading Assets"}
                             </DialogTitle>
                             <DialogDescription className="text-xs text-muted-foreground">
                                 {isComplete
-                                    ? "All your files have been successfully processed."
-                                    : "Please keep this window open until the upload finishes."}
+                                    ? "Your profile has been updated successfully."
+                                    : "Please keep this window open until we finish."}
                             </DialogDescription>
                         </div>
                     </div>
@@ -88,8 +97,8 @@ export function UploadProgress({
                                     <div className="rounded-lg bg-background p-2 shadow-sm shrink-0">
                                         <FileIcon className="h-4 w-4 md:h-5 md:w-5 text-[#3b82f6]" />
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="truncate text-xs md:text-sm font-semibold text-foreground/90">{file.name}</p>
+                                    <div className="flex-1 min-w-0 overflow-hidden">
+                                        <p className="truncate block w-full text-xs md:text-sm font-semibold text-foreground/90">{truncateText(file.name, 42)}</p>
                                         <p className="text-[10px] md:text-xs text-muted-foreground font-medium">{formatBytes(file.size)}</p>
                                     </div>
                                 </div>
@@ -97,18 +106,8 @@ export function UploadProgress({
                         </div>
                     </div>
                 </div>
-
-                {isComplete && (
-                    <DialogFooter className="sm:justify-center">
-                        <Button
-                            onClick={onDone}
-                            className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
-                        >
-                            Done
-                        </Button>
-                    </DialogFooter>
-                )}
             </DialogContent>
         </Dialog>
     )
 }
+

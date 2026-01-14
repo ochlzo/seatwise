@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { SquarePen } from "lucide-react";
 import { AvatarSelect } from "@/components/avatar-select";
-import { setAvatarAction } from "@/lib/actions/setAvatar";
+import { updateAvatarAction } from "@/lib/actions/updateAvatar";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { setUser } from "@/lib/features/auth/authSlice";
 
@@ -19,31 +19,33 @@ export function ProfileAvatarContainer({ initialAvatarUrl, fallback, defaultAvat
     const user = useAppSelector((state) => state.auth.user);
     const [showSelect, setShowSelect] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
+    const [isSaving, setIsSaving] = useState(false);
 
-    const handleSelect = async (newAvatarUrl: string) => {
-        // Optimistically update the UI
-        const previousAvatarUrl = avatarUrl;
-        setAvatarUrl(newAvatarUrl);
-        setShowSelect(false);
+    const handleSelect = async (newAvatarUrl: string, isCustom: boolean) => {
+        setIsSaving(true);
 
         try {
-            const result = await setAvatarAction(newAvatarUrl);
-            if (result.success) {
-                // Update global Redux state to sync sidebar and other components
+            const result = await updateAvatarAction(newAvatarUrl, isCustom);
+
+            if (result.success && result.url) {
+                setAvatarUrl(result.url);
+                setShowSelect(false);
+
+                // Update global Redux state
                 if (user) {
                     dispatch(setUser({
                         ...user,
-                        photoURL: newAvatarUrl
+                        photoURL: result.url
                     }));
                 }
             } else {
-                // Revert on error
-                setAvatarUrl(previousAvatarUrl);
                 alert(result.error || "Failed to save avatar");
             }
         } catch (error) {
-            setAvatarUrl(previousAvatarUrl);
+            console.error("Save error:", error);
             alert("An unexpected error occurred while saving your avatar.");
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -72,6 +74,7 @@ export function ProfileAvatarContainer({ initialAvatarUrl, fallback, defaultAvat
                     onClose={() => setShowSelect(false)}
                     onSelect={handleSelect}
                     presetAvatars={defaultAvatars}
+                    isSaving={isSaving}
                 />
             )}
         </>
