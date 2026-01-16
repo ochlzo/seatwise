@@ -441,7 +441,7 @@ export default function Home() {
           </ScrollReveal>
           <div className="flex gap-4">
             <button
-              onClick={() => router.push("/login")}
+              onClick={() => router.push("/dashboard")}
               className="cursor-pointer px-8 py-4 bg-blue-500 text-white font-bold uppercase tracking-widest hover:bg-zinc-900 transition-colors duration-300"
             >
               Get Started
