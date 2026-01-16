@@ -38,6 +38,9 @@ export const metadata: Metadata = {
     "seat reservation system",
     "venue management",
   ],
+  verification: {
+    google: "ThJgxjZAPRJ7ciZN868MhIZOuMND-CAlOUlpVn0kuhs",
+  },
   alternates: {
     canonical: "/",
   },
@@ -68,9 +71,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} antialiased`}
       >
         <StoreProvider>
-          <SmoothScroll>
-            {children}
-          </SmoothScroll>
+          <SmoothScroll>{children}</SmoothScroll>
         </StoreProvider>
       </body>
     </html>
