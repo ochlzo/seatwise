@@ -1,33 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { adminAuth } from "@/lib/firebaseAdmin";
-import { getUserByFirebaseUid, resolveAvatarUrl } from "@/lib/db/Users";
+import { resolveAvatarUrl } from "@/lib/db/Users";
+import { requireAuth } from "@/lib/auth/requireAuth";
 
 export async function GET(req: NextRequest) {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("session")?.value;
-
-  if (!sessionCookie) {
-    return NextResponse.json({ isAuthenticated: false }, { status: 401 });
+  const auth = await requireAuth();
+  if (!auth.ok) {
+    return NextResponse.json({ isAuthenticated: false }, { status: auth.status });
   }
 
+  const user = auth.user;
+
   try {
-    const decodedClaims = await adminAuth.verifySessionCookie(
-      sessionCookie,
-      true
-    );
-    const uid = decodedClaims.uid;
-
-    const user = await getUserByFirebaseUid(uid);
-
-    if (!user) {
-      return NextResponse.json({ isAuthenticated: false }, { status: 401 });
-    }
-
     return NextResponse.json({
       isAuthenticated: true,
       user: {
-        uid: (user.firebase_uid as string) || uid,
+        uid: (user.firebase_uid as string) || null,
         email: (user.email as string | null) ?? null,
         displayName: `${(user.first_name as string | null) || ""} ${(user.last_name as string | null) || ""
           }`.trim(),

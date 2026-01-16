@@ -61,6 +61,7 @@ Your job is to help implement features, fix bugs, and refactor code while preser
   - return response
 - Prefer placing reusable logic in `lib/` helpers where possible.
 - Do not change existing endpoint response shapes unless explicitly asked.
+- All API routes must be protected with `requireAuth()` or `requireAdmin()` except for `/api/auth/login`.
 
 ---
 

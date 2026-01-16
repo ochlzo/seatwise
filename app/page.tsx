@@ -442,11 +442,11 @@ export default function Home() {
           <div className="flex gap-4">
             <button
               onClick={() => router.push("/dashboard")}
-              className="cursor-pointer px-8 py-4 bg-blue-500 text-white font-bold uppercase tracking-widest hover:bg-zinc-900 transition-colors duration-300"
+              className="cursor-pointer px-6 md:px-8 py-3 md:py-4 bg-blue-500 text-white text-sm md:text-base font-bold uppercase tracking-widest hover:bg-zinc-900 transition-colors duration-300"
             >
               Get Started
             </button>
-            <button className="px-8 py-4 border border-zinc-300 text-zinc-900 font-bold uppercase tracking-widest hover:border-zinc-900 transition-colors duration-300">
+            <button className="px-6 md:px-8 py-3 md:py-4 border border-zinc-300 text-zinc-900 text-sm md:text-base font-bold uppercase tracking-widest hover:border-zinc-900 transition-colors duration-300">
               Learn More
             </button>
           </div>

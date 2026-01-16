@@ -11,8 +11,17 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppDispatch } from "@/lib/hooks";
+import { useEffect } from "react";
+import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 
 export default function AccountPage() {
+  const dispatch = useAppDispatch();
+
+  useEffect(() => {
+    dispatch(setLoading(false));
+  }, [dispatch]);
+
   return (
     <>
       <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">

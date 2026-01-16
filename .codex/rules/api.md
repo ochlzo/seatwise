@@ -71,6 +71,8 @@ All new API responses MUST follow a consistent envelope structure to allow the f
     - Protected routes MUST check the `session` cookie.
     - Use the pattern: `const session = (await cookies()).get("session")?.value;`
     - Verify via `adminAuth.verifySessionCookie(session, true)`.
+    - Prefer shared guards: use `requireAuth()` for authenticated routes and `requireAdmin()` for admin-only routes.
+    - All API routes MUST be protected except `/api/auth/login` (public entry point).
 - **CORS**: Private by default. Do not implement custom CORS headers unless explicitly required for external integrations.
 - **Methods**: Only expose the HTTP methods that are actually implemented.
 

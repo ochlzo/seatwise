@@ -2,7 +2,7 @@
 
 import * as React from "react"
 
-import { ChevronsUpDown } from "lucide-react"
+import { ChevronsUpDown, House } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 import { cn } from "@/lib/utils"
@@ -97,6 +97,19 @@ export function TeamSwitcher({
               side={isMobile ? "bottom" : "right"}
               sideOffset={4}
             >
+              <DropdownMenuItem
+                onClick={() => {
+                  dispatch(setLoading(true));
+                  router.push("/");
+                }}
+                className="gap-2 p-2 group cursor-pointer"
+              >
+                <div className="flex size-6 items-center justify-center rounded-md border">
+                  <House className="size-3.5 shrink-0 text-muted-foreground" />
+                </div>
+                Home
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-muted-foreground text-xs">
                 User Mode
               </DropdownMenuLabel>
