@@ -27,7 +27,17 @@ export const metadata: Metadata = {
     template: "%s | Seatwise",
   },
   description:
-    "Seatwise helps venues manage seating and events with speed, precision, and intelligence.",
+    "Seatwise is a seat reservation app for Bicol University College of Arts and Letters, offering fast booking and venue management.",
+  keywords: [
+    "seatwise",
+    "seat reservation app",
+    "bucal",
+    "bicol university",
+    "college of arts and letters",
+    "seatwiseapp",
+    "seat reservation system",
+    "venue management",
+  ],
   alternates: {
     canonical: "/",
   },
