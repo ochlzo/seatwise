@@ -33,7 +33,7 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [defaultAvatars, setDefaultAvatars] = useState<string[]>([]);
-  
+
 
   const [formData, setFormData] = useState({
     username: "",
@@ -83,9 +83,9 @@ export default function ProfilePage() {
   // Real-time username validation
   useEffect(() => {
     if (!isEditing) return;
-    
+
     const username = formData.username.trim();
-    
+
     // Clear errors if username is empty
     if (username.length === 0) {
       setFieldErrors(prev => ({ ...prev, username: null }));
@@ -260,17 +260,17 @@ export default function ProfilePage() {
               fallback={user.firstName?.[0] || user.username?.[0] || "U"}
               defaultAvatars={defaultAvatars}
             />
-            <div className="text-center">
-              <CardTitle className="text-3xl font-brand font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            <div className="text-center px-4">
+              <CardTitle className="text-2xl md:text-3xl font-brand font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent break-words">
                 {user.firstName} {user.lastName}
               </CardTitle>
-              <p className="text-muted-foreground font-medium mt-1">
+              <p className="text-sm md:text-base text-muted-foreground font-medium mt-1">
                 @{user.username}
               </p>
             </div>
           </CardHeader>
 
-          <CardContent className="pt-14 pb-10 relative group">
+          <CardContent className="pt-12 md:pt-14 pb-10 relative group">
             {/* Edit/Save Button Container */}
             <div className="absolute top-0 right-4 z-10">
               {isEditing ? (
@@ -278,17 +278,17 @@ export default function ProfilePage() {
                   <Button
                     onClick={handleSave}
                     disabled={
-                      isSubmitting || 
-                      !!fieldErrors.username || 
-                      !!fieldErrors.first_name || 
-                      !!fieldErrors.last_name || 
+                      isSubmitting ||
+                      !!fieldErrors.username ||
+                      !!fieldErrors.first_name ||
+                      !!fieldErrors.last_name ||
                       usernameTaken
                     }
                     size="sm"
-                    className="h-8 rounded-lg bg-primary hover:bg-primary/90 shadow-md shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-9 md:h-8 px-4 md:px-3 rounded-lg bg-primary hover:bg-primary/90 shadow-md shadow-primary/20 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
-                    Save
+                    <span className="text-xs font-semibold">Save</span>
                   </Button>
                   <Button
                     variant="ghost"
@@ -308,7 +308,7 @@ export default function ProfilePage() {
                       setUsernameTaken(false);
                     }}
                     disabled={isSubmitting}
-                    className="h-8 w-8 p-0 rounded-lg hover:bg-destructive/10 hover:text-destructive"
+                    className="h-9 w-9 md:h-8 md:w-8 p-0 rounded-lg hover:bg-destructive/10 hover:text-destructive"
                   >
                     <X className="h-4 w-4" />
                   </Button>
@@ -318,7 +318,7 @@ export default function ProfilePage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setIsEditing(true)}
-                  className="h-8 px-3 rounded-lg border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all group/btn"
+                  className="h-9 md:h-8 px-3.5 md:px-3 rounded-lg border-primary/20 hover:border-primary/50 hover:bg-primary/5 transition-all group/btn"
                 >
                   <Edit2 className="h-3.5 w-3.5 mr-1.5 text-primary group-hover/btn:scale-110 transition-transform" />
                   <span className="text-xs font-semibold">Edit</span>
@@ -354,8 +354,8 @@ export default function ProfilePage() {
                       placeholder="johndoe"
                       className={cn(
                         "h-12 bg-secondary/20 rounded-xl transition-all font-medium border",
-                        (fieldErrors.username || usernameTaken) 
-                          ? "border-destructive" 
+                        (fieldErrors.username || usernameTaken)
+                          ? "border-destructive"
                           : "border-border/50 focus:ring-primary/20 focus:ring-2"
                       )}
                       autoFocus
@@ -409,8 +409,8 @@ export default function ProfilePage() {
                       placeholder="John"
                       className={cn(
                         "h-12 bg-secondary/20 rounded-xl transition-all font-medium border",
-                        fieldErrors.first_name 
-                          ? "border-destructive" 
+                        fieldErrors.first_name
+                          ? "border-destructive"
                           : "border-border/50 focus:ring-primary/20 focus:ring-2"
                       )}
                     />
@@ -453,8 +453,8 @@ export default function ProfilePage() {
                       placeholder="Doe"
                       className={cn(
                         "h-12 bg-secondary/20 rounded-xl transition-all font-medium border",
-                        fieldErrors.last_name 
-                          ? "border-destructive" 
+                        fieldErrors.last_name
+                          ? "border-destructive"
                           : "border-border/50 focus:ring-primary/20 focus:ring-2"
                       )}
                     />

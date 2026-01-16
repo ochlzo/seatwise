@@ -51,16 +51,16 @@ export function ProfileAvatarContainer({ initialAvatarUrl, fallback, defaultAvat
 
     return (
         <>
-            <div className="relative group">
-                <Avatar className="h-32 w-32 border-4 border-background shadow-lg transition-transform duration-300 group-hover:scale-[1.02]">
+            <div className="relative group shrink-0">
+                <Avatar className="h-28 w-28 md:h-32 md:w-32 border-4 border-background shadow-lg transition-transform duration-300 group-hover:scale-[1.02] shrink-0">
                     <AvatarImage src={avatarUrl} />
-                    <AvatarFallback className="text-2xl font-bold bg-[#3b82f6] text-white">
+                    <AvatarFallback className="text-xl md:text-2xl font-bold bg-[#3b82f6] text-white">
                         {fallback}
                     </AvatarFallback>
                 </Avatar>
                 <button
                     onClick={() => setShowSelect(true)}
-                    className="absolute bottom-1 right-1 p-2.5 rounded-full bg-[#3b82f6] text-white shadow-xl border-2 border-background 
+                    className="absolute bottom-1 right-1 p-3 md:p-2.5 rounded-full bg-[#3b82f6] text-white shadow-xl border-2 border-background 
                      hover:bg-[#2563eb] transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
                     aria-label="Edit Profile Picture"
                 >

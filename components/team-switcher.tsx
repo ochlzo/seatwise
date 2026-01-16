@@ -57,10 +57,16 @@ export function TeamSwitcher({
   const content = (
     <SidebarMenuButton
       size="lg"
+      onClick={() => {
+        if (!isAdmin) {
+          dispatch(setLoading(true));
+          router.push("/");
+        }
+      }}
       className={cn(
         "h-14",
         isAdmin && "data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
-        !isAdmin && "hover:bg-transparent active:bg-transparent cursor-default"
+        !isAdmin && "cursor-pointer"
       )}
     >
       <div className={cn(
