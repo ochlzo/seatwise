@@ -21,8 +21,30 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Seatwise",
-  description: "Seatwise Application",
+  metadataBase: new URL("https://seatwiseapp.vercel.app"),
+  title: {
+    default: "Seatwise",
+    template: "%s | Seatwise",
+  },
+  description:
+    "Seatwise helps venues manage seating and events with speed, precision, and intelligence.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "Seatwise",
+    description:
+      "Seatwise helps venues manage seating and events with speed, precision, and intelligence.",
+    url: "https://seatwiseapp.vercel.app",
+    siteName: "Seatwise",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Seatwise",
+    description:
+      "Seatwise helps venues manage seating and events with speed, precision, and intelligence.",
+  },
 };
 
 export default function RootLayout({
