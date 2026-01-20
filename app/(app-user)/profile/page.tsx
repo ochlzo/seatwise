@@ -229,7 +229,7 @@ export default function ProfilePage() {
 
   return (
     <>
-      <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+      <header className="sticky top-0 z-10 bg-background flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
         <div className="flex items-center gap-2 px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator
@@ -246,7 +246,7 @@ export default function ProfilePage() {
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 max-w-4xl mx-auto w-full overflow-hidden animate-in fade-in duration-500">
+      <div className="flex flex-1 flex-col gap-6 p-4 pt-0 md:p-6 md:pt-0 max-w-4xl mx-auto w-full animate-in fade-in duration-500">
         <Card className="border-none shadow-xl bg-card/60 backdrop-blur-md relative overflow-hidden">
           {/* Background Decorative Element */}
           <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
