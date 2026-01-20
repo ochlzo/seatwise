@@ -33,11 +33,7 @@ import { logout, User } from "@/lib/features/auth/authSlice";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 import { usePathname } from "next/navigation";
 
-export function NavUser({
-  user,
-}: {
-  user: User | null;
-}) {
+export function NavUser({ user }: { user: User | null }) {
   const { isMobile } = useSidebar();
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -58,7 +54,12 @@ export function NavUser({
   const name = user?.displayName || user?.username || "User";
   const email = user?.email || "";
   const avatar = user?.photoURL || undefined;
-  const initials = name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   const handleProfileClick = () => {
     if (pathname !== "/profile") {
@@ -85,7 +86,9 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={avatar} alt={name} />
-                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                <AvatarFallback className="rounded-lg">
+                  {initials}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{name}</span>
@@ -108,10 +111,6 @@ export function NavUser({
               <DropdownMenuItem onClick={handleAccountClick}>
                 <BadgeCheck />
                 Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard />
-                Billing
               </DropdownMenuItem>
               <DropdownMenuItem>
                 <Bell />
