@@ -27,10 +27,10 @@ export default async function AppUserLayout({
     }
 
     return (
-        <SidebarProvider>
+        <SidebarProvider className="h-svh overflow-hidden">
             <LoadingPage />
             <AppSidebar />
-            <SidebarInset>
+            <SidebarInset className="overflow-y-auto">
                 {children}
             </SidebarInset>
         </SidebarProvider>
