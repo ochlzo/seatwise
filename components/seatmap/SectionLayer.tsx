@@ -7,7 +7,31 @@ import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import { selectNode, updateNode } from "@/lib/features/seatmap/seatmapSlice";
 import { SeatmapShapeNode } from "@/lib/seatmap/types";
 
-const ShapeItem = ({ shape, isSelected, onSelect, onChange }: { shape: SeatmapShapeNode, isSelected: boolean, onSelect: any, onChange: any }) => {
+const ShapeItem = ({
+    shape,
+    isSelected,
+    onSelect,
+    onChange,
+    onDragStart,
+    onDragEnd,
+}: {
+    shape: SeatmapShapeNode;
+    isSelected: boolean;
+    onSelect: any;
+    onChange: any;
+    onDragStart?: () => void;
+    onDragEnd?: () => void;
+}) => {
+    const rafRef = React.useRef<number | null>(null);
+    const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
+
+    const flushDragPosition = () => {
+        if (!pendingPosRef.current) return;
+        onChange(shape.id, { position: pendingPosRef.current });
+        pendingPosRef.current = null;
+        rafRef.current = null;
+    };
+
     const commonProps = {
         x: shape.position.x,
         y: shape.position.y,
@@ -20,6 +44,9 @@ const ShapeItem = ({ shape, isSelected, onSelect, onChange }: { shape: SeatmapSh
         dash: shape.dash,
         draggable: isSelected,
         name: "shape-item",
+        onDragStart: () => {
+            if (onDragStart) onDragStart();
+        },
         onClick: (e: any) => {
             e.cancelBubble = true;
             onSelect(shape.id);
@@ -29,9 +56,21 @@ const ShapeItem = ({ shape, isSelected, onSelect, onChange }: { shape: SeatmapSh
             onSelect(shape.id);
         },
         onDragEnd: (e: any) => {
+            if (rafRef.current !== null) {
+                cancelAnimationFrame(rafRef.current);
+                rafRef.current = null;
+            }
+            pendingPosRef.current = null;
             onChange(shape.id, {
                 position: { x: e.target.x(), y: e.target.y() }
             });
+            if (onDragEnd) onDragEnd();
+        },
+        onDragMove: (e: any) => {
+            pendingPosRef.current = { x: e.target.x(), y: e.target.y() };
+            if (rafRef.current === null) {
+                rafRef.current = requestAnimationFrame(flushDragPosition);
+            }
         },
         shadowColor: "black",
         shadowBlur: isSelected ? 10 : 0,
@@ -74,7 +113,13 @@ const ShapeItem = ({ shape, isSelected, onSelect, onChange }: { shape: SeatmapSh
     }
 };
 
-export default function SectionLayer() {
+export default function SectionLayer({
+    onNodeDragStart,
+    onNodeDragEnd,
+}: {
+    onNodeDragStart?: () => void;
+    onNodeDragEnd?: () => void;
+}) {
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
     const dispatch = useAppDispatch();
@@ -91,6 +136,8 @@ export default function SectionLayer() {
                     isSelected={selectedIds.includes(shape.id)}
                     onSelect={(id: string) => dispatch(selectNode(id))}
                     onChange={(id: string, changes: any) => dispatch(updateNode({ id, changes }))}
+                    onDragStart={onNodeDragStart}
+                    onDragEnd={onNodeDragEnd}
                 />
             ))}
         </Layer>
