@@ -1,12 +1,14 @@
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './features/auth/authSlice';
 import loadingReducer from './features/loading/isLoadingSlice';
+import seatmapReducer from './features/seatmap/seatmapSlice';
 
 export const makeStore = () => {
     return configureStore({
         reducer: {
             auth: authReducer,
             loading: loadingReducer,
+            seatmap: seatmapReducer,
         },
     });
 };

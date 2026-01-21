@@ -90,8 +90,10 @@ export type SeatmapLabelNode = SeatmapNodeBase & {
 
 export type SeatmapShapeNode = SeatmapNodeBase & {
   type: "shape";
-  shape: "rect" | "circle" | "ellipse" | "line" | "path";
+  shape: "rect" | "circle" | "ellipse" | "line" | "path" | "polygon" | "stairs";
   points?: number[];
+  dash?: number[];
+  sides?: number; // for regular polygons like hexagon
 };
 
 export type SeatmapNode =
