@@ -12,6 +12,10 @@ interface SeatmapState {
         dash?: number[];
         sides?: number;
     };
+    viewportSize: {
+        width: number;
+        height: number;
+    };
 }
 
 const initialState: SeatmapState = {
@@ -20,6 +24,7 @@ const initialState: SeatmapState = {
     mode: "select",
     selectedIds: [],
     drawShape: { shape: "rect" },
+    viewportSize: { width: 800, height: 600 },
 };
 
 const seatmapSlice = createSlice({
@@ -38,6 +43,12 @@ const seatmapSlice = createSlice({
             }>
         ) => {
             state.drawShape = action.payload;
+        },
+        setViewportSize: (
+            state,
+            action: PayloadAction<{ width: number; height: number }>
+        ) => {
+            state.viewportSize = action.payload;
         },
         setViewport: (state, action: PayloadAction<SeatmapViewport>) => {
             state.viewport = action.payload;
@@ -169,6 +180,7 @@ const seatmapSlice = createSlice({
 export const {
     setMode,
     setDrawShape,
+    setViewportSize,
     setViewport,
     addSeat,
     addShape,
