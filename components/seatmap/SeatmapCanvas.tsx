@@ -32,6 +32,8 @@ export default function SeatmapCanvas() {
         start: { x: number; y: number };
         current: { x: number; y: number };
     } | null>(null);
+    const MIN_SCALE = 0.4;
+    const MAX_SCALE = 3;
 
     // Resize observer to keep stage responsive
     const [dimensions, setDimensions] = React.useState({ width: 800, height: 600 });
@@ -123,20 +125,33 @@ export default function SeatmapCanvas() {
         const oldScale = stage.scaleX();
         const pointer = stage.getPointerPosition();
 
-        const scaleBy = 1.1;
-        const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+        // Trackpad pinch typically sets ctrlKey=true on wheel events.
+        const isPinchZoom = e.evt.ctrlKey === true;
 
-        const mousePointTo = {
-            x: (pointer.x - stage.x()) / oldScale,
-            y: (pointer.y - stage.y()) / oldScale,
-        };
+        if (isPinchZoom && pointer) {
+            const scaleBy = 1.06;
+            const nextScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
+            const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, nextScale));
+
+            const mousePointTo = {
+                x: (pointer.x - stage.x()) / oldScale,
+                y: (pointer.y - stage.y()) / oldScale,
+            };
+
+            const newPos = {
+                x: pointer.x - mousePointTo.x * newScale,
+                y: pointer.y - mousePointTo.y * newScale,
+            };
+
+            dispatch(setViewport({ position: newPos, scale: newScale }));
+            return;
+        }
 
         const newPos = {
-            x: pointer.x - mousePointTo.x * newScale,
-            y: pointer.y - mousePointTo.y * newScale,
+            x: viewport.position.x - e.evt.deltaX,
+            y: viewport.position.y - e.evt.deltaY,
         };
-
-        dispatch(setViewport({ position: newPos, scale: newScale }));
+        dispatch(setViewport({ position: newPos, scale: viewport.scale }));
     };
 
     const handleDragEnd = (e: any) => {
