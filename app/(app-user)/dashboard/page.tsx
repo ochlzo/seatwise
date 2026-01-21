@@ -9,11 +9,13 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import AdminShield from "@/components/AdminShield"
+import { StickyHeader } from "@/components/sticky-header"
+import { ThemeSwithcer } from "@/components/theme-swithcer"
 
 export default async function Page() {
   return (
     <>
-      <header className="sticky top-0 z-10 bg-background flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+      <StickyHeader className="flex shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
         <div className="flex items-center gap-2 px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator
@@ -34,10 +36,11 @@ export default async function Page() {
             </BreadcrumbList>
           </Breadcrumb>
         </div>
-        <div className="ml-auto px-4 flex items-center">
+        <div className="ml-auto px-4 flex items-center gap-3">
+          <ThemeSwithcer />
           <AdminShield />
         </div>
-      </header>
+      </StickyHeader>
       <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
         <div className="grid auto-rows-min gap-4 md:grid-cols-3">
           <div className="bg-muted/50 aspect-video rounded-xl" />

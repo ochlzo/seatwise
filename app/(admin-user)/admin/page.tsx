@@ -13,10 +13,12 @@ import {
     SidebarProvider,
     SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { StickyHeader } from "@/components/sticky-header"
 
 import { verifyAdmin } from '@/lib/auth/admin'
 import LoadingPage from "@/app/LoadingPage"
 import AdminShield from "@/components/AdminShield"
+import { ThemeSwithcer } from "@/components/theme-swithcer"
 
 export default async function Page() {
     await verifyAdmin();
@@ -26,7 +28,7 @@ export default async function Page() {
             <LoadingPage />
             <AdminSidebar />
             <SidebarInset>
-                <header className="sticky top-0 z-10 bg-background flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+                <StickyHeader className="flex shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
                     <div className="flex items-center gap-2 px-4">
                         <SidebarTrigger className="-ml-1" />
                         <Separator
@@ -48,9 +50,10 @@ export default async function Page() {
                         </Breadcrumb>
                     </div>
                     <div className="ml-auto px-4 flex items-center">
+                        <ThemeSwithcer />
                         <AdminShield />
                     </div>
-                </header>
+                </StickyHeader>
                 <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                     <div className="grid auto-rows-min gap-4 md:grid-cols-3">
                         <div className="bg-muted/50 aspect-video rounded-xl" />

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -19,19 +20,64 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  CreditCard,
-  KeyRound,
-  Mail,
-  ShieldCheck,
-  User,
-} from "lucide-react";
+import { CreditCard, KeyRound, Mail, ShieldCheck, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { StickyHeader } from "@/components/sticky-header";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { setLoading } from "@/lib/features/loading/isLoadingSlice";
+import { useRouter } from "next/navigation";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "@/lib/firebaseClient";
+import { ThemeSwithcer } from "@/components/theme-swithcer"
 
 export default function AccountPage() {
+  const dispatch = useAppDispatch();
+  const user = useAppSelector((state) => state.auth.user);
+  const router = useRouter();
+  const [isResetOpen, setIsResetOpen] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
+
+  useEffect(() => {
+    dispatch(setLoading(false));
+  }, [dispatch]);
+
+  const fullName =
+    user?.firstName || user?.lastName
+      ? `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim()
+      : "Seatwise User";
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) {
+      toast.error("No email address found.");
+      return;
+    }
+
+    setIsResetOpen(false);
+    setIsSendingReset(true);
+    try {
+      await sendPasswordResetEmail(auth, user.email);
+      toast.success("Sent, email might be in spam");
+    } catch (error) {
+      console.error("Password reset failed:", error);
+      toast.error("Failed to send reset email.");
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
   return (
     <>
-      <header className="sticky top-0 z-10 bg-background flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+      <StickyHeader className="flex shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
         <div className="flex items-center gap-2 px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator
@@ -46,38 +92,55 @@ export default function AccountPage() {
             </BreadcrumbList>
           </Breadcrumb>
         </div>
-      </header>
+         <div className="ml-auto px-4 flex items-center gap-3">
+            <ThemeSwithcer />
+         </div>
+      </StickyHeader>
 
       <div className="flex flex-1 flex-col gap-6 p-4 pt-0 md:p-6 md:pt-0 max-w-5xl mx-auto w-full animate-in fade-in duration-500">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg md:text-xl">Account Details</CardTitle>
-            <CardDescription>
-              Manage your profile information and account identifiers.
-            </CardDescription>
+          <CardHeader className="relative">
+            <div className="flex flex-col gap-1">
+              <CardTitle className="text-lg md:text-xl">
+                Account Details
+              </CardTitle>
+              <CardDescription>Manage your account.</CardDescription>
+            </div>
+            <Button
+              className="absolute right-6 top-6 h-10"
+              onClick={() => router.push("/profile")}
+            >
+              Edit Details
+            </Button>
           </CardHeader>
           <CardContent className="grid gap-5">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="account-name" className="flex items-center gap-2">
+                <Label
+                  htmlFor="account-name"
+                  className="flex items-center gap-2"
+                >
                   <User className="size-4 text-muted-foreground" />
                   Full name
                 </Label>
                 <Input
                   id="account-name"
-                  placeholder="Seatwise User"
+                  value={fullName}
                   className="h-11"
                   disabled
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="account-email" className="flex items-center gap-2">
+                <Label
+                  htmlFor="account-email"
+                  className="flex items-center gap-2"
+                >
                   <Mail className="size-4 text-muted-foreground" />
                   Email address
                 </Label>
                 <Input
                   id="account-email"
-                  placeholder="seatwise@example.com"
+                  value={user?.email ?? ""}
                   className="h-11"
                   disabled
                 />
@@ -86,21 +149,13 @@ export default function AccountPage() {
                 <Label htmlFor="account-username">Username</Label>
                 <Input
                   id="account-username"
-                  placeholder="@seatwise"
+                  value={user?.username ? `@${user.username}` : ""}
                   className="h-11"
                   disabled
                 />
               </div>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-3 border-t sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              Profile edits will be available in the next update.
-            </p>
-            <Button className="h-11 w-full sm:w-auto" disabled>
-              Edit Details
-            </Button>
-          </CardFooter>
         </Card>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -122,7 +177,12 @@ export default function AccountPage() {
                     </p>
                   </div>
                 </div>
-                <Button size="sm" className="h-9">
+                <Button
+                  size="sm"
+                  className="h-9"
+                  onClick={() => setIsResetOpen(true)}
+                  disabled={isSendingReset}
+                >
                   Change
                 </Button>
               </div>
@@ -136,8 +196,8 @@ export default function AccountPage() {
                     </p>
                   </div>
                 </div>
-                <Button size="sm" variant="outline" className="h-9">
-                  Enable
+                <Button size="sm" variant="outline" className="h-9" disabled>
+                  Coming soon
                 </Button>
               </div>
             </CardContent>
@@ -145,9 +205,9 @@ export default function AccountPage() {
 
           <Card className="flex h-full flex-col">
             <CardHeader>
-              <CardTitle className="text-lg">Billing</CardTitle>
+              <CardTitle className="text-lg">Payments</CardTitle>
               <CardDescription>
-                Manage your billing method and invoices.
+                Manage your gcash account and payments.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
@@ -157,21 +217,21 @@ export default function AccountPage() {
                   <div>
                     <p className="text-sm font-medium">Payment method</p>
                     <p className="text-xs text-muted-foreground">
-                      No card added yet
+                      No gcash number added yet
                     </p>
                   </div>
                 </div>
                 <Button size="sm" variant="outline" className="h-9">
-                  Add Card
+                  Add GCash
                 </Button>
               </div>
               <div className="rounded-lg border border-border/60 px-4 py-3">
-                <p className="text-sm font-medium">Invoices</p>
+                <p className="text-sm font-medium">Payments</p>
                 <p className="text-xs text-muted-foreground">
-                  View and download past invoices.
+                  View past payments.
                 </p>
                 <Button size="sm" className="mt-3 h-9">
-                  View invoices
+                  View payments
                 </Button>
               </div>
             </CardContent>
@@ -207,6 +267,25 @@ export default function AccountPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset password</DialogTitle>
+            <DialogDescription>
+              Send the password reset email to {user?.email ?? "your email"}?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancel</Button>
+            </DialogClose>
+            <Button onClick={handlePasswordReset} disabled={isSendingReset}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
