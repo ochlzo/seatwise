@@ -3,7 +3,7 @@
 
 import React from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { setMode, setViewport, setDrawShape } from "@/lib/features/seatmap/seatmapSlice";
+import { setMode, setViewport, setDrawShape, updateNode } from "@/lib/features/seatmap/seatmapSlice";
 import { LocateFixed, Move, MousePointer2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -234,6 +234,25 @@ export function SelectionPanel() {
     const selectedNode = nodes[selectedIds[0]];
     if (!selectedNode) return null;
 
+    const palette = ["#ffffff", "#cccccc", "#b2b2b2", "#e5e5e5", "#999999", "#7f7f7f"];
+
+    const applyStrokeColor = (color: string) => {
+        if (selectedNode.type !== "shape") return;
+        dispatch(updateNode({
+            id: selectedNode.id,
+            changes: { stroke: color }
+        }));
+    };
+
+    const applyFillColor = (color: string) => {
+        if (selectedNode.type !== "shape") return;
+        if (selectedNode.shape === "line") return;
+        dispatch(updateNode({
+            id: selectedNode.id,
+            changes: { fill: color }
+        }));
+    };
+
     return (
         <div className="absolute top-4 right-4 z-20 w-64 bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
             <h3 className="font-bold mb-2">Selection</h3>
@@ -255,6 +274,42 @@ export function SelectionPanel() {
                     <span>{Math.round(selectedNode.position.x)} / {Math.round(selectedNode.position.y)}</span>
                 </div>
             </div>
+            {selectedNode.type === "shape" && (
+                <div className="mt-4 space-y-4">
+                    <div>
+                        <div className="text-xs text-zinc-500 mb-2">Stroke Color</div>
+                        <div className="grid grid-cols-6 gap-2">
+                            {palette.map((color) => (
+                                <button
+                                    key={`stroke-${color}`}
+                                    type="button"
+                                    className={`h-6 w-6 rounded border ${selectedNode.stroke === color ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-300 dark:border-zinc-700"}`}
+                                    style={{ backgroundColor: color }}
+                                    onClick={() => applyStrokeColor(color)}
+                                    title={color}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                    {selectedNode.shape !== "line" && (
+                        <div>
+                            <div className="text-xs text-zinc-500 mb-2">Fill Color</div>
+                            <div className="grid grid-cols-6 gap-2">
+                                {palette.map((color) => (
+                                    <button
+                                        key={`fill-${color}`}
+                                        type="button"
+                                        className={`h-6 w-6 rounded border ${selectedNode.fill === color ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-300 dark:border-zinc-700"}`}
+                                        style={{ backgroundColor: color }}
+                                        onClick={() => applyFillColor(color)}
+                                        title={color}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     )
 }
