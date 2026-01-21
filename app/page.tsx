@@ -20,6 +20,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { createPortal } from "react-dom";
 import ScrollReveal from "@/components/ui/scroll-reveal";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
+import { useTheme } from "next-themes";
 
 // @ts-ignore - types are not correctly resolved for this extension
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib";
@@ -238,14 +239,19 @@ function SeatModel({ onReady }: { onReady: () => void }) {
   );
 }
 
-function Scene({ onReady }: { onReady: () => void }) {
+function Scene({ onReady, isDark }: { onReady: () => void; isDark: boolean }) {
   const isMobile = useIsMobile();
+  const { invalidate } = useThree();
+
+  useEffect(() => {
+    invalidate();
+  }, [isDark, invalidate]);
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 0, 10]} fov={40} />
       <Environment preset="city" environmentIntensity={isMobile ? 0.3 : 1} />
       <ambientLight intensity={isMobile ? 0.6 : 0.8} />
-      {isMobile && <fog attach="fog" args={["#f0f9ff", 3, 15]} />}
+      {isMobile && !isDark && <fog attach="fog" args={["#f0f9ff", 3, 15]} />}
 
       {/* High-quality SpotLight shadow */}
       <spotLight
@@ -292,6 +298,8 @@ function FixedCanvasLayer() {
   const [mounted, setMounted] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const isMobile = useIsMobile();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   useEffect(() => {
     setMounted(true);
@@ -330,7 +338,7 @@ function FixedCanvasLayer() {
       >
         <Suspense fallback={null}>
           <LoadingHandler modelReady={modelReady} />
-          <Scene onReady={() => setModelReady(true)} />
+          <Scene onReady={() => setModelReady(true)} isDark={isDark} />
         </Suspense>
       </Canvas>
     </div>,

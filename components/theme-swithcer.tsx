@@ -13,11 +13,38 @@ export function ThemeSwithcer({
 }: React.ComponentProps<typeof SwitchPrimitive.Root>) {
   const { resolvedTheme, setTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleCheckedChange = (checked: boolean) => {
     setTheme(checked ? "dark" : "light");
     onCheckedChange?.(checked);
   };
+
+  if (!mounted) {
+    return (
+      <SwitchPrimitive.Root
+        data-slot="theme-switcher"
+        className={cn(
+          "group data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:border-ring focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex h-[1.15rem] w-8 shrink-0 items-center rounded-full border border-transparent shadow-xs transition-all outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+        checked={false}
+        disabled
+        {...props}
+      >
+        <SwitchPrimitive.Thumb
+          data-slot="theme-switcher-thumb"
+          className="bg-background pointer-events-none relative grid size-4 place-items-center rounded-full ring-0"
+        >
+          <Sun className="size-3 text-amber-500" />
+        </SwitchPrimitive.Thumb>
+      </SwitchPrimitive.Root>
+    );
+  }
 
   return (
     <SwitchPrimitive.Root
