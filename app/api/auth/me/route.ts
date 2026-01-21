@@ -29,8 +29,7 @@ export async function GET(req: NextRequest) {
       user: {
         uid: (user.firebase_uid as string) || uid,
         email: (user.email as string | null) ?? null,
-        displayName: `${(user.first_name as string | null) || ""} ${(user.last_name as string | null) || ""
-          }`.trim(),
+        displayName: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
         firstName: user.first_name as string | null,
         lastName: user.last_name as string | null,
         username: user.username as string | null,
