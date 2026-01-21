@@ -1,19 +1,9 @@
 import { AdminSidebar } from "@/components/admin-sidebar"
 import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
-import { Separator } from "@/components/ui/separator"
-import {
     SidebarInset,
     SidebarProvider,
-    SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { StickyHeader } from "@/components/sticky-header"
+import { PageHeader } from "@/components/page-header"
 
 import { verifyAdmin } from '@/lib/auth/admin'
 import LoadingPage from "@/app/LoadingPage"
@@ -28,32 +18,17 @@ export default async function Page() {
             <LoadingPage />
             <AdminSidebar />
             <SidebarInset>
-                <StickyHeader className="flex shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-                    <div className="flex items-center gap-2 px-4">
-                        <SidebarTrigger className="-ml-1" />
-                        <Separator
-                            orientation="vertical"
-                            className="mr-2 data-[orientation=vertical]:h-4"
-                        />
-                        <Breadcrumb>
-                            <BreadcrumbList>
-                                <BreadcrumbItem className="hidden md:block">
-                                    <BreadcrumbLink href="#">
-                                        Building Your Application
-                                    </BreadcrumbLink>
-                                </BreadcrumbItem>
-                                <BreadcrumbSeparator className="hidden md:block" />
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                                </BreadcrumbItem>
-                            </BreadcrumbList>
-                        </Breadcrumb>
-                    </div>
-                    <div className="ml-auto px-4 flex items-center">
-                        <ThemeSwithcer />
-                        <AdminShield />
-                    </div>
-                </StickyHeader>
+                <PageHeader
+                    title="Data Fetching"
+                    parentLabel="Building Your Application"
+                    parentHref="#"
+                    rightSlot={
+                        <>
+                            <ThemeSwithcer />
+                            <AdminShield />
+                        </>
+                    }
+                />
                 <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
                     <div className="grid auto-rows-min gap-4 md:grid-cols-3">
                         <div className="bg-muted/50 aspect-video rounded-xl" />
