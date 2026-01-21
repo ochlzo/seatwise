@@ -13,6 +13,7 @@ import {
     updateNode,
     rotateSelected,
     scaleSelected,
+    setViewportSize,
 } from "@/lib/features/seatmap/seatmapSlice";
 import SeatLayer from "@/components/seatmap/SeatLayer";
 import SectionLayer from "@/components/seatmap/SectionLayer";
@@ -52,6 +53,10 @@ export default function SeatmapCanvas() {
         window.addEventListener('resize', updateDimensions);
         return () => window.removeEventListener('resize', updateDimensions);
     }, []);
+
+    useEffect(() => {
+        dispatch(setViewportSize(dimensions));
+    }, [dimensions, dispatch]);
 
     // Center view on load
     useEffect(() => {
