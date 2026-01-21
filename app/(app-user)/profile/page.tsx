@@ -1,14 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -24,7 +16,7 @@ import { getDefaultAvatarsAction } from "@/lib/actions/getDefaultAvatars";
 import { updateProfileAction, checkUsernameAction } from "@/lib/actions/updateProfile";
 import { cn } from "@/lib/utils";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { StickyHeader } from "@/components/sticky-header";
+import { PageHeader } from "@/components/page-header";
 import { ThemeSwithcer } from "@/components/theme-swithcer"
 
 export default function ProfilePage() {
@@ -231,25 +223,10 @@ export default function ProfilePage() {
 
   return (
     <>
-      <StickyHeader className="flex shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-        <div className="flex items-center gap-2 px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator
-            orientation="vertical"
-            className="mr-2 data-[orientation=vertical]:h-4"
-          />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbPage>User Profile</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
-        <div className="ml-auto px-4 flex items-center gap-3">
-            <ThemeSwithcer />
-        </div>
-      </StickyHeader>
+      <PageHeader
+        title="User Profile"
+        rightSlot={<ThemeSwithcer />}
+      />
 
       <div className="flex flex-1 flex-col gap-6 p-4 pt-0 md:p-6 md:pt-0 max-w-4xl mx-auto w-full animate-in fade-in duration-500">
         <Card className="border-none shadow-xl bg-card/60 backdrop-blur-md relative overflow-hidden">
