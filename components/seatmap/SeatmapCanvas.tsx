@@ -95,12 +95,13 @@ export default function SeatmapCanvas() {
 
             // Check for valid keys first to avoid unnecessary dispatches
             if (['[', ']', '-', '='].includes(e.key)) {
+                const rotateStep = e.shiftKey ? 15 : 5;
                 switch (e.key) {
                     case '[':
-                        dispatch(rotateSelected(-5));
+                        dispatch(rotateSelected(-rotateStep));
                         break;
                     case ']':
-                        dispatch(rotateSelected(5));
+                        dispatch(rotateSelected(rotateStep));
                         break;
                     case '-':
                         dispatch(scaleSelected(0.9));
