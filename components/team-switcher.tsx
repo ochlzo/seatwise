@@ -69,14 +69,22 @@ export function TeamSwitcher({
         !isAdmin && "cursor-pointer"
       )}
     >
-      <div className={cn(
-        "flex flex-1 items-center justify-start overflow-hidden",
-        state === "collapsed" && "justify-center"
-      )}>
+      <div
+        className={cn(
+          "flex flex-1 items-center justify-start overflow-hidden",
+          isMobile && "justify-center",
+          state === "collapsed" && "justify-center"
+        )}
+      >
         <img
           src={state === "collapsed" ? logoMini : logo}
           alt="Seatwise"
-          className={state === "collapsed" ? "size-9 object-contain" : "h-11 w-auto max-w-full object-contain"}
+          className={cn(
+            state === "collapsed"
+              ? "size-9 object-contain"
+              : "h-11 w-auto max-w-full object-contain",
+            isMobile && "mx-auto"
+          )}
         />
       </div>
       {isAdmin && state !== "collapsed" && <ChevronsUpDown className="ml-auto size-4 shrink-0" />}
