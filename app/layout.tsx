@@ -3,6 +3,8 @@ import { Geist, Geist_Mono, Outfit } from "next/font/google";
 import "./globals.css";
 import StoreProvider from "./StoreProvider";
 import SmoothScroll from "@/components/SmoothScroll";
+import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,14 +33,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="scroll-smooth">
+    <html lang="en" className="scroll-smooth" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} antialiased`}
       >
         <StoreProvider>
-          <SmoothScroll>
-            {children}
-          </SmoothScroll>
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <SmoothScroll>
+              {children}
+            </SmoothScroll>
+            <Toaster />
+          </ThemeProvider>
         </StoreProvider>
       </body>
     </html>
