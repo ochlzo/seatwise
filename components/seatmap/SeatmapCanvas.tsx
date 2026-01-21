@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useRef, useEffect } from "react";
-import { Stage, Layer, Rect, Text, Group } from "react-konva";
+import { Stage, Layer, Rect, Text, Group, Circle, RegularPolygon, Line } from "react-konva";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
     setViewport,
@@ -20,10 +20,17 @@ import { getRelativePointerPosition } from "@/lib/seatmap/geometry";
 
 export default function SeatmapCanvas() {
     const dispatch = useAppDispatch();
-    const { viewport, mode } = useAppSelector((state) => state.seatmap);
+    const { viewport, mode, drawShape } = useAppSelector((state) => state.seatmap);
     const stageRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [isDraggingNode, setIsDraggingNode] = React.useState(false);
+    const [drawDraft, setDrawDraft] = React.useState<{
+        shape: typeof drawShape.shape;
+        dash?: number[];
+        sides?: number;
+        start: { x: number; y: number };
+        current: { x: number; y: number };
+    } | null>(null);
 
     // Resize observer to keep stage responsive
     const [dimensions, setDimensions] = React.useState({ width: 800, height: 600 });
@@ -139,6 +146,7 @@ export default function SeatmapCanvas() {
     }
 
     const handleStageClick = (e: any) => {
+        if (mode === "draw") return;
         if (e.target === e.target.getStage()) {
             dispatch(deselectAll());
             return;
@@ -188,6 +196,171 @@ export default function SeatmapCanvas() {
         }
     };
 
+    const handleMouseDown = (e: any) => {
+        if (mode !== "draw") return;
+        if (e.evt && e.evt.button !== 0) return;
+        if (e.target !== e.target.getStage()) return;
+
+        const stage = stageRef.current;
+        if (!stage) return;
+        const pos = getRelativePointerPosition(stage);
+        if (!pos) return;
+
+        setDrawDraft({
+            shape: drawShape.shape,
+            dash: drawShape.dash,
+            sides: drawShape.sides,
+            start: pos,
+            current: pos,
+        });
+    };
+
+    const handleMouseMove = () => {
+        if (!drawDraft) return;
+        const stage = stageRef.current;
+        if (!stage) return;
+        const pos = getRelativePointerPosition(stage);
+        if (!pos) return;
+        setDrawDraft((prev) => (prev ? { ...prev, current: pos } : prev));
+    };
+
+    const handleMouseUp = () => {
+        if (!drawDraft) return;
+
+        const { start, current } = drawDraft;
+        const dx = current.x - start.x;
+        const dy = current.y - start.y;
+        const width = Math.abs(dx);
+        const height = Math.abs(dy);
+        const minSize = 4;
+
+        if (drawDraft.shape === "line") {
+            const length = Math.hypot(dx, dy);
+            if (length >= minSize) {
+                dispatch(addShape({
+                    x: start.x,
+                    y: start.y,
+                    shape: "line",
+                    dash: drawDraft.dash,
+                    points: [0, 0, dx, dy],
+                    strokeWidth: 2,
+                }));
+            }
+            setDrawDraft(null);
+            return;
+        }
+
+        if (width < minSize || height < minSize) {
+            setDrawDraft(null);
+            return;
+        }
+
+        const centerX = start.x + dx / 2;
+        const centerY = start.y + dy / 2;
+
+        if (drawDraft.shape === "rect") {
+            dispatch(addShape({
+                x: centerX,
+                y: centerY,
+                shape: "rect",
+                width,
+                height,
+            }));
+        } else if (drawDraft.shape === "circle") {
+            const radius = Math.min(width, height) / 2;
+            dispatch(addShape({
+                x: centerX,
+                y: centerY,
+                shape: "circle",
+                radius,
+            }));
+        } else if (drawDraft.shape === "polygon") {
+            const radius = Math.min(width, height) / 2;
+            dispatch(addShape({
+                x: centerX,
+                y: centerY,
+                shape: "polygon",
+                radius,
+                sides: drawDraft.sides ?? 6,
+            }));
+        }
+
+        setDrawDraft(null);
+    };
+
+    const renderDraft = () => {
+        if (!drawDraft) return null;
+
+        const { start, current } = drawDraft;
+        const dx = current.x - start.x;
+        const dy = current.y - start.y;
+        const width = Math.abs(dx);
+        const height = Math.abs(dy);
+        const centerX = start.x + dx / 2;
+        const centerY = start.y + dy / 2;
+
+        if (drawDraft.shape === "line") {
+            return (
+                <Line
+                    points={[start.x, start.y, current.x, current.y]}
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dash={drawDraft.dash}
+                />
+            );
+        }
+
+        if (drawDraft.shape === "rect") {
+            return (
+                <Rect
+                    x={centerX}
+                    y={centerY}
+                    width={width}
+                    height={height}
+                    offsetX={width / 2}
+                    offsetY={height / 2}
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dash={[6, 4]}
+                    fill="rgba(59, 130, 246, 0.15)"
+                />
+            );
+        }
+
+        if (drawDraft.shape === "circle") {
+            const radius = Math.min(width, height) / 2;
+            return (
+                <Circle
+                    x={centerX}
+                    y={centerY}
+                    radius={radius}
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dash={[6, 4]}
+                    fill="rgba(59, 130, 246, 0.15)"
+                />
+            );
+        }
+
+        if (drawDraft.shape === "polygon") {
+            const radius = Math.min(width, height) / 2;
+            return (
+                <RegularPolygon
+                    x={centerX}
+                    y={centerY}
+                    sides={drawDraft.sides ?? 6}
+                    radius={radius}
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dash={[6, 4]}
+                    fill="rgba(59, 130, 246, 0.15)"
+                />
+            );
+        }
+
+        return null;
+    };
+
     return (
         <div
             ref={containerRef}
@@ -202,6 +375,9 @@ export default function SeatmapCanvas() {
                 onWheel={handleWheel}
                 onClick={handleStageClick}
                 onTap={handleStageClick}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
                 ref={stageRef}
                 x={viewport.position.x}
                 y={viewport.position.y}
@@ -211,6 +387,10 @@ export default function SeatmapCanvas() {
             >
                 <Layer>
                     {/* Grid or Background could go here */}
+                </Layer>
+
+                <Layer listening={false}>
+                    {renderDraft()}
                 </Layer>
 
                 <SectionLayer

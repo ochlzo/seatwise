@@ -5,8 +5,13 @@ import { v4 as uuidv4 } from "uuid";
 interface SeatmapState {
     nodes: Record<string, SeatmapNode>;
     viewport: SeatmapViewport;
-    mode: "select" | "pan";
+    mode: "select" | "pan" | "draw";
     selectedIds: string[];
+    drawShape: {
+        shape: SeatmapShapeNode["shape"];
+        dash?: number[];
+        sides?: number;
+    };
 }
 
 const initialState: SeatmapState = {
@@ -14,14 +19,25 @@ const initialState: SeatmapState = {
     viewport: { position: { x: 0, y: 0 }, scale: 1 },
     mode: "select",
     selectedIds: [],
+    drawShape: { shape: "rect" },
 };
 
 const seatmapSlice = createSlice({
     name: "seatmap",
     initialState,
     reducers: {
-        setMode: (state, action: PayloadAction<"select" | "pan">) => {
+        setMode: (state, action: PayloadAction<"select" | "pan" | "draw">) => {
             state.mode = action.payload;
+        },
+        setDrawShape: (
+            state,
+            action: PayloadAction<{
+                shape: SeatmapShapeNode["shape"];
+                dash?: number[];
+                sides?: number;
+            }>
+        ) => {
+            state.drawShape = action.payload;
         },
         setViewport: (state, action: PayloadAction<SeatmapViewport>) => {
             state.viewport = action.payload;
@@ -39,21 +55,53 @@ const seatmapSlice = createSlice({
             };
             state.nodes[id] = newSeat;
         },
-        addShape: (state, action: PayloadAction<{ x: number; y: number, shape: SeatmapShapeNode['shape'], dash?: number[], sides?: number }>) => {
+        addShape: (
+            state,
+            action: PayloadAction<{
+                x: number;
+                y: number;
+                shape: SeatmapShapeNode["shape"];
+                dash?: number[];
+                sides?: number;
+                width?: number;
+                height?: number;
+                radius?: number;
+                points?: number[];
+                fill?: string;
+                stroke?: string;
+                strokeWidth?: number;
+            }>
+        ) => {
             const id = uuidv4();
-            const { x, y, shape, dash, sides } = action.payload;
+            const {
+                x,
+                y,
+                shape,
+                dash,
+                sides,
+                width,
+                height,
+                radius,
+                points,
+                fill,
+                stroke,
+                strokeWidth,
+            } = action.payload;
 
             // Define default sizes based on shape
-            let width = 50;
-            let height = 50;
-            let radius = 30;
-            let points = undefined;
+            let defaultWidth = 50;
+            let defaultHeight = 50;
+            let defaultRadius = 30;
+            let defaultPoints = undefined;
 
             if (shape === "line") {
-                width = 0; height = 0; radius = 0;
-                points = [0, 0, 100, 0];
+                defaultWidth = 0;
+                defaultHeight = 0;
+                defaultRadius = 0;
+                defaultPoints = [0, 0, 100, 0];
             } else if (shape === "stairs") {
-                width = 60; height = 60;
+                defaultWidth = 60;
+                defaultHeight = 60;
             }
 
             const newShape: SeatmapShapeNode = {
@@ -64,14 +112,14 @@ const seatmapSlice = createSlice({
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
-                width,
-                height,
-                radius,
-                fill: shape === 'line' ? undefined : '#cbd5e1',
-                stroke: '#64748b',
-                strokeWidth: 2,
+                width: width ?? defaultWidth,
+                height: height ?? defaultHeight,
+                radius: radius ?? defaultRadius,
+                fill: fill ?? (shape === "line" ? undefined : "#cbd5e1"),
+                stroke: stroke ?? "#64748b",
+                strokeWidth: strokeWidth ?? 2,
                 dash,
-                points,
+                points: points ?? defaultPoints,
                 sides
             };
             state.nodes[id] = newShape;
@@ -116,6 +164,7 @@ const seatmapSlice = createSlice({
 
 export const {
     setMode,
+    setDrawShape,
     setViewport,
     addSeat,
     addShape,
