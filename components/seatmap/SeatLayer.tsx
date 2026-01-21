@@ -57,10 +57,8 @@ const SeatItem = ({
             groupRef.current.rotation(rotation);
         }
         const scaleX = groupRef.current.scaleX();
-        const scaleY = isShiftDown ? scaleX : groupRef.current.scaleY();
-        if (isShiftDown) {
-            groupRef.current.scaleY(scaleY);
-        }
+        const scaleY = scaleX;
+        groupRef.current.scaleY(scaleY);
         rotation = ((rotation % 360) + 360) % 360;
         onChange(seat.id, { rotation, scaleX, scaleY });
     };
@@ -126,7 +124,7 @@ const SeatItem = ({
                     ref={transformerRef}
                     rotateEnabled
                     resizeEnabled
-                    keepRatio={!!isShiftDown}
+                    keepRatio
                     boundBoxFunc={(oldBox, newBox) => {
                         if (
                             newBox.width < MIN_SIZE ||
