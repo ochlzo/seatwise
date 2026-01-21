@@ -167,10 +167,19 @@ const seatmapSlice = createSlice({
         scaleSelected: (state, action: PayloadAction<number>) => {
             state.selectedIds.forEach((id) => {
                 if (state.nodes[id]) {
-                    const currentScaleX = state.nodes[id].scaleX || 1;
-                    const currentScaleY = state.nodes[id].scaleY || 1;
-                    state.nodes[id].scaleX = currentScaleX * action.payload;
-                    state.nodes[id].scaleY = currentScaleY * action.payload;
+                    const node = state.nodes[id] as SeatmapNode;
+                    if (node.type === "shape" && node.shape === "line") {
+                        if (Array.isArray(node.points)) {
+                            node.points = node.points.map((value) => value * action.payload);
+                        }
+                        node.scaleX = 1;
+                        node.scaleY = 1;
+                        return;
+                    }
+                    const currentScaleX = node.scaleX || 1;
+                    const currentScaleY = node.scaleY || 1;
+                    node.scaleX = currentScaleX * action.payload;
+                    node.scaleY = currentScaleY * action.payload;
                 }
             });
         }

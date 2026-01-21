@@ -8,6 +8,9 @@ import { selectNode, updateNode } from "@/lib/features/seatmap/seatmapSlice";
 import { SeatmapShapeNode } from "@/lib/seatmap/types";
 
 const ROTATION_SNAP = 15;
+const MIN_SIZE = 10;
+const MAX_SIZE = 800;
+const MIN_LINE_LENGTH = 6;
 
 const ShapeItem = ({
     shape,
@@ -16,6 +19,7 @@ const ShapeItem = ({
     onChange,
     onDragStart,
     onDragEnd,
+    isShiftDown,
 }: {
     shape: SeatmapShapeNode;
     isSelected: boolean;
@@ -23,6 +27,7 @@ const ShapeItem = ({
     onChange: any;
     onDragStart?: () => void;
     onDragEnd?: () => void;
+    isShiftDown?: boolean;
 }) => {
     const shapeRef = React.useRef<any>(null);
     const transformerRef = React.useRef<any>(null);
@@ -43,16 +48,18 @@ const ShapeItem = ({
         rafRef.current = null;
     };
 
-    const applyRotation = (evt?: Event) => {
+    const applyTransform = (evt?: Event) => {
         if (!shapeRef.current) return;
         let rotation = shapeRef.current.rotation();
-        const shiftKey = (evt as any)?.shiftKey;
+        const shiftKey = (evt as any)?.shiftKey || isShiftDown;
         if (shiftKey) {
             rotation = Math.round(rotation / ROTATION_SNAP) * ROTATION_SNAP;
             shapeRef.current.rotation(rotation);
         }
+        const scaleX = shapeRef.current.scaleX();
+        const scaleY = shapeRef.current.scaleY();
         rotation = ((rotation % 360) + 360) % 360;
-        onChange(shape.id, { rotation });
+        onChange(shape.id, { rotation, scaleX, scaleY });
     };
 
     const commonProps = {
@@ -95,8 +102,8 @@ const ShapeItem = ({
                 rafRef.current = requestAnimationFrame(flushDragPosition);
             }
         },
-        onTransform: (e: any) => applyRotation(e?.evt),
-        onTransformEnd: (e: any) => applyRotation(e?.evt),
+        onTransform: (e: any) => applyTransform(e?.evt),
+        onTransformEnd: (e: any) => applyTransform(e?.evt),
         shadowColor: "black",
         shadowBlur: isSelected ? 10 : 0,
         shadowOpacity: 0.3
@@ -108,7 +115,24 @@ const ShapeItem = ({
                 <>
                     <Rect ref={shapeRef} {...commonProps} width={shape.width || 50} height={shape.height || 50} offsetX={(shape.width || 50) / 2} offsetY={(shape.height || 50) / 2} cornerRadius={4} />
                     {isSelected && (
-                        <Transformer ref={transformerRef} rotateEnabled resizeEnabled={false} enabledAnchors={[]} rotateAnchorOffset={24} />
+                        <Transformer
+                            ref={transformerRef}
+                            rotateEnabled
+                            resizeEnabled
+                            keepRatio={!!isShiftDown}
+                            boundBoxFunc={(oldBox, newBox) => {
+                                if (
+                                    newBox.width < MIN_SIZE ||
+                                    newBox.height < MIN_SIZE ||
+                                    newBox.width > MAX_SIZE ||
+                                    newBox.height > MAX_SIZE
+                                ) {
+                                    return oldBox;
+                                }
+                                return newBox;
+                            }}
+                            rotateAnchorOffset={24}
+                        />
                     )}
                 </>
             );
@@ -117,7 +141,24 @@ const ShapeItem = ({
                 <>
                     <Circle ref={shapeRef} {...commonProps} radius={shape.radius || 30} />
                     {isSelected && (
-                        <Transformer ref={transformerRef} rotateEnabled resizeEnabled={false} enabledAnchors={[]} rotateAnchorOffset={24} />
+                        <Transformer
+                            ref={transformerRef}
+                            rotateEnabled
+                            resizeEnabled
+                            keepRatio
+                            boundBoxFunc={(oldBox, newBox) => {
+                                if (
+                                    newBox.width < MIN_SIZE ||
+                                    newBox.height < MIN_SIZE ||
+                                    newBox.width > MAX_SIZE ||
+                                    newBox.height > MAX_SIZE
+                                ) {
+                                    return oldBox;
+                                }
+                                return newBox;
+                            }}
+                            rotateAnchorOffset={24}
+                        />
                     )}
                 </>
             );
@@ -126,7 +167,24 @@ const ShapeItem = ({
                 <>
                     <RegularPolygon ref={shapeRef} {...commonProps} sides={shape.sides || 6} radius={shape.radius || 30} />
                     {isSelected && (
-                        <Transformer ref={transformerRef} rotateEnabled resizeEnabled={false} enabledAnchors={[]} rotateAnchorOffset={24} />
+                        <Transformer
+                            ref={transformerRef}
+                            rotateEnabled
+                            resizeEnabled
+                            keepRatio
+                            boundBoxFunc={(oldBox, newBox) => {
+                                if (
+                                    newBox.width < MIN_SIZE ||
+                                    newBox.height < MIN_SIZE ||
+                                    newBox.width > MAX_SIZE ||
+                                    newBox.height > MAX_SIZE
+                                ) {
+                                    return oldBox;
+                                }
+                                return newBox;
+                            }}
+                            rotateAnchorOffset={24}
+                        />
                     )}
                 </>
             );
@@ -147,6 +205,23 @@ const ShapeItem = ({
             const centeredPoints = rawPoints.map((val, idx) => (
                 idx % 2 === 0 ? val - centerX : val - centerY
             ));
+            const startAbs = {
+                x: shape.position.x + rawPoints[0],
+                y: shape.position.y + rawPoints[1],
+            };
+            const endAbs = {
+                x: shape.position.x + rawPoints[2],
+                y: shape.position.y + rawPoints[3],
+            };
+            const updateEndpoint = (index: 0 | 2, next: { x: number; y: number }) => {
+                const nextPoints = [...rawPoints];
+                nextPoints[index] = next.x - shape.position.x;
+                nextPoints[index + 1] = next.y - shape.position.y;
+                const dx = nextPoints[2] - nextPoints[0];
+                const dy = nextPoints[3] - nextPoints[1];
+                if (Math.hypot(dx, dy) < MIN_LINE_LENGTH) return;
+                onChange(shape.id, { points: nextPoints, scaleX: 1, scaleY: 1 });
+            };
             return (
                 <>
                     <Line
@@ -155,11 +230,35 @@ const ShapeItem = ({
                         x={shape.position.x + centerX}
                         y={shape.position.y + centerY}
                         points={centeredPoints}
+                        scaleX={1}
+                        scaleY={1}
                         tension={0}
                         hitStrokeWidth={10}
                     />
                     {isSelected && (
-                        <Transformer ref={transformerRef} rotateEnabled resizeEnabled={false} enabledAnchors={[]} rotateAnchorOffset={24} />
+                        <>
+                            <Transformer ref={transformerRef} rotateEnabled resizeEnabled={false} enabledAnchors={[]} rotateAnchorOffset={24} />
+                            <Circle
+                                x={startAbs.x}
+                                y={startAbs.y}
+                                radius={5}
+                                fill="#3b82f6"
+                                stroke="#1e3a8a"
+                                strokeWidth={1}
+                                draggable
+                                onDragMove={(e) => updateEndpoint(0, { x: e.target.x(), y: e.target.y() })}
+                            />
+                            <Circle
+                                x={endAbs.x}
+                                y={endAbs.y}
+                                radius={5}
+                                fill="#3b82f6"
+                                stroke="#1e3a8a"
+                                strokeWidth={1}
+                                draggable
+                                onDragMove={(e) => updateEndpoint(2, { x: e.target.x(), y: e.target.y() })}
+                            />
+                        </>
                     )}
                 </>
             );
@@ -186,7 +285,24 @@ const ShapeItem = ({
                     ))}
                     </Group>
                     {isSelected && (
-                        <Transformer ref={transformerRef} rotateEnabled resizeEnabled={false} enabledAnchors={[]} rotateAnchorOffset={24} />
+                        <Transformer
+                            ref={transformerRef}
+                            rotateEnabled
+                            resizeEnabled
+                            keepRatio={!!isShiftDown}
+                            boundBoxFunc={(oldBox, newBox) => {
+                                if (
+                                    newBox.width < MIN_SIZE ||
+                                    newBox.height < MIN_SIZE ||
+                                    newBox.width > MAX_SIZE ||
+                                    newBox.height > MAX_SIZE
+                                ) {
+                                    return oldBox;
+                                }
+                                return newBox;
+                            }}
+                            rotateAnchorOffset={24}
+                        />
                     )}
                 </>
             );
@@ -205,6 +321,22 @@ export default function SectionLayer({
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
     const dispatch = useAppDispatch();
+    const [isShiftDown, setIsShiftDown] = React.useState(false);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Shift") setIsShiftDown(true);
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.key === "Shift") setIsShiftDown(false);
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("keyup", handleKeyUp);
+        };
+    }, []);
 
     // @ts-ignore
     const shapes = Object.values(nodes).filter((node): node is SeatmapShapeNode => node.type === "shape");
@@ -220,6 +352,7 @@ export default function SectionLayer({
                     onChange={(id: string, changes: any) => dispatch(updateNode({ id, changes }))}
                     onDragStart={onNodeDragStart}
                     onDragEnd={onNodeDragEnd}
+                    isShiftDown={isShiftDown}
                 />
             ))}
         </Layer>
