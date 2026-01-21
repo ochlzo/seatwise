@@ -16,21 +16,36 @@ export function Sidebar() {
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
                 <h2 className="font-bold text-lg">Seat Palette</h2>
             </div>
-            <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
-                <div className="text-sm text-zinc-500 mb-2">Seats</div>
-                <div
-                    className="p-4 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-                    draggable
-                    onDragStart={(e) => {
-                        e.dataTransfer.setData("type", "seat");
-                        e.dataTransfer.effectAllowed = "copy";
-                    }}
-                >
-                    <div className="w-12 h-12 relative flex items-center justify-center">
-                        <img src="/seat-default.svg" alt="Seat" className="w-full h-full object-contain" />
+                <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
+                    <div className="text-sm text-zinc-500 mb-2">Seats</div>
+                    <div
+                        className="p-4 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                        draggable
+                        onDragStart={(e) => {
+                            e.dataTransfer.setData("type", "seat");
+                            e.dataTransfer.setData("seatType", "standard");
+                            e.dataTransfer.effectAllowed = "copy";
+                        }}
+                    >
+                        <div className="w-12 h-12 relative flex items-center justify-center">
+                            <img src="/seat-default.svg" alt="Seat" className="w-full h-full object-contain" />
+                        </div>
+                        <span className="text-sm font-medium">Standard Seat</span>
                     </div>
-                    <span className="text-sm font-medium">Standard Seat</span>
-                </div>
+                    <div
+                        className="p-4 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                        draggable
+                        onDragStart={(e) => {
+                            e.dataTransfer.setData("type", "seat");
+                            e.dataTransfer.setData("seatType", "vip");
+                            e.dataTransfer.effectAllowed = "copy";
+                        }}
+                    >
+                        <div className="w-12 h-12 relative flex items-center justify-center">
+                            <img src="/default-vip-seat.svg" alt="VIP Seat" className="w-full h-full object-contain" />
+                        </div>
+                        <span className="text-sm font-medium">VIP Seat</span>
+                    </div>
 
                 <div className="text-sm text-zinc-500 mb-2 mt-4">Shapes</div>
                 <div className="grid grid-cols-2 gap-2">

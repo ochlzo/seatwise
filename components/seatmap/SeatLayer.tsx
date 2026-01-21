@@ -8,6 +8,8 @@ import { selectNode, updateNode } from "@/lib/features/seatmap/seatmapSlice";
 
 const SEAT_IMAGE_URL = "/seat-default.svg";
 const SEAT_SELECTED_IMAGE_URL = "/seat-selected.svg";
+const VIP_SEAT_IMAGE_URL = "/default-vip-seat.svg";
+const VIP_SEAT_SELECTED_IMAGE_URL = "/selected-vip-seat.svg";
 
 const SeatItem = ({
   seat,
@@ -17,8 +19,12 @@ const SeatItem = ({
   onDragStart,
   onDragEnd,
 }: any) => {
-  const imageUrl = isSelected ? SEAT_SELECTED_IMAGE_URL : SEAT_IMAGE_URL;
-  const [image] = useImage(imageUrl);
+    const seatType = seat.seatType ?? "standard";
+    const imageUrl =
+        seatType === "vip"
+            ? (isSelected ? VIP_SEAT_SELECTED_IMAGE_URL : VIP_SEAT_IMAGE_URL)
+            : (isSelected ? SEAT_SELECTED_IMAGE_URL : SEAT_IMAGE_URL);
+    const [image] = useImage(imageUrl);
   const rafRef = React.useRef<number | null>(null);
   const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
 

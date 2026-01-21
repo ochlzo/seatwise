@@ -176,6 +176,7 @@ export default function SeatmapCanvas() {
 
         const type = e.dataTransfer.getData("type");
         const shape = e.dataTransfer.getData("shape");
+        const seatType = e.dataTransfer.getData("seatType");
 
         if (type === "shape") {
             const sides = e.dataTransfer.getData("sides");
@@ -192,7 +193,11 @@ export default function SeatmapCanvas() {
             }));
         } else {
             // Default to seat
-            dispatch(addSeat({ x: pos.x, y: pos.y }));
+            dispatch(addSeat({
+                x: pos.x,
+                y: pos.y,
+                seatType: seatType === "vip" ? "vip" : "standard",
+            }));
         }
     };
 

@@ -56,6 +56,7 @@ export type SeatmapSeatNode = SeatmapNodeBase & {
   seatNumber?: number;
   status: SeatStatus;
   priceTierId?: string;
+  seatType?: "standard" | "vip";
 };
 
 export type SeatmapRowNode = SeatmapNodeBase & {

@@ -42,7 +42,10 @@ const seatmapSlice = createSlice({
         setViewport: (state, action: PayloadAction<SeatmapViewport>) => {
             state.viewport = action.payload;
         },
-        addSeat: (state, action: PayloadAction<{ x: number; y: number }>) => {
+        addSeat: (
+            state,
+            action: PayloadAction<{ x: number; y: number; seatType?: "standard" | "vip" }>
+        ) => {
             const id = uuidv4();
             const newSeat: SeatmapSeatNode = {
                 id,
@@ -52,6 +55,7 @@ const seatmapSlice = createSlice({
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
+                seatType: action.payload.seatType ?? "standard",
             };
             state.nodes[id] = newSeat;
         },
