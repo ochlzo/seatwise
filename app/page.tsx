@@ -19,6 +19,7 @@ import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { createPortal } from "react-dom";
 import ScrollReveal from "@/components/ui/scroll-reveal";
+import { ThemeSwithcer } from "@/components/theme-swithcer";
 
 // @ts-ignore - types are not correctly resolved for this extension
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib";
@@ -299,16 +300,19 @@ function FixedCanvasLayer() {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 h-screen w-full z-[-10] bg-white pointer-events-none">
+    <div className="fixed inset-0 h-screen w-full z-[-10] bg-white dark:bg-zinc-950 pointer-events-none">
       {/* Radial overlay to make the center clear while blending edges */}
-      <div className={`absolute inset-0 z-[1] transition-opacity duration-1000 ${isMobile
-        ? "bg-[radial-gradient(circle_at_center,_transparent_0%,_#f0f7ff_50%,_white_100%)] opacity-94"
-        : "bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] opacity-70"
-        }`} />
+      <div
+        className={`absolute inset-0 z-[1] transition-opacity duration-1000 ${
+          isMobile
+            ? "bg-[radial-gradient(circle_at_center,_transparent_0%,_#f0f7ff_50%,_white_100%)] opacity-94 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_60%,_#0a0a0a_100%)]"
+            : "bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] opacity-70 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_70%,_#0a0a0a_100%)]"
+        }`}
+      />
 
       {/* Mobile-only subtle blue "mist" for top and bottom to frame text */}
       {isMobile && (
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-100/35 via-transparent to-blue-200/25 z-[2] pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-100/35 via-transparent to-blue-200/25 dark:from-blue-900/25 dark:to-blue-800/10 z-[2] pointer-events-none" />
       )}
 
       <Canvas
@@ -360,7 +364,10 @@ export default function Home() {
   const router = useRouter();
 
   return (
-    <main className="relative z-10 snap-y snap-mandatory bg-transparent text-zinc-900 selection:bg-blue-200">
+    <main className="relative z-10 snap-y snap-mandatory bg-transparent text-zinc-900 dark:text-zinc-100 selection:bg-blue-200 dark:selection:bg-blue-800">
+      <div className="fixed right-6 top-6 z-30 pointer-events-auto">
+        <ThemeSwithcer />
+      </div>
       {/* Fixed 3D Canvas Background */}
       <FixedCanvasLayer />
 
@@ -374,7 +381,7 @@ export default function Home() {
             textClassName="max-w-2xl mb-10 leading-relaxed drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
             containerClassName="!m-0 !mb-10"
           >
-            <span className="block text-xl md:text-3xl font-medium md:font-light text-zinc-800 md:text-zinc-500 mb-6">
+            <span className="block text-xl md:text-3xl font-medium md:font-light text-zinc-800 md:text-zinc-500 dark:text-zinc-200 dark:md:text-zinc-300 mb-6">
               The future of venue management. Precision, speed, and intelligence
               in every seat.
             </span>
@@ -385,7 +392,7 @@ export default function Home() {
           <div className="flex flex-row items-center gap-4 md:gap-8 flex-wrap">
             <button
               // onClick={() => router.push("/login")}
-              className="cursor-pointer px-6 md:px-8 py-3 md:py-4 bg-zinc-900 text-white font-bold uppercase tracking-widest hover:bg-blue-500 transition-colors duration-300"
+              className="cursor-pointer px-6 md:px-8 py-3 md:py-4 bg-zinc-900 text-white font-bold uppercase tracking-widest hover:bg-blue-500 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-blue-500 dark:hover:text-white transition-colors duration-300"
             >
               View Events Now!
             </button>
@@ -412,7 +419,7 @@ export default function Home() {
             <span className="text-blue-500">pay in a tap.</span>
           </h2>
           <ScrollReveal
-            textClassName="text-lg md:text-2xl text-zinc-800 md:text-zinc-500 font-medium md:font-light mb-8 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+            textClassName="text-lg md:text-2xl text-zinc-800 md:text-zinc-500 dark:text-zinc-200 dark:md:text-zinc-300 font-medium md:font-light mb-8 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
             containerClassName="!m-0 !mb-8"
             rotationEnd="center center"
             wordAnimationEnd="center center"
@@ -430,7 +437,7 @@ export default function Home() {
             Ready to <span className="text-blue-500">Try it Out?</span>
           </h2>
           <ScrollReveal
-            textClassName="text-lg md:text-2xl text-zinc-800 md:text-zinc-500 font-medium md:font-light mb-10 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+            textClassName="text-lg md:text-2xl text-zinc-800 md:text-zinc-500 dark:text-zinc-200 dark:md:text-zinc-300 font-medium md:font-light mb-10 drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
             containerClassName="!m-0 !mb-10"
             rotationEnd="center center"
             wordAnimationEnd="center center"
@@ -442,11 +449,11 @@ export default function Home() {
           <div className="flex gap-4">
             <button
               onClick={() => router.push("/dashboard")}
-              className="cursor-pointer px-8 py-4 bg-blue-500 text-white font-bold uppercase tracking-widest hover:bg-zinc-900 transition-colors duration-300"
+              className="cursor-pointer px-8 py-4 bg-blue-500 text-white font-bold uppercase tracking-widest hover:bg-zinc-900 dark:hover:bg-zinc-100 dark:hover:text-zinc-900 transition-colors duration-300"
             >
               Get Started
             </button>
-            <button className="px-8 py-4 border border-zinc-300 text-zinc-900 font-bold uppercase tracking-widest hover:border-zinc-900 transition-colors duration-300">
+            <button className="px-8 py-4 border border-zinc-300 text-zinc-900 dark:border-zinc-700 dark:text-zinc-100 font-bold uppercase tracking-widest hover:border-zinc-900 dark:hover:border-zinc-200 transition-colors duration-300">
               Learn More
             </button>
           </div>
@@ -454,13 +461,13 @@ export default function Home() {
       </section>
 
       {/* Footer (small) */}
-      <footer className="relative py-10 px-6 md:px-32 border-t border-zinc-100 z-20 flex flex-col md:flex-row justify-between items-center text-zinc-500 text-xs uppercase tracking-widest gap-4">
+      <footer className="relative py-10 px-6 md:px-32 border-t border-zinc-100 dark:border-zinc-800 z-20 flex flex-col md:flex-row justify-between items-center text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-widest gap-4">
         <p>&copy; 2026 SEATWISE • CHOLO CANDELARIA • SEAN ARMENTA • BUCAL</p>
         <div className="flex gap-8">
-          <a href="#" className="hover:text-zinc-900 transition-colors">
+          <a href="#" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
             Privacy
           </a>
-          <a href="#" className="hover:text-zinc-900 transition-colors">
+          <a href="#" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
             Terms
           </a>
         </div>
