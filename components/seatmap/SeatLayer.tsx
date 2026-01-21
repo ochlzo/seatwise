@@ -11,6 +11,8 @@ const SEAT_SELECTED_IMAGE_URL = "/seat-selected.svg";
 const VIP_SEAT_IMAGE_URL = "/default-vip-seat.svg";
 const VIP_SEAT_SELECTED_IMAGE_URL = "/selected-vip-seat.svg";
 const ROTATION_SNAP = 15;
+const MIN_SIZE = 16;
+const MAX_SIZE = 320;
 
 const SeatItem = ({
     seat,
@@ -19,6 +21,7 @@ const SeatItem = ({
     onChange,
     onDragStart,
     onDragEnd,
+    isShiftDown,
 }: any) => {
     const seatType = seat.seatType ?? "standard";
     const imageUrl =
@@ -45,16 +48,21 @@ const SeatItem = ({
         rafRef.current = null;
     };
 
-    const applyRotation = (evt?: Event) => {
+    const applyTransform = (evt?: Event) => {
         if (!groupRef.current) return;
         let rotation = groupRef.current.rotation();
-        const shiftKey = (evt as any)?.shiftKey;
+        const shiftKey = (evt as any)?.shiftKey || isShiftDown;
         if (shiftKey) {
             rotation = Math.round(rotation / ROTATION_SNAP) * ROTATION_SNAP;
             groupRef.current.rotation(rotation);
         }
+        const scaleX = groupRef.current.scaleX();
+        const scaleY = isShiftDown ? scaleX : groupRef.current.scaleY();
+        if (isShiftDown) {
+            groupRef.current.scaleY(scaleY);
+        }
         rotation = ((rotation % 360) + 360) % 360;
-        onChange(seat.id, { rotation });
+        onChange(seat.id, { rotation, scaleX, scaleY });
     };
 
     return (
@@ -99,8 +107,8 @@ const SeatItem = ({
                         rafRef.current = requestAnimationFrame(flushDragPosition);
                     }
                 }}
-                onTransform={(e) => applyRotation(e?.evt)}
-                onTransformEnd={(e) => applyRotation(e?.evt)}
+                onTransform={(e) => applyTransform(e?.evt)}
+                onTransformEnd={(e) => applyTransform(e?.evt)}
                 name="seat-group"
             >
                 <KonvaImage
@@ -117,8 +125,19 @@ const SeatItem = ({
                 <Transformer
                     ref={transformerRef}
                     rotateEnabled
-                    resizeEnabled={false}
-                    enabledAnchors={[]}
+                    resizeEnabled
+                    keepRatio={!!isShiftDown}
+                    boundBoxFunc={(oldBox, newBox) => {
+                        if (
+                            newBox.width < MIN_SIZE ||
+                            newBox.height < MIN_SIZE ||
+                            newBox.width > MAX_SIZE ||
+                            newBox.height > MAX_SIZE
+                        ) {
+                            return oldBox;
+                        }
+                        return newBox;
+                    }}
                     rotateAnchorOffset={24}
                 />
             )}
@@ -127,15 +146,31 @@ const SeatItem = ({
 };
 
 export default function SeatLayer({
-  onNodeDragStart,
-  onNodeDragEnd,
+    onNodeDragStart,
+    onNodeDragEnd,
 }: {
-  onNodeDragStart?: () => void;
-  onNodeDragEnd?: () => void;
+    onNodeDragStart?: () => void;
+    onNodeDragEnd?: () => void;
 }) {
-  const nodes = useAppSelector((state) => state.seatmap.nodes);
-  const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
-  const dispatch = useAppDispatch();
+    const nodes = useAppSelector((state) => state.seatmap.nodes);
+    const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
+    const dispatch = useAppDispatch();
+    const [isShiftDown, setIsShiftDown] = React.useState(false);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Shift") setIsShiftDown(true);
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.key === "Shift") setIsShiftDown(false);
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        window.addEventListener("keyup", handleKeyUp);
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+            window.removeEventListener("keyup", handleKeyUp);
+        };
+    }, []);
 
   const seats = Object.values(nodes).filter((node) => node.type === "seat");
 
@@ -147,13 +182,14 @@ export default function SeatLayer({
           seat={seat}
           isSelected={selectedIds.includes(seat.id)}
           onSelect={(id: string) => dispatch(selectNode(id))}
-          onChange={(id: string, changes: any) =>
-            dispatch(updateNode({ id, changes }))
-          }
-          onDragStart={onNodeDragStart}
-          onDragEnd={onNodeDragEnd}
-        />
-      ))}
-    </Layer>
-  );
+                    onChange={(id: string, changes: any) =>
+                        dispatch(updateNode({ id, changes }))
+                    }
+                    onDragStart={onNodeDragStart}
+                    onDragEnd={onNodeDragEnd}
+                    isShiftDown={isShiftDown}
+                />
+            ))}
+        </Layer>
+    );
 }
