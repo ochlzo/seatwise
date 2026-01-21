@@ -23,6 +23,7 @@ export default function SeatmapCanvas() {
     const { viewport, mode } = useAppSelector((state) => state.seatmap);
     const stageRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [isDraggingNode, setIsDraggingNode] = React.useState(false);
 
     // Resize observer to keep stage responsive
     const [dimensions, setDimensions] = React.useState({ width: 800, height: 600 });
@@ -127,9 +128,12 @@ export default function SeatmapCanvas() {
     };
 
     const handleDragEnd = (e: any) => {
+        const stage = stageRef.current;
+        if (!stage || e.target !== stage) return;
+
         // Update viewport on pan end
         dispatch(setViewport({
-            position: { x: e.target.x(), y: e.target.y() },
+            position: { x: stage.x(), y: stage.y() },
             scale: viewport.scale
         }));
     }
@@ -194,7 +198,7 @@ export default function SeatmapCanvas() {
             <Stage
                 width={dimensions.width}
                 height={dimensions.height}
-                draggable={mode === "pan"}
+                draggable={mode === "pan" && !isDraggingNode}
                 onWheel={handleWheel}
                 onClick={handleStageClick}
                 onTap={handleStageClick}
@@ -209,13 +213,19 @@ export default function SeatmapCanvas() {
                     {/* Grid or Background could go here */}
                 </Layer>
 
-                <SectionLayer />
+                <SectionLayer
+                    onNodeDragStart={() => setIsDraggingNode(true)}
+                    onNodeDragEnd={() => setIsDraggingNode(false)}
+                />
 
                 <Layer>
                     {/* Stage Label Removed */}
                 </Layer>
 
-                <SeatLayer />
+                <SeatLayer
+                    onNodeDragStart={() => setIsDraggingNode(true)}
+                    onNodeDragEnd={() => setIsDraggingNode(false)}
+                />
 
             </Stage>
         </div>
