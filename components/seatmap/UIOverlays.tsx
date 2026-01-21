@@ -24,7 +24,7 @@ export function Sidebar() {
                     }}
                 >
                     <div className="w-12 h-12 relative flex items-center justify-center">
-                        <img src="/armchair.svg" alt="Seat" className="w-full h-full object-contain" />
+                        <img src="/seat-default.svg" alt="Seat" className="w-full h-full object-contain" />
                     </div>
                     <span className="text-sm font-medium">Standard Seat</span>
                 </div>
