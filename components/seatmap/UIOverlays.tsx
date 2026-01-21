@@ -3,11 +3,14 @@
 
 import React from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { setMode, setViewport } from "@/lib/features/seatmap/seatmapSlice";
-import { LocateFixed, Move, MousePointer2 } from "lucide-react";
+import { setMode, setViewport, setDrawShape } from "@/lib/features/seatmap/seatmapSlice";
+import { LocateFixed, Move, MousePointer2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Sidebar() {
+    const dispatch = useAppDispatch();
+    const drawShape = useAppSelector(state => state.seatmap.drawShape);
+
     return (
         <div className="w-64 bg-white dark:bg-zinc-950 border-r border-zinc-200 dark:border-zinc-800 flex flex-col h-full z-10 shrink-0">
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
@@ -35,20 +38,23 @@ export function Sidebar() {
                         { label: "Square", type: "shape", shape: "rect", icon: <div className="w-8 h-8 border-2 border-zinc-500" /> },
                         { label: "Circle", type: "shape", shape: "circle", icon: <div className="w-8 h-8 rounded-full border-2 border-zinc-500" /> },
                         { label: "Hexagon", type: "shape", shape: "polygon", sides: 6, icon: <div className="w-8 h-8 border-2 border-zinc-500 transform rotate-45" style={{ clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)", background: 'none' }} /> },
-                        { label: "Stairs", type: "shape", shape: "stairs", icon: <div className="w-8 h-8 flex flex-col justify-between border-2 border-zinc-500 p-0.5"><div className="h-px bg-zinc-500" /><div className="h-px bg-zinc-500" /><div className="h-px bg-zinc-500" /></div> },
                         { label: "Line", type: "shape", shape: "line", icon: <div className="w-8 h-0 border-t-2 border-zinc-500 mt-4" /> },
                         { label: "Dashed", type: "shape", shape: "line", dash: [5, 5], icon: <div className="w-8 h-0 border-t-2 border-dashed border-zinc-500 mt-4" /> },
                     ].map((item, i) => (
                         <div
                             key={i}
-                            className="p-3 border border-zinc-200 dark:border-zinc-800 rounded flex flex-col items-center gap-2 cursor-grab hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                            draggable
-                            onDragStart={(e) => {
-                                e.dataTransfer.setData("type", item.type);
-                                e.dataTransfer.setData("shape", item.shape);
-                                if (item.sides) e.dataTransfer.setData("sides", item.sides.toString());
-                                if (item.dash) e.dataTransfer.setData("dash", JSON.stringify(item.dash));
-                                e.dataTransfer.effectAllowed = "copy";
+                            className={`p-3 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
+                                drawShape.shape === item.shape && (drawShape.sides ?? 0) === (item.sides ?? 0) && JSON.stringify(drawShape.dash ?? []) === JSON.stringify(item.dash ?? [])
+                                    ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                                    : "border-zinc-200 dark:border-zinc-800"
+                            }`}
+                            onClick={() => {
+                                dispatch(setMode("draw"));
+                                dispatch(setDrawShape({
+                                    shape: item.shape as any,
+                                    sides: item.sides,
+                                    dash: item.dash
+                                }));
                             }}
                         >
                             {item.icon}
@@ -94,6 +100,14 @@ export function Toolbar() {
                 title="Pan Mode"
             >
                 <Move className="w-4 h-4" />
+            </Button>
+            <Button
+                variant={mode === "draw" ? "default" : "ghost"}
+                size="icon"
+                onClick={() => dispatch(setMode("draw"))}
+                title="Draw Mode"
+            >
+                <Pencil className="w-4 h-4" />
             </Button>
             <div className="w-full h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
             <Button
