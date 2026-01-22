@@ -36,7 +36,7 @@ export function SeatMapSidebar({
         </div>
       </SidebarHeader>
       <SidebarContent className="px-2 pb-2">
-        <div className="text-xs text-zinc-500 mb-2">Seats</div>
+        <div className="text-xs text-zinc-500 mb-2">Seats (draggable)</div>
         <div
           className="p-3 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
           draggable
@@ -74,7 +74,7 @@ export function SeatMapSidebar({
           <span className="text-xs font-medium">VIP Seat</span>
         </div>
 
-        <div className="text-xs text-zinc-500 mb-2 mt-4">Shapes</div>
+        <div className="text-xs text-zinc-500 mb-2 mt-4">Shapes (click and draw)</div>
         <div className="grid grid-cols-2 gap-2">
           {[
             {

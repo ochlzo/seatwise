@@ -459,9 +459,11 @@ const ShapeItem = ({
 export default function SectionLayer({
     onNodeDragStart,
     onNodeDragEnd,
+    stageRef,
 }: {
     onNodeDragStart?: () => void;
     onNodeDragEnd?: () => void;
+    stageRef?: React.RefObject<any>;
 }) {
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
@@ -473,6 +475,8 @@ export default function SectionLayer({
         draggedId: string | null;
         startPositions: Record<string, { x: number; y: number }>;
     }>({ active: false, draggedId: null, startPositions: {} });
+    const multiDragRafRef = React.useRef<number | null>(null);
+    const pendingMultiDragRef = React.useRef<Record<string, { x: number; y: number }> | null>(null);
 
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -522,7 +526,23 @@ export default function SectionLayer({
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
         });
-        dispatch(updateNodesPositions({ positions, history: false }));
+        pendingMultiDragRef.current = positions;
+        if (multiDragRafRef.current === null) {
+            multiDragRafRef.current = requestAnimationFrame(() => {
+                if (pendingMultiDragRef.current && stageRef?.current) {
+                    const stage = stageRef.current;
+                    Object.entries(pendingMultiDragRef.current).forEach(([nodeId, next]) => {
+                        const node = stage.findOne(`#${nodeId}`);
+                        if (node) {
+                            node.position(next);
+                        }
+                    });
+                    stage.batchDraw();
+                    pendingMultiDragRef.current = null;
+                }
+                multiDragRafRef.current = null;
+            });
+        }
         return true;
     };
 
@@ -537,6 +557,21 @@ export default function SectionLayer({
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
         });
+        if (multiDragRafRef.current !== null) {
+            cancelAnimationFrame(multiDragRafRef.current);
+            multiDragRafRef.current = null;
+            pendingMultiDragRef.current = null;
+        }
+        if (stageRef?.current) {
+            const stage = stageRef.current;
+            Object.entries(positions).forEach(([nodeId, next]) => {
+                const node = stage.findOne(`#${nodeId}`);
+                if (node) {
+                    node.position(next);
+                }
+            });
+            stage.batchDraw();
+        }
         multiDragRef.current = {
             active: false,
             draggedId: null,

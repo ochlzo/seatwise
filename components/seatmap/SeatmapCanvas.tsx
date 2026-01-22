@@ -922,17 +922,19 @@ export default function SeatmapCanvas() {
 
           {renderDraft()}
 
-          <SectionLayer
-            onNodeDragStart={() => setIsDraggingNode(true)}
-            onNodeDragEnd={() => setIsDraggingNode(false)}
-          />
+        <SectionLayer
+          stageRef={stageRef}
+          onNodeDragStart={() => setIsDraggingNode(true)}
+          onNodeDragEnd={() => setIsDraggingNode(false)}
+        />
 
           {/* Stage Label Removed */}
 
-          <SeatLayer
-            onNodeDragStart={() => setIsDraggingNode(true)}
-            onNodeDragEnd={() => setIsDraggingNode(false)}
-          />
+        <SeatLayer
+          stageRef={stageRef}
+          onNodeDragStart={() => setIsDraggingNode(true)}
+          onNodeDragEnd={() => setIsDraggingNode(false)}
+        />
 
           <Transformer
             ref={transformerRef}
