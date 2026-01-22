@@ -100,12 +100,13 @@ export function Sidebar() {
               icon: <div className="w-8 h-0 border-t-2 border-zinc-500 mt-4" />,
             },
             {
-              label: "Dashed",
+              label: "Text",
               type: "shape",
-              shape: "line",
-              dash: [5, 5],
+              shape: "text",
               icon: (
-                <div className="w-8 h-0 border-t-2 border-dashed border-zinc-500 mt-4" />
+                <div className="w-8 h-8 border-2 border-zinc-500 flex items-center justify-center text-xs font-semibold text-zinc-600">
+                  T
+                </div>
               ),
             },
           ].map((item, i) => (
@@ -113,9 +114,7 @@ export function Sidebar() {
               key={i}
               className={`p-3 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
                 drawShape.shape === item.shape &&
-                (drawShape.sides ?? 0) === (item.sides ?? 0) &&
-                JSON.stringify(drawShape.dash ?? []) ===
-                  JSON.stringify(item.dash ?? [])
+                (drawShape.sides ?? 0) === (item.sides ?? 0)
                   ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
                   : "border-zinc-200 dark:border-zinc-800"
               }`}
@@ -125,7 +124,6 @@ export function Sidebar() {
                   setDrawShape({
                     shape: item.shape as any,
                     sides: item.sides,
-                    dash: item.dash,
                   }),
                 );
               }}
@@ -224,6 +222,12 @@ export function Toolbar() {
             if (node.type !== "shape") return;
 
             if (node.shape === "rect" || node.shape === "stairs") {
+              const w = (node.width ?? 0) * sx;
+              const h = (node.height ?? 0) * sy;
+              expand(node.position.x, node.position.y, w / 2, h / 2);
+              return;
+            }
+            if (node.shape === "text") {
               const w = (node.width ?? 0) * sx;
               const h = (node.height ?? 0) * sy;
               expand(node.position.x, node.position.y, w / 2, h / 2);
@@ -369,6 +373,31 @@ export function SelectionPanel() {
     );
   };
 
+  const estimateTextBox = (text: string, fontSize: number, padding: number) => {
+    const width = Math.max(40, text.length * fontSize * 0.6 + padding * 2);
+    const height = fontSize + padding * 2;
+    return { width, height };
+  };
+
+  const updateFontSize = (value: string) => {
+    if (selectedNode.type !== "shape" || selectedNode.shape !== "text") return;
+    const next = Number(value);
+    if (Number.isNaN(next)) return;
+    const padding = selectedNode.padding ?? 8;
+    const textValue = selectedNode.text ?? "Text";
+    const { width, height } = estimateTextBox(textValue, next, padding);
+    dispatch(
+      updateNode({
+        id: selectedNode.id,
+        changes: {
+          fontSize: next,
+          width,
+          height,
+        },
+      }),
+    );
+  };
+
   const updateDash = (checked: boolean) => {
     if (selectedNode.type !== "shape") return;
     dispatch(
@@ -453,6 +482,18 @@ export function SelectionPanel() {
               onChange={(e) => updateDash(e.target.checked)}
             />
           </div>
+          {selectedNode.shape === "text" && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-zinc-500">Font Size</span>
+              <input
+                type="number"
+                step="1"
+                className="w-20 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                value={Math.round(selectedNode.fontSize ?? 18)}
+                onChange={(e) => updateFontSize(e.target.value)}
+              />
+            </div>
+          )}
           <div>
             <div className="text-xs text-zinc-500 mb-2">Stroke Color</div>
             <div className="grid grid-cols-6 gap-2">

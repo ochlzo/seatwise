@@ -714,6 +714,26 @@ export default function SeatmapCanvas() {
       return;
     }
 
+    if (drawDraft.shape === "text") {
+      dispatch(
+        addShape({
+          x: start.x,
+          y: start.y,
+          shape: "text",
+          text: "Text",
+          fontSize: 18,
+          fontFamily: "Inter",
+          textColor: "#111827",
+          padding: 8,
+          fill: "#ffffff",
+          stroke: "#64748b",
+          strokeWidth: 2,
+        }),
+      );
+      setDrawDraft(null);
+      return;
+    }
+
     if (width < minSize || height < minSize) {
       setDrawDraft(null);
       return;
@@ -820,6 +840,23 @@ export default function SeatmapCanvas() {
           y={centerY}
           sides={drawDraft.sides ?? 6}
           radius={radius}
+          stroke="#3b82f6"
+          strokeWidth={2}
+          dash={[6, 4]}
+          fill="rgba(59, 130, 246, 0.15)"
+        />
+      );
+    }
+
+    if (drawDraft.shape === "text") {
+      return (
+        <Rect
+          x={centerX}
+          y={centerY}
+          width={width}
+          height={height}
+          offsetX={width / 2}
+          offsetY={height / 2}
           stroke="#3b82f6"
           strokeWidth={2}
           dash={[6, 4]}
