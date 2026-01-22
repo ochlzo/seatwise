@@ -94,14 +94,18 @@ export function SeatMapSidebar({
               shape: "polygon",
               sides: 6,
               icon: (
-                <div
-                  className="w-8 h-8 border-2 border-zinc-500 transform rotate-45"
-                  style={{
-                    clipPath:
-                      "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
-                    background: "none",
-                  }}
-                />
+                <svg
+                  viewBox="0 0 100 100"
+                  className="w-8 h-8"
+                  aria-hidden="true"
+                >
+                  <polygon
+                    points="25,6 75,6 98,50 75,94 25,94 2,50"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="6"
+                  />
+                </svg>
               ),
             },
             {
