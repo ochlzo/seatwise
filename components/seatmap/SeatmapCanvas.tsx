@@ -18,19 +18,19 @@ import {
   setViewport,
   addSeat,
   addShape,
-    selectNode,
-    deselectAll,
-    updateNode,
-    updateNodes,
-    rotateSelected,
-    scaleSelected,
-    setViewportSize,
-    setSelectedIds,
-    copySelected,
-    pasteNodesAt,
-    deleteSelected,
-    undo,
-    redo,
+  selectNode,
+  deselectAll,
+  updateNode,
+  updateNodes,
+  rotateSelected,
+  scaleSelected,
+  setViewportSize,
+  setSelectedIds,
+  copySelected,
+  pasteNodesAt,
+  deleteSelected,
+  undo,
+  redo,
 } from "@/lib/features/seatmap/seatmapSlice";
 import SeatLayer from "@/components/seatmap/SeatLayer";
 import SectionLayer from "@/components/seatmap/SectionLayer";
@@ -52,13 +52,22 @@ export default function SeatmapCanvas() {
   const [isMarqueeSelecting, setIsMarqueeSelecting] = React.useState(false);
   const rotationStateRef = useRef<{
     active: boolean;
+    pivot: { x: number; y: number } | null;
+    startPointerAngle: number;
     baseRotation: number;
     lastDelta: number;
     baseNodes: Record<
       string,
       { rotation: number; position: { x: number; y: number } }
     >;
-  }>({ active: false, baseRotation: 0, lastDelta: 0, baseNodes: {} });
+  }>({
+    active: false,
+    pivot: null,
+    startPointerAngle: 0,
+    baseRotation: 0,
+    lastDelta: 0,
+    baseNodes: {},
+  });
   const [drawDraft, setDrawDraft] = React.useState<{
     shape: typeof drawShape.shape;
     dash?: number[];
@@ -223,6 +232,8 @@ export default function SeatmapCanvas() {
     if (history) {
       rotationStateRef.current = {
         active: false,
+        pivot: null,
+        startPointerAngle: 0,
         baseRotation: 0,
         lastDelta: 0,
         baseNodes: {},
@@ -414,6 +425,111 @@ export default function SeatmapCanvas() {
     }
   };
 
+  // HELPERS FOR GROUP ROTATE (ORBIT MODE)
+
+  function getSelectionPivot(stage: any, nodes: any[]) {
+    if (!nodes.length) return null;
+
+    // bounding box in STAGE/world coords
+    const rects = nodes.map((n) => n.getClientRect({ relativeTo: stage }));
+    const minX = Math.min(...rects.map((r) => r.x));
+    const minY = Math.min(...rects.map((r) => r.y));
+    const maxX = Math.max(...rects.map((r) => r.x + r.width));
+    const maxY = Math.max(...rects.map((r) => r.y + r.height));
+
+    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+  }
+
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  const deg = (rad: number) => (rad * 180) / Math.PI;
+
+  function angleFrom(p: { x: number; y: number }, c: { x: number; y: number }) {
+    return deg(Math.atan2(p.y - c.y, p.x - c.x));
+  }
+
+  // Keep delta in [-180, 180] to prevent jump at wraparound
+  function normalizeDelta(d: number) {
+    let x = d % 360;
+    if (x > 180) x -= 360;
+    if (x < -180) x += 360;
+    return x;
+  }
+
+  function rotatePoint(
+    p: { x: number; y: number },
+    c: { x: number; y: number },
+    deltaDeg: number,
+  ) {
+    const r = rad(deltaDeg);
+    const cos = Math.cos(r);
+    const sin = Math.sin(r);
+    const dx = p.x - c.x;
+    const dy = p.y - c.y;
+    return {
+      x: c.x + dx * cos - dy * sin,
+      y: c.y + dx * sin + dy * cos,
+    };
+  }
+
+  // Use stage transform to get pointer in WORLD coords (works with pan/zoom)
+  function getWorldPointer(stage: any) {
+    const p = stage.getPointerPosition();
+    if (!p) return null;
+    const t = stage.getAbsoluteTransform().copy().invert();
+    return t.point(p);
+  }
+
+  const applyCursorDrivenGroupRotation = (history: boolean) => {
+    const stage = stageRef.current;
+    const transformer = transformerRef.current;
+    const state = rotationStateRef.current;
+    if (!stage || !transformer || !state.active || !state.pivot) return false;
+
+    const wp = getWorldPointer(stage);
+    if (!wp) return false;
+
+    const currentAngle = angleFrom(wp, state.pivot);
+    const delta = normalizeDelta(currentAngle - state.startPointerAngle);
+
+    const changes: Record<string, any> = {};
+
+    transformer.nodes().forEach((node: any) => {
+      const id = node.id();
+      const base = state.baseNodes[id];
+      if (!id || !base) return;
+
+      // ORBIT: rotate position around pivot
+      const nextPos = rotatePoint(base.position, state.pivot!, delta);
+
+      // Rotate node by same delta (keeps orientation consistent)
+      const nextRot = normalizeRotation(base.rotation + delta);
+
+      node.position(nextPos);
+      node.rotation(nextRot);
+
+      changes[id] = {
+        position: nextPos,
+        rotation: nextRot,
+      };
+    });
+
+    // Don’t spam history while dragging
+    dispatch(updateNodes({ changes, history }));
+
+    if (history) {
+      rotationStateRef.current = {
+        active: false,
+        pivot: null,
+        startPointerAngle: 0,
+        baseRotation: 0,
+        lastDelta: 0,
+        baseNodes: {},
+      };
+    }
+
+    return true;
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     const stage = stageRef.current;
@@ -468,7 +584,12 @@ export default function SeatmapCanvas() {
         lastPointerPosRef.current = pos;
       }
     }
-    if (mode === "select" && e.evt && e.evt.button === 0 && e.target === e.target.getStage()) {
+    if (
+      mode === "select" &&
+      e.evt &&
+      e.evt.button === 0 &&
+      e.target === e.target.getStage()
+    ) {
       const pos = getRelativePointerPosition(stage);
       if (!pos) return;
       marqueeStartRef.current = pos;
@@ -772,19 +893,26 @@ export default function SeatmapCanvas() {
             rotateEnabled
             resizeEnabled
             rotationSnaps={isShiftDown ? ROTATION_SNAPS : []}
+            rotateAnchorOffset={40}
             onTransformStart={() => {
-              const transformer = transformerRef.current;
               const stage = stageRef.current;
-              if (!transformer || !stage) return;
+              const transformer = transformerRef.current;
+              if (!stage || !transformer) return;
 
-              // Capture base state from the actual Konva nodes (NOT Redux),
-              // because Konva may already have applied partial transforms.
+              const selected = transformer.nodes();
+              if (!selected.length) return;
+
+              const pivot = getSelectionPivot(stage, selected);
+              if (!pivot) return;
+
+              const wp = getWorldPointer(stage);
+              if (!wp) return;
+
               const baseNodes: Record<
                 string,
                 { rotation: number; position: { x: number; y: number } }
               > = {};
-
-              transformer.nodes().forEach((node: any) => {
+              selected.forEach((node: any) => {
                 const id = node.id();
                 if (!id) return;
                 baseNodes[id] = {
@@ -795,20 +923,20 @@ export default function SeatmapCanvas() {
 
               rotationStateRef.current = {
                 active: true,
-                baseRotation: transformer.rotation(),
+                pivot,
+                startPointerAngle: angleFrom(wp, pivot),
+                baseRotation: 0,
                 lastDelta: 0,
                 baseNodes,
               };
             }}
             onTransform={() => {
-              if (!applyGroupRotation(false)) {
-                commitGroupTransform(false);
-              }
+              if (applyCursorDrivenGroupRotation(false)) return;
+              commitGroupTransform(false);
             }}
             onTransformEnd={() => {
-              if (!applyGroupRotation(true)) {
-                commitGroupTransform(true);
-              }
+              if (applyCursorDrivenGroupRotation(true)) return;
+              commitGroupTransform(true);
             }}
           />
         </Layer>
