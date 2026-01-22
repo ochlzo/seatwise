@@ -360,10 +360,35 @@ const ShapeItem = ({
                 x: target.x() - centerX,
                 y: target.y() - centerY,
             });
-            const updateEndpoint = (index: 0 | 2, next: { x: number; y: number }, history?: boolean) => {
+            const updateEndpoint = (
+                index: 0 | 2,
+                next: { x: number; y: number },
+                history?: boolean,
+                shiftKey?: boolean,
+            ) => {
+                let snapped = next;
+                if (shiftKey) {
+                    const otherIndex = index === 0 ? 2 : 0;
+                    const otherAbs = {
+                        x: shape.position.x + rawPoints[otherIndex],
+                        y: shape.position.y + rawPoints[otherIndex + 1],
+                    };
+                    const dx = next.x - otherAbs.x;
+                    const dy = next.y - otherAbs.y;
+                    const length = Math.hypot(dx, dy);
+                    if (length > 0) {
+                        const step = Math.PI / 4;
+                        const angle = Math.atan2(dy, dx);
+                        const snappedAngle = Math.round(angle / step) * step;
+                        snapped = {
+                            x: otherAbs.x + Math.cos(snappedAngle) * length,
+                            y: otherAbs.y + Math.sin(snappedAngle) * length,
+                        };
+                    }
+                }
                 const nextPoints = [...rawPoints];
-                nextPoints[index] = next.x - shape.position.x;
-                nextPoints[index + 1] = next.y - shape.position.y;
+                nextPoints[index] = snapped.x - shape.position.x;
+                nextPoints[index + 1] = snapped.y - shape.position.y;
                 const dx = nextPoints[2] - nextPoints[0];
                 const dy = nextPoints[3] - nextPoints[1];
                 if (Math.hypot(dx, dy) < MIN_LINE_LENGTH) return;
@@ -425,8 +450,12 @@ const ShapeItem = ({
                                 stroke="#1e3a8a"
                                 strokeWidth={1}
                                 draggable
-                                onDragMove={(e) => updateEndpoint(0, { x: e.target.x(), y: e.target.y() }, false)}
-                                onDragEnd={(e) => updateEndpoint(0, { x: e.target.x(), y: e.target.y() }, true)}
+                                onDragMove={(e) =>
+                                    updateEndpoint(0, { x: e.target.x(), y: e.target.y() }, false, e.evt?.shiftKey)
+                                }
+                                onDragEnd={(e) =>
+                                    updateEndpoint(0, { x: e.target.x(), y: e.target.y() }, true, e.evt?.shiftKey)
+                                }
                             />
                             <Circle
                                 x={endAbs.x}
@@ -436,8 +465,12 @@ const ShapeItem = ({
                                 stroke="#1e3a8a"
                                 strokeWidth={1}
                                 draggable
-                                onDragMove={(e) => updateEndpoint(2, { x: e.target.x(), y: e.target.y() }, false)}
-                                onDragEnd={(e) => updateEndpoint(2, { x: e.target.x(), y: e.target.y() }, true)}
+                                onDragMove={(e) =>
+                                    updateEndpoint(2, { x: e.target.x(), y: e.target.y() }, false, e.evt?.shiftKey)
+                                }
+                                onDragEnd={(e) =>
+                                    updateEndpoint(2, { x: e.target.x(), y: e.target.y() }, true, e.evt?.shiftKey)
+                                }
                             />
                         </>
                     )}

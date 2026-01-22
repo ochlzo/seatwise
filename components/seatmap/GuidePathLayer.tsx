@@ -99,10 +99,31 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
     index: number,
     next: { x: number; y: number },
     history: boolean,
+    shiftKey?: boolean,
   ) => {
+    let snapped = next;
+    if (shiftKey) {
+      const otherIndex = index === 0 ? guide.points.length - 2 : 0;
+      const other = {
+        x: guide.points[otherIndex],
+        y: guide.points[otherIndex + 1],
+      };
+      const dx = next.x - other.x;
+      const dy = next.y - other.y;
+      const length = Math.hypot(dx, dy);
+      if (length > 0) {
+        const step = Math.PI / 4;
+        const angle = Math.atan2(dy, dx);
+        const snappedAngle = Math.round(angle / step) * step;
+        snapped = {
+          x: other.x + Math.cos(snappedAngle) * length,
+          y: other.y + Math.sin(snappedAngle) * length,
+        };
+      }
+    }
     const points = [...guide.points];
-    points[index] = next.x;
-    points[index + 1] = next.y;
+    points[index] = snapped.x;
+    points[index + 1] = snapped.y;
     dispatch(updateNode({ id: guide.id, changes: { points }, history }));
   };
 
@@ -169,10 +190,22 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
                   draggable
                   name="guide-path-handle"
                   onDragMove={(e) =>
-                    updateEndpoint(guide, 0, { x: e.target.x(), y: e.target.y() }, false)
+                    updateEndpoint(
+                      guide,
+                      0,
+                      { x: e.target.x(), y: e.target.y() },
+                      false,
+                      e.evt?.shiftKey,
+                    )
                   }
                   onDragEnd={(e) =>
-                    updateEndpoint(guide, 0, { x: e.target.x(), y: e.target.y() }, true)
+                    updateEndpoint(
+                      guide,
+                      0,
+                      { x: e.target.x(), y: e.target.y() },
+                      true,
+                      e.evt?.shiftKey,
+                    )
                   }
                 />
                 <Circle
@@ -185,10 +218,22 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
                   draggable
                   name="guide-path-handle"
                   onDragMove={(e) =>
-                    updateEndpoint(guide, endIndex, { x: e.target.x(), y: e.target.y() }, false)
+                    updateEndpoint(
+                      guide,
+                      endIndex,
+                      { x: e.target.x(), y: e.target.y() },
+                      false,
+                      e.evt?.shiftKey,
+                    )
                   }
                   onDragEnd={(e) =>
-                    updateEndpoint(guide, endIndex, { x: e.target.x(), y: e.target.y() }, true)
+                    updateEndpoint(
+                      guide,
+                      endIndex,
+                      { x: e.target.x(), y: e.target.y() },
+                      true,
+                      e.evt?.shiftKey,
+                    )
                   }
                 />
               </>
