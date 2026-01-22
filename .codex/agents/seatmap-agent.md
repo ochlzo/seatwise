@@ -6,13 +6,16 @@
 - Trackpad navigation: two-finger scroll pans; pinch zoom zooms to cursor with limits (min 0.4, max 3).
 - Right-click pans the canvas; context menu suppressed.
 - Reset View now fits all nodes (seats + shapes) to viewport with padding.
+- Multi-select supported via Shift/Ctrl/Cmd toggle on click/tap.
+- Marquee (rubber-band) selection added in select mode; Shift/Ctrl add, Alt subtract, intersection-based hit testing.
 
 ## Draw Mode (Shapes)
 - New `mode: "draw"` and draw shape selection in Redux.
 - Shapes are created via click-drag (rubber-band) in draw mode (no drag/drop for shapes).
-- Supported shapes: rect, circle, hexagon (polygon), line, dashed line. Stairs removed from UI.
+- Supported shapes: rect, circle, hexagon (polygon), line, text. Stairs removed from UI.
 - Draft preview layer renders while dragging; commit on mouse up.
 - Circle/polygon radius uses min(width,height)/2; center at drag midpoint.
+- Text shape is placed on click (no drag sizing) with default styling.
 
 ## Seat Types
 - `seatType` added to seat nodes: `"standard"` (default) or `"vip"`.
@@ -25,7 +28,9 @@
 - Shows scale values (scaleX / scaleY).
 - Shape color palette split into Stroke Color and Fill Color pickers.
   - Lines only use stroke; fill picker hidden for lines.
-- Note: editable Rotation / X/Y / Scale UI is in progress (see below).
+- Text shapes have a text input + font size control.
+- Dashed stroke toggle (checkbox) added for shapes.
+- Text shapes include transparent stroke/fill options.
 
 ## Rotation & Resize
 - Rotation supported via Transformer and keyboard.
@@ -36,16 +41,23 @@
   - Shapes: min 10, max 800.
 - Lines: resize via draggable endpoint handles; min line length enforced.
 - Keyboard scale now scales line endpoints instead of scale transforms.
+- Multi-selection group Transformer added (single transformers hidden when multi-select).
+- Group rotation: default orbits around selection; Alt rotates in place; Shift snapping still applies.
+- Group multi-drag moves all selected nodes together with one history entry.
+
+## Seatmap Layout
+- Seatmap layout now uses shadcn `SidebarProvider` + `SidebarInset`.
+- Seat palette moved into `SeatMapSidebar` (non-gutter offcanvas collapse).
+- New non-sticky `SeatmapPageHeader` mirrors `PageHeader` without `StickyHeader`.
+- Hexagon palette icon replaced with an SVG polygon for correct display.
 
 ## Files Touched (Seatmap)
 - `components/seatmap/SeatmapCanvas.tsx`
 - `components/seatmap/SeatLayer.tsx`
 - `components/seatmap/SectionLayer.tsx`
 - `components/seatmap/UIOverlays.tsx`
+- `components/seatmap/seatmap-sidebar.tsx`
+- `components/seatmap/seatmap-page-header.tsx`
 - `lib/features/seatmap/seatmapSlice.ts`
 - `lib/seatmap/types.ts`
-- `public/seat-selected.svg` (new)
-- `public/default-vip-seat.svg`, `public/selected-vip-seat.svg` (used)
-
-## Notes / Follow-ups
-- Editable fields (Rotation / X/Y / Scale) were requested; helper functions were added in `components/seatmap/UIOverlays.tsx`, but the UI inputs still show static text due to a failed patch. Update that block to use inputs and wire `updateRotation`, `updatePosition`, `updateScale`.
+- `app/test/page.tsx`
