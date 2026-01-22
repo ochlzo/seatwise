@@ -311,23 +311,23 @@ export function SelectionPanel() {
     "#7f7f7f",
   ];
 
-  const applyStrokeColor = (color: string) => {
+  const applyStrokeColor = (color: string | null) => {
     if (selectedNode.type !== "shape") return;
     dispatch(
       updateNode({
         id: selectedNode.id,
-        changes: { stroke: color },
+        changes: { stroke: color ?? undefined },
       }),
     );
   };
 
-  const applyFillColor = (color: string) => {
+  const applyFillColor = (color: string | null) => {
     if (selectedNode.type !== "shape") return;
     if (selectedNode.shape === "line") return;
     dispatch(
       updateNode({
         id: selectedNode.id,
-        changes: { fill: color },
+        changes: { fill: color ?? undefined },
       }),
     );
   };
@@ -391,6 +391,23 @@ export function SelectionPanel() {
         id: selectedNode.id,
         changes: {
           fontSize: next,
+          width,
+          height,
+        },
+      }),
+    );
+  };
+
+  const updateTextValue = (value: string) => {
+    if (selectedNode.type !== "shape" || selectedNode.shape !== "text") return;
+    const padding = selectedNode.padding ?? 8;
+    const fontSize = selectedNode.fontSize ?? 18;
+    const { width, height } = estimateTextBox(value, fontSize, padding);
+    dispatch(
+      updateNode({
+        id: selectedNode.id,
+        changes: {
+          text: value,
           width,
           height,
         },
@@ -483,6 +500,17 @@ export function SelectionPanel() {
             />
           </div>
           {selectedNode.shape === "text" && (
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-zinc-500">Text</span>
+              <input
+                type="text"
+                className="w-full bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-sm"
+                value={selectedNode.text ?? "Text"}
+                onChange={(e) => updateTextValue(e.target.value)}
+              />
+            </div>
+          )}
+          {selectedNode.shape === "text" && (
             <div className="flex items-center justify-between">
               <span className="text-xs text-zinc-500">Font Size</span>
               <input
@@ -497,6 +525,20 @@ export function SelectionPanel() {
           <div>
             <div className="text-xs text-zinc-500 mb-2">Stroke Color</div>
             <div className="grid grid-cols-6 gap-2">
+              {selectedNode.shape === "text" && (
+                <button
+                  type="button"
+                  className={`h-6 w-6 rounded border text-[10px] uppercase ${
+                    !selectedNode.stroke
+                      ? "border-zinc-900 dark:border-zinc-100"
+                      : "border-zinc-300 dark:border-zinc-700"
+                  }`}
+                  onClick={() => applyStrokeColor(null)}
+                  title="Transparent"
+                >
+                  T
+                </button>
+              )}
               {palette.map((color) => (
                 <button
                   key={`stroke-${color}`}
@@ -513,6 +555,20 @@ export function SelectionPanel() {
             <div>
               <div className="text-xs text-zinc-500 mb-2">Fill Color</div>
               <div className="grid grid-cols-6 gap-2">
+                {selectedNode.shape === "text" && (
+                  <button
+                    type="button"
+                    className={`h-6 w-6 rounded border text-[10px] uppercase ${
+                      !selectedNode.fill
+                        ? "border-zinc-900 dark:border-zinc-100"
+                        : "border-zinc-300 dark:border-zinc-700"
+                    }`}
+                    onClick={() => applyFillColor(null)}
+                    title="Transparent"
+                  >
+                    T
+                  </button>
+                )}
                 {palette.map((color) => (
                   <button
                     key={`fill-${color}`}
