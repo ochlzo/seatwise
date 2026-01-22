@@ -16,43 +16,43 @@ export function Sidebar() {
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800">
                 <h2 className="font-bold text-lg">Seat Palette</h2>
             </div>
-                <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
-                    <div className="text-sm text-zinc-500 mb-2">Seats</div>
-                    <div
-                        className="p-4 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-                        draggable
-                        onDragStart={(e) => {
-                            e.dataTransfer.setData("type", "seat");
-                            e.dataTransfer.setData("seatType", "standard");
-                            e.dataTransfer.effectAllowed = "copy";
-                        }}
-                    >
-                        <div className="w-12 h-12 relative flex items-center justify-center">
-                            <img src="/seat-default.svg" alt="Seat" className="w-full h-full object-contain" />
-                        </div>
-                        <span className="text-sm font-medium">Standard Seat</span>
+            <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
+                <div className="text-sm text-zinc-500 mb-2">Seats</div>
+                <div
+                    className="p-4 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                    draggable
+                    onDragStart={(e) => {
+                        e.dataTransfer.setData("type", "seat");
+                        e.dataTransfer.setData("seatType", "standard");
+                        e.dataTransfer.effectAllowed = "copy";
+                    }}
+                >
+                    <div className="w-12 h-12 relative flex items-center justify-center">
+                        <img src="/seat-default.svg" alt="Seat" className="w-full h-full object-contain" />
                     </div>
-                    <div
-                        className="p-4 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-                        draggable
-                        onDragStart={(e) => {
-                            e.dataTransfer.setData("type", "seat");
-                            e.dataTransfer.setData("seatType", "vip");
-                            e.dataTransfer.effectAllowed = "copy";
-                        }}
-                    >
-                        <div className="w-12 h-12 relative flex items-center justify-center">
-                            <img src="/default-vip-seat.svg" alt="VIP Seat" className="w-full h-full object-contain" />
-                        </div>
-                        <span className="text-sm font-medium">VIP Seat</span>
+                    <span className="text-sm font-medium">Standard Seat</span>
+                </div>
+                <div
+                    className="p-4 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
+                    draggable
+                    onDragStart={(e) => {
+                        e.dataTransfer.setData("type", "seat");
+                        e.dataTransfer.setData("seatType", "vip");
+                        e.dataTransfer.effectAllowed = "copy";
+                    }}
+                >
+                    <div className="w-12 h-12 relative flex items-center justify-center">
+                        <img src="/default-vip-seat.svg" alt="VIP Seat" className="w-full h-full object-contain" />
                     </div>
+                    <span className="text-sm font-medium">VIP Seat</span>
+                </div>
 
                 <div className="text-sm text-zinc-500 mb-2 mt-4">Shapes</div>
                 <div className="grid grid-cols-2 gap-2">
                     {[
                         { label: "Square", type: "shape", shape: "rect", icon: <div className="w-8 h-8 border-2 border-zinc-500" /> },
                         { label: "Circle", type: "shape", shape: "circle", icon: <div className="w-8 h-8 rounded-full border-2 border-zinc-500" /> },
-                        { label: "Hexagon", type: "shape", shape: "polygon", sides: 6, icon: <div className="w-8 h-8 border-2 border-zinc-500 transform rotate-45" style={{ clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)", background: 'none' }} /> },
+                        { label: "Hexagon", type: "shape", shape: "polygon", sides: 6, icon: <div className="w-8 h-8 border-2 border-zinc-500 transform rotate-45" style={{ clipPath: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)", background: "none" }} /> },
                         { label: "Line", type: "shape", shape: "line", icon: <div className="w-8 h-0 border-t-2 border-zinc-500 mt-4" /> },
                         { label: "Dashed", type: "shape", shape: "line", dash: [5, 5], icon: <div className="w-8 h-0 border-t-2 border-dashed border-zinc-500 mt-4" /> },
                     ].map((item, i) => (
@@ -191,7 +191,6 @@ export function Toolbar() {
                             maxX = Math.max(maxX, node.position.x + pMaxX);
                             minY = Math.min(minY, node.position.y + pMinY);
                             maxY = Math.max(maxY, node.position.y + pMaxY);
-                            return;
                         }
                     });
 
@@ -253,6 +252,41 @@ export function SelectionPanel() {
         }));
     };
 
+    const updatePosition = (axis: "x" | "y", value: string) => {
+        const next = Number(value);
+        if (Number.isNaN(next)) return;
+        dispatch(updateNode({
+            id: selectedNode.id,
+            changes: {
+                position: {
+                    x: axis === "x" ? next : selectedNode.position.x,
+                    y: axis === "y" ? next : selectedNode.position.y,
+                }
+            }
+        }));
+    };
+
+    const updateRotation = (value: string) => {
+        const next = Number(value);
+        if (Number.isNaN(next)) return;
+        dispatch(updateNode({
+            id: selectedNode.id,
+            changes: { rotation: next }
+        }));
+    };
+
+    const updateScale = (axis: "x" | "y", value: string) => {
+        const next = Number(value);
+        if (Number.isNaN(next)) return;
+        dispatch(updateNode({
+            id: selectedNode.id,
+            changes: {
+                scaleX: axis === "x" ? next : (selectedNode.scaleX ?? 1),
+                scaleY: axis === "y" ? next : (selectedNode.scaleY ?? 1),
+            }
+        }));
+    };
+
     return (
         <div className="absolute top-4 right-4 z-20 w-64 bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
             <h3 className="font-bold mb-2">Selection</h3>
@@ -267,11 +301,51 @@ export function SelectionPanel() {
                 </div>
                 <div className="flex justify-between">
                     <span className="text-zinc-500">Rotation:</span>
-                    <span>{Math.round(selectedNode.rotation || 0)}°</span>
+                    <input
+                        type="number"
+                        step="1"
+                        className="w-20 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                        value={Math.round(selectedNode.rotation || 0)}
+                        onChange={(e) => updateRotation(e.target.value)}
+                    />
                 </div>
                 <div className="flex justify-between">
                     <span className="text-zinc-500">X / Y:</span>
-                    <span>{Math.round(selectedNode.position.x)} / {Math.round(selectedNode.position.y)}</span>
+                    <div className="flex gap-2">
+                        <input
+                            type="number"
+                            step="1"
+                            className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                            value={Math.round(selectedNode.position.x)}
+                            onChange={(e) => updatePosition("x", e.target.value)}
+                        />
+                        <input
+                            type="number"
+                            step="1"
+                            className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                            value={Math.round(selectedNode.position.y)}
+                            onChange={(e) => updatePosition("y", e.target.value)}
+                        />
+                    </div>
+                </div>
+                <div className="flex justify-between">
+                    <span className="text-zinc-500">Scale:</span>
+                    <div className="flex gap-2">
+                        <input
+                            type="number"
+                            step="0.01"
+                            className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                            value={(selectedNode.scaleX ?? 1).toFixed(2)}
+                            onChange={(e) => updateScale("x", e.target.value)}
+                        />
+                        <input
+                            type="number"
+                            step="0.01"
+                            className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                            value={(selectedNode.scaleY ?? 1).toFixed(2)}
+                            onChange={(e) => updateScale("y", e.target.value)}
+                        />
+                    </div>
                 </div>
             </div>
             {selectedNode.type === "shape" && (

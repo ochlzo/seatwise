@@ -43,12 +43,12 @@ const SeatItem = ({
 
     const flushDragPosition = () => {
         if (!pendingPosRef.current) return;
-        onChange(seat.id, { position: pendingPosRef.current });
+        onChange(seat.id, { position: pendingPosRef.current }, false);
         pendingPosRef.current = null;
         rafRef.current = null;
     };
 
-    const applyTransform = (evt?: Event) => {
+    const applyTransform = (evt?: Event, history?: boolean) => {
         if (!groupRef.current) return;
         let rotation = groupRef.current.rotation();
         const shiftKey = (evt as any)?.shiftKey || isShiftDown;
@@ -57,10 +57,12 @@ const SeatItem = ({
             groupRef.current.rotation(rotation);
         }
         const scaleX = groupRef.current.scaleX();
-        const scaleY = scaleX;
-        groupRef.current.scaleY(scaleY);
+        const scaleY = shiftKey ? scaleX : groupRef.current.scaleY();
+        if (shiftKey) {
+            groupRef.current.scaleY(scaleY);
+        }
         rotation = ((rotation % 360) + 360) % 360;
-        onChange(seat.id, { rotation, scaleX, scaleY });
+        onChange(seat.id, { rotation, scaleX, scaleY }, history);
     };
 
     return (
@@ -96,7 +98,7 @@ const SeatItem = ({
                     pendingPosRef.current = null;
                     onChange(seat.id, {
                         position: { x: e.target.x(), y: e.target.y() },
-                    });
+                    }, true);
                     if (onDragEnd) onDragEnd();
                 }}
                 onDragMove={(e) => {
@@ -105,8 +107,8 @@ const SeatItem = ({
                         rafRef.current = requestAnimationFrame(flushDragPosition);
                     }
                 }}
-                onTransform={(e) => applyTransform(e?.evt)}
-                onTransformEnd={(e) => applyTransform(e?.evt)}
+                onTransform={(e) => applyTransform(e?.evt, false)}
+                onTransformEnd={(e) => applyTransform(e?.evt, true)}
                 name="seat-group"
             >
                 <KonvaImage
@@ -178,10 +180,10 @@ export default function SeatLayer({
         <SeatItem
           key={seat.id}
           seat={seat}
-          isSelected={selectedIds.includes(seat.id)}
-          onSelect={(id: string) => dispatch(selectNode(id))}
-                    onChange={(id: string, changes: any) =>
-                        dispatch(updateNode({ id, changes }))
+                    isSelected={selectedIds.includes(seat.id)}
+                    onSelect={(id: string) => dispatch(selectNode(id))}
+                    onChange={(id: string, changes: any, history?: boolean) =>
+                        dispatch(updateNode({ id, changes, history }))
                     }
                     onDragStart={onNodeDragStart}
                     onDragEnd={onNodeDragEnd}

@@ -16,6 +16,11 @@ interface SeatmapState {
         width: number;
         height: number;
     };
+    clipboard: SeatmapNode[];
+    history: {
+        past: Array<{ nodes: Record<string, SeatmapNode>; selectedIds: string[] }>;
+        future: Array<{ nodes: Record<string, SeatmapNode>; selectedIds: string[] }>;
+    };
 }
 
 const initialState: SeatmapState = {
@@ -25,6 +30,31 @@ const initialState: SeatmapState = {
     selectedIds: [],
     drawShape: { shape: "rect" },
     viewportSize: { width: 800, height: 600 },
+    clipboard: [],
+    history: { past: [], future: [] },
+};
+
+const HISTORY_LIMIT = 15;
+
+const snapshotState = (state: SeatmapState) => ({
+    nodes: JSON.parse(JSON.stringify(state.nodes)) as Record<string, SeatmapNode>,
+    selectedIds: [...state.selectedIds],
+});
+
+const pushHistory = (state: SeatmapState) => {
+    state.history.past.push(snapshotState(state));
+    if (state.history.past.length > HISTORY_LIMIT) {
+        state.history.past.shift();
+    }
+    state.history.future = [];
+};
+
+const restoreSnapshot = (
+    state: SeatmapState,
+    snapshot: { nodes: Record<string, SeatmapNode>; selectedIds: string[] }
+) => {
+    state.nodes = JSON.parse(JSON.stringify(snapshot.nodes)) as Record<string, SeatmapNode>;
+    state.selectedIds = [...snapshot.selectedIds];
 };
 
 const seatmapSlice = createSlice({
@@ -57,6 +87,7 @@ const seatmapSlice = createSlice({
             state,
             action: PayloadAction<{ x: number; y: number; seatType?: "standard" | "vip" }>
         ) => {
+            pushHistory(state);
             const id = uuidv4();
             const newSeat: SeatmapSeatNode = {
                 id,
@@ -87,6 +118,7 @@ const seatmapSlice = createSlice({
                 strokeWidth?: number;
             }>
         ) => {
+            pushHistory(state);
             const id = uuidv4();
             const {
                 x,
@@ -141,10 +173,13 @@ const seatmapSlice = createSlice({
         },
         updateNode: (
             state,
-            action: PayloadAction<{ id: string; changes: Partial<SeatmapNode> }>
+            action: PayloadAction<{ id: string; changes: Partial<SeatmapNode>; history?: boolean }>
         ) => {
-            const { id, changes } = action.payload;
+            const { id, changes, history } = action.payload;
             if (state.nodes[id]) {
+                if (history !== false) {
+                    pushHistory(state);
+                }
                 const updated = { ...state.nodes[id], ...changes } as SeatmapNode;
                 // @ts-ignore - complex union type merging
                 state.nodes[id] = updated;
@@ -157,6 +192,9 @@ const seatmapSlice = createSlice({
             state.selectedIds = [];
         },
         rotateSelected: (state, action: PayloadAction<number>) => {
+            if (state.selectedIds.length) {
+                pushHistory(state);
+            }
             state.selectedIds.forEach((id) => {
                 if (state.nodes[id]) {
                     const currentRotation = state.nodes[id].rotation || 0;
@@ -165,6 +203,9 @@ const seatmapSlice = createSlice({
             });
         },
         scaleSelected: (state, action: PayloadAction<number>) => {
+            if (state.selectedIds.length) {
+                pushHistory(state);
+            }
             state.selectedIds.forEach((id) => {
                 if (state.nodes[id]) {
                     const node = state.nodes[id] as SeatmapNode;
@@ -182,7 +223,65 @@ const seatmapSlice = createSlice({
                     node.scaleY = currentScaleY * action.payload;
                 }
             });
-        }
+        },
+        copySelected: (state) => {
+            state.clipboard = state.selectedIds
+                .map((id) => state.nodes[id])
+                .filter(Boolean)
+                .map((node) => JSON.parse(JSON.stringify(node)) as SeatmapNode);
+        },
+        pasteNodesAt: (state, action: PayloadAction<{ x: number; y: number }>) => {
+            if (!state.clipboard.length) return;
+            pushHistory(state);
+            const center = state.clipboard.reduce(
+                (acc, node) => {
+                    acc.x += node.position.x;
+                    acc.y += node.position.y;
+                    return acc;
+                },
+                { x: 0, y: 0 }
+            );
+            center.x /= state.clipboard.length;
+            center.y /= state.clipboard.length;
+
+            const offsetX = action.payload.x - center.x;
+            const offsetY = action.payload.y - center.y;
+            const newIds: string[] = [];
+
+            state.clipboard.forEach((node) => {
+                const id = uuidv4();
+                const copy = JSON.parse(JSON.stringify(node)) as SeatmapNode;
+                copy.id = id;
+                copy.position = {
+                    x: copy.position.x + offsetX,
+                    y: copy.position.y + offsetY,
+                };
+                state.nodes[id] = copy;
+                newIds.push(id);
+            });
+
+            state.selectedIds = newIds;
+        },
+        deleteSelected: (state) => {
+            if (!state.selectedIds.length) return;
+            pushHistory(state);
+            state.selectedIds.forEach((id) => {
+                delete state.nodes[id];
+            });
+            state.selectedIds = [];
+        },
+        undo: (state) => {
+            const previous = state.history.past.pop();
+            if (!previous) return;
+            state.history.future.push(snapshotState(state));
+            restoreSnapshot(state, previous);
+        },
+        redo: (state) => {
+            const next = state.history.future.pop();
+            if (!next) return;
+            state.history.past.push(snapshotState(state));
+            restoreSnapshot(state, next);
+        },
     },
 });
 
@@ -197,7 +296,12 @@ export const {
     selectNode,
     deselectAll,
     rotateSelected,
-    scaleSelected
+    scaleSelected,
+    copySelected,
+    pasteNodesAt,
+    deleteSelected,
+    undo,
+    redo,
 } = seatmapSlice.actions;
 
 export default seatmapSlice.reducer;
