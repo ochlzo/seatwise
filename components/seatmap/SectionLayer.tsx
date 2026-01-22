@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import { Layer, Rect, Circle, RegularPolygon, Line, Group, Transformer, Text } from "react-konva";
+import { Rect, Circle, RegularPolygon, Line, Group, Transformer, Text } from "react-konva";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
     selectNode,
@@ -104,7 +104,10 @@ const ShapeItem = ({
             shapeRef.current.rotation(rotation);
         }
         const scaleX = shapeRef.current.scaleX();
-        const scaleY = shapeRef.current.scaleY();
+        const scaleY = shape.shape === "text" ? scaleX : shapeRef.current.scaleY();
+        if (shape.shape === "text") {
+            shapeRef.current.scaleY(scaleY);
+        }
         rotation = ((rotation % 360) + 360) % 360;
         onChange(shape.id, { rotation, scaleX, scaleY }, history);
     };
@@ -118,6 +121,7 @@ const ShapeItem = ({
         id: shape.id,
         stroke: isSelected ? "#3b82f6" : shape.stroke || "#64748b",
         strokeWidth: isSelected ? 3 : shape.strokeWidth || 2,
+        strokeScaleEnabled: false,
         fill: shape.fill,
         dash: shape.dash,
         draggable: isSelected,
@@ -209,6 +213,7 @@ const ShapeItem = ({
                             fill={fillColor}
                             stroke={strokeColor}
                             strokeWidth={commonProps.strokeWidth}
+                            strokeScaleEnabled={false}
                             dash={shape.dash}
                             cornerRadius={4}
                         />
@@ -230,7 +235,7 @@ const ShapeItem = ({
                             ref={transformerRef}
                             rotateEnabled
                             resizeEnabled
-                            keepRatio={!!isShiftDown}
+                            keepRatio
                             boundBoxFunc={(oldBox, newBox) => {
                                 if (
                                     newBox.width < MIN_SIZE ||
@@ -542,7 +547,7 @@ export default function SectionLayer({
     };
 
     return (
-        <Layer>
+        <Group>
             {shapes.map((shape) => (
                 <ShapeItem
                     key={shape.id}
@@ -576,6 +581,6 @@ export default function SectionLayer({
                     selectionCount={selectionCount}
                 />
             ))}
-        </Layer>
+        </Group>
     );
 }

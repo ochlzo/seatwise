@@ -68,6 +68,7 @@ export default function SeatmapCanvas() {
     lastDelta: 0,
     baseNodes: {},
   });
+  const activeTransformAnchorRef = useRef<string | null>(null);
   const [drawDraft, setDrawDraft] = React.useState<{
     shape: typeof drawShape.shape;
     dash?: number[];
@@ -176,11 +177,21 @@ export default function SeatmapCanvas() {
     targetNodes.forEach((node: any) => {
       const id = node.id();
       if (!id) return;
+      const nodeData = nodes[id];
+      let scaleX = node.scaleX();
+      let scaleY = node.scaleY();
+      if (
+        nodeData?.type === "seat" ||
+        (nodeData?.type === "shape" && nodeData.shape === "text")
+      ) {
+        scaleY = scaleX;
+        node.scaleY(scaleY);
+      }
       changes[id] = {
         position: { x: node.x(), y: node.y() },
         rotation: node.rotation(),
-        scaleX: node.scaleX(),
-        scaleY: node.scaleY(),
+        scaleX,
+        scaleY,
       };
     });
 
@@ -893,9 +904,8 @@ export default function SeatmapCanvas() {
         scaleY={viewport.scale}
         onDragEnd={handleDragEnd}
       >
-        <Layer>{/* Grid or Background could go here */}</Layer>
-
-        <Layer listening={false}>
+        <Layer>
+          {/* Grid or Background could go here */}
           {marqueeRect.visible && (
             <Rect
               x={marqueeRect.x}
@@ -906,25 +916,24 @@ export default function SeatmapCanvas() {
               strokeWidth={1}
               dash={[4, 4]}
               fill="rgba(59, 130, 246, 0.12)"
+              listening={false}
             />
           )}
-        </Layer>
 
-        <Layer listening={false}>{renderDraft()}</Layer>
+          {renderDraft()}
 
-        <SectionLayer
-          onNodeDragStart={() => setIsDraggingNode(true)}
-          onNodeDragEnd={() => setIsDraggingNode(false)}
-        />
+          <SectionLayer
+            onNodeDragStart={() => setIsDraggingNode(true)}
+            onNodeDragEnd={() => setIsDraggingNode(false)}
+          />
 
-        <Layer>{/* Stage Label Removed */}</Layer>
+          {/* Stage Label Removed */}
 
-        <SeatLayer
-          onNodeDragStart={() => setIsDraggingNode(true)}
-          onNodeDragEnd={() => setIsDraggingNode(false)}
-        />
+          <SeatLayer
+            onNodeDragStart={() => setIsDraggingNode(true)}
+            onNodeDragEnd={() => setIsDraggingNode(false)}
+          />
 
-        <Layer>
           <Transformer
             ref={transformerRef}
             rotateEnabled
@@ -935,6 +944,8 @@ export default function SeatmapCanvas() {
               const stage = stageRef.current;
               const transformer = transformerRef.current;
               if (!stage || !transformer) return;
+              activeTransformAnchorRef.current = transformer.getActiveAnchor?.() ?? null;
+              if (activeTransformAnchorRef.current !== "rotater") return;
 
               const selected = transformer.nodes();
               if (!selected.length) return;
@@ -968,14 +979,24 @@ export default function SeatmapCanvas() {
               };
             }}
             onTransform={() => {
-              if (isAltDown && applyGroupRotation(false)) return;
-              if (applyCursorDrivenGroupRotation(false)) return;
+              if (activeTransformAnchorRef.current === "rotater") {
+                if (isAltDown && applyGroupRotation(false)) return;
+                if (applyCursorDrivenGroupRotation(false)) return;
+                commitGroupTransform(false);
+                return;
+              }
               commitGroupTransform(false);
             }}
             onTransformEnd={() => {
-              if (isAltDown && applyGroupRotation(true)) return;
-              if (applyCursorDrivenGroupRotation(true)) return;
+              if (activeTransformAnchorRef.current === "rotater") {
+                if (isAltDown && applyGroupRotation(true)) return;
+                if (applyCursorDrivenGroupRotation(true)) return;
+                commitGroupTransform(true);
+                activeTransformAnchorRef.current = null;
+                return;
+              }
               commitGroupTransform(true);
+              activeTransformAnchorRef.current = null;
             }}
           />
         </Layer>

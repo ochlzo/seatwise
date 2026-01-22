@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Layer, Image as KonvaImage, Group, Rect, Transformer } from "react-konva";
+import { Image as KonvaImage, Group, Rect, Transformer } from "react-konva";
 import useImage from "use-image";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
@@ -66,10 +66,8 @@ const SeatItem = ({
             groupRef.current.rotation(rotation);
         }
         const scaleX = groupRef.current.scaleX();
-        const scaleY = shiftKey ? scaleX : groupRef.current.scaleY();
-        if (shiftKey) {
-            groupRef.current.scaleY(scaleY);
-        }
+        const scaleY = scaleX;
+        groupRef.current.scaleY(scaleY);
         rotation = ((rotation % 360) + 360) % 360;
         onChange(seat.id, { rotation, scaleX, scaleY }, history);
     };
@@ -270,7 +268,7 @@ export default function SeatLayer({
     };
 
     return (
-        <Layer>
+        <Group>
             {seats.map((seat) => (
                 <SeatItem
                     key={seat.id}
@@ -304,6 +302,6 @@ export default function SeatLayer({
                     selectionCount={selectionCount}
                 />
             ))}
-        </Layer>
+        </Group>
     );
 }

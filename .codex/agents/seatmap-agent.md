@@ -26,6 +26,7 @@
 
 ## Selection Panel
 - Shows scale values (scaleX / scaleY).
+- Shows scale values (scaleX / scaleY).
 - Shape color palette split into Stroke Color and Fill Color pickers.
   - Lines only use stroke; fill picker hidden for lines.
 - Text shapes have a text input + font size control.
@@ -50,6 +51,9 @@
 - Seat palette moved into `SeatMapSidebar` (non-gutter offcanvas collapse).
 - New non-sticky `SeatmapPageHeader` mirrors `PageHeader` without `StickyHeader`.
 - Hexagon palette icon replaced with an SVG polygon for correct display.
+
+## Konva Performance
+- Consolidated the Stage tree into a single `Layer`, with `SeatLayer` and `SectionLayer` rendering `Group` wrappers instead of nested layers to reduce the layer count warning.
 
 ## Files Touched (Seatmap)
 - `components/seatmap/SeatmapCanvas.tsx`
