@@ -301,6 +301,7 @@ export function SelectionPanel() {
 
   const selectedNode = nodes[selectedIds[0]];
   if (!selectedNode) return null;
+  if (selectedNode.type === "helper") return null;
 
   const palette = [
     "#ffffff",
