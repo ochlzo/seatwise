@@ -239,6 +239,9 @@ const seatmapSlice = createSlice({
             }
             state.selectedIds = [...state.selectedIds, id];
         },
+        setSelectedIds: (state, action: PayloadAction<string[]>) => {
+            state.selectedIds = action.payload;
+        },
         deselectAll: (state) => {
             state.selectedIds = [];
         },
@@ -348,6 +351,7 @@ export const {
     updateNodesPositions,
     selectNode,
     toggleSelectNode,
+    setSelectedIds,
     deselectAll,
     rotateSelected,
     scaleSelected,
