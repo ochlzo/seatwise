@@ -4,7 +4,12 @@
 import React from "react";
 import { Layer, Rect, Circle, RegularPolygon, Line, Group, Transformer } from "react-konva";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
-import { selectNode, updateNode } from "@/lib/features/seatmap/seatmapSlice";
+import {
+    selectNode,
+    toggleSelectNode,
+    updateNode,
+    updateNodesPositions,
+} from "@/lib/features/seatmap/seatmapSlice";
 import { SeatmapShapeNode } from "@/lib/seatmap/types";
 
 const ROTATION_SNAP = 15;
@@ -20,6 +25,9 @@ const ShapeItem = ({
     onDragStart,
     onDragEnd,
     isShiftDown,
+    onMultiDragStart,
+    onMultiDragMove,
+    onMultiDragEnd,
 }: {
     shape: SeatmapShapeNode;
     isSelected: boolean;
@@ -28,6 +36,9 @@ const ShapeItem = ({
     onDragStart?: () => void;
     onDragEnd?: () => void;
     isShiftDown?: boolean;
+    onMultiDragStart?: (id: string, pos: { x: number; y: number }) => boolean;
+    onMultiDragMove?: (id: string, pos: { x: number; y: number }) => boolean;
+    onMultiDragEnd?: (id: string, pos: { x: number; y: number }) => boolean;
 }) => {
     const shapeRef = React.useRef<any>(null);
     const transformerRef = React.useRef<any>(null);
@@ -76,27 +87,52 @@ const ShapeItem = ({
         name: "shape-item",
         onDragStart: () => {
             if (onDragStart) onDragStart();
+            if (onMultiDragStart) {
+                onMultiDragStart(shape.id, {
+                    x: shape.position.x,
+                    y: shape.position.y,
+                });
+            }
         },
         onClick: (e: any) => {
             e.cancelBubble = true;
-            onSelect(shape.id);
+            onSelect(shape.id, e);
         },
         onTap: (e: any) => {
             e.cancelBubble = true;
-            onSelect(shape.id);
+            onSelect(shape.id, e);
         },
         onDragEnd: (e: any) => {
+            const handled = onMultiDragEnd
+                ? onMultiDragEnd(shape.id, {
+                      x: e.target.x(),
+                      y: e.target.y(),
+                  })
+                : false;
             if (rafRef.current !== null) {
                 cancelAnimationFrame(rafRef.current);
                 rafRef.current = null;
             }
             pendingPosRef.current = null;
-            onChange(shape.id, {
-                position: { x: e.target.x(), y: e.target.y() }
-            }, true);
+            if (!handled) {
+                onChange(
+                    shape.id,
+                    {
+                        position: { x: e.target.x(), y: e.target.y() },
+                    },
+                    true,
+                );
+            }
             if (onDragEnd) onDragEnd();
         },
         onDragMove: (e: any) => {
+            const handled = onMultiDragMove
+                ? onMultiDragMove(shape.id, {
+                      x: e.target.x(),
+                      y: e.target.y(),
+                  })
+                : false;
+            if (handled) return;
             pendingPosRef.current = { x: e.target.x(), y: e.target.y() };
             if (rafRef.current === null) {
                 rafRef.current = requestAnimationFrame(flushDragPosition);
@@ -324,6 +360,11 @@ export default function SectionLayer({
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
     const dispatch = useAppDispatch();
     const [isShiftDown, setIsShiftDown] = React.useState(false);
+    const multiDragRef = React.useRef<{
+        active: boolean;
+        draggedId: string | null;
+        startPositions: Record<string, { x: number; y: number }>;
+    }>({ active: false, draggedId: null, startPositions: {} });
 
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -343,6 +384,60 @@ export default function SectionLayer({
     // @ts-ignore
     const shapes = Object.values(nodes).filter((node): node is SeatmapShapeNode => node.type === "shape");
 
+    const beginMultiDrag = (id: string) => {
+        if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
+        const startPositions: Record<string, { x: number; y: number }> = {};
+        selectedIds.forEach((selectedId) => {
+            const node = nodes[selectedId];
+            if (!node) return;
+            startPositions[selectedId] = {
+                x: node.position.x,
+                y: node.position.y,
+            };
+        });
+        multiDragRef.current = {
+            active: true,
+            draggedId: id,
+            startPositions,
+        };
+        return true;
+    };
+
+    const updateMultiDrag = (id: string, pos: { x: number; y: number }) => {
+        const state = multiDragRef.current;
+        if (!state.active || state.draggedId !== id) return false;
+        const origin = state.startPositions[id];
+        if (!origin) return false;
+        const dx = pos.x - origin.x;
+        const dy = pos.y - origin.y;
+        const positions: Record<string, { x: number; y: number }> = {};
+        Object.entries(state.startPositions).forEach(([nodeId, start]) => {
+            positions[nodeId] = { x: start.x + dx, y: start.y + dy };
+        });
+        dispatch(updateNodesPositions({ positions, history: false }));
+        return true;
+    };
+
+    const endMultiDrag = (id: string, pos: { x: number; y: number }) => {
+        const state = multiDragRef.current;
+        if (!state.active || state.draggedId !== id) return false;
+        const origin = state.startPositions[id];
+        if (!origin) return false;
+        const dx = pos.x - origin.x;
+        const dy = pos.y - origin.y;
+        const positions: Record<string, { x: number; y: number }> = {};
+        Object.entries(state.startPositions).forEach(([nodeId, start]) => {
+            positions[nodeId] = { x: start.x + dx, y: start.y + dy };
+        });
+        multiDragRef.current = {
+            active: false,
+            draggedId: null,
+            startPositions: {},
+        };
+        dispatch(updateNodesPositions({ positions, history: true }));
+        return true;
+    };
+
     return (
         <Layer>
             {shapes.map((shape) => (
@@ -350,13 +445,31 @@ export default function SectionLayer({
                     key={shape.id}
                     shape={shape}
                     isSelected={selectedIds.includes(shape.id)}
-                    onSelect={(id: string) => dispatch(selectNode(id))}
+                    onSelect={(id: string, evt?: any) => {
+                        const additive =
+                            evt?.evt?.shiftKey ||
+                            evt?.evt?.ctrlKey ||
+                            evt?.evt?.metaKey ||
+                            isShiftDown;
+                        if (additive) {
+                            dispatch(toggleSelectNode(id));
+                            return;
+                        }
+                        dispatch(selectNode(id));
+                    }}
                     onChange={(id: string, changes: any, history?: boolean) =>
                         dispatch(updateNode({ id, changes, history }))
                     }
                     onDragStart={onNodeDragStart}
                     onDragEnd={onNodeDragEnd}
                     isShiftDown={isShiftDown}
+                    onMultiDragStart={(id: string) => beginMultiDrag(id)}
+                    onMultiDragMove={(id: string, pos: { x: number; y: number }) =>
+                        updateMultiDrag(id, pos)
+                    }
+                    onMultiDragEnd={(id: string, pos: { x: number; y: number }) =>
+                        endMultiDrag(id, pos)
+                    }
                 />
             ))}
         </Layer>
