@@ -78,7 +78,6 @@ const ShapeItem = ({
 }) => {
     const shapeRef = React.useRef<any>(null);
     const transformerRef = React.useRef<any>(null);
-    const textRef = React.useRef<any>(null);
     const rafRef = React.useRef<number | null>(null);
     const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
 
@@ -193,101 +192,8 @@ const ShapeItem = ({
             const measured = measureTextBox(textValue, fontSize, fontFamily, padding);
             const width = shape.width ?? measured.width;
             const height = shape.height ?? measured.height;
-
-            const startEditing = () => {
-                const stage = shapeRef.current?.getStage();
-                const textNode = textRef.current;
-                if (!stage || !textNode) return;
-
-                const stageBox = stage.container().getBoundingClientRect();
-                const textPosition = textNode.getAbsolutePosition();
-                const scale = stage.scaleX() || 1;
-
-                const areaPosition = {
-                    x: stageBox.left + textPosition.x * scale,
-                    y: stageBox.top + textPosition.y * scale,
-                };
-
-                const textarea = document.createElement("textarea");
-                document.body.appendChild(textarea);
-                textarea.value = textValue;
-                textarea.style.position = "absolute";
-                textarea.style.top = `${areaPosition.y}px`;
-                textarea.style.left = `${areaPosition.x}px`;
-                textarea.style.width = `${(width - padding * 2) * scale}px`;
-                textarea.style.height = `${(height - padding * 2) * scale}px`;
-                textarea.style.fontSize = `${fontSize * scale}px`;
-                textarea.style.fontFamily = fontFamily;
-                textarea.style.color = textColor;
-                textarea.style.border = "1px solid #cbd5e1";
-                textarea.style.padding = "0";
-                textarea.style.margin = "0";
-                textarea.style.background = "white";
-                textarea.style.outline = "none";
-                textarea.style.resize = "none";
-                textarea.style.lineHeight = "1.2";
-                textarea.style.boxSizing = "border-box";
-                textarea.style.textAlign = "center";
-
-                let committed = false;
-
-                const removeTextarea = () => {
-                    if (textarea.parentNode) {
-                        textarea.parentNode.removeChild(textarea);
-                    }
-                    window.removeEventListener("click", handleOutsideClick);
-                };
-
-                const commit = () => {
-                    if (committed) return;
-                    committed = true;
-                    const nextText = textarea.value;
-                    const nextSize = measureTextBox(
-                        nextText,
-                        fontSize,
-                        fontFamily,
-                        padding
-                    );
-                    onChange(
-                        shape.id,
-                        {
-                            text: nextText,
-                            width: nextSize.width,
-                            height: nextSize.height,
-                        },
-                        true
-                    );
-                    removeTextarea();
-                };
-
-                const cancel = () => {
-                    committed = true;
-                    removeTextarea();
-                };
-
-                const handleOutsideClick = (evt: MouseEvent) => {
-                    if (evt.target !== textarea) {
-                        commit();
-                    }
-                };
-
-                textarea.addEventListener("keydown", (evt) => {
-                    if (evt.key === "Enter" && !evt.shiftKey) {
-                        evt.preventDefault();
-                        commit();
-                    } else if (evt.key === "Escape") {
-                        evt.preventDefault();
-                        cancel();
-                    }
-                });
-
-                setTimeout(() => {
-                    window.addEventListener("click", handleOutsideClick);
-                });
-
-                textarea.focus();
-                textarea.select();
-            };
+            const fillColor = shape.fill;
+            const strokeColor = isSelected ? commonProps.stroke : shape.stroke;
 
             return (
                 <>
@@ -296,20 +202,17 @@ const ShapeItem = ({
                         {...commonProps}
                         offsetX={width / 2}
                         offsetY={height / 2}
-                        onDblClick={startEditing}
-                        onDblTap={startEditing}
                     >
                         <Rect
                             width={width}
                             height={height}
-                            fill={shape.fill ?? "#ffffff"}
-                            stroke={commonProps.stroke}
+                            fill={fillColor}
+                            stroke={strokeColor}
                             strokeWidth={commonProps.strokeWidth}
                             dash={shape.dash}
                             cornerRadius={4}
                         />
                         <Text
-                            ref={textRef}
                             x={padding}
                             y={padding}
                             width={Math.max(0, width - padding * 2)}
