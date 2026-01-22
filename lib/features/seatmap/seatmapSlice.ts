@@ -185,6 +185,27 @@ const seatmapSlice = createSlice({
                 state.nodes[id] = updated;
             }
         },
+        updateNodes: (
+            state,
+            action: PayloadAction<{
+                changes: Record<string, Partial<SeatmapNode>>;
+                history?: boolean;
+            }>
+        ) => {
+            const { changes, history } = action.payload;
+            const ids = Object.keys(changes);
+            if (!ids.length) return;
+            if (history !== false) {
+                pushHistory(state);
+            }
+            ids.forEach((id) => {
+                const node = state.nodes[id];
+                if (!node) return;
+                const updated = { ...node, ...changes[id] } as SeatmapNode;
+                // @ts-ignore - complex union type merging
+                state.nodes[id] = updated;
+            });
+        },
         updateNodesPositions: (
             state,
             action: PayloadAction<{
@@ -323,6 +344,7 @@ export const {
     addSeat,
     addShape,
     updateNode,
+    updateNodes,
     updateNodesPositions,
     selectNode,
     toggleSelectNode,

@@ -28,6 +28,7 @@ const ShapeItem = ({
     onMultiDragStart,
     onMultiDragMove,
     onMultiDragEnd,
+    selectionCount,
 }: {
     shape: SeatmapShapeNode;
     isSelected: boolean;
@@ -39,6 +40,7 @@ const ShapeItem = ({
     onMultiDragStart?: (id: string, pos: { x: number; y: number }) => boolean;
     onMultiDragMove?: (id: string, pos: { x: number; y: number }) => boolean;
     onMultiDragEnd?: (id: string, pos: { x: number; y: number }) => boolean;
+    selectionCount: number;
 }) => {
     const shapeRef = React.useRef<any>(null);
     const transformerRef = React.useRef<any>(null);
@@ -79,12 +81,13 @@ const ShapeItem = ({
         rotation: shape.rotation,
         scaleX: shape.scaleX,
         scaleY: shape.scaleY,
+        id: shape.id,
         stroke: isSelected ? "#3b82f6" : shape.stroke || "#64748b",
         strokeWidth: isSelected ? 3 : shape.strokeWidth || 2,
         fill: shape.fill,
         dash: shape.dash,
         draggable: isSelected,
-        name: "shape-item",
+        name: "shape-item selectable",
         onDragStart: () => {
             if (onDragStart) onDragStart();
             if (onMultiDragStart) {
@@ -150,7 +153,7 @@ const ShapeItem = ({
             return (
                 <>
                     <Rect ref={shapeRef} {...commonProps} width={shape.width || 50} height={shape.height || 50} offsetX={(shape.width || 50) / 2} offsetY={(shape.height || 50) / 2} cornerRadius={4} />
-                    {isSelected && (
+                    {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
                             rotateEnabled
@@ -176,7 +179,7 @@ const ShapeItem = ({
             return (
                 <>
                     <Circle ref={shapeRef} {...commonProps} radius={shape.radius || 30} />
-                    {isSelected && (
+                    {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
                             rotateEnabled
@@ -202,7 +205,7 @@ const ShapeItem = ({
             return (
                 <>
                     <RegularPolygon ref={shapeRef} {...commonProps} sides={shape.sides || 6} radius={shape.radius || 30} />
-                    {isSelected && (
+                    {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
                             rotateEnabled
@@ -271,7 +274,7 @@ const ShapeItem = ({
                         tension={0}
                         hitStrokeWidth={10}
                     />
-                    {isSelected && (
+                    {isSelected && selectionCount === 1 && (
                         <>
                             <Transformer ref={transformerRef} rotateEnabled resizeEnabled={false} enabledAnchors={[]} rotateAnchorOffset={24} />
                             <Circle
@@ -322,7 +325,7 @@ const ShapeItem = ({
                         />
                     ))}
                     </Group>
-                    {isSelected && (
+                    {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
                             rotateEnabled
@@ -358,6 +361,7 @@ export default function SectionLayer({
 }) {
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
+    const selectionCount = selectedIds.length;
     const dispatch = useAppDispatch();
     const [isShiftDown, setIsShiftDown] = React.useState(false);
     const multiDragRef = React.useRef<{
@@ -470,6 +474,7 @@ export default function SectionLayer({
                     onMultiDragEnd={(id: string, pos: { x: number; y: number }) =>
                         endMultiDrag(id, pos)
                     }
+                    selectionCount={selectionCount}
                 />
             ))}
         </Layer>

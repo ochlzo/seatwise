@@ -30,6 +30,7 @@ const SeatItem = ({
     onMultiDragStart,
     onMultiDragMove,
     onMultiDragEnd,
+    selectionCount,
 }: any) => {
     const seatType = seat.seatType ?? "standard";
     const imageUrl =
@@ -142,7 +143,8 @@ const SeatItem = ({
                 }}
                 onTransform={(e) => applyTransform(e?.evt, false)}
                 onTransformEnd={(e) => applyTransform(e?.evt, true)}
-                name="seat-group"
+                id={seat.id}
+                name="seat-group seat-item selectable"
             >
                 <KonvaImage
                     image={image}
@@ -154,7 +156,7 @@ const SeatItem = ({
                     shadowOpacity={0.3}
                 />
             </Group>
-            {isSelected && (
+            {isSelected && selectionCount === 1 && (
                 <Transformer
                     ref={transformerRef}
                     rotateEnabled
@@ -187,6 +189,7 @@ export default function SeatLayer({
 }) {
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
+    const selectionCount = selectedIds.length;
     const dispatch = useAppDispatch();
     const [isShiftDown, setIsShiftDown] = React.useState(false);
     const multiDragRef = React.useRef<{
@@ -298,6 +301,7 @@ export default function SeatLayer({
                     onMultiDragEnd={(id: string, pos: { x: number; y: number }) =>
                         endMultiDrag(id, pos)
                     }
+                    selectionCount={selectionCount}
                 />
             ))}
         </Layer>
