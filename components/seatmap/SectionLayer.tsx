@@ -43,12 +43,12 @@ const ShapeItem = ({
 
     const flushDragPosition = () => {
         if (!pendingPosRef.current) return;
-        onChange(shape.id, { position: pendingPosRef.current });
+        onChange(shape.id, { position: pendingPosRef.current }, false);
         pendingPosRef.current = null;
         rafRef.current = null;
     };
 
-    const applyTransform = (evt?: Event) => {
+    const applyTransform = (evt?: Event, history?: boolean) => {
         if (!shapeRef.current) return;
         let rotation = shapeRef.current.rotation();
         const shiftKey = (evt as any)?.shiftKey || isShiftDown;
@@ -59,7 +59,7 @@ const ShapeItem = ({
         const scaleX = shapeRef.current.scaleX();
         const scaleY = shapeRef.current.scaleY();
         rotation = ((rotation % 360) + 360) % 360;
-        onChange(shape.id, { rotation, scaleX, scaleY });
+        onChange(shape.id, { rotation, scaleX, scaleY }, history);
     };
 
     const commonProps = {
@@ -93,7 +93,7 @@ const ShapeItem = ({
             pendingPosRef.current = null;
             onChange(shape.id, {
                 position: { x: e.target.x(), y: e.target.y() }
-            });
+            }, true);
             if (onDragEnd) onDragEnd();
         },
         onDragMove: (e: any) => {
@@ -102,8 +102,8 @@ const ShapeItem = ({
                 rafRef.current = requestAnimationFrame(flushDragPosition);
             }
         },
-        onTransform: (e: any) => applyTransform(e?.evt),
-        onTransformEnd: (e: any) => applyTransform(e?.evt),
+        onTransform: (e: any) => applyTransform(e?.evt, false),
+        onTransformEnd: (e: any) => applyTransform(e?.evt, true),
         shadowColor: "black",
         shadowBlur: isSelected ? 10 : 0,
         shadowOpacity: 0.3
@@ -213,14 +213,14 @@ const ShapeItem = ({
                 x: shape.position.x + rawPoints[2],
                 y: shape.position.y + rawPoints[3],
             };
-            const updateEndpoint = (index: 0 | 2, next: { x: number; y: number }) => {
+            const updateEndpoint = (index: 0 | 2, next: { x: number; y: number }, history?: boolean) => {
                 const nextPoints = [...rawPoints];
                 nextPoints[index] = next.x - shape.position.x;
                 nextPoints[index + 1] = next.y - shape.position.y;
                 const dx = nextPoints[2] - nextPoints[0];
                 const dy = nextPoints[3] - nextPoints[1];
                 if (Math.hypot(dx, dy) < MIN_LINE_LENGTH) return;
-                onChange(shape.id, { points: nextPoints, scaleX: 1, scaleY: 1 });
+                onChange(shape.id, { points: nextPoints, scaleX: 1, scaleY: 1 }, history);
             };
             return (
                 <>
@@ -246,7 +246,8 @@ const ShapeItem = ({
                                 stroke="#1e3a8a"
                                 strokeWidth={1}
                                 draggable
-                                onDragMove={(e) => updateEndpoint(0, { x: e.target.x(), y: e.target.y() })}
+                                onDragMove={(e) => updateEndpoint(0, { x: e.target.x(), y: e.target.y() }, false)}
+                                onDragEnd={(e) => updateEndpoint(0, { x: e.target.x(), y: e.target.y() }, true)}
                             />
                             <Circle
                                 x={endAbs.x}
@@ -256,7 +257,8 @@ const ShapeItem = ({
                                 stroke="#1e3a8a"
                                 strokeWidth={1}
                                 draggable
-                                onDragMove={(e) => updateEndpoint(2, { x: e.target.x(), y: e.target.y() })}
+                                onDragMove={(e) => updateEndpoint(2, { x: e.target.x(), y: e.target.y() }, false)}
+                                onDragEnd={(e) => updateEndpoint(2, { x: e.target.x(), y: e.target.y() }, true)}
                             />
                         </>
                     )}
@@ -349,7 +351,9 @@ export default function SectionLayer({
                     shape={shape}
                     isSelected={selectedIds.includes(shape.id)}
                     onSelect={(id: string) => dispatch(selectNode(id))}
-                    onChange={(id: string, changes: any) => dispatch(updateNode({ id, changes }))}
+                    onChange={(id: string, changes: any, history?: boolean) =>
+                        dispatch(updateNode({ id, changes, history }))
+                    }
                     onDragStart={onNodeDragStart}
                     onDragEnd={onNodeDragEnd}
                     isShiftDown={isShiftDown}

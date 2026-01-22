@@ -14,6 +14,11 @@ import {
     rotateSelected,
     scaleSelected,
     setViewportSize,
+    copySelected,
+    pasteNodesAt,
+    deleteSelected,
+    undo,
+    redo,
 } from "@/lib/features/seatmap/seatmapSlice";
 import SeatLayer from "@/components/seatmap/SeatLayer";
 import SectionLayer from "@/components/seatmap/SectionLayer";
@@ -25,6 +30,7 @@ export default function SeatmapCanvas() {
     const stageRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [isDraggingNode, setIsDraggingNode] = React.useState(false);
+    const [isRightPanning, setIsRightPanning] = React.useState(false);
     const [drawDraft, setDrawDraft] = React.useState<{
         shape: typeof drawShape.shape;
         dash?: number[];
@@ -34,6 +40,7 @@ export default function SeatmapCanvas() {
     } | null>(null);
     const MIN_SCALE = 0.4;
     const MAX_SCALE = 3;
+    const lastPointerPosRef = useRef<{ x: number; y: number } | null>(null);
 
     // Resize observer to keep stage responsive
     const [dimensions, setDimensions] = React.useState({ width: 800, height: 600 });
@@ -89,11 +96,60 @@ export default function SeatmapCanvas() {
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+                return;
+            }
             // Only if we have a selection
             // We can't easily access Redux state here without a ref or dependency
             // But dispatch works
 
             // Check for valid keys first to avoid unnecessary dispatches
+            if (e.ctrlKey || e.metaKey) {
+                const key = e.key.toLowerCase();
+                if (key === "c") {
+                    e.preventDefault();
+                    dispatch(copySelected());
+                    return;
+                }
+                if (key === "v") {
+                    e.preventDefault();
+                    const stage = stageRef.current;
+                    const pointer = lastPointerPosRef.current;
+                    let pos = pointer;
+                    if (!pos && stage) {
+                        const center = {
+                            x: dimensions.width / 2,
+                            y: dimensions.height / 2,
+                        };
+                        pos = {
+                            x: (center.x - viewport.position.x) / viewport.scale,
+                            y: (center.y - viewport.position.y) / viewport.scale,
+                        };
+                    }
+                    if (pos) {
+                        dispatch(pasteNodesAt(pos));
+                    }
+                    return;
+                }
+                if (key === "z") {
+                    e.preventDefault();
+                    dispatch(undo());
+                    return;
+                }
+                if (key === "y") {
+                    e.preventDefault();
+                    dispatch(redo());
+                    return;
+                }
+            }
+
+            if (e.key === "Delete" || e.key === "Backspace") {
+                e.preventDefault();
+                dispatch(deleteSelected());
+                return;
+            }
+
             if (['[', ']', '-', '='].includes(e.key)) {
                 const rotateStep = e.shiftKey ? 15 : 5;
                 switch (e.key) {
@@ -115,7 +171,7 @@ export default function SeatmapCanvas() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [dispatch]);
+    }, [dispatch, dimensions, viewport]);
 
 
     const handleWheel = (e: any) => {
@@ -223,11 +279,20 @@ export default function SeatmapCanvas() {
     };
 
     const handleMouseDown = (e: any) => {
+        const stage = stageRef.current;
+        if (stage) {
+            const pos = getRelativePointerPosition(stage);
+            if (pos) {
+                lastPointerPosRef.current = pos;
+            }
+        }
+        if (e.evt && e.evt.button === 2) {
+            setIsRightPanning(true);
+            return;
+        }
         if (mode !== "draw") return;
         if (e.evt && e.evt.button !== 0) return;
         if (e.target !== e.target.getStage()) return;
-
-        const stage = stageRef.current;
         if (!stage) return;
         const pos = getRelativePointerPosition(stage);
         if (!pos) return;
@@ -242,15 +307,21 @@ export default function SeatmapCanvas() {
     };
 
     const handleMouseMove = () => {
-        if (!drawDraft) return;
         const stage = stageRef.current;
         if (!stage) return;
         const pos = getRelativePointerPosition(stage);
         if (!pos) return;
-        setDrawDraft((prev) => (prev ? { ...prev, current: pos } : prev));
+        lastPointerPosRef.current = pos;
+        if (drawDraft) {
+            setDrawDraft((prev) => (prev ? { ...prev, current: pos } : prev));
+        }
     };
 
     const handleMouseUp = () => {
+        if (isRightPanning) {
+            setIsRightPanning(false);
+            return;
+        }
         if (!drawDraft) return;
 
         const { start, current } = drawDraft;
@@ -397,13 +468,14 @@ export default function SeatmapCanvas() {
             <Stage
                 width={dimensions.width}
                 height={dimensions.height}
-                draggable={mode === "pan" && !isDraggingNode}
+                draggable={(mode === "pan" || isRightPanning) && !isDraggingNode}
                 onWheel={handleWheel}
                 onClick={handleStageClick}
                 onTap={handleStageClick}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
+                onContextMenu={(e) => e.evt?.preventDefault()}
                 ref={stageRef}
                 x={viewport.position.x}
                 y={viewport.position.y}
