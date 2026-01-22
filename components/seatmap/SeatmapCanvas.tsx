@@ -31,10 +31,12 @@ import {
   deleteSelected,
   undo,
   redo,
+  addGuidePath,
 } from "@/lib/features/seatmap/seatmapSlice";
 import SeatLayer from "@/components/seatmap/SeatLayer";
 import SectionLayer from "@/components/seatmap/SectionLayer";
 import { getRelativePointerPosition } from "@/lib/seatmap/geometry";
+import GuidePathLayer from "@/components/seatmap/GuidePathLayer";
 
 export default function SeatmapCanvas() {
   const dispatch = useAppDispatch();
@@ -725,6 +727,19 @@ export default function SeatmapCanvas() {
       return;
     }
 
+    if (drawDraft.shape === "guidePath") {
+      const length = Math.hypot(dx, dy);
+      if (length >= minSize) {
+        dispatch(
+          addGuidePath({
+            points: [start.x, start.y, current.x, current.y],
+          }),
+        );
+      }
+      setDrawDraft(null);
+      return;
+    }
+
     if (drawDraft.shape === "text") {
       dispatch(
         addShape({
@@ -807,6 +822,17 @@ export default function SeatmapCanvas() {
           stroke="#3b82f6"
           strokeWidth={2}
           dash={drawDraft.dash}
+        />
+      );
+    }
+
+    if (drawDraft.shape === "guidePath") {
+      return (
+        <Line
+          points={[start.x, start.y, current.x, current.y]}
+          stroke="#6b7280"
+          strokeWidth={2}
+          dash={[6, 4]}
         />
       );
     }
@@ -922,9 +948,11 @@ export default function SeatmapCanvas() {
 
           {renderDraft()}
 
-        <SectionLayer
-          stageRef={stageRef}
-          onNodeDragStart={() => setIsDraggingNode(true)}
+          <GuidePathLayer />
+
+          <SectionLayer
+            stageRef={stageRef}
+            onNodeDragStart={() => setIsDraggingNode(true)}
           onNodeDragEnd={() => setIsDraggingNode(false)}
         />
 

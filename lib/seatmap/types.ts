@@ -5,7 +5,8 @@ export type SeatmapNodeType =
   | "row"
   | "label"
   | "aisle"
-  | "shape";
+  | "shape"
+  | "helper";
 
 export type SeatStatus = "available" | "reserved" | "sold" | "blocked";
 
@@ -110,6 +111,16 @@ export type SeatmapShapeNode = SeatmapNodeBase & {
   padding?: number;
 };
 
+export type GuidePathNode = {
+  id: string;
+  type: "helper";
+  helperType: "guidePath";
+  points: number[];
+  dash?: number[];
+  stroke?: string;
+  strokeWidth?: number;
+};
+
 export type SeatmapNode =
   | SeatmapStageNode
   | SeatmapSeatNode
@@ -117,7 +128,8 @@ export type SeatmapNode =
   | SeatmapSectionNode
   | SeatmapAisleNode
   | SeatmapLabelNode
-  | SeatmapShapeNode;
+  | SeatmapShapeNode
+  | GuidePathNode;
 
 export type SeatmapViewport = {
   position: SeatmapPoint;

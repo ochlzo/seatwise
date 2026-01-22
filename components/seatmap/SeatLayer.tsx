@@ -10,6 +10,8 @@ import {
     updateNode,
     updateNodesPositions,
 } from "@/lib/features/seatmap/seatmapSlice";
+import { closestPointOnPolyline } from "@/lib/seatmap/geometry";
+import { GuidePathNode } from "@/lib/seatmap/types";
 
 const SEAT_IMAGE_URL = "/seat-default.svg";
 const SEAT_SELECTED_IMAGE_URL = "/seat-selected.svg";
@@ -18,6 +20,24 @@ const VIP_SEAT_SELECTED_IMAGE_URL = "/selected-vip-seat.svg";
 const ROTATION_SNAP = 15;
 const MIN_SIZE = 16;
 const MAX_SIZE = 320;
+const SNAP_THRESHOLD = 12;
+
+const getSnappedPosition = (
+    position: { x: number; y: number },
+    guidePaths: GuidePathNode[],
+) => {
+    let closest = null as null | { x: number; y: number; distance: number };
+    guidePaths.forEach((guide) => {
+        const result = closestPointOnPolyline(position.x, position.y, guide.points);
+        if (result.distance <= SNAP_THRESHOLD) {
+            if (!closest || result.distance < closest.distance) {
+                closest = { x: result.point.x, y: result.point.y, distance: result.distance };
+            }
+        }
+    });
+    if (!closest) return null;
+    return { x: closest.x, y: closest.y };
+};
 
 const SeatItem = ({
     seat,
@@ -31,6 +51,8 @@ const SeatItem = ({
     onMultiDragMove,
     onMultiDragEnd,
     selectionCount,
+    showGuidePaths,
+    guidePaths,
 }: any) => {
     const seatType = seat.seatType ?? "standard";
     const imageUrl =
@@ -116,10 +138,18 @@ const SeatItem = ({
                     }
                     pendingPosRef.current = null;
                     if (!handled) {
+                        let nextPos = { x: e.target.x(), y: e.target.y() };
+                        if (showGuidePaths && guidePaths.length) {
+                            const snapped = getSnappedPosition(nextPos, guidePaths);
+                            if (snapped) {
+                                nextPos = snapped;
+                                e.target.position(nextPos);
+                            }
+                        }
                         onChange(
                             seat.id,
                             {
-                                position: { x: e.target.x(), y: e.target.y() },
+                                position: nextPos,
                             },
                             true,
                         );
@@ -134,7 +164,15 @@ const SeatItem = ({
                           })
                         : false;
                     if (handled) return;
-                    pendingPosRef.current = { x: e.target.x(), y: e.target.y() };
+                    let nextPos = { x: e.target.x(), y: e.target.y() };
+                    if (showGuidePaths && guidePaths.length) {
+                        const snapped = getSnappedPosition(nextPos, guidePaths);
+                        if (snapped) {
+                            nextPos = snapped;
+                            e.target.position(nextPos);
+                        }
+                    }
+                    pendingPosRef.current = nextPos;
                     if (rafRef.current === null) {
                         rafRef.current = requestAnimationFrame(flushDragPosition);
                     }
@@ -189,6 +227,7 @@ export default function SeatLayer({
 }) {
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
+    const showGuidePaths = useAppSelector((state) => state.seatmap.showGuidePaths);
     const selectionCount = selectedIds.length;
     const dispatch = useAppDispatch();
     const [isShiftDown, setIsShiftDown] = React.useState(false);
@@ -216,6 +255,10 @@ export default function SeatLayer({
     }, []);
 
     const seats = Object.values(nodes).filter((node) => node.type === "seat");
+    const guidePaths = Object.values(nodes).filter(
+        (node): node is GuidePathNode =>
+            node.type === "helper" && node.helperType === "guidePath",
+    );
 
     const beginMultiDrag = (id: string) => {
         if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
@@ -241,8 +284,18 @@ export default function SeatLayer({
         if (!state.active || state.draggedId !== id) return false;
         const origin = state.startPositions[id];
         if (!origin) return false;
-        const dx = pos.x - origin.x;
-        const dy = pos.y - origin.y;
+        let dx = pos.x - origin.x;
+        let dy = pos.y - origin.y;
+        if (showGuidePaths && guidePaths.length) {
+            const snapped = getSnappedPosition(
+                { x: origin.x + dx, y: origin.y + dy },
+                guidePaths,
+            );
+            if (snapped) {
+                dx = snapped.x - origin.x;
+                dy = snapped.y - origin.y;
+            }
+        }
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -272,8 +325,18 @@ export default function SeatLayer({
         if (!state.active || state.draggedId !== id) return false;
         const origin = state.startPositions[id];
         if (!origin) return false;
-        const dx = pos.x - origin.x;
-        const dy = pos.y - origin.y;
+        let dx = pos.x - origin.x;
+        let dy = pos.y - origin.y;
+        if (showGuidePaths && guidePaths.length) {
+            const snapped = getSnappedPosition(
+                { x: origin.x + dx, y: origin.y + dy },
+                guidePaths,
+            );
+            if (snapped) {
+                dx = snapped.x - origin.x;
+                dy = snapped.y - origin.y;
+            }
+        }
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -335,6 +398,8 @@ export default function SeatLayer({
                         endMultiDrag(id, pos)
                     }
                     selectionCount={selectionCount}
+                    showGuidePaths={showGuidePaths}
+                    guidePaths={guidePaths}
                 />
             ))}
         </Group>
