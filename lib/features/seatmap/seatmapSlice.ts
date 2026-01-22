@@ -116,6 +116,11 @@ const seatmapSlice = createSlice({
                 fill?: string;
                 stroke?: string;
                 strokeWidth?: number;
+                text?: string;
+                fontSize?: number;
+                fontFamily?: string;
+                textColor?: string;
+                padding?: number;
             }>
         ) => {
             pushHistory(state);
@@ -133,6 +138,11 @@ const seatmapSlice = createSlice({
                 fill,
                 stroke,
                 strokeWidth,
+                text,
+                fontSize,
+                fontFamily,
+                textColor,
+                padding,
             } = action.payload;
 
             // Define default sizes based on shape
@@ -140,6 +150,11 @@ const seatmapSlice = createSlice({
             let defaultHeight = 50;
             let defaultRadius = 30;
             let defaultPoints = undefined;
+            let defaultText = text ?? "Text";
+            let defaultFontSize = fontSize ?? 18;
+            let defaultFontFamily = fontFamily ?? "Inter";
+            let defaultTextColor = textColor ?? "#111827";
+            let defaultPadding = padding ?? 8;
 
             if (shape === "line") {
                 defaultWidth = 0;
@@ -149,6 +164,12 @@ const seatmapSlice = createSlice({
             } else if (shape === "stairs") {
                 defaultWidth = 60;
                 defaultHeight = 60;
+            } else if (shape === "text") {
+                defaultWidth = Math.max(
+                    40,
+                    defaultText.length * defaultFontSize * 0.6 + defaultPadding * 2
+                );
+                defaultHeight = defaultFontSize + defaultPadding * 2;
             }
 
             const newShape: SeatmapShapeNode = {
@@ -167,7 +188,12 @@ const seatmapSlice = createSlice({
                 strokeWidth: strokeWidth ?? 2,
                 dash,
                 points: points ?? defaultPoints,
-                sides
+                sides,
+                text: shape === "text" ? defaultText : undefined,
+                fontSize: shape === "text" ? defaultFontSize : undefined,
+                fontFamily: shape === "text" ? defaultFontFamily : undefined,
+                textColor: shape === "text" ? defaultTextColor : undefined,
+                padding: shape === "text" ? defaultPadding : undefined,
             };
             state.nodes[id] = newShape;
         },

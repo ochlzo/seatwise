@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import { Layer, Rect, Circle, RegularPolygon, Line, Group, Transformer } from "react-konva";
+import { Layer, Rect, Circle, RegularPolygon, Line, Group, Transformer, Text } from "react-konva";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
     selectNode,
@@ -16,6 +16,40 @@ const ROTATION_SNAP = 15;
 const MIN_SIZE = 10;
 const MAX_SIZE = 800;
 const MIN_LINE_LENGTH = 6;
+const DEFAULT_TEXT = "Text";
+const DEFAULT_FONT_SIZE = 18;
+const DEFAULT_FONT_FAMILY = "Inter";
+const DEFAULT_TEXT_COLOR = "#111827";
+const DEFAULT_TEXT_PADDING = 8;
+
+const measureTextBox = (
+    value: string,
+    fontSize: number,
+    fontFamily: string,
+    padding: number
+) => {
+    if (typeof document === "undefined") {
+        return {
+            width: Math.max(40, value.length * fontSize * 0.6 + padding * 2),
+            height: fontSize + padding * 2,
+        };
+    }
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+        return {
+            width: Math.max(40, value.length * fontSize * 0.6 + padding * 2),
+            height: fontSize + padding * 2,
+        };
+    }
+    ctx.font = `${fontSize}px ${fontFamily}`;
+    const metrics = ctx.measureText(value);
+    const textWidth = metrics.width;
+    return {
+        width: Math.max(40, textWidth + padding * 2),
+        height: fontSize + padding * 2,
+    };
+};
 
 const ShapeItem = ({
     shape,
@@ -44,6 +78,7 @@ const ShapeItem = ({
 }) => {
     const shapeRef = React.useRef<any>(null);
     const transformerRef = React.useRef<any>(null);
+    const textRef = React.useRef<any>(null);
     const rafRef = React.useRef<number | null>(null);
     const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
 
@@ -149,6 +184,167 @@ const ShapeItem = ({
     };
 
     switch (shape.shape) {
+        case "text": {
+            const textValue = shape.text ?? DEFAULT_TEXT;
+            const fontSize = shape.fontSize ?? DEFAULT_FONT_SIZE;
+            const fontFamily = shape.fontFamily ?? DEFAULT_FONT_FAMILY;
+            const textColor = shape.textColor ?? DEFAULT_TEXT_COLOR;
+            const padding = shape.padding ?? DEFAULT_TEXT_PADDING;
+            const measured = measureTextBox(textValue, fontSize, fontFamily, padding);
+            const width = shape.width ?? measured.width;
+            const height = shape.height ?? measured.height;
+
+            const startEditing = () => {
+                const stage = shapeRef.current?.getStage();
+                const textNode = textRef.current;
+                if (!stage || !textNode) return;
+
+                const stageBox = stage.container().getBoundingClientRect();
+                const textPosition = textNode.getAbsolutePosition();
+                const scale = stage.scaleX() || 1;
+
+                const areaPosition = {
+                    x: stageBox.left + textPosition.x * scale,
+                    y: stageBox.top + textPosition.y * scale,
+                };
+
+                const textarea = document.createElement("textarea");
+                document.body.appendChild(textarea);
+                textarea.value = textValue;
+                textarea.style.position = "absolute";
+                textarea.style.top = `${areaPosition.y}px`;
+                textarea.style.left = `${areaPosition.x}px`;
+                textarea.style.width = `${(width - padding * 2) * scale}px`;
+                textarea.style.height = `${(height - padding * 2) * scale}px`;
+                textarea.style.fontSize = `${fontSize * scale}px`;
+                textarea.style.fontFamily = fontFamily;
+                textarea.style.color = textColor;
+                textarea.style.border = "1px solid #cbd5e1";
+                textarea.style.padding = "0";
+                textarea.style.margin = "0";
+                textarea.style.background = "white";
+                textarea.style.outline = "none";
+                textarea.style.resize = "none";
+                textarea.style.lineHeight = "1.2";
+                textarea.style.boxSizing = "border-box";
+                textarea.style.textAlign = "center";
+
+                let committed = false;
+
+                const removeTextarea = () => {
+                    if (textarea.parentNode) {
+                        textarea.parentNode.removeChild(textarea);
+                    }
+                    window.removeEventListener("click", handleOutsideClick);
+                };
+
+                const commit = () => {
+                    if (committed) return;
+                    committed = true;
+                    const nextText = textarea.value;
+                    const nextSize = measureTextBox(
+                        nextText,
+                        fontSize,
+                        fontFamily,
+                        padding
+                    );
+                    onChange(
+                        shape.id,
+                        {
+                            text: nextText,
+                            width: nextSize.width,
+                            height: nextSize.height,
+                        },
+                        true
+                    );
+                    removeTextarea();
+                };
+
+                const cancel = () => {
+                    committed = true;
+                    removeTextarea();
+                };
+
+                const handleOutsideClick = (evt: MouseEvent) => {
+                    if (evt.target !== textarea) {
+                        commit();
+                    }
+                };
+
+                textarea.addEventListener("keydown", (evt) => {
+                    if (evt.key === "Enter" && !evt.shiftKey) {
+                        evt.preventDefault();
+                        commit();
+                    } else if (evt.key === "Escape") {
+                        evt.preventDefault();
+                        cancel();
+                    }
+                });
+
+                setTimeout(() => {
+                    window.addEventListener("click", handleOutsideClick);
+                });
+
+                textarea.focus();
+                textarea.select();
+            };
+
+            return (
+                <>
+                    <Group
+                        ref={shapeRef}
+                        {...commonProps}
+                        offsetX={width / 2}
+                        offsetY={height / 2}
+                        onDblClick={startEditing}
+                        onDblTap={startEditing}
+                    >
+                        <Rect
+                            width={width}
+                            height={height}
+                            fill={shape.fill ?? "#ffffff"}
+                            stroke={commonProps.stroke}
+                            strokeWidth={commonProps.strokeWidth}
+                            dash={shape.dash}
+                            cornerRadius={4}
+                        />
+                        <Text
+                            ref={textRef}
+                            x={padding}
+                            y={padding}
+                            width={Math.max(0, width - padding * 2)}
+                            height={Math.max(0, height - padding * 2)}
+                            text={textValue}
+                            fontSize={fontSize}
+                            fontFamily={fontFamily}
+                            fill={textColor}
+                            align="center"
+                            verticalAlign="middle"
+                        />
+                    </Group>
+                    {isSelected && selectionCount === 1 && (
+                        <Transformer
+                            ref={transformerRef}
+                            rotateEnabled
+                            resizeEnabled
+                            keepRatio={!!isShiftDown}
+                            boundBoxFunc={(oldBox, newBox) => {
+                                if (
+                                    newBox.width < MIN_SIZE ||
+                                    newBox.height < MIN_SIZE ||
+                                    newBox.width > MAX_SIZE ||
+                                    newBox.height > MAX_SIZE
+                                ) {
+                                    return oldBox;
+                                }
+                                return newBox;
+                            }}
+                            rotateAnchorOffset={24}
+                        />
+                    )}
+                </>
+            );
+        }
         case "rect":
             return (
                 <>

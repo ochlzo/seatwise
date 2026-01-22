@@ -115,6 +115,15 @@ export function SeatMapSidebar({
                 <div className="w-8 h-0 border-t-2 border-zinc-500 mt-4" />
               ),
             },
+            {
+              label: "Text",
+              shape: "text",
+              icon: (
+                <div className="w-8 h-8 border-2 border-zinc-500 flex items-center justify-center text-xs font-semibold text-zinc-600">
+                  T
+                </div>
+              ),
+            },
           ].map((item, i) => (
             <div
               key={i}
