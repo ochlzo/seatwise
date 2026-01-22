@@ -43,6 +43,7 @@ export default function SeatmapToolbar() {
     selectedIds.forEach((id) => {
       const node = nodes[id];
       if (!node) return;
+      if (!("position" in node)) return;
       positions[id] = {
         x: node.position.x + dx,
         y: node.position.y + dy,

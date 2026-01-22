@@ -8,10 +8,11 @@ interface SeatmapState {
     mode: "select" | "pan" | "draw";
     selectedIds: string[];
     drawShape: {
-        shape: SeatmapShapeNode["shape"];
+        shape: SeatmapShapeNode["shape"] | "guidePath";
         dash?: number[];
         sides?: number;
     };
+    showGuidePaths: boolean;
     viewportSize: {
         width: number;
         height: number;
@@ -29,6 +30,7 @@ const initialState: SeatmapState = {
     mode: "select",
     selectedIds: [],
     drawShape: { shape: "rect" },
+    showGuidePaths: true,
     viewportSize: { width: 800, height: 600 },
     clipboard: [],
     history: { past: [], future: [] },
@@ -67,12 +69,15 @@ const seatmapSlice = createSlice({
         setDrawShape: (
             state,
             action: PayloadAction<{
-                shape: SeatmapShapeNode["shape"];
+                shape: SeatmapShapeNode["shape"] | "guidePath";
                 dash?: number[];
                 sides?: number;
             }>
         ) => {
             state.drawShape = action.payload;
+        },
+        setShowGuidePaths: (state, action: PayloadAction<boolean>) => {
+            state.showGuidePaths = action.payload;
         },
         setViewportSize: (
             state,
@@ -196,6 +201,27 @@ const seatmapSlice = createSlice({
                 padding: shape === "text" ? defaultPadding : undefined,
             };
             state.nodes[id] = newShape;
+        },
+        addGuidePath: (
+            state,
+            action: PayloadAction<{
+                points: number[];
+                dash?: number[];
+                stroke?: string;
+                strokeWidth?: number;
+            }>
+        ) => {
+            pushHistory(state);
+            const id = uuidv4();
+            state.nodes[id] = {
+                id,
+                type: "helper",
+                helperType: "guidePath",
+                points: action.payload.points,
+                dash: action.payload.dash ?? [6, 4],
+                stroke: action.payload.stroke ?? "#9ca3af",
+                strokeWidth: action.payload.strokeWidth ?? 2,
+            };
         },
         updateNode: (
             state,
@@ -372,6 +398,7 @@ export const {
     setViewport,
     addSeat,
     addShape,
+    addGuidePath,
     updateNode,
     updateNodes,
     updateNodesPositions,
@@ -381,6 +408,7 @@ export const {
     deselectAll,
     rotateSelected,
     scaleSelected,
+    setShowGuidePaths,
     copySelected,
     pasteNodesAt,
     deleteSelected,

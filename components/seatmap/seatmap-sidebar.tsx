@@ -12,13 +12,18 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { setDrawShape, setMode } from "@/lib/features/seatmap/seatmapSlice";
+import {
+  setDrawShape,
+  setMode,
+  setShowGuidePaths,
+} from "@/lib/features/seatmap/seatmapSlice";
 
 export function SeatMapSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const dispatch = useAppDispatch();
   const drawShape = useAppSelector((state) => state.seatmap.drawShape);
+  const showGuidePaths = useAppSelector((state) => state.seatmap.showGuidePaths);
   const { isMobile, setOpenMobile } = useSidebar();
   const pathname = usePathname();
 
@@ -148,6 +153,32 @@ export function SeatMapSidebar({
             </div>
           ))}
         </div>
+
+        <div className="text-xs text-zinc-500 mb-2 mt-4">Guide Path</div>
+        <div
+          className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
+            drawShape.shape === "guidePath"
+              ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+              : "border-zinc-200 dark:border-zinc-800"
+          }`}
+          onClick={() => {
+            dispatch(setMode("draw"));
+            dispatch(setDrawShape({ shape: "guidePath" }));
+          }}
+        >
+          <div className="w-8 h-2 border-b-2 border-dashed border-zinc-500" />
+          <span className="text-[10px]">Guide Path</span>
+        </div>
+
+        <label className="mt-4 flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-blue-600"
+            checked={showGuidePaths}
+            onChange={(e) => dispatch(setShowGuidePaths(e.target.checked))}
+          />
+          Show guide paths
+        </label>
       </SidebarContent>
       <SidebarFooter className="px-3 py-3">
         <div className="text-xs text-zinc-500 space-y-1">
