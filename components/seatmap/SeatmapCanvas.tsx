@@ -158,6 +158,9 @@ export default function SeatmapCanvas() {
       .map((id) => {
         const nodeData = nodes[id];
         if (!nodeData) return null;
+        if (nodeData.type === "helper") {
+          return null;
+        }
         if (nodeData.type === "shape" && nodeData.shape === "line") {
           return null;
         }
@@ -431,7 +434,11 @@ export default function SeatmapCanvas() {
     // If clicked on section or something else that isn't a seat, deselect
     // Seat selection is handled in SeatItem
     // Shape selection is handled in ShapeItem
-    if (!e.target.hasName("seat-image") && !e.target.hasName("shape-item")) {
+    if (
+      !e.target.hasName("seat-image") &&
+      !e.target.hasName("shape-item") &&
+      !e.target.hasName("guide-path")
+    ) {
       if (!additive) {
         dispatch(deselectAll());
       }
@@ -948,21 +955,21 @@ export default function SeatmapCanvas() {
 
           {renderDraft()}
 
-          <GuidePathLayer />
+          <GuidePathLayer stageRef={stageRef} />
 
           <SectionLayer
             stageRef={stageRef}
             onNodeDragStart={() => setIsDraggingNode(true)}
-          onNodeDragEnd={() => setIsDraggingNode(false)}
-        />
+            onNodeDragEnd={() => setIsDraggingNode(false)}
+          />
 
           {/* Stage Label Removed */}
 
-        <SeatLayer
-          stageRef={stageRef}
-          onNodeDragStart={() => setIsDraggingNode(true)}
-          onNodeDragEnd={() => setIsDraggingNode(false)}
-        />
+          <SeatLayer
+            stageRef={stageRef}
+            onNodeDragStart={() => setIsDraggingNode(true)}
+            onNodeDragEnd={() => setIsDraggingNode(false)}
+          />
 
           <Transformer
             ref={transformerRef}

@@ -9,6 +9,7 @@ import {
     toggleSelectNode,
     updateNode,
     updateNodesPositions,
+    updateNodes,
 } from "@/lib/features/seatmap/seatmapSlice";
 import { closestPointOnPolyline } from "@/lib/seatmap/geometry";
 import { GuidePathNode } from "@/lib/seatmap/types";
@@ -26,17 +27,22 @@ const getSnappedPosition = (
     position: { x: number; y: number },
     guidePaths: GuidePathNode[],
 ) => {
-    let closest = null as null | { x: number; y: number; distance: number };
+    let closest = null as null | { x: number; y: number; distance: number; guideId: string };
     guidePaths.forEach((guide) => {
         const result = closestPointOnPolyline(position.x, position.y, guide.points);
         if (result.distance <= SNAP_THRESHOLD) {
             if (!closest || result.distance < closest.distance) {
-                closest = { x: result.point.x, y: result.point.y, distance: result.distance };
+                closest = {
+                    x: result.point.x,
+                    y: result.point.y,
+                    distance: result.distance,
+                    guideId: guide.id,
+                };
             }
         }
     });
     if (!closest) return null;
-    return { x: closest.x, y: closest.y };
+    return { x: closest.x, y: closest.y, guideId: closest.guideId };
 };
 
 const SeatItem = ({
@@ -64,6 +70,7 @@ const SeatItem = ({
     const transformerRef = React.useRef<any>(null);
     const rafRef = React.useRef<number | null>(null);
     const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
+    const pendingSnapGuideIdRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
         if (isSelected && transformerRef.current && groupRef.current) {
@@ -74,8 +81,16 @@ const SeatItem = ({
 
     const flushDragPosition = () => {
         if (!pendingPosRef.current) return;
-        onChange(seat.id, { position: pendingPosRef.current }, false);
+        onChange(
+            seat.id,
+            {
+                position: pendingPosRef.current,
+                snapGuideId: pendingSnapGuideIdRef.current ?? undefined,
+            },
+            false,
+        );
         pendingPosRef.current = null;
+        pendingSnapGuideIdRef.current = null;
         rafRef.current = null;
     };
 
@@ -139,17 +154,20 @@ const SeatItem = ({
                     pendingPosRef.current = null;
                     if (!handled) {
                         let nextPos = { x: e.target.x(), y: e.target.y() };
+                        let snapGuideId: string | undefined = undefined;
                         if (showGuidePaths && guidePaths.length) {
                             const snapped = getSnappedPosition(nextPos, guidePaths);
                             if (snapped) {
                                 nextPos = snapped;
                                 e.target.position(nextPos);
+                                snapGuideId = snapped.guideId;
                             }
                         }
                         onChange(
                             seat.id,
                             {
                                 position: nextPos,
+                                snapGuideId,
                             },
                             true,
                         );
@@ -170,7 +188,12 @@ const SeatItem = ({
                         if (snapped) {
                             nextPos = snapped;
                             e.target.position(nextPos);
+                            pendingSnapGuideIdRef.current = snapped.guideId;
+                        } else {
+                            pendingSnapGuideIdRef.current = null;
                         }
+                    } else {
+                        pendingSnapGuideIdRef.current = null;
                     }
                     pendingPosRef.current = nextPos;
                     if (rafRef.current === null) {
@@ -235,6 +258,7 @@ export default function SeatLayer({
         active: boolean;
         draggedId: string | null;
         startPositions: Record<string, { x: number; y: number }>;
+        snapGuideId?: string | null;
     }>({ active: false, draggedId: null, startPositions: {} });
     const multiDragRafRef = React.useRef<number | null>(null);
     const pendingMultiDragRef = React.useRef<Record<string, { x: number; y: number }> | null>(null);
@@ -275,6 +299,7 @@ export default function SeatLayer({
             active: true,
             draggedId: id,
             startPositions,
+            snapGuideId: null,
         };
         return true;
     };
@@ -286,6 +311,7 @@ export default function SeatLayer({
         if (!origin) return false;
         let dx = pos.x - origin.x;
         let dy = pos.y - origin.y;
+        let snapGuideId: string | null = null;
         if (showGuidePaths && guidePaths.length) {
             const snapped = getSnappedPosition(
                 { x: origin.x + dx, y: origin.y + dy },
@@ -294,8 +320,10 @@ export default function SeatLayer({
             if (snapped) {
                 dx = snapped.x - origin.x;
                 dy = snapped.y - origin.y;
+                snapGuideId = snapped.guideId;
             }
         }
+        multiDragRef.current.snapGuideId = snapGuideId;
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -327,6 +355,7 @@ export default function SeatLayer({
         if (!origin) return false;
         let dx = pos.x - origin.x;
         let dy = pos.y - origin.y;
+        let snapGuideId: string | null = state.snapGuideId ?? null;
         if (showGuidePaths && guidePaths.length) {
             const snapped = getSnappedPosition(
                 { x: origin.x + dx, y: origin.y + dy },
@@ -335,6 +364,9 @@ export default function SeatLayer({
             if (snapped) {
                 dx = snapped.x - origin.x;
                 dy = snapped.y - origin.y;
+                snapGuideId = snapped.guideId;
+            } else {
+                snapGuideId = null;
             }
         }
         const positions: Record<string, { x: number; y: number }> = {};
@@ -356,10 +388,22 @@ export default function SeatLayer({
             });
             stage.batchDraw();
         }
+        const snapChanges: Record<string, { snapGuideId?: string }> = {};
+        selectedIds.forEach((selectedId) => {
+            const node = nodes[selectedId];
+            if (!node || node.type !== "seat") return;
+            snapChanges[selectedId] = {
+                snapGuideId: snapGuideId ?? undefined,
+            };
+        });
+        if (Object.keys(snapChanges).length) {
+            dispatch(updateNodes({ changes: snapChanges, history: false }));
+        }
         multiDragRef.current = {
             active: false,
             draggedId: null,
             startPositions: {},
+            snapGuideId: null,
         };
         dispatch(updateNodesPositions({ positions, history: true }));
         return true;
