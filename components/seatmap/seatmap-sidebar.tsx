@@ -105,18 +105,10 @@ export function SeatMapSidebar({
               ),
             },
             {
-              label: "Line",    
+              label: "Line",
               shape: "line",
               icon: (
                 <div className="w-8 h-0 border-t-2 border-zinc-500 mt-4" />
-              ),
-            },
-            {
-              label: "Dashed",
-              shape: "line",
-              dash: [5, 5],
-              icon: (
-                <div className="w-8 h-0 border-t-2 border-dashed border-zinc-500 mt-4" />
               ),
             },
           ].map((item, i) => (
@@ -124,9 +116,7 @@ export function SeatMapSidebar({
               key={i}
               className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
                 drawShape.shape === item.shape &&
-                (drawShape.sides ?? 0) === (item.sides ?? 0) &&
-                JSON.stringify(drawShape.dash ?? []) ===
-                  JSON.stringify(item.dash ?? [])
+                (drawShape.sides ?? 0) === (item.sides ?? 0)
                   ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
                   : "border-zinc-200 dark:border-zinc-800"
               }`}
@@ -136,7 +126,6 @@ export function SeatMapSidebar({
                   setDrawShape({
                     shape: item.shape as any,
                     sides: item.sides,
-                    dash: item.dash,
                   }),
                 );
               }}

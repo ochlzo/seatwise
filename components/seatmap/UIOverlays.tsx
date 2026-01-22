@@ -369,6 +369,16 @@ export function SelectionPanel() {
     );
   };
 
+  const updateDash = (checked: boolean) => {
+    if (selectedNode.type !== "shape") return;
+    dispatch(
+      updateNode({
+        id: selectedNode.id,
+        changes: { dash: checked ? [5, 5] : undefined },
+      }),
+    );
+  };
+
   return (
     <div className="absolute top-4 right-4 z-20 w-64 bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
       <h3 className="font-bold mb-2">Selection</h3>
@@ -434,6 +444,15 @@ export function SelectionPanel() {
       </div>
       {selectedNode.type === "shape" && (
         <div className="mt-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-500">Dashed Stroke</span>
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-blue-600"
+              checked={Array.isArray(selectedNode.dash) && selectedNode.dash.length > 0}
+              onChange={(e) => updateDash(e.target.checked)}
+            />
+          </div>
           <div>
             <div className="text-xs text-zinc-500 mb-2">Stroke Color</div>
             <div className="grid grid-cols-6 gap-2">
