@@ -185,8 +185,38 @@ const seatmapSlice = createSlice({
                 state.nodes[id] = updated;
             }
         },
+        updateNodesPositions: (
+            state,
+            action: PayloadAction<{
+                positions: Record<string, { x: number; y: number }>;
+                history?: boolean;
+            }>
+        ) => {
+            const { positions, history } = action.payload;
+            const ids = Object.keys(positions);
+            if (!ids.length) return;
+            if (history !== false) {
+                pushHistory(state);
+            }
+            ids.forEach((id) => {
+                const node = state.nodes[id];
+                if (!node) return;
+                node.position = {
+                    x: positions[id].x,
+                    y: positions[id].y,
+                };
+            });
+        },
         selectNode: (state, action: PayloadAction<string>) => {
             state.selectedIds = [action.payload];
+        },
+        toggleSelectNode: (state, action: PayloadAction<string>) => {
+            const id = action.payload;
+            if (state.selectedIds.includes(id)) {
+                state.selectedIds = state.selectedIds.filter((selectedId) => selectedId !== id);
+                return;
+            }
+            state.selectedIds = [...state.selectedIds, id];
         },
         deselectAll: (state) => {
             state.selectedIds = [];
@@ -293,7 +323,9 @@ export const {
     addSeat,
     addShape,
     updateNode,
+    updateNodesPositions,
     selectNode,
+    toggleSelectNode,
     deselectAll,
     rotateSelected,
     scaleSelected,

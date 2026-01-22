@@ -224,15 +224,21 @@ export default function SeatmapCanvas() {
 
     const handleStageClick = (e: any) => {
         if (mode === "draw") return;
+        const additive =
+            e?.evt?.shiftKey || e?.evt?.ctrlKey || e?.evt?.metaKey;
         if (e.target === e.target.getStage()) {
-            dispatch(deselectAll());
+            if (!additive) {
+                dispatch(deselectAll());
+            }
             return;
         }
         // If clicked on section or something else that isn't a seat, deselect
         // Seat selection is handled in SeatItem
         // Shape selection is handled in ShapeItem
         if (!e.target.hasName('seat-image') && !e.target.hasName('shape-item')) {
-            dispatch(deselectAll());
+            if (!additive) {
+                dispatch(deselectAll());
+            }
         }
     };
 

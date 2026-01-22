@@ -4,7 +4,12 @@ import React from "react";
 import { Layer, Image as KonvaImage, Group, Rect, Transformer } from "react-konva";
 import useImage from "use-image";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
-import { selectNode, updateNode } from "@/lib/features/seatmap/seatmapSlice";
+import {
+    selectNode,
+    toggleSelectNode,
+    updateNode,
+    updateNodesPositions,
+} from "@/lib/features/seatmap/seatmapSlice";
 
 const SEAT_IMAGE_URL = "/seat-default.svg";
 const SEAT_SELECTED_IMAGE_URL = "/seat-selected.svg";
@@ -22,6 +27,9 @@ const SeatItem = ({
     onDragStart,
     onDragEnd,
     isShiftDown,
+    onMultiDragStart,
+    onMultiDragMove,
+    onMultiDragEnd,
 }: any) => {
     const seatType = seat.seatType ?? "standard";
     const imageUrl =
@@ -81,27 +89,52 @@ const SeatItem = ({
                 draggable={isSelected}
                 onDragStart={() => {
                     if (onDragStart) onDragStart();
+                    if (onMultiDragStart) {
+                        onMultiDragStart(seat.id, {
+                            x: seat.position.x,
+                            y: seat.position.y,
+                        });
+                    }
                 }}
                 onClick={(e) => {
                     e.cancelBubble = true;
-                    onSelect(seat.id);
+                    onSelect(seat.id, e);
                 }}
                 onTap={(e) => {
                     e.cancelBubble = true;
-                    onSelect(seat.id);
+                    onSelect(seat.id, e);
                 }}
                 onDragEnd={(e) => {
+                    const handled = onMultiDragEnd
+                        ? onMultiDragEnd(seat.id, {
+                              x: e.target.x(),
+                              y: e.target.y(),
+                          })
+                        : false;
                     if (rafRef.current !== null) {
                         cancelAnimationFrame(rafRef.current);
                         rafRef.current = null;
                     }
                     pendingPosRef.current = null;
-                    onChange(seat.id, {
-                        position: { x: e.target.x(), y: e.target.y() },
-                    }, true);
+                    if (!handled) {
+                        onChange(
+                            seat.id,
+                            {
+                                position: { x: e.target.x(), y: e.target.y() },
+                            },
+                            true,
+                        );
+                    }
                     if (onDragEnd) onDragEnd();
                 }}
                 onDragMove={(e) => {
+                    const handled = onMultiDragMove
+                        ? onMultiDragMove(seat.id, {
+                              x: e.target.x(),
+                              y: e.target.y(),
+                          })
+                        : false;
+                    if (handled) return;
                     pendingPosRef.current = { x: e.target.x(), y: e.target.y() };
                     if (rafRef.current === null) {
                         rafRef.current = requestAnimationFrame(flushDragPosition);
@@ -156,6 +189,11 @@ export default function SeatLayer({
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
     const dispatch = useAppDispatch();
     const [isShiftDown, setIsShiftDown] = React.useState(false);
+    const multiDragRef = React.useRef<{
+        active: boolean;
+        draggedId: string | null;
+        startPositions: Record<string, { x: number; y: number }>;
+    }>({ active: false, draggedId: null, startPositions: {} });
 
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -172,22 +210,94 @@ export default function SeatLayer({
         };
     }, []);
 
-  const seats = Object.values(nodes).filter((node) => node.type === "seat");
+    const seats = Object.values(nodes).filter((node) => node.type === "seat");
 
-  return (
-    <Layer>
-      {seats.map((seat) => (
-        <SeatItem
-          key={seat.id}
-          seat={seat}
+    const beginMultiDrag = (id: string) => {
+        if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
+        const startPositions: Record<string, { x: number; y: number }> = {};
+        selectedIds.forEach((selectedId) => {
+            const node = nodes[selectedId];
+            if (!node) return;
+            startPositions[selectedId] = {
+                x: node.position.x,
+                y: node.position.y,
+            };
+        });
+        multiDragRef.current = {
+            active: true,
+            draggedId: id,
+            startPositions,
+        };
+        return true;
+    };
+
+    const updateMultiDrag = (id: string, pos: { x: number; y: number }) => {
+        const state = multiDragRef.current;
+        if (!state.active || state.draggedId !== id) return false;
+        const origin = state.startPositions[id];
+        if (!origin) return false;
+        const dx = pos.x - origin.x;
+        const dy = pos.y - origin.y;
+        const positions: Record<string, { x: number; y: number }> = {};
+        Object.entries(state.startPositions).forEach(([nodeId, start]) => {
+            positions[nodeId] = { x: start.x + dx, y: start.y + dy };
+        });
+        dispatch(updateNodesPositions({ positions, history: false }));
+        return true;
+    };
+
+    const endMultiDrag = (id: string, pos: { x: number; y: number }) => {
+        const state = multiDragRef.current;
+        if (!state.active || state.draggedId !== id) return false;
+        const origin = state.startPositions[id];
+        if (!origin) return false;
+        const dx = pos.x - origin.x;
+        const dy = pos.y - origin.y;
+        const positions: Record<string, { x: number; y: number }> = {};
+        Object.entries(state.startPositions).forEach(([nodeId, start]) => {
+            positions[nodeId] = { x: start.x + dx, y: start.y + dy };
+        });
+        multiDragRef.current = {
+            active: false,
+            draggedId: null,
+            startPositions: {},
+        };
+        dispatch(updateNodesPositions({ positions, history: true }));
+        return true;
+    };
+
+    return (
+        <Layer>
+            {seats.map((seat) => (
+                <SeatItem
+                    key={seat.id}
+                    seat={seat}
                     isSelected={selectedIds.includes(seat.id)}
-                    onSelect={(id: string) => dispatch(selectNode(id))}
+                    onSelect={(id: string, evt?: any) => {
+                        const additive =
+                            evt?.evt?.shiftKey ||
+                            evt?.evt?.ctrlKey ||
+                            evt?.evt?.metaKey ||
+                            isShiftDown;
+                        if (additive) {
+                            dispatch(toggleSelectNode(id));
+                            return;
+                        }
+                        dispatch(selectNode(id));
+                    }}
                     onChange={(id: string, changes: any, history?: boolean) =>
                         dispatch(updateNode({ id, changes, history }))
                     }
                     onDragStart={onNodeDragStart}
                     onDragEnd={onNodeDragEnd}
                     isShiftDown={isShiftDown}
+                    onMultiDragStart={(id: string) => beginMultiDrag(id)}
+                    onMultiDragMove={(id: string, pos: { x: number; y: number }) =>
+                        updateMultiDrag(id, pos)
+                    }
+                    onMultiDragEnd={(id: string, pos: { x: number; y: number }) =>
+                        endMultiDrag(id, pos)
+                    }
                 />
             ))}
         </Layer>
