@@ -18,18 +18,19 @@ import {
   setViewport,
   addSeat,
   addShape,
-  selectNode,
-  deselectAll,
-  updateNode,
-  updateNodes,
-  rotateSelected,
-  scaleSelected,
-  setViewportSize,
-  copySelected,
-  pasteNodesAt,
-  deleteSelected,
-  undo,
-  redo,
+    selectNode,
+    deselectAll,
+    updateNode,
+    updateNodes,
+    rotateSelected,
+    scaleSelected,
+    setViewportSize,
+    setSelectedIds,
+    copySelected,
+    pasteNodesAt,
+    deleteSelected,
+    undo,
+    redo,
 } from "@/lib/features/seatmap/seatmapSlice";
 import SeatLayer from "@/components/seatmap/SeatLayer";
 import SectionLayer from "@/components/seatmap/SectionLayer";
@@ -46,6 +47,9 @@ export default function SeatmapCanvas() {
   const [isDraggingNode, setIsDraggingNode] = React.useState(false);
   const [isRightPanning, setIsRightPanning] = React.useState(false);
   const [isShiftDown, setIsShiftDown] = React.useState(false);
+  const [isCtrlDown, setIsCtrlDown] = React.useState(false);
+  const [isAltDown, setIsAltDown] = React.useState(false);
+  const [isMarqueeSelecting, setIsMarqueeSelecting] = React.useState(false);
   const rotationStateRef = useRef<{
     active: boolean;
     baseRotation: number;
@@ -73,6 +77,14 @@ export default function SeatmapCanvas() {
     return snaps;
   }, []);
   const lastPointerPosRef = useRef<{ x: number; y: number } | null>(null);
+  const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [marqueeRect, setMarqueeRect] = React.useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    visible: boolean;
+  }>({ x: 0, y: 0, width: 0, height: 0, visible: false });
 
   // Resize observer to keep stage responsive
   const [dimensions, setDimensions] = React.useState({
@@ -100,9 +112,13 @@ export default function SeatmapCanvas() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Shift") setIsShiftDown(true);
+      if (e.key === "Control") setIsCtrlDown(true);
+      if (e.key === "Alt") setIsAltDown(true);
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === "Shift") setIsShiftDown(false);
+      if (e.key === "Control") setIsCtrlDown(false);
+      if (e.key === "Alt") setIsAltDown(false);
     };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -452,6 +468,20 @@ export default function SeatmapCanvas() {
         lastPointerPosRef.current = pos;
       }
     }
+    if (mode === "select" && e.evt && e.evt.button === 0 && e.target === e.target.getStage()) {
+      const pos = getRelativePointerPosition(stage);
+      if (!pos) return;
+      marqueeStartRef.current = pos;
+      setIsMarqueeSelecting(true);
+      setMarqueeRect({
+        x: pos.x,
+        y: pos.y,
+        width: 0,
+        height: 0,
+        visible: true,
+      });
+      return;
+    }
     if (e.evt && e.evt.button === 2) {
       setIsRightPanning(true);
       return;
@@ -478,12 +508,60 @@ export default function SeatmapCanvas() {
     const pos = getRelativePointerPosition(stage);
     if (!pos) return;
     lastPointerPosRef.current = pos;
+    if (isMarqueeSelecting && marqueeStartRef.current) {
+      const start = marqueeStartRef.current;
+      const x = Math.min(start.x, pos.x);
+      const y = Math.min(start.y, pos.y);
+      const width = Math.abs(pos.x - start.x);
+      const height = Math.abs(pos.y - start.y);
+      setMarqueeRect({ x, y, width, height, visible: true });
+      return;
+    }
     if (drawDraft) {
       setDrawDraft((prev) => (prev ? { ...prev, current: pos } : prev));
     }
   };
 
   const handleMouseUp = () => {
+    if (isMarqueeSelecting) {
+      const stage = stageRef.current;
+      const start = marqueeStartRef.current;
+      if (stage && start) {
+        const x = marqueeRect.x;
+        const y = marqueeRect.y;
+        const width = marqueeRect.width;
+        const height = marqueeRect.height;
+        const intersectingIds = stage
+          .find(".selectable")
+          .filter((node: any) => {
+            const rect = node.getClientRect({ relativeTo: stage });
+            const intersects =
+              rect.x < x + width &&
+              rect.x + rect.width > x &&
+              rect.y < y + height &&
+              rect.y + rect.height > y;
+            return intersects;
+          })
+          .map((node: any) => node.id())
+          .filter(Boolean);
+
+        const current = new Set(selectedIds);
+        if (isAltDown) {
+          intersectingIds.forEach((id: string) => current.delete(id));
+        } else if (isShiftDown || isCtrlDown) {
+          intersectingIds.forEach((id: string) => current.add(id));
+        } else {
+          current.clear();
+          intersectingIds.forEach((id: string) => current.add(id));
+        }
+        dispatch(setSelectedIds(Array.from(current)));
+      }
+
+      marqueeStartRef.current = null;
+      setIsMarqueeSelecting(false);
+      setMarqueeRect({ x: 0, y: 0, width: 0, height: 0, visible: false });
+      return;
+    }
     if (isRightPanning) {
       setIsRightPanning(false);
       return;
@@ -658,6 +736,21 @@ export default function SeatmapCanvas() {
         onDragEnd={handleDragEnd}
       >
         <Layer>{/* Grid or Background could go here */}</Layer>
+
+        <Layer listening={false}>
+          {marqueeRect.visible && (
+            <Rect
+              x={marqueeRect.x}
+              y={marqueeRect.y}
+              width={marqueeRect.width}
+              height={marqueeRect.height}
+              stroke="#3b82f6"
+              strokeWidth={1}
+              dash={[4, 4]}
+              fill="rgba(59, 130, 246, 0.12)"
+            />
+          )}
+        </Layer>
 
         <Layer listening={false}>{renderDraft()}</Layer>
 
