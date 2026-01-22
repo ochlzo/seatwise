@@ -3,7 +3,10 @@
 
 import React from "react";
 import dynamic from "next/dynamic";
-import { Sidebar, Toolbar, SelectionPanel } from "@/components/seatmap/UIOverlays";
+import { Toolbar, SelectionPanel } from "@/components/seatmap/UIOverlays";
+import { SeatMapSidebar } from "@/components/seatmap/seatmap-sidebar";
+import { SeatmapPageHeader } from "@/components/seatmap/seatmap-page-header";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 // Dynamically import Konva component to avoid SSR issues
 const SeatmapCanvas = dynamic(
@@ -16,29 +19,21 @@ const SeatmapCanvas = dynamic(
 
 export default function TestPage() {
     return (
-        <div className="flex h-screen w-full bg-zinc-50 dark:bg-zinc-950 overflow-hidden text-zinc-900 dark:text-zinc-100">
-
-            {/* Sidebar (Left) */}
-            <Sidebar />
-
-            {/* Main Content Area */}
-            <main className="flex-1 relative overflow-hidden flex flex-col">
-
-                {/* Header */}
-                <header className="h-14 border-b border-zinc-200 dark:border-zinc-800 flex items-center px-4 bg-white dark:bg-zinc-900 z-10 shrink-0">
-                    <h1 className="font-bold text-lg">Seatwise Prototype</h1>
-                    <div className="ml-auto text-sm text-zinc-500">
-                        app/test/page.tsx
-                    </div>
-                </header>
-
-                {/* Canvas Area */}
+        <SidebarProvider className="h-svh overflow-hidden">
+            <SeatMapSidebar />
+            <SidebarInset className="overflow-hidden">
+                <SeatmapPageHeader
+                    title="Seatwise Prototype"
+                    parentLabel="Seatmap"
+                    parentHref="#"
+                    rightSlot={<span className="text-xs text-zinc-500">app/test/page.tsx</span>}
+                />
                 <div className="flex-1 relative bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
                     <Toolbar />
                     <SelectionPanel />
                     <SeatmapCanvas />
                 </div>
-            </main>
-        </div>
+            </SidebarInset>
+        </SidebarProvider>
     );
 }
