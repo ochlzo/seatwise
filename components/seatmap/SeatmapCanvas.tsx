@@ -925,16 +925,18 @@ export default function SeatmapCanvas() {
                 active: true,
                 pivot,
                 startPointerAngle: angleFrom(wp, pivot),
-                baseRotation: 0,
+                baseRotation: transformer.rotation(),
                 lastDelta: 0,
                 baseNodes,
               };
             }}
             onTransform={() => {
+              if (isAltDown && applyGroupRotation(false)) return;
               if (applyCursorDrivenGroupRotation(false)) return;
               commitGroupTransform(false);
             }}
             onTransformEnd={() => {
+              if (isAltDown && applyGroupRotation(true)) return;
               if (applyCursorDrivenGroupRotation(true)) return;
               commitGroupTransform(true);
             }}
