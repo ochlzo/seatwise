@@ -341,8 +341,18 @@ const seatmapSlice = createSlice({
             pushHistory(state);
             const center = state.clipboard.reduce(
                 (acc, node) => {
-                    acc.x += node.position.x;
-                    acc.y += node.position.y;
+                    if (node.type === "helper" && node.helperType === "guidePath") {
+                        const points = node.points ?? [];
+                        if (points.length >= 2) {
+                            acc.x += points[0];
+                            acc.y += points[1];
+                        }
+                        return acc;
+                    }
+                    if ("position" in node) {
+                        acc.x += node.position.x;
+                        acc.y += node.position.y;
+                    }
                     return acc;
                 },
                 { x: 0, y: 0 }
@@ -358,10 +368,16 @@ const seatmapSlice = createSlice({
                 const id = uuidv4();
                 const copy = JSON.parse(JSON.stringify(node)) as SeatmapNode;
                 copy.id = id;
-                copy.position = {
-                    x: copy.position.x + offsetX,
-                    y: copy.position.y + offsetY,
-                };
+                if (copy.type === "helper" && copy.helperType === "guidePath") {
+                    copy.points = (copy.points ?? []).map((value, index) =>
+                        index % 2 === 0 ? value + offsetX : value + offsetY,
+                    );
+                } else if ("position" in copy) {
+                    copy.position = {
+                        x: copy.position.x + offsetX,
+                        y: copy.position.y + offsetY,
+                    };
+                }
                 state.nodes[id] = copy;
                 newIds.push(id);
             });

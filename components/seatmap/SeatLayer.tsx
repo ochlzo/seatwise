@@ -289,7 +289,7 @@ export default function SeatLayer({
         const startPositions: Record<string, { x: number; y: number }> = {};
         selectedIds.forEach((selectedId) => {
             const node = nodes[selectedId];
-            if (!node) return;
+            if (!node || node.type !== "seat") return;
             startPositions[selectedId] = {
                 x: node.position.x,
                 y: node.position.y,
