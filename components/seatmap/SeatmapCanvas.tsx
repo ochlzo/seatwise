@@ -49,11 +49,12 @@ export default function SeatmapCanvas() {
   const rotationStateRef = useRef<{
     active: boolean;
     baseRotation: number;
+    lastDelta: number;
     baseNodes: Record<
       string,
       { rotation: number; position: { x: number; y: number } }
     >;
-  }>({ active: false, baseRotation: 0, baseNodes: {} });
+  }>({ active: false, baseRotation: 0, lastDelta: 0, baseNodes: {} });
   const [drawDraft, setDrawDraft] = React.useState<{
     shape: typeof drawShape.shape;
     dash?: number[];
@@ -174,7 +175,10 @@ export default function SeatmapCanvas() {
     const stage = stageRef.current;
     if (!transformer || !rotationState.active || !stage) return false;
 
-    const delta = transformer.rotation() - rotationState.baseRotation;
+    const delta = history
+      ? rotationState.lastDelta
+      : transformer.rotation() - rotationState.baseRotation;
+    rotationState.lastDelta = delta;
 
     const changes: Record<string, any> = {};
 
@@ -204,6 +208,7 @@ export default function SeatmapCanvas() {
       rotationStateRef.current = {
         active: false,
         baseRotation: 0,
+        lastDelta: 0,
         baseNodes: {},
       };
     }
@@ -698,6 +703,7 @@ export default function SeatmapCanvas() {
               rotationStateRef.current = {
                 active: true,
                 baseRotation: transformer.rotation(),
+                lastDelta: 0,
                 baseNodes,
               };
             }}
