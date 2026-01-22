@@ -356,6 +356,10 @@ const ShapeItem = ({
                 x: shape.position.x + rawPoints[2],
                 y: shape.position.y + rawPoints[3],
             };
+            const getLinePositionFromTarget = (target: any) => ({
+                x: target.x() - centerX,
+                y: target.y() - centerY,
+            });
             const updateEndpoint = (index: 0 | 2, next: { x: number; y: number }, history?: boolean) => {
                 const nextPoints = [...rawPoints];
                 nextPoints[index] = next.x - shape.position.x;
@@ -377,6 +381,38 @@ const ShapeItem = ({
                         scaleY={1}
                         tension={0}
                         hitStrokeWidth={10}
+                        onDragMove={(e: any) => {
+                            const nextPos = getLinePositionFromTarget(e.target);
+                            const handled = onMultiDragMove
+                                ? onMultiDragMove(shape.id, nextPos)
+                                : false;
+                            if (handled) return;
+                            pendingPosRef.current = nextPos;
+                            if (rafRef.current === null) {
+                                rafRef.current = requestAnimationFrame(flushDragPosition);
+                            }
+                        }}
+                        onDragEnd={(e: any) => {
+                            const nextPos = getLinePositionFromTarget(e.target);
+                            const handled = onMultiDragEnd
+                                ? onMultiDragEnd(shape.id, nextPos)
+                                : false;
+                            if (rafRef.current !== null) {
+                                cancelAnimationFrame(rafRef.current);
+                                rafRef.current = null;
+                            }
+                            pendingPosRef.current = null;
+                            if (!handled) {
+                                onChange(
+                                    shape.id,
+                                    {
+                                        position: nextPos,
+                                    },
+                                    true,
+                                );
+                            }
+                            if (onDragEnd) onDragEnd();
+                        }}
                     />
                     {isSelected && selectionCount === 1 && (
                         <>
