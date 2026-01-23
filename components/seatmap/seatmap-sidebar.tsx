@@ -17,6 +17,7 @@ import {
   setDrawShape,
   setMode,
   setShowGuidePaths,
+  setSnapSpacing,
 } from "@/lib/features/seatmap/seatmapSlice";
 
 export function SeatMapSidebar({
@@ -25,6 +26,7 @@ export function SeatMapSidebar({
   const dispatch = useAppDispatch();
   const drawShape = useAppSelector((state) => state.seatmap.drawShape);
   const showGuidePaths = useAppSelector((state) => state.seatmap.showGuidePaths);
+  const snapSpacing = useAppSelector((state) => state.seatmap.snapSpacing);
   const viewport = useAppSelector((state) => state.seatmap.viewport);
   const viewportSize = useAppSelector((state) => state.seatmap.viewportSize);
   const [gridRows, setGridRows] = React.useState(3);
@@ -125,6 +127,18 @@ export function SeatMapSidebar({
           </button>
         </div>
 
+        <div className="text-xs text-zinc-500 mb-2 mt-4">Spacing</div>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={0}
+            className="w-full rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs dark:border-zinc-800"
+            value={snapSpacing}
+            onChange={(e) => dispatch(setSnapSpacing(Math.max(0, Number(e.target.value))))}
+            placeholder="Spacing (px)"
+          />
+        </div>
+
         <div className="text-xs text-zinc-500 mb-2 mt-4">Shapes (click and draw)</div>
         <div className="grid grid-cols-2 gap-2">
           {[
@@ -178,12 +192,11 @@ export function SeatMapSidebar({
           ].map((item, i) => (
             <div
               key={i}
-              className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
-                drawShape.shape === item.shape &&
-                (drawShape.sides ?? 0) === (item.sides ?? 0)
+              className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${drawShape.shape === item.shape &&
+                  (drawShape.sides ?? 0) === (item.sides ?? 0)
                   ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
                   : "border-zinc-200 dark:border-zinc-800"
-              }`}
+                }`}
               onClick={() => {
                 dispatch(setMode("draw"));
                 dispatch(
@@ -202,11 +215,10 @@ export function SeatMapSidebar({
 
         <div className="text-xs text-zinc-500 mb-2 mt-4">Guide Path</div>
         <div
-          className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
-            drawShape.shape === "guidePath"
+          className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${drawShape.shape === "guidePath"
               ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
               : "border-zinc-200 dark:border-zinc-800"
-          }`}
+            }`}
           onClick={() => {
             dispatch(setMode("draw"));
             dispatch(setDrawShape({ shape: "guidePath" }));

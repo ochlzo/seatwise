@@ -24,6 +24,7 @@ interface SeatmapState {
         future: Array<{ nodes: Record<string, SeatmapNode>; selectedIds: string[] }>;
     };
     zoomLocked: boolean;
+    snapSpacing: number;
 }
 
 const initialState: SeatmapState = {
@@ -38,6 +39,7 @@ const initialState: SeatmapState = {
     clipboard: [],
     history: { past: [], future: [] },
     zoomLocked: false,
+    snapSpacing: 0,
 };
 
 const HISTORY_LIMIT = 15;
@@ -97,6 +99,9 @@ const seatmapSlice = createSlice({
         },
         toggleZoomLock: (state) => {
             state.zoomLocked = !state.zoomLocked;
+        },
+        setSnapSpacing: (state, action: PayloadAction<number>) => {
+            state.snapSpacing = action.payload;
         },
         addSeat: (
             state,
@@ -483,6 +488,7 @@ export const {
     undo,
     redo,
     toggleZoomLock,
+    setSnapSpacing,
 } = seatmapSlice.actions;
 
 export default seatmapSlice.reducer;
