@@ -1,4 +1,3 @@
-"use strict";
 "use client";
 
 import React from "react";
@@ -8,8 +7,10 @@ import {
   setViewport,
   setDrawShape,
   updateNode,
+  updateNodes,
+  toggleZoomLock,
 } from "@/lib/features/seatmap/seatmapSlice";
-import { LocateFixed, Move, MousePointer2, Pencil } from "lucide-react";
+import { LocateFixed, Move, MousePointer2, Pencil, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Sidebar() {
@@ -112,12 +113,11 @@ export function Sidebar() {
           ].map((item, i) => (
             <div
               key={i}
-              className={`p-3 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
-                drawShape.shape === item.shape &&
+              className={`p-3 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${drawShape.shape === item.shape &&
                 (drawShape.sides ?? 0) === (item.sides ?? 0)
-                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
-                  : "border-zinc-200 dark:border-zinc-800"
-              }`}
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                : "border-zinc-200 dark:border-zinc-800"
+                }`}
               onClick={() => {
                 dispatch(setMode("draw"));
                 dispatch(
@@ -155,6 +155,7 @@ export function Toolbar() {
   const mode = useAppSelector((state) => state.seatmap.mode);
   const nodes = useAppSelector((state) => state.seatmap.nodes);
   const viewportSize = useAppSelector((state) => state.seatmap.viewportSize);
+  const zoomLocked = useAppSelector((state) => state.seatmap.zoomLocked);
 
   return (
     <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 bg-white dark:bg-zinc-900 p-2 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
@@ -181,6 +182,15 @@ export function Toolbar() {
         title="Draw Mode"
       >
         <Pencil className="w-4 h-4" />
+      </Button>
+      <div className="w-full h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
+      <Button
+        variant={zoomLocked ? "default" : "ghost"}
+        size="icon"
+        onClick={() => dispatch(toggleZoomLock())}
+        title={zoomLocked ? "Unlock Zoom" : "Lock Zoom"}
+      >
+        {zoomLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
       </Button>
       <div className="w-full h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
       <Button
@@ -310,165 +320,133 @@ export function SelectionPanel() {
     "#e5e5e5",
     "#999999",
     "#7f7f7f",
+    "#3b82f6",
+    "#ef4444",
+    "#10b981",
+    "#f59e0b",
+    "#6366f1",
+    "#8b5cf6",
   ];
 
-  const applyStrokeColor = (color: string | null) => {
-    if (selectedNode.type !== "shape") return;
-    dispatch(
-      updateNode({
-        id: selectedNode.id,
-        changes: { stroke: color ?? undefined },
-      }),
-    );
+  const applyBulkColor = (type: "fill" | "stroke", color: string | null) => {
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      const node = nodes[id];
+      if (!node || node.type !== "shape") return;
+      if (type === "fill" && node.shape === "line") return;
+      changes[id] = { [type]: color ?? undefined };
+    });
+    if (Object.keys(changes).length) {
+      dispatch(updateNodes({ changes }));
+    }
   };
 
-  const applyFillColor = (color: string | null) => {
-    if (selectedNode.type !== "shape") return;
-    if (selectedNode.shape === "line") return;
-    dispatch(
-      updateNode({
-        id: selectedNode.id,
-        changes: { fill: color ?? undefined },
-      }),
-    );
-  };
-
-  const updatePosition = (axis: "x" | "y", value: string) => {
+  const updateBulkPosition = (axis: "x" | "y", value: string) => {
     const next = Number(value);
     if (Number.isNaN(next)) return;
-    dispatch(
-      updateNode({
-        id: selectedNode.id,
-        changes: {
-          position: {
-            x: axis === "x" ? next : selectedNode.position.x,
-            y: axis === "y" ? next : selectedNode.position.y,
-          },
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      const node = nodes[id];
+      if (!node || !("position" in node)) return;
+      changes[id] = {
+        position: {
+          x: axis === "x" ? next : node.position.x,
+          y: axis === "y" ? next : node.position.y,
         },
-      }),
-    );
+      };
+    });
+    if (Object.keys(changes).length) {
+      dispatch(updateNodes({ changes }));
+    }
   };
 
-  const updateRotation = (value: string) => {
+  const updateBulkRotation = (value: string) => {
     const next = Number(value);
     if (Number.isNaN(next)) return;
-    dispatch(
-      updateNode({
-        id: selectedNode.id,
-        changes: { rotation: next },
-      }),
-    );
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      if (nodes[id]) {
+        changes[id] = { rotation: next };
+      }
+    });
+    if (Object.keys(changes).length) {
+      dispatch(updateNodes({ changes }));
+    }
   };
 
-  const updateScale = (axis: "x" | "y", value: string) => {
+  const updateBulkScale = (axis: "x" | "y", value: string) => {
     const next = Number(value);
     if (Number.isNaN(next)) return;
-    dispatch(
-      updateNode({
-        id: selectedNode.id,
-        changes: {
-          scaleX: axis === "x" ? next : (selectedNode.scaleX ?? 1),
-          scaleY: axis === "y" ? next : (selectedNode.scaleY ?? 1),
-        },
-      }),
-    );
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      if (nodes[id]) {
+        changes[id] = {
+          scaleX: axis === "x" ? next : (nodes[id].scaleX ?? 1),
+          scaleY: axis === "y" ? next : (nodes[id].scaleY ?? 1),
+        };
+      }
+    });
+    if (Object.keys(changes).length) {
+      dispatch(updateNodes({ changes }));
+    }
   };
 
-  const estimateTextBox = (text: string, fontSize: number, padding: number) => {
-    const width = Math.max(40, text.length * fontSize * 0.6 + padding * 2);
-    const height = fontSize + padding * 2;
-    return { width, height };
-  };
-
-  const updateFontSize = (value: string) => {
-    if (selectedNode.type !== "shape" || selectedNode.shape !== "text") return;
-    const next = Number(value);
-    if (Number.isNaN(next)) return;
-    const padding = selectedNode.padding ?? 8;
-    const textValue = selectedNode.text ?? "Text";
-    const { width, height } = estimateTextBox(textValue, next, padding);
-    dispatch(
-      updateNode({
-        id: selectedNode.id,
-        changes: {
-          fontSize: next,
-          width,
-          height,
-        },
-      }),
-    );
-  };
-
-  const updateTextValue = (value: string) => {
-    if (selectedNode.type !== "shape" || selectedNode.shape !== "text") return;
-    const padding = selectedNode.padding ?? 8;
-    const fontSize = selectedNode.fontSize ?? 18;
-    const { width, height } = estimateTextBox(value, fontSize, padding);
-    dispatch(
-      updateNode({
-        id: selectedNode.id,
-        changes: {
-          text: value,
-          width,
-          height,
-        },
-      }),
-    );
-  };
-
-  const updateDash = (checked: boolean) => {
-    if (selectedNode.type !== "shape") return;
-    dispatch(
-      updateNode({
-        id: selectedNode.id,
-        changes: { dash: checked ? [5, 5] : undefined },
-      }),
-    );
-  };
+  const isShapeSelection = selectedIds.every(id => nodes[id]?.type === 'shape');
+  const commonRotation = selectedIds.length === 1 ? selectedNode.rotation : "";
+  const commonX = selectedIds.length === 1 ? selectedNode.position.x : "";
+  const commonY = selectedIds.length === 1 ? selectedNode.position.y : "";
+  const commonScaleX = selectedIds.length === 1 ? selectedNode.scaleX : "";
+  const commonScaleY = selectedIds.length === 1 ? selectedNode.scaleY : "";
 
   return (
     <div className="absolute top-4 right-4 z-20 w-64 bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
-      <h3 className="font-bold mb-2">Selection</h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-bold">Selection</h3>
+        <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-500">
+          {selectedIds.length} {selectedIds.length === 1 ? 'item' : 'items'}
+        </span>
+      </div>
       <div className="text-sm space-y-2">
-        <div className="flex justify-between">
-          <span className="text-zinc-500">ID:</span>
-          <span className="font-mono text-xs">
-            {selectedNode.id.slice(0, 8)}...
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-zinc-500">Type:</span>
-          <span className="capitalize">{selectedNode.type}</span>
-        </div>
+        {selectedIds.length === 1 && (
+          <div className="flex justify-between">
+            <span className="text-zinc-500">ID:</span>
+            <span className="font-mono text-[10px]">
+              {selectedNode.id.split('-')[0]}...
+            </span>
+          </div>
+        )}
         <div className="flex justify-between">
           <span className="text-zinc-500">Rotation:</span>
           <input
             type="number"
             step="1"
             className="w-20 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-            value={Math.round(selectedNode.rotation || 0)}
-            onChange={(e) => updateRotation(e.target.value)}
+            placeholder="Mixed"
+            value={Math.round(Number(commonRotation)) || ""}
+            onChange={(e) => updateBulkRotation(e.target.value)}
           />
         </div>
-        <div className="flex justify-between">
-          <span className="text-zinc-500">X / Y:</span>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              step="1"
-              className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-              value={Math.round(selectedNode.position.x)}
-              onChange={(e) => updatePosition("x", e.target.value)}
-            />
-            <input
-              type="number"
-              step="1"
-              className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-              value={Math.round(selectedNode.position.y)}
-              onChange={(e) => updatePosition("y", e.target.value)}
-            />
+        {selectedIds.length === 1 && (
+          <div className="flex justify-between">
+            <span className="text-zinc-500">X / Y:</span>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                step="1"
+                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                value={Math.round(Number(commonX))}
+                onChange={(e) => updateBulkPosition("x", e.target.value)}
+              />
+              <input
+                type="number"
+                step="1"
+                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                value={Math.round(Number(commonY))}
+                onChange={(e) => updateBulkPosition("y", e.target.value)}
+              />
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex justify-between">
           <span className="text-zinc-500">Scale:</span>
           <div className="flex gap-2">
@@ -476,113 +454,65 @@ export function SelectionPanel() {
               type="number"
               step="0.01"
               className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-              value={(selectedNode.scaleX ?? 1).toFixed(2)}
-              onChange={(e) => updateScale("x", e.target.value)}
+              placeholder="X"
+              value={commonScaleX ? Number(commonScaleX).toFixed(2) : ""}
+              onChange={(e) => updateBulkScale("x", e.target.value)}
             />
             <input
               type="number"
               step="0.01"
               className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-              value={(selectedNode.scaleY ?? 1).toFixed(2)}
-              onChange={(e) => updateScale("y", e.target.value)}
+              placeholder="Y"
+              value={commonScaleY ? Number(commonScaleY).toFixed(2) : ""}
+              onChange={(e) => updateBulkScale("y", e.target.value)}
             />
           </div>
         </div>
       </div>
-      {selectedNode.type === "shape" && (
+      {isShapeSelection && (
         <div className="mt-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-500">Dashed Stroke</span>
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-blue-600"
-              checked={Array.isArray(selectedNode.dash) && selectedNode.dash.length > 0}
-              onChange={(e) => updateDash(e.target.checked)}
-            />
-          </div>
-          {selectedNode.shape === "text" && (
-            <div className="flex flex-col gap-2">
-              <span className="text-xs text-zinc-500">Text</span>
-              <input
-                type="text"
-                className="w-full bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-sm"
-                value={selectedNode.text ?? "Text"}
-                onChange={(e) => updateTextValue(e.target.value)}
-              />
-            </div>
-          )}
-          {selectedNode.shape === "text" && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-500">Font Size</span>
-              <input
-                type="number"
-                step="1"
-                className="w-20 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-                value={Math.round(selectedNode.fontSize ?? 18)}
-                onChange={(e) => updateFontSize(e.target.value)}
-              />
-            </div>
-          )}
           <div>
             <div className="text-xs text-zinc-500 mb-2">Stroke Color</div>
             <div className="grid grid-cols-6 gap-2">
-              {selectedNode.shape === "text" && (
-                <button
-                  type="button"
-                  className={`h-6 w-6 rounded border text-[10px] uppercase ${
-                    !selectedNode.stroke
-                      ? "border-zinc-900 dark:border-zinc-100"
-                      : "border-zinc-300 dark:border-zinc-700"
-                  }`}
-                  onClick={() => applyStrokeColor(null)}
-                  title="Transparent"
-                >
-                  T
-                </button>
-              )}
+              <button
+                type="button"
+                className="h-6 w-6 rounded border text-[10px] uppercase border-zinc-300 dark:border-zinc-700 hover:border-zinc-900 dark:hover:border-zinc-100"
+                onClick={() => applyBulkColor("stroke", null)}
+              >
+                T
+              </button>
               {palette.map((color) => (
                 <button
                   key={`stroke-${color}`}
                   type="button"
-                  className={`h-6 w-6 rounded border ${selectedNode.stroke === color ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-300 dark:border-zinc-700"}`}
+                  className={`h-6 w-6 rounded border ${selectedIds.length === 1 && selectedNode.stroke === color ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-300 dark:border-zinc-700"}`}
                   style={{ backgroundColor: color }}
-                  onClick={() => applyStrokeColor(color)}
-                  title={color}
+                  onClick={() => applyBulkColor("stroke", color)}
                 />
               ))}
             </div>
           </div>
-          {selectedNode.shape !== "line" && (
-            <div>
-              <div className="text-xs text-zinc-500 mb-2">Fill Color</div>
-              <div className="grid grid-cols-6 gap-2">
-                {selectedNode.shape === "text" && (
-                  <button
-                    type="button"
-                    className={`h-6 w-6 rounded border text-[10px] uppercase ${
-                      !selectedNode.fill
-                        ? "border-zinc-900 dark:border-zinc-100"
-                        : "border-zinc-300 dark:border-zinc-700"
-                    }`}
-                    onClick={() => applyFillColor(null)}
-                    title="Transparent"
-                  >
-                    T
-                  </button>
-                )}
-                {palette.map((color) => (
-                  <button
-                    key={`fill-${color}`}
-                    type="button"
-                    className={`h-6 w-6 rounded border ${selectedNode.fill === color ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-300 dark:border-zinc-700"}`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => applyFillColor(color)}
-                    title={color}
-                  />
-                ))}
-              </div>
+          <div>
+            <div className="text-xs text-zinc-500 mb-2">Fill Color</div>
+            <div className="grid grid-cols-6 gap-2">
+              <button
+                type="button"
+                className="h-6 w-6 rounded border text-[10px] uppercase border-zinc-300 dark:border-zinc-700 hover:border-zinc-900 dark:hover:border-zinc-100"
+                onClick={() => applyBulkColor("fill", null)}
+              >
+                T
+              </button>
+              {palette.map((color) => (
+                <button
+                  key={`fill-${color}`}
+                  type="button"
+                  className={`h-6 w-6 rounded border ${selectedIds.length === 1 && selectedNode.fill === color ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-300 dark:border-zinc-700"}`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => applyBulkColor("fill", color)}
+                />
+              ))}
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>

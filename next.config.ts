@@ -29,5 +29,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig; // Trigger reload
+// Trigger reload: 2026-01-23T08:58:00
+export default nextConfig;
 

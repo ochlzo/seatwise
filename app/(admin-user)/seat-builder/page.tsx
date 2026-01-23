@@ -1,4 +1,3 @@
-"use strict";
 "use client";
 
 import React from "react";
@@ -18,7 +17,7 @@ const SeatmapCanvas = dynamic(
     }
 );
 
-export default function TestPage() {
+export default function Page() {
     return (
         <SidebarProvider className="h-svh overflow-hidden">
             <SeatMapSidebar />
@@ -27,7 +26,7 @@ export default function TestPage() {
                     title="Seatwise Prototype"
                     parentLabel="Seatmap"
                     parentHref="#"
-                    rightSlot={<span className="text-xs text-zinc-500">app/test/page.tsx</span>}
+                    rightSlot={<span className="text-xs text-zinc-500">app/(admin-user)/seat-builder/page.tsx</span>}
                 />
                 <div className="flex-1 relative bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
                     <ModeToolbar />
