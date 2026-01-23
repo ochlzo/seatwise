@@ -118,7 +118,7 @@ export function SeatMapSidebar({
                   rows: gridRows,
                   cols: gridCols,
                   center,
-                  gap: 4,
+                  gap: snapSpacing,
                 }),
               );
             }}
@@ -193,9 +193,9 @@ export function SeatMapSidebar({
             <div
               key={i}
               className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${drawShape.shape === item.shape &&
-                  (drawShape.sides ?? 0) === (item.sides ?? 0)
-                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
-                  : "border-zinc-200 dark:border-zinc-800"
+                (drawShape.sides ?? 0) === (item.sides ?? 0)
+                ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                : "border-zinc-200 dark:border-zinc-800"
                 }`}
               onClick={() => {
                 dispatch(setMode("draw"));
@@ -216,8 +216,8 @@ export function SeatMapSidebar({
         <div className="text-xs text-zinc-500 mb-2 mt-4">Guide Path</div>
         <div
           className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${drawShape.shape === "guidePath"
-              ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
-              : "border-zinc-200 dark:border-zinc-800"
+            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+            : "border-zinc-200 dark:border-zinc-800"
             }`}
           onClick={() => {
             dispatch(setMode("draw"));

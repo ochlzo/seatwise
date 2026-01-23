@@ -39,7 +39,7 @@ const initialState: SeatmapState = {
     clipboard: [],
     history: { past: [], future: [] },
     zoomLocked: false,
-    snapSpacing: 0,
+    snapSpacing: 8,
 };
 
 const HISTORY_LIMIT = 15;
@@ -134,7 +134,7 @@ const seatmapSlice = createSlice({
             if (rows <= 0 || cols <= 0) return;
             pushHistory(state);
             const seatSize = 32;
-            const step = seatSize + (gap ?? 4);
+            const step = seatSize + (gap ?? 8);
             const startX = center.x - ((cols - 1) * step) / 2;
             const startY = center.y - ((rows - 1) * step) / 2;
             for (let row = 0; row < rows; row += 1) {
