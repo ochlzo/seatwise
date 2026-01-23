@@ -40,7 +40,7 @@ import GuidePathLayer from "@/components/seatmap/GuidePathLayer";
 
 export default function SeatmapCanvas() {
   const dispatch = useAppDispatch();
-  const { viewport, mode, drawShape, selectedIds, nodes, showGrid, zoomLocked } = useAppSelector(
+  const { viewport, mode, drawShape, selectedIds, nodes, showGrid, zoomLocked, showGuidePaths, snapSpacing } = useAppSelector(
     (state) => state.seatmap,
   );
   const stageRef = useRef<any>(null);
@@ -101,6 +101,9 @@ export default function SeatmapCanvas() {
   const [snapLines, setSnapLines] = React.useState<{
     x: number | null;
     y: number | null;
+    isSpacingX?: boolean;
+    isSpacingY?: boolean;
+    spacingValue?: number;
   }>({ x: null, y: null });
 
   // Resize observer to keep stage responsive
@@ -1011,6 +1014,7 @@ export default function SeatmapCanvas() {
             stageRef={stageRef}
             snapLines={snapLines}
             onSnap={setSnapLines}
+            snapSpacing={snapSpacing}
           />
 
           <SectionLayer
@@ -1021,6 +1025,7 @@ export default function SeatmapCanvas() {
               setSnapLines({ x: null, y: null });
             }}
             onSnap={setSnapLines}
+            snapSpacing={snapSpacing}
           />
 
           {/* Stage Label Removed */}
@@ -1033,27 +1038,38 @@ export default function SeatmapCanvas() {
               setSnapLines({ x: null, y: null });
             }}
             onSnap={setSnapLines}
+            snapSpacing={snapSpacing}
           />
 
           {/* Centralized Snap Lines Rendering */}
           {snapLines.x !== null && (
             <Line
               points={[snapLines.x, -10000, snapLines.x, 10000]}
-              stroke="#3b82f6"
+              stroke={snapLines.isSpacingX ? "#10b981" : "#3b82f6"}
               strokeWidth={1}
               dash={[4, 4]}
-              opacity={0.5}
+              opacity={0.8}
               listening={false}
             />
           )}
           {snapLines.y !== null && (
             <Line
               points={[-10000, snapLines.y, 10000, snapLines.y]}
-              stroke="#3b82f6"
+              stroke={snapLines.isSpacingY ? "#10b981" : "#3b82f6"}
               strokeWidth={1}
               dash={[4, 4]}
-              opacity={0.5}
+              opacity={0.8}
               listening={false}
+            />
+          )}
+          {(snapLines.isSpacingX || snapLines.isSpacingY) && snapLines.spacingValue && (
+            <Text
+              x={(snapLines.x ?? 0) + 5}
+              y={(snapLines.y ?? 0) + 5}
+              text={`${snapLines.spacingValue}px`}
+              fill="#10b981"
+              fontSize={12}
+              fontStyle="bold"
             />
           )}
 

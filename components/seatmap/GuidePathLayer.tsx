@@ -9,16 +9,34 @@ import {
   updateNode,
   updateNodesPositions,
 } from "@/lib/features/seatmap/seatmapSlice";
-import { closestPointOnPolyline } from "@/lib/seatmap/geometry";
-import { GuidePathNode, SeatmapSeatNode } from "@/lib/seatmap/types";
+import {
+  closestPointOnPolyline,
+  getNodeBoundingBox,
+  getNodesBoundingBox,
+  getSnapResults
+} from "@/lib/seatmap/geometry";
+import { GuidePathNode, SeatmapNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 
 type GuidePathLayerProps = {
   stageRef?: React.RefObject<any>;
-  snapLines: { x: number | null; y: number | null };
-  onSnap: (lines: { x: number | null; y: number | null }) => void;
+  snapLines: {
+    x: number | null;
+    y: number | null;
+    isSpacingX?: boolean;
+    isSpacingY?: boolean;
+    spacingValue?: number;
+  };
+  onSnap: (lines: {
+    x: number | null;
+    y: number | null;
+    isSpacingX?: boolean;
+    isSpacingY?: boolean;
+    spacingValue?: number;
+  }) => void;
+  snapSpacing: number;
 };
 
-export default function GuidePathLayer({ stageRef, snapLines, onSnap }: GuidePathLayerProps) {
+export default function GuidePathLayer({ stageRef, snapLines, onSnap, snapSpacing }: GuidePathLayerProps) {
   const dispatch = useAppDispatch();
   const nodes = useAppSelector((state) => state.seatmap.nodes);
   const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
@@ -136,61 +154,40 @@ export default function GuidePathLayer({ stageRef, snapLines, onSnap }: GuidePat
     let dy = target.y() - last.y;
     if (!dx && !dy) return;
 
-    // Snapping Logic for the entire guide path
-    const SNAP_THRESHOLD = 8;
+    const shiftedPoints = guide.points.map((v, i) => i % 2 === 0 ? v + dx : v + dy);
+    const draggedBB = getNodeBoundingBox({
+      type: "helper",
+      helperType: "guidePath",
+      points: shiftedPoints
+    });
+
     let bestSnapX: number | null = null;
     let bestSnapY: number | null = null;
+    let isSpacingX = false;
+    let isSpacingY = false;
 
-    // Check snapping for BOTH start and end points of the guide we are dragging
-    const pts = guide.points;
-    const start = { x: pts[0] + dx, y: pts[1] + dy };
-    const lastIdx = pts.length - 2;
-    const end = { x: pts[lastIdx] + dx, y: pts[lastIdx + 1] + dy };
+    if (draggedBB) {
+      const snap = getSnapResults(
+        draggedBB,
+        Object.values(nodes),
+        [guide.id],
+        snapSpacing
+      );
+      dx += (snap.x - draggedBB.centerX);
+      dy += (snap.y - draggedBB.centerY);
+      bestSnapX = snap.snapX;
+      bestSnapY = snap.snapY;
+      isSpacingX = snap.isSpacingX;
+      isSpacingY = snap.isSpacingY;
+    }
 
-    const otherEndpoints: { x: number; y: number }[] = [];
-    guides.forEach((g) => {
-      if (g.id === guide.id) return;
-      const gpts = g.points;
-      if (gpts.length < 4) return;
-      otherEndpoints.push({ x: gpts[0], y: gpts[1] });
-      const gLastIdx = gpts.length - 2;
-      otherEndpoints.push({ x: gpts[gLastIdx], y: gpts[gLastIdx + 1] });
+    onSnap({
+      x: bestSnapX,
+      y: bestSnapY,
+      isSpacingX,
+      isSpacingY,
+      spacingValue: snapSpacing
     });
-
-    let minDiffX = SNAP_THRESHOLD;
-    let minDiffY = SNAP_THRESHOLD;
-
-    otherEndpoints.forEach((ep) => {
-      // Check X snaps
-      const dStartX = Math.abs(start.x - ep.x);
-      if (dStartX < minDiffX) {
-        minDiffX = dStartX;
-        dx = ep.x - pts[0];
-        bestSnapX = ep.x;
-      }
-      const dEndX = Math.abs(end.x - ep.x);
-      if (dEndX < minDiffX) {
-        minDiffX = dEndX;
-        dx = ep.x - pts[lastIdx];
-        bestSnapX = ep.x;
-      }
-
-      // Check Y snaps
-      const dStartY = Math.abs(start.y - ep.y);
-      if (dStartY < minDiffY) {
-        minDiffY = dStartY;
-        dy = ep.y - pts[1];
-        bestSnapY = ep.y;
-      }
-      const dEndY = Math.abs(end.y - ep.y);
-      if (dEndY < minDiffY) {
-        minDiffY = dEndY;
-        dy = ep.y - pts[lastIdx + 1];
-        bestSnapY = ep.y;
-      }
-    });
-
-    onSnap({ x: bestSnapX, y: bestSnapY });
 
     const nextPoints = guide.points.map((value, index) =>
       index % 2 === 0 ? value + dx : value + dy,
@@ -256,7 +253,7 @@ export default function GuidePathLayer({ stageRef, snapLines, onSnap }: GuidePat
     let bestSnapX: number | null = null;
     let bestSnapY: number | null = null;
 
-    // 1. Alignment Snapping to other guide endpoints
+    // Alignment Snapping to other guide endpoints
     const otherEndpoints: { x: number; y: number }[] = [];
     guides.forEach((g) => {
       if (g.id === guide.id) return;
@@ -316,7 +313,13 @@ export default function GuidePathLayer({ stageRef, snapLines, onSnap }: GuidePat
       }
     }
 
-    onSnap({ x: bestSnapX, y: bestSnapY });
+    onSnap({
+      x: bestSnapX,
+      y: bestSnapY,
+      isSpacingX: false,
+      isSpacingY: false,
+      spacingValue: snapSpacing
+    });
 
     const points = [...guide.points];
     points[index] = snapped.x;
