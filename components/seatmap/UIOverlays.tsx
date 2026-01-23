@@ -404,8 +404,8 @@ export function SelectionPanel() {
       const node = nodes[id];
       if (node && node.type === 'seat') {
         const nodeChanges: any = {};
-        if (changesToApply.rowLabel !== undefined) nodeChanges.rowLabel = changesToApply.rowLabel;
-        if (changesToApply.seatNumber !== undefined) nodeChanges.seatNumber = changesToApply.seatNumber;
+        if ('rowLabel' in changesToApply) nodeChanges.rowLabel = changesToApply.rowLabel;
+        if ('seatNumber' in changesToApply) nodeChanges.seatNumber = changesToApply.seatNumber;
         changes[id] = nodeChanges;
       }
     });
@@ -539,10 +539,15 @@ export function SelectionPanel() {
               <div className="flex justify-between items-center">
                 <span className="text-xs text-zinc-500">Number:</span>
                 <input
-                  type="number"
+                  type="text"
                   className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-                  value={commonSeatNumber}
-                  onChange={(e) => updateBulkSeatInfo({ seatNumber: parseInt(e.target.value, 10) || 0 })}
+                  value={commonSeatNumber ?? ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || /^\d+$/.test(val)) {
+                      updateBulkSeatInfo({ seatNumber: val === "" ? undefined : parseInt(val, 10) });
+                    }
+                  }}
                 />
               </div>
             ) : (
