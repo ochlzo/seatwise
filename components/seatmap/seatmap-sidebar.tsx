@@ -20,6 +20,8 @@ import {
   setSnapSpacing,
   updateCategories,
 } from "@/lib/features/seatmap/seatmapSlice";
+import { DialogTrigger } from "@/components/ui/dialog";
+import { SeatmapHowToDialog } from "@/components/seatmap/how-to";
 import { Plus, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
@@ -305,6 +307,18 @@ export function SeatMapSidebar({
             <li>Drag selected to move</li>
             <li>Scroll to zoom</li>
           </ul>
+          <SeatmapHowToDialog
+            trigger={
+              <DialogTrigger asChild>
+                <a
+                  className="inline-flex items-center text-xs text-blue-600 hover:underline dark:text-blue-400"
+                  href="#"
+                >
+                  more
+                </a>
+              </DialogTrigger>
+            }
+          />
         </div>
       </SidebarFooter>
       <SidebarRail />
