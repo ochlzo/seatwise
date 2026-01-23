@@ -56,7 +56,7 @@ export type SeatmapSeatNode = SeatmapNodeBase & {
   rowLabel?: string;
   seatNumber?: number;
   status: SeatStatus;
-  seatType?: "standard";
+  seatType?: "standard" | "vip";
   snapGuideId?: string;
   categoryId?: string;
 };
