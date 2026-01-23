@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Image as KonvaImage, Group, Rect, Transformer } from "react-konva";
+import { Image as KonvaImage, Group, Rect, Transformer, Text } from "react-konva";
 import useImage from "use-image";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
@@ -50,7 +50,7 @@ const SeatItem = React.memo(({
     snapSpacing,
     categories,
 }: any) => {
-    let imageUrl = isSelected ? "/seat-selected.svg" : "/seat-default.svg";
+    let imageUrl = "/seat-default.svg";
 
     if (seat.categoryId) {
         const category = categories.find((c: any) => c.id === seat.categoryId);
@@ -58,6 +58,15 @@ const SeatItem = React.memo(({
             imageUrl = COLOR_TO_SVG[category.color];
         }
     }
+
+    const label = `${seat.rowLabel ?? ""}${seat.seatNumber ?? ""}`;
+    const getLabelColor = () => {
+        if (!seat.categoryId) return "#4b5563"; // gray-600
+        const category = categories.find((c: any) => c.id === seat.categoryId);
+        if (!category) return "#4b5563";
+        if (category.color === "#ffd700") return "#000000"; // Gold gets black
+        return "#ffffff"; // Dark colors get white
+    };
 
     const [image] = useImage(imageUrl);
     const groupRef = React.useRef<any>(null);
@@ -259,6 +268,19 @@ const SeatItem = React.memo(({
                     shadowBlur={isSelected ? 5 : 0}
                     shadowOpacity={0.3}
                 />
+                {label && (
+                    <Text
+                        text={label}
+                        width={32}
+                        height={32}
+                        fontSize={10}
+                        fontStyle="bold"
+                        fill={getLabelColor()}
+                        align="center"
+                        verticalAlign="middle"
+                        listening={false}
+                    />
+                )}
             </Group>
             {isSelected && selectionCount === 1 && (
                 <Transformer
