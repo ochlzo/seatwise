@@ -98,6 +98,10 @@ export default function SeatmapCanvas() {
     height: number;
     visible: boolean;
   }>({ x: 0, y: 0, width: 0, height: 0, visible: false });
+  const [snapLines, setSnapLines] = React.useState<{
+    x: number | null;
+    y: number | null;
+  }>({ x: null, y: null });
 
   // Resize observer to keep stage responsive
   const [dimensions, setDimensions] = React.useState({
@@ -141,6 +145,7 @@ export default function SeatmapCanvas() {
       setIsRightPanning(false);
       setMarqueeRect((prev) => ({ ...prev, visible: false }));
       setDrawDraft(null);
+      setSnapLines({ x: null, y: null });
     };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -1002,12 +1007,20 @@ export default function SeatmapCanvas() {
 
           {renderDraft()}
 
-          <GuidePathLayer stageRef={stageRef} />
+          <GuidePathLayer
+            stageRef={stageRef}
+            snapLines={snapLines}
+            onSnap={setSnapLines}
+          />
 
           <SectionLayer
             stageRef={stageRef}
             onNodeDragStart={() => setIsDraggingNode(true)}
-            onNodeDragEnd={() => setIsDraggingNode(false)}
+            onNodeDragEnd={() => {
+              setIsDraggingNode(false);
+              setSnapLines({ x: null, y: null });
+            }}
+            onSnap={setSnapLines}
           />
 
           {/* Stage Label Removed */}
@@ -1015,8 +1028,34 @@ export default function SeatmapCanvas() {
           <SeatLayer
             stageRef={stageRef}
             onNodeDragStart={() => setIsDraggingNode(true)}
-            onNodeDragEnd={() => setIsDraggingNode(false)}
+            onNodeDragEnd={() => {
+              setIsDraggingNode(false);
+              setSnapLines({ x: null, y: null });
+            }}
+            onSnap={setSnapLines}
           />
+
+          {/* Centralized Snap Lines Rendering */}
+          {snapLines.x !== null && (
+            <Line
+              points={[snapLines.x, -10000, snapLines.x, 10000]}
+              stroke="#3b82f6"
+              strokeWidth={1}
+              dash={[4, 4]}
+              opacity={0.5}
+              listening={false}
+            />
+          )}
+          {snapLines.y !== null && (
+            <Line
+              points={[-10000, snapLines.y, 10000, snapLines.y]}
+              stroke="#3b82f6"
+              strokeWidth={1}
+              dash={[4, 4]}
+              opacity={0.5}
+              listening={false}
+            />
+          )}
 
           <Transformer
             ref={transformerRef}

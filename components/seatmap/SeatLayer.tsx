@@ -12,7 +12,7 @@ import {
     updateNodes,
 } from "@/lib/features/seatmap/seatmapSlice";
 import { closestPointOnPolyline } from "@/lib/seatmap/geometry";
-import { GuidePathNode } from "@/lib/seatmap/types";
+import { GuidePathNode, SeatmapNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 
 const SEAT_IMAGE_URL = "/seat-default.svg";
 const SEAT_SELECTED_IMAGE_URL = "/seat-selected.svg";
@@ -21,29 +21,6 @@ const VIP_SEAT_SELECTED_IMAGE_URL = "/selected-vip-seat.svg";
 const ROTATION_SNAP = 15;
 const MIN_SIZE = 16;
 const MAX_SIZE = 320;
-const SNAP_THRESHOLD = 12;
-
-const getSnappedPosition = (
-    position: { x: number; y: number },
-    guidePaths: GuidePathNode[],
-) => {
-    let closest = null as null | { x: number; y: number; distance: number; guideId: string };
-    guidePaths.forEach((guide) => {
-        const result = closestPointOnPolyline(position.x, position.y, guide.points);
-        if (result.distance <= SNAP_THRESHOLD) {
-            if (!closest || result.distance < closest.distance) {
-                closest = {
-                    x: result.point.x,
-                    y: result.point.y,
-                    distance: result.distance,
-                    guideId: guide.id,
-                };
-            }
-        }
-    });
-    if (!closest) return null;
-    return { x: closest.x, y: closest.y, guideId: closest.guideId };
-};
 
 const SeatItem = React.memo(({
     seat,
@@ -56,9 +33,11 @@ const SeatItem = React.memo(({
     onMultiDragStart,
     onMultiDragMove,
     onMultiDragEnd,
-    selectionCount,
     showGuidePaths,
     guidePaths,
+    onSnap,
+    nodes,
+    selectionCount,
 }: any) => {
     const seatType = seat.seatType ?? "standard";
     const imageUrl =
@@ -70,7 +49,6 @@ const SeatItem = React.memo(({
     const transformerRef = React.useRef<any>(null);
     const rafRef = React.useRef<number | null>(null);
     const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
-    const pendingSnapGuideIdRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
         if (isSelected && transformerRef.current && groupRef.current) {
@@ -85,12 +63,10 @@ const SeatItem = React.memo(({
             seat.id,
             {
                 position: pendingPosRef.current,
-                snapGuideId: pendingSnapGuideIdRef.current ?? undefined,
             },
             false,
         );
         pendingPosRef.current = null;
-        pendingSnapGuideIdRef.current = null;
         rafRef.current = null;
     };
 
@@ -154,24 +130,37 @@ const SeatItem = React.memo(({
                     pendingPosRef.current = null;
                     if (!handled) {
                         let nextPos = { x: e.target.x(), y: e.target.y() };
-                        let snapGuideId: string | undefined = undefined;
-                        if (showGuidePaths && guidePaths.length) {
-                            const snapped = getSnappedPosition(nextPos, guidePaths);
-                            if (snapped) {
-                                nextPos = snapped;
-                                e.target.position(nextPos);
-                                snapGuideId = snapped.guideId;
+
+                        let bestSnapX: number | null = null;
+                        let bestSnapY: number | null = null;
+                        const SNAP_THRESHOLD = 8;
+
+                        (Object.values(nodes) as SeatmapNode[]).forEach((node) => {
+                            if (node.id === seat.id) return;
+                            if (!("position" in node)) return;
+
+                            if (Math.abs(nextPos.x - node.position.x) < SNAP_THRESHOLD) {
+                                nextPos.x = node.position.x;
+                                bestSnapX = node.position.x;
                             }
-                        }
+                            if (Math.abs(nextPos.y - node.position.y) < SNAP_THRESHOLD) {
+                                nextPos.y = node.position.y;
+                                bestSnapY = node.position.y;
+                            }
+                        });
+                        e.target.position(nextPos);
+
+                        onSnap({ x: bestSnapX, y: bestSnapY });
+
                         onChange(
                             seat.id,
                             {
                                 position: nextPos,
-                                snapGuideId,
                             },
                             true,
                         );
                     }
+                    onSnap({ x: null, y: null });
                     if (onDragEnd) onDragEnd();
                 }}
                 onDragMove={(e) => {
@@ -183,18 +172,26 @@ const SeatItem = React.memo(({
                         : false;
                     if (handled) return;
                     let nextPos = { x: e.target.x(), y: e.target.y() };
-                    if (showGuidePaths && guidePaths.length) {
-                        const snapped = getSnappedPosition(nextPos, guidePaths);
-                        if (snapped) {
-                            nextPos = snapped;
-                            e.target.position(nextPos);
-                            pendingSnapGuideIdRef.current = snapped.guideId;
-                        } else {
-                            pendingSnapGuideIdRef.current = null;
+                    let bestSnapX: number | null = null;
+                    let bestSnapY: number | null = null;
+                    const SNAP_THRESHOLD = 8;
+
+                    (Object.values(nodes) as SeatmapNode[]).forEach((node) => {
+                        if (node.id === seat.id) return;
+                        if (!("position" in node)) return;
+
+                        if (Math.abs(nextPos.x - node.position.x) < SNAP_THRESHOLD) {
+                            nextPos.x = node.position.x;
+                            bestSnapX = node.position.x;
                         }
-                    } else {
-                        pendingSnapGuideIdRef.current = null;
-                    }
+                        if (Math.abs(nextPos.y - node.position.y) < SNAP_THRESHOLD) {
+                            nextPos.y = node.position.y;
+                            bestSnapY = node.position.y;
+                        }
+                    });
+                    e.target.position(nextPos);
+
+                    onSnap({ x: bestSnapX, y: bestSnapY });
                     pendingPosRef.current = nextPos;
                     if (rafRef.current === null) {
                         rafRef.current = requestAnimationFrame(flushDragPosition);
@@ -252,10 +249,12 @@ export default function SeatLayer({
     onNodeDragStart,
     onNodeDragEnd,
     stageRef,
+    onSnap,
 }: {
     onNodeDragStart?: () => void;
     onNodeDragEnd?: () => void;
     stageRef?: React.RefObject<any>;
+    onSnap: (lines: { x: number | null; y: number | null }) => void;
 }) {
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
@@ -267,7 +266,6 @@ export default function SeatLayer({
         active: boolean;
         draggedId: string | null;
         startPositions: Record<string, { x: number; y: number }>;
-        snapGuideId?: string | null;
     }>({ active: false, draggedId: null, startPositions: {} });
     const multiDragRafRef = React.useRef<number | null>(null);
     const pendingMultiDragRef = React.useRef<Record<string, { x: number; y: number }> | null>(null);
@@ -319,7 +317,6 @@ export default function SeatLayer({
             active: true,
             draggedId: id,
             startPositions,
-            snapGuideId: null,
         };
         multiDragKonvaNodesRef.current = konvaNodes;
         return true;
@@ -332,19 +329,29 @@ export default function SeatLayer({
         if (!origin) return false;
         let dx = pos.x - origin.x;
         let dy = pos.y - origin.y;
-        let snapGuideId: string | null = null;
-        if (showGuidePaths && guidePaths.length) {
-            const snapped = getSnappedPosition(
-                { x: origin.x + dx, y: origin.y + dy },
-                guidePaths,
-            );
-            if (snapped) {
-                dx = snapped.x - origin.x;
-                dy = snapped.y - origin.y;
-                snapGuideId = snapped.guideId;
+
+        let bestSnapX: number | null = null;
+        let bestSnapY: number | null = null;
+
+        const SNAP_THRESHOLD = 8;
+        const currentPos = { x: origin.x + dx, y: origin.y + dy };
+
+        // 1. Alignment Snapping
+        (Object.values(nodes) as SeatmapNode[]).forEach((node) => {
+            if (selectedIds.includes(node.id)) return;
+            if (!("position" in node)) return;
+
+            if (Math.abs(currentPos.x - node.position.x) < SNAP_THRESHOLD) {
+                dx = node.position.x - origin.x;
+                bestSnapX = node.position.x;
             }
-        }
-        multiDragRef.current.snapGuideId = snapGuideId;
+            if (Math.abs(currentPos.y - node.position.y) < SNAP_THRESHOLD) {
+                dy = node.position.y - origin.y;
+                bestSnapY = node.position.y;
+            }
+        });
+
+        onSnap({ x: bestSnapX, y: bestSnapY });
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -378,20 +385,6 @@ export default function SeatLayer({
         if (!origin) return false;
         let dx = pos.x - origin.x;
         let dy = pos.y - origin.y;
-        let snapGuideId: string | null = state.snapGuideId ?? null;
-        if (showGuidePaths && guidePaths.length) {
-            const snapped = getSnappedPosition(
-                { x: origin.x + dx, y: origin.y + dy },
-                guidePaths,
-            );
-            if (snapped) {
-                dx = snapped.x - origin.x;
-                dy = snapped.y - origin.y;
-                snapGuideId = snapped.guideId;
-            } else {
-                snapGuideId = null;
-            }
-        }
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -412,22 +405,10 @@ export default function SeatLayer({
         if (stageRef?.current) {
             stageRef.current.batchDraw();
         }
-        const snapChanges: Record<string, { snapGuideId?: string }> = {};
-        selectedIds.forEach((selectedId) => {
-            const node = nodes[selectedId];
-            if (!node || node.type !== "seat") return;
-            snapChanges[selectedId] = {
-                snapGuideId: snapGuideId ?? undefined,
-            };
-        });
-        if (Object.keys(snapChanges).length) {
-            dispatch(updateNodes({ changes: snapChanges, history: false }));
-        }
         multiDragRef.current = {
             active: false,
             draggedId: null,
             startPositions: {},
-            snapGuideId: null,
         };
         dispatch(updateNodesPositions({ positions, history: true }));
         return true;
@@ -468,6 +449,8 @@ export default function SeatLayer({
                     selectionCount={selectionCount}
                     showGuidePaths={showGuidePaths}
                     guidePaths={guidePaths}
+                    onSnap={onSnap}
+                    nodes={nodes}
                 />
             ))}
         </Group>
