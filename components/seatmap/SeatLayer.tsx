@@ -271,8 +271,13 @@ const SeatItem = React.memo(({
                 {label && (
                     <Text
                         text={label}
+                        x={16}
+                        y={16}
                         width={32}
                         height={32}
+                        offsetX={16}
+                        offsetY={16}
+                        rotation={-seat.rotation}
                         fontSize={10}
                         fontStyle="bold"
                         fill={getLabelColor()}
