@@ -220,7 +220,7 @@ export default function SeatmapCanvas() {
       };
     });
 
-    if (Object.keys(changes).length) {
+    if (history && Object.keys(changes).length) {
       dispatch(updateNodes({ changes, history }));
     }
   };
@@ -261,7 +261,7 @@ export default function SeatmapCanvas() {
       };
     });
 
-    if (Object.keys(changes).length) {
+    if (history && Object.keys(changes).length) {
       dispatch(updateNodes({ changes, history }));
     }
 
@@ -554,8 +554,9 @@ export default function SeatmapCanvas() {
       };
     });
 
-    // Don’t spam history while dragging
-    dispatch(updateNodes({ changes, history }));
+    if (history && Object.keys(changes).length) { // Added .length check
+      dispatch(updateNodes({ changes, history }));
+    }
 
     if (history) {
       rotationStateRef.current = {
@@ -1121,10 +1122,8 @@ export default function SeatmapCanvas() {
               if (activeTransformAnchorRef.current === "rotater") {
                 if (isAltDown && applyGroupRotation(false)) return;
                 if (applyCursorDrivenGroupRotation(false)) return;
-                commitGroupTransform(false);
                 return;
               }
-              commitGroupTransform(false);
             }}
             onTransformEnd={() => {
               if (activeTransformAnchorRef.current === "rotater") {
