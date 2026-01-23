@@ -134,9 +134,53 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
   const handleGuideDragMove = (guide: GuidePathNode, target: any) => {
     const last = dragStateRef.current[guide.id];
     if (!last) return;
-    const dx = target.x() - last.x;
-    const dy = target.y() - last.y;
+    let dx = target.x() - last.x;
+    let dy = target.y() - last.y;
     if (!dx && !dy) return;
+
+    // Snapping Logic for the entire guide path
+    const SNAP_THRESHOLD = 8;
+    let bestSnapX: number | null = null;
+    let bestSnapY: number | null = null;
+
+    // Check snapping for BOTH start and end points of the guide we are dragging
+    const pts = guide.points;
+    const start = { x: pts[0] + dx, y: pts[1] + dy };
+    const lastIdx = pts.length - 2;
+    const end = { x: pts[lastIdx] + dx, y: pts[lastIdx + 1] + dy };
+
+    const otherEndpoints: { x: number; y: number }[] = [];
+    guides.forEach((g) => {
+      if (g.id === guide.id) return;
+      const gpts = g.points;
+      if (gpts.length < 4) return;
+      otherEndpoints.push({ x: gpts[0], y: gpts[1] });
+      const gLastIdx = gpts.length - 2;
+      otherEndpoints.push({ x: gpts[gLastIdx], y: gpts[gLastIdx + 1] });
+    });
+
+    otherEndpoints.forEach((ep) => {
+      // Snap X (check start and end)
+      if (Math.abs(start.x - ep.x) < SNAP_THRESHOLD) {
+        dx = ep.x - pts[0];
+        bestSnapX = ep.x;
+      } else if (Math.abs(end.x - ep.x) < SNAP_THRESHOLD) {
+        dx = ep.x - pts[lastIdx];
+        bestSnapX = ep.x;
+      }
+
+      // Snap Y (check start and end)
+      if (Math.abs(start.y - ep.y) < SNAP_THRESHOLD) {
+        dy = ep.y - pts[1];
+        bestSnapY = ep.y;
+      } else if (Math.abs(end.y - ep.y) < SNAP_THRESHOLD) {
+        dy = ep.y - pts[lastIdx + 1];
+        bestSnapY = ep.y;
+      }
+    });
+
+    setSnapLines({ x: bestSnapX, y: bestSnapY });
+
     const nextPoints = guide.points.map((value, index) =>
       index % 2 === 0 ? value + dx : value + dy,
     );
@@ -185,6 +229,7 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
     );
 
     delete dragStateRef.current[guideId];
+    setSnapLines({ x: null, y: null });
   };
 
   const updateEndpoint = (
