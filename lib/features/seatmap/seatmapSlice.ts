@@ -13,6 +13,7 @@ interface SeatmapState {
         sides?: number;
     };
     showGuidePaths: boolean;
+    showGrid: boolean;
     viewportSize: {
         width: number;
         height: number;
@@ -22,6 +23,7 @@ interface SeatmapState {
         past: Array<{ nodes: Record<string, SeatmapNode>; selectedIds: string[] }>;
         future: Array<{ nodes: Record<string, SeatmapNode>; selectedIds: string[] }>;
     };
+    zoomLocked: boolean;
 }
 
 const initialState: SeatmapState = {
@@ -31,15 +33,17 @@ const initialState: SeatmapState = {
     selectedIds: [],
     drawShape: { shape: "rect" },
     showGuidePaths: true,
+    showGrid: false,
     viewportSize: { width: 800, height: 600 },
     clipboard: [],
     history: { past: [], future: [] },
+    zoomLocked: false,
 };
 
 const HISTORY_LIMIT = 15;
 
 const snapshotState = (state: SeatmapState) => ({
-    nodes: JSON.parse(JSON.stringify(state.nodes)) as Record<string, SeatmapNode>,
+    nodes: { ...state.nodes },
     selectedIds: [...state.selectedIds],
 });
 
@@ -55,7 +59,7 @@ const restoreSnapshot = (
     state: SeatmapState,
     snapshot: { nodes: Record<string, SeatmapNode>; selectedIds: string[] }
 ) => {
-    state.nodes = JSON.parse(JSON.stringify(snapshot.nodes)) as Record<string, SeatmapNode>;
+    state.nodes = { ...snapshot.nodes };
     state.selectedIds = [...snapshot.selectedIds];
 };
 
@@ -79,6 +83,9 @@ const seatmapSlice = createSlice({
         setShowGuidePaths: (state, action: PayloadAction<boolean>) => {
             state.showGuidePaths = action.payload;
         },
+        setShowGrid: (state, action: PayloadAction<boolean>) => {
+            state.showGrid = action.payload;
+        },
         setViewportSize: (
             state,
             action: PayloadAction<{ width: number; height: number }>
@@ -87,6 +94,9 @@ const seatmapSlice = createSlice({
         },
         setViewport: (state, action: PayloadAction<SeatmapViewport>) => {
             state.viewport = action.payload;
+        },
+        toggleZoomLock: (state) => {
+            state.zoomLocked = !state.zoomLocked;
         },
         addSeat: (
             state,
@@ -105,6 +115,42 @@ const seatmapSlice = createSlice({
                 seatType: action.payload.seatType ?? "standard",
             };
             state.nodes[id] = newSeat;
+        },
+        addSeatGrid: (
+            state,
+            action: PayloadAction<{
+                rows: number;
+                cols: number;
+                center: { x: number; y: number };
+                gap?: number;
+            }>
+        ) => {
+            const { rows, cols, center, gap } = action.payload;
+            if (rows <= 0 || cols <= 0) return;
+            pushHistory(state);
+            const seatSize = 32;
+            const step = seatSize + (gap ?? 4);
+            const startX = center.x - ((cols - 1) * step) / 2;
+            const startY = center.y - ((rows - 1) * step) / 2;
+            for (let row = 0; row < rows; row += 1) {
+                for (let col = 0; col < cols; col += 1) {
+                    const id = uuidv4();
+                    const newSeat: SeatmapSeatNode = {
+                        id,
+                        type: "seat",
+                        position: {
+                            x: startX + col * step,
+                            y: startY + row * step,
+                        },
+                        status: "available",
+                        rotation: 0,
+                        scaleX: 1,
+                        scaleY: 1,
+                        seatType: "standard",
+                    };
+                    state.nodes[id] = newSeat;
+                }
+            }
         },
         addShape: (
             state,
@@ -217,6 +263,10 @@ const seatmapSlice = createSlice({
                 id,
                 type: "helper",
                 helperType: "guidePath",
+                position: { x: 0, y: 0 },
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
                 points: action.payload.points,
                 dash: action.payload.dash ?? [6, 4],
                 stroke: action.payload.stroke ?? "#9ca3af",
@@ -413,6 +463,7 @@ export const {
     setViewportSize,
     setViewport,
     addSeat,
+    addSeatGrid,
     addShape,
     addGuidePath,
     updateNode,
@@ -425,11 +476,13 @@ export const {
     rotateSelected,
     scaleSelected,
     setShowGuidePaths,
+    setShowGrid,
     copySelected,
     pasteNodesAt,
     deleteSelected,
     undo,
     redo,
+    toggleZoomLock,
 } = seatmapSlice.actions;
 
 export default seatmapSlice.reducer;

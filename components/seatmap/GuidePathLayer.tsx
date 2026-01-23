@@ -279,8 +279,28 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
               lineJoin="round"
               name="guide-path"
               draggable={isSelected}
-              listening={isSelected}
+              listening
               strokeScaleEnabled={false}
+              onClick={(e) => {
+                e.cancelBubble = true;
+                const additive =
+                  e?.evt?.shiftKey || e?.evt?.ctrlKey || e?.evt?.metaKey;
+                if (additive) {
+                  dispatch(toggleSelectNode(guide.id));
+                  return;
+                }
+                dispatch(selectNode(guide.id));
+              }}
+              onTap={(e) => {
+                e.cancelBubble = true;
+                const additive =
+                  e?.evt?.shiftKey || e?.evt?.ctrlKey || e?.evt?.metaKey;
+                if (additive) {
+                  dispatch(toggleSelectNode(guide.id));
+                  return;
+                }
+                dispatch(selectNode(guide.id));
+              }}
               onDragStart={(e) => {
                 dragStateRef.current[guide.id] = {
                   x: e.target.x(),

@@ -1,4 +1,3 @@
-"use strict";
 "use client";
 
 import React from "react";
@@ -51,7 +50,7 @@ const measureTextBox = (
     };
 };
 
-const ShapeItem = ({
+const ShapeItem = React.memo(({
     shape,
     isSelected,
     onSelect,
@@ -146,9 +145,9 @@ const ShapeItem = ({
         onDragEnd: (e: any) => {
             const handled = onMultiDragEnd
                 ? onMultiDragEnd(shape.id, {
-                      x: e.target.x(),
-                      y: e.target.y(),
-                  })
+                    x: e.target.x(),
+                    y: e.target.y(),
+                })
                 : false;
             if (rafRef.current !== null) {
                 cancelAnimationFrame(rafRef.current);
@@ -169,9 +168,9 @@ const ShapeItem = ({
         onDragMove: (e: any) => {
             const handled = onMultiDragMove
                 ? onMultiDragMove(shape.id, {
-                      x: e.target.x(),
-                      y: e.target.y(),
-                  })
+                    x: e.target.x(),
+                    y: e.target.y(),
+                })
                 : false;
             if (handled) return;
             pendingPosRef.current = { x: e.target.x(), y: e.target.y() };
@@ -485,18 +484,18 @@ const ShapeItem = ({
             return (
                 <>
                     <Group ref={shapeRef} {...commonProps} offsetX={w / 2} offsetY={h / 2}>
-                    {/* Bounding box / Background */}
-                    <Rect width={w} height={h} stroke={commonProps.stroke} strokeWidth={commonProps.strokeWidth} fill={shape.fill} cornerRadius={2} />
+                        {/* Bounding box / Background */}
+                        <Rect width={w} height={h} stroke={commonProps.stroke} strokeWidth={commonProps.strokeWidth} fill={shape.fill} cornerRadius={2} />
 
-                    {/* Steps */}
-                    {Array.from({ length: steps - 1 }).map((_, i) => (
-                        <Line
-                            key={i}
-                            points={[0, (i + 1) * stepSize, w, (i + 1) * stepSize]}
-                            stroke={commonProps.stroke}
-                            strokeWidth={1}
-                        />
-                    ))}
+                        {/* Steps */}
+                        {Array.from({ length: steps - 1 }).map((_, i) => (
+                            <Line
+                                key={i}
+                                points={[0, (i + 1) * stepSize, w, (i + 1) * stepSize]}
+                                stroke={commonProps.stroke}
+                                strokeWidth={1}
+                            />
+                        ))}
                     </Group>
                     {isSelected && selectionCount === 1 && (
                         <Transformer
@@ -523,7 +522,14 @@ const ShapeItem = ({
         default:
             return null;
     }
-};
+}, (prev, next) => {
+    return (
+        prev.shape === next.shape &&
+        prev.isSelected === next.isSelected &&
+        prev.selectionCount === next.selectionCount &&
+        prev.isShiftDown === next.isShiftDown
+    );
+});
 
 export default function SectionLayer({
     onNodeDragStart,
@@ -546,6 +552,7 @@ export default function SectionLayer({
     }>({ active: false, draggedId: null, startPositions: {} });
     const multiDragRafRef = React.useRef<number | null>(null);
     const pendingMultiDragRef = React.useRef<Record<string, { x: number; y: number }> | null>(null);
+    const multiDragKonvaNodesRef = React.useRef<Record<string, any>>({});
 
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -568,19 +575,29 @@ export default function SectionLayer({
     const beginMultiDrag = (id: string) => {
         if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
         const startPositions: Record<string, { x: number; y: number }> = {};
+        const konvaNodes: Record<string, any> = {};
+        const stage = stageRef?.current;
+
         selectedIds.forEach((selectedId) => {
             const node = nodes[selectedId];
-            if (!node) return;
+            if (!node || node.type !== "shape") return;
             startPositions[selectedId] = {
                 x: node.position.x,
                 y: node.position.y,
             };
+            if (stage) {
+                const konvaNode = stage.findOne(`#${selectedId}`);
+                if (konvaNode) {
+                    konvaNodes[selectedId] = konvaNode;
+                }
+            }
         });
         multiDragRef.current = {
             active: true,
             draggedId: id,
             startPositions,
         };
+        multiDragKonvaNodesRef.current = konvaNodes;
         return true;
     };
 
@@ -598,15 +615,17 @@ export default function SectionLayer({
         pendingMultiDragRef.current = positions;
         if (multiDragRafRef.current === null) {
             multiDragRafRef.current = requestAnimationFrame(() => {
-                if (pendingMultiDragRef.current && stageRef?.current) {
-                    const stage = stageRef.current;
+                if (pendingMultiDragRef.current) {
+                    const konvaNodes = multiDragKonvaNodesRef.current;
                     Object.entries(pendingMultiDragRef.current).forEach(([nodeId, next]) => {
-                        const node = stage.findOne(`#${nodeId}`);
+                        const node = konvaNodes[nodeId];
                         if (node) {
                             node.position(next);
                         }
                     });
-                    stage.batchDraw();
+                    if (stageRef?.current) {
+                        stageRef.current.batchDraw();
+                    }
                     pendingMultiDragRef.current = null;
                 }
                 multiDragRafRef.current = null;
@@ -631,15 +650,16 @@ export default function SectionLayer({
             multiDragRafRef.current = null;
             pendingMultiDragRef.current = null;
         }
+
+        const konvaNodes = multiDragKonvaNodesRef.current;
+        Object.entries(positions).forEach(([nodeId, next]) => {
+            const node = konvaNodes[nodeId];
+            if (node) {
+                node.position(next);
+            }
+        });
         if (stageRef?.current) {
-            const stage = stageRef.current;
-            Object.entries(positions).forEach(([nodeId, next]) => {
-                const node = stage.findOne(`#${nodeId}`);
-                if (node) {
-                    node.position(next);
-                }
-            });
-            stage.batchDraw();
+            stageRef.current.batchDraw();
         }
         multiDragRef.current = {
             active: false,

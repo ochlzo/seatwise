@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
+  addSeatGrid,
   setDrawShape,
   setMode,
   setShowGuidePaths,
@@ -24,6 +25,10 @@ export function SeatMapSidebar({
   const dispatch = useAppDispatch();
   const drawShape = useAppSelector((state) => state.seatmap.drawShape);
   const showGuidePaths = useAppSelector((state) => state.seatmap.showGuidePaths);
+  const viewport = useAppSelector((state) => state.seatmap.viewport);
+  const viewportSize = useAppSelector((state) => state.seatmap.viewportSize);
+  const [gridRows, setGridRows] = React.useState(3);
+  const [gridCols, setGridCols] = React.useState(3);
   const { isMobile, setOpenMobile } = useSidebar();
   const pathname = usePathname();
 
@@ -77,6 +82,47 @@ export function SeatMapSidebar({
             />
           </div>
           <span className="text-xs font-medium">VIP Seat</span>
+        </div>
+
+        <div className="text-xs text-zinc-500 mb-2 mt-4">Seat Grid</div>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={1}
+            className="w-16 rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs dark:border-zinc-800"
+            value={gridRows}
+            onChange={(e) => setGridRows(Math.max(1, Number(e.target.value)))}
+            aria-label="Rows"
+          />
+          <span className="text-xs text-zinc-400">x</span>
+          <input
+            type="number"
+            min={1}
+            className="w-16 rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs dark:border-zinc-800"
+            value={gridCols}
+            onChange={(e) => setGridCols(Math.max(1, Number(e.target.value)))}
+            aria-label="Columns"
+          />
+          <button
+            type="button"
+            className="ml-auto rounded border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            onClick={() => {
+              const center = {
+                x: (viewportSize.width / 2 - viewport.position.x) / viewport.scale,
+                y: (viewportSize.height / 2 - viewport.position.y) / viewport.scale,
+              };
+              dispatch(
+                addSeatGrid({
+                  rows: gridRows,
+                  cols: gridCols,
+                  center,
+                  gap: 4,
+                }),
+              );
+            }}
+          >
+            Create
+          </button>
         </div>
 
         <div className="text-xs text-zinc-500 mb-2 mt-4">Shapes (click and draw)</div>

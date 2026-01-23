@@ -64,6 +64,7 @@ export function getRelativePointerPosition(node: any) {
     const transform = node.getAbsoluteTransform().copy();
     transform.invert();
     const pos = node.getStage().getPointerPosition();
+    if (!pos) return null;
     return transform.point(pos);
 }
 

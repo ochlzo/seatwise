@@ -45,7 +45,7 @@ const getSnappedPosition = (
     return { x: closest.x, y: closest.y, guideId: closest.guideId };
 };
 
-const SeatItem = ({
+const SeatItem = React.memo(({
     seat,
     isSelected,
     onSelect,
@@ -143,9 +143,9 @@ const SeatItem = ({
                 onDragEnd={(e) => {
                     const handled = onMultiDragEnd
                         ? onMultiDragEnd(seat.id, {
-                              x: e.target.x(),
-                              y: e.target.y(),
-                          })
+                            x: e.target.x(),
+                            y: e.target.y(),
+                        })
                         : false;
                     if (rafRef.current !== null) {
                         cancelAnimationFrame(rafRef.current);
@@ -177,9 +177,9 @@ const SeatItem = ({
                 onDragMove={(e) => {
                     const handled = onMultiDragMove
                         ? onMultiDragMove(seat.id, {
-                              x: e.target.x(),
-                              y: e.target.y(),
-                          })
+                            x: e.target.x(),
+                            y: e.target.y(),
+                        })
                         : false;
                     if (handled) return;
                     let nextPos = { x: e.target.x(), y: e.target.y() };
@@ -237,7 +237,16 @@ const SeatItem = ({
             )}
         </>
     );
-};
+}, (prev, next) => {
+    return (
+        prev.seat === next.seat &&
+        prev.isSelected === next.isSelected &&
+        prev.selectionCount === next.selectionCount &&
+        prev.isShiftDown === next.isShiftDown &&
+        prev.showGuidePaths === next.showGuidePaths &&
+        prev.guidePaths.length === next.guidePaths.length
+    );
+});
 
 export default function SeatLayer({
     onNodeDragStart,
@@ -284,9 +293,14 @@ export default function SeatLayer({
             node.type === "helper" && node.helperType === "guidePath",
     );
 
+    const multiDragKonvaNodesRef = React.useRef<Record<string, any>>({});
+
     const beginMultiDrag = (id: string) => {
         if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
         const startPositions: Record<string, { x: number; y: number }> = {};
+        const konvaNodes: Record<string, any> = {};
+        const stage = stageRef?.current;
+
         selectedIds.forEach((selectedId) => {
             const node = nodes[selectedId];
             if (!node || node.type !== "seat") return;
@@ -294,6 +308,12 @@ export default function SeatLayer({
                 x: node.position.x,
                 y: node.position.y,
             };
+            if (stage) {
+                const konvaNode = stage.findOne(`#${selectedId}`);
+                if (konvaNode) {
+                    konvaNodes[selectedId] = konvaNode;
+                }
+            }
         });
         multiDragRef.current = {
             active: true,
@@ -301,6 +321,7 @@ export default function SeatLayer({
             startPositions,
             snapGuideId: null,
         };
+        multiDragKonvaNodesRef.current = konvaNodes;
         return true;
     };
 
@@ -331,15 +352,17 @@ export default function SeatLayer({
         pendingMultiDragRef.current = positions;
         if (multiDragRafRef.current === null) {
             multiDragRafRef.current = requestAnimationFrame(() => {
-                if (pendingMultiDragRef.current && stageRef?.current) {
-                    const stage = stageRef.current;
+                if (pendingMultiDragRef.current) {
+                    const konvaNodes = multiDragKonvaNodesRef.current;
                     Object.entries(pendingMultiDragRef.current).forEach(([nodeId, next]) => {
-                        const node = stage.findOne(`#${nodeId}`);
+                        const node = konvaNodes[nodeId];
                         if (node) {
                             node.position(next);
                         }
                     });
-                    stage.batchDraw();
+                    if (stageRef?.current) {
+                        stageRef.current.batchDraw();
+                    }
                     pendingMultiDragRef.current = null;
                 }
                 multiDragRafRef.current = null;
@@ -378,15 +401,16 @@ export default function SeatLayer({
             multiDragRafRef.current = null;
             pendingMultiDragRef.current = null;
         }
+
+        const konvaNodes = multiDragKonvaNodesRef.current;
+        Object.entries(positions).forEach(([nodeId, next]) => {
+            const node = konvaNodes[nodeId];
+            if (node) {
+                node.position(next);
+            }
+        });
         if (stageRef?.current) {
-            const stage = stageRef.current;
-            Object.entries(positions).forEach(([nodeId, next]) => {
-                const node = stage.findOne(`#${nodeId}`);
-                if (node) {
-                    node.position(next);
-                }
-            });
-            stage.batchDraw();
+            stageRef.current.batchDraw();
         }
         const snapChanges: Record<string, { snapGuideId?: string }> = {};
         selectedIds.forEach((selectedId) => {

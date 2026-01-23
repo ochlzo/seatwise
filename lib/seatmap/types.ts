@@ -94,14 +94,14 @@ export type SeatmapLabelNode = SeatmapNodeBase & {
 export type SeatmapShapeNode = SeatmapNodeBase & {
   type: "shape";
   shape:
-    | "rect"
-    | "circle"
-    | "ellipse"
-    | "line"
-    | "path"
-    | "polygon"
-    | "stairs"
-    | "text";
+  | "rect"
+  | "circle"
+  | "ellipse"
+  | "line"
+  | "path"
+  | "polygon"
+  | "stairs"
+  | "text";
   points?: number[];
   dash?: number[];
   sides?: number; // for regular polygons like hexagon
@@ -112,14 +112,11 @@ export type SeatmapShapeNode = SeatmapNodeBase & {
   padding?: number;
 };
 
-export type GuidePathNode = {
-  id: string;
+export type GuidePathNode = SeatmapNodeBase & {
   type: "helper";
   helperType: "guidePath";
   points: number[];
   dash?: number[];
-  stroke?: string;
-  strokeWidth?: number;
 };
 
 export type SeatmapNode =

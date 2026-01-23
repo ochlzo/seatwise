@@ -24,6 +24,7 @@ import {
   deleteSelected,
   updateNodesPositions,
   setSelectedIds,
+  setShowGrid,
 } from "@/lib/features/seatmap/seatmapSlice";
 
 const NUDGE_STEP = 10;
@@ -34,6 +35,7 @@ export default function SeatmapToolbar() {
   const nodes = useAppSelector((state) => state.seatmap.nodes);
   const viewport = useAppSelector((state) => state.seatmap.viewport);
   const viewportSize = useAppSelector((state) => state.seatmap.viewportSize);
+  const showGrid = useAppSelector((state) => state.seatmap.showGrid);
 
   const hasSelection = selectedIds.length > 0;
 
@@ -145,6 +147,14 @@ export default function SeatmapToolbar() {
             <ArrowDown className="h-4 w-4" />
           </Button>
         </div>
+        <Separator orientation="vertical" className="mx-1 h-6" />
+        <Button
+          variant={showGrid ? "default" : "ghost"}
+          size="sm"
+          onClick={() => dispatch(setShowGrid(!showGrid))}
+        >
+          Grid
+        </Button>
         <Separator orientation="vertical" className="mx-1 h-6" />
         <Button variant="ghost" size="sm" onClick={handleClearAll}>
           <XCircle className="mr-2 h-4 w-4" />

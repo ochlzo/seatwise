@@ -40,7 +40,7 @@ import GuidePathLayer from "@/components/seatmap/GuidePathLayer";
 
 export default function SeatmapCanvas() {
   const dispatch = useAppDispatch();
-  const { viewport, mode, drawShape, selectedIds, nodes } = useAppSelector(
+  const { viewport, mode, drawShape, selectedIds, nodes, showGrid, zoomLocked } = useAppSelector(
     (state) => state.seatmap,
   );
   const stageRef = useRef<any>(null);
@@ -89,6 +89,7 @@ export default function SeatmapCanvas() {
     return snaps;
   }, []);
   const lastPointerPosRef = useRef<{ x: number; y: number } | null>(null);
+  const lastStagePointerPosRef = useRef<{ x: number; y: number } | null>(null);
   const marqueeStartRef = useRef<{ x: number; y: number } | null>(null);
   const [marqueeRect, setMarqueeRect] = React.useState<{
     x: number;
@@ -132,11 +133,22 @@ export default function SeatmapCanvas() {
       if (e.key === "Control") setIsCtrlDown(false);
       if (e.key === "Alt") setIsAltDown(false);
     };
+    const handleBlur = () => {
+      setIsShiftDown(false);
+      setIsCtrlDown(false);
+      setIsAltDown(false);
+      setIsMarqueeSelecting(false);
+      setIsRightPanning(false);
+      setMarqueeRect((prev) => ({ ...prev, visible: false }));
+      setDrawDraft(null);
+    };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
     };
   }, []);
 
@@ -170,7 +182,7 @@ export default function SeatmapCanvas() {
 
     transformer.nodes(selectedNodes);
     transformer.getLayer()?.batchDraw();
-  }, [selectedIds, nodes]);
+  }, [selectedIds]);
 
   const commitGroupTransform = (history: boolean) => {
     const transformer = transformerRef.current;
@@ -383,6 +395,7 @@ export default function SeatmapCanvas() {
     const isPinchZoom = e.evt.ctrlKey === true;
 
     if (isPinchZoom && pointer) {
+      if (zoomLocked) return;
       const scaleBy = 1.06;
       const nextScale =
         e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
@@ -625,6 +638,7 @@ export default function SeatmapCanvas() {
     }
     if (e.evt && e.evt.button === 2) {
       setIsRightPanning(true);
+      lastStagePointerPosRef.current = stage.getPointerPosition();
       return;
     }
     if (mode !== "draw") return;
@@ -643,12 +657,33 @@ export default function SeatmapCanvas() {
     });
   };
 
-  const handleMouseMove = () => {
+  const handleMouseMove = (e: any) => {
     const stage = stageRef.current;
     if (!stage) return;
     const pos = getRelativePointerPosition(stage);
     if (!pos) return;
     lastPointerPosRef.current = pos;
+
+    if (isRightPanning) {
+      const pointerPos = stage.getPointerPosition();
+      const lastPos = lastStagePointerPosRef.current;
+      if (pointerPos && lastPos) {
+        const dx = pointerPos.x - lastPos.x;
+        const dy = pointerPos.y - lastPos.y;
+
+        dispatch(setViewport({
+          position: {
+            x: viewport.position.x + dx,
+            y: viewport.position.y + dy
+          },
+          scale: viewport.scale
+        }));
+
+        lastStagePointerPosRef.current = pointerPos;
+      }
+      return;
+    }
+
     if (isMarqueeSelecting && marqueeStartRef.current) {
       const start = marqueeStartRef.current;
       const x = Math.min(start.x, pos.x);
@@ -683,7 +718,7 @@ export default function SeatmapCanvas() {
               rect.y + rect.height > y;
             return intersects;
           })
-          .map((node: any) => node.id())
+          .map((node: any) => node.id() || node.getParent()?.id())
           .filter(Boolean);
 
         const current = new Set(selectedIds);
@@ -705,6 +740,7 @@ export default function SeatmapCanvas() {
     }
     if (isRightPanning) {
       setIsRightPanning(false);
+      lastStagePointerPosRef.current = null;
       return;
     }
     if (!drawDraft) return;
@@ -915,14 +951,25 @@ export default function SeatmapCanvas() {
   return (
     <div
       ref={containerRef}
-      className="w-full h-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden relative"
+      className={`w-full h-full bg-zinc-100 dark:bg-zinc-900 overflow-hidden relative ${isRightPanning ? 'cursor-grabbing' : mode === 'pan' ? 'cursor-grab' : ''}`}
+      style={{ cursor: isRightPanning ? 'grabbing' : mode === 'pan' ? 'grab' : undefined }}
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
+      {showGrid && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(148,163,184,0.35) 1px, transparent 1px), linear-gradient(to bottom, rgba(148,163,184,0.35) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+          }}
+        />
+      )}
       <Stage
         width={dimensions.width}
         height={dimensions.height}
-        draggable={(mode === "pan" || isRightPanning) && !isDraggingNode}
+        draggable={false}
         onWheel={handleWheel}
         onClick={handleStageClick}
         onTap={handleStageClick}
