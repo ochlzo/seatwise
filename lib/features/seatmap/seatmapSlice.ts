@@ -110,19 +110,19 @@ const seatmapSlice = createSlice({
         },
         addSeat: (
             state,
-            action: PayloadAction<{ x: number; y: number }>
+            action: PayloadAction<{ x: number; y: number; seatType?: "standard" | "vip" }>
         ) => {
             pushHistory(state);
             const id = uuidv4();
             const newSeat: SeatmapSeatNode = {
                 id,
                 type: "seat",
-                position: action.payload,
+                position: { x: action.payload.x, y: action.payload.y },
                 status: "available",
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
-                seatType: "standard",
+                seatType: action.payload.seatType ?? "standard",
             };
             state.nodes[id] = newSeat;
         },
