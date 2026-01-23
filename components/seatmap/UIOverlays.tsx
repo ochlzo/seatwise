@@ -290,6 +290,9 @@ export function SelectionPanel() {
   const nodes = useAppSelector((state) => state.seatmap.nodes);
   const categories = useAppSelector((state) => state.seatmap.categories);
 
+  const [rangeStart, setRangeStart] = React.useState("1");
+  const [rangeError, setRangeError] = React.useState<string | null>(null);
+
   if (selectedIds.length === 0) return null;
 
   const selectedNode = nodes[selectedIds[0]];
@@ -297,82 +300,9 @@ export function SelectionPanel() {
   if (selectedNode.type === "helper") return null;
 
   const palette = [
-    "#ffffff",
-    "#cccccc",
-    "#b2b2b2",
-    "#e5e5e5",
-    "#999999",
-    "#7f7f7f",
-    "#3b82f6",
-    "#ef4444",
-    "#10b981",
-    "#f59e0b",
-    "#6366f1",
-    "#8b5cf6",
+    "#ffffff", "#cccccc", "#b2b2b2", "#e5e5e5", "#999999", "#7f7f7f",
+    "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#6366f1", "#8b5cf6",
   ];
-
-  const applyBulkColor = (type: "fill" | "stroke", color: string | null) => {
-    const changes: Record<string, any> = {};
-    selectedIds.forEach((id) => {
-      const node = nodes[id];
-      if (!node || node.type !== "shape") return;
-      if (type === "fill" && node.shape === "line") return;
-      changes[id] = { [type]: color ?? undefined };
-    });
-    if (Object.keys(changes).length) {
-      dispatch(updateNodes({ changes }));
-    }
-  };
-
-  const updateBulkPosition = (axis: "x" | "y", value: string) => {
-    const next = Number(value);
-    if (Number.isNaN(next)) return;
-    const changes: Record<string, any> = {};
-    selectedIds.forEach((id) => {
-      const node = nodes[id];
-      if (!node || !("position" in node)) return;
-      changes[id] = {
-        position: {
-          x: axis === "x" ? next : node.position.x,
-          y: axis === "y" ? next : node.position.y,
-        },
-      };
-    });
-    if (Object.keys(changes).length) {
-      dispatch(updateNodes({ changes }));
-    }
-  };
-
-  const updateBulkRotation = (value: string) => {
-    const next = Number(value);
-    if (Number.isNaN(next)) return;
-    const changes: Record<string, any> = {};
-    selectedIds.forEach((id) => {
-      if (nodes[id]) {
-        changes[id] = { rotation: next };
-      }
-    });
-    if (Object.keys(changes).length) {
-      dispatch(updateNodes({ changes }));
-    }
-  };
-
-  const updateBulkScale = (axis: "x" | "y", value: string) => {
-    const next = Number(value);
-    if (Number.isNaN(next)) return;
-    const changes: Record<string, any> = {};
-    selectedIds.forEach((id) => {
-      if (nodes[id]) {
-        changes[id] = {
-          scaleX: axis === "x" ? next : (nodes[id].scaleX ?? 1),
-          scaleY: axis === "y" ? next : (nodes[id].scaleY ?? 1),
-        };
-      }
-    });
-    if (Object.keys(changes).length) {
-      dispatch(updateNodes({ changes }));
-    }
-  };
 
   const getCommonValue = (key: string, isNestedPosition?: "x" | "y") => {
     if (selectedIds.length === 0) return "";
@@ -388,7 +318,6 @@ export function SelectionPanel() {
         current = node[key];
       }
 
-      // Default values for common properties if undefined
       if (current === undefined) {
         if (key === 'rotation') current = 0;
         if (key === 'scaleX' || key === 'scaleY') current = 1;
@@ -414,18 +343,49 @@ export function SelectionPanel() {
   const commonScaleY = getCommonValue("scaleY");
   const commonText = getCommonValue("text");
   const commonCategoryId = getCommonValue("categoryId");
+  const commonRowLabel = getCommonValue("rowLabel");
+  const commonSeatNumber = getCommonValue("seatNumber");
 
-  const updateBulkCategoryId = (categoryId: string | null) => {
+  const updateBulkRotation = (value: string) => {
+    const next = Number(value);
+    if (Number.isNaN(next)) return;
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      if (nodes[id]) changes[id] = { rotation: next };
+    });
+    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
+  };
+
+  const updateBulkPosition = (axis: "x" | "y", value: string) => {
+    const next = Number(value);
+    if (Number.isNaN(next)) return;
     const changes: Record<string, any> = {};
     selectedIds.forEach((id) => {
       const node = nodes[id];
-      if (node && node.type === 'seat') {
-        changes[id] = { categoryId: categoryId || undefined };
+      if (!node || !("position" in node)) return;
+      changes[id] = {
+        position: {
+          x: axis === "x" ? next : node.position.x,
+          y: axis === "y" ? next : node.position.y,
+        },
+      };
+    });
+    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
+  };
+
+  const updateBulkScale = (axis: "x" | "y", value: string) => {
+    const next = Number(value);
+    if (Number.isNaN(next)) return;
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      if (nodes[id]) {
+        changes[id] = {
+          scaleX: axis === "x" ? next : (nodes[id].scaleX ?? 1),
+          scaleY: axis === "y" ? next : (nodes[id].scaleY ?? 1),
+        };
       }
     });
-    if (Object.keys(changes).length) {
-      dispatch(updateNodes({ changes }));
-    }
+    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
   };
 
   const updateBulkText = (text: string) => {
@@ -435,162 +395,249 @@ export function SelectionPanel() {
         changes[id] = { text };
       }
     });
-    if (Object.keys(changes).length) {
-      dispatch(updateNodes({ changes }));
+    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
+  };
+
+  const updateBulkSeatInfo = (changesToApply: { rowLabel?: string; seatNumber?: number }) => {
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      const node = nodes[id];
+      if (node && node.type === 'seat') {
+        const nodeChanges: any = {};
+        if (changesToApply.rowLabel !== undefined) nodeChanges.rowLabel = changesToApply.rowLabel;
+        if (changesToApply.seatNumber !== undefined) nodeChanges.seatNumber = changesToApply.seatNumber;
+        changes[id] = nodeChanges;
+      }
+    });
+    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
+  };
+
+  const applySeatRange = () => {
+    const startNum = parseInt(rangeStart, 10);
+    if (isNaN(startNum)) {
+      setRangeError("Invalid number");
+      return;
     }
+    setRangeError(null);
+    const changes: Record<string, any> = {};
+    const selectedSeats = selectedIds.filter(id => nodes[id]?.type === 'seat');
+    selectedSeats.forEach((id, idx) => {
+      changes[id] = { seatNumber: startNum + idx };
+    });
+    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
+  };
+
+  const updateBulkCategoryId = (categoryId: string | null) => {
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      if (nodes[id]?.type === 'seat') {
+        changes[id] = { categoryId: categoryId || undefined };
+      }
+    });
+    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
+  };
+
+  const applyBulkColor = (type: "fill" | "stroke", color: string | null) => {
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      const node = nodes[id];
+      if (!node || node.type !== "shape") return;
+      if (type === "fill" && node.shape === "line") return;
+      changes[id] = { [type]: color ?? undefined };
+    });
+    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
   };
 
   return (
     <div className="absolute top-4 right-4 z-20 w-64 bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-4">
         <h3 className="font-bold">Selection</h3>
         <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-500">
           {selectedIds.length} {selectedIds.length === 1 ? 'item' : 'items'}
         </span>
       </div>
-      <div className="text-sm space-y-2">
-        {selectedIds.length === 1 && (
-          <div className="flex justify-between">
-            <span className="text-zinc-500">ID:</span>
-            <span className="font-mono text-[10px]">
-              {selectedNode.id.split('-')[0]}...
-            </span>
+
+      <div className="text-sm space-y-4">
+        {/* Transforms */}
+        <div className="space-y-2">
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-zinc-500">Rotation:</span>
+            <input
+              type="number"
+              className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+              value={commonRotation !== "" ? Math.round(Number(commonRotation)) : ""}
+              onChange={(e) => updateBulkRotation(e.target.value)}
+            />
           </div>
-        )}
-        <div className="flex justify-between">
-          <span className="text-zinc-500">Rotation:</span>
-          <input
-            type="number"
-            step="1"
-            className="w-20 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-            placeholder="Mixed"
-            value={commonRotation !== "" ? Math.round(Number(commonRotation)) : ""}
-            onChange={(e) => updateBulkRotation(e.target.value)}
-          />
-        </div>
-        {selectedIds.length === 1 && (
-          <div className="flex justify-between">
-            <span className="text-zinc-500">X / Y:</span>
-            <div className="flex gap-2">
+          {selectedIds.length === 1 && (
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-zinc-500">X / Y:</span>
+              <div className="flex gap-1">
+                <input
+                  type="number"
+                  className="w-14 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                  value={commonX !== "" ? Math.round(Number(commonX)) : ""}
+                  onChange={(e) => updateBulkPosition("x", e.target.value)}
+                />
+                <input
+                  type="number"
+                  className="w-14 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                  value={commonY !== "" ? Math.round(Number(commonY)) : ""}
+                  onChange={(e) => updateBulkPosition("y", e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-zinc-500">Scale X/Y:</span>
+            <div className="flex gap-1">
               <input
                 type="number"
-                step="1"
-                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-                value={commonX !== "" ? Math.round(Number(commonX)) : ""}
-                onChange={(e) => updateBulkPosition("x", e.target.value)}
+                step="0.1"
+                className="w-14 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                value={commonScaleX ? Number(commonScaleX).toFixed(1) : ""}
+                onChange={(e) => updateBulkScale("x", e.target.value)}
               />
               <input
                 type="number"
-                step="1"
-                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-                value={commonY !== "" ? Math.round(Number(commonY)) : ""}
-                onChange={(e) => updateBulkPosition("y", e.target.value)}
+                step="0.1"
+                className="w-14 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                value={commonScaleY ? Number(commonScaleY).toFixed(1) : ""}
+                onChange={(e) => updateBulkScale("y", e.target.value)}
               />
             </div>
           </div>
-        )}
-        <div className="flex justify-between">
-          <span className="text-zinc-500">Scale:</span>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              step="0.01"
-              className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-              placeholder="X"
-              value={commonScaleX ? Number(commonScaleX).toFixed(2) : ""}
-              onChange={(e) => updateBulkScale("x", e.target.value)}
-            />
-            <input
-              type="number"
-              step="0.01"
-              className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-              placeholder="Y"
-              value={commonScaleY ? Number(commonScaleY).toFixed(2) : ""}
-              onChange={(e) => updateBulkScale("y", e.target.value)}
-            />
-          </div>
         </div>
+
+        {/* Text Content */}
         {isTextSelection && (
-          <div className="flex flex-col gap-1">
-            <span className="text-zinc-500">Text:</span>
+          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
+            <span className="text-xs text-zinc-500">Text Content:</span>
             <textarea
-              className="w-full bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs min-h-[60px] resize-none"
-              placeholder={commonText === "" ? "Mixed" : "Enter text..."}
+              className="w-full mt-1 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs min-h-[50px] resize-none"
               value={commonText}
               onChange={(e) => updateBulkText(e.target.value)}
             />
           </div>
         )}
+
+        {/* Seat Labels */}
+        {isSeatSelection && (
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+            <div className="text-[11px] uppercase font-bold text-zinc-400">Seat Labeling</div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-zinc-500">Row:</span>
+              <input
+                type="text"
+                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right uppercase"
+                placeholder="A, B..."
+                value={commonRowLabel}
+                onChange={(e) => updateBulkSeatInfo({ rowLabel: e.target.value.toUpperCase() })}
+              />
+            </div>
+            {selectedIds.length === 1 ? (
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-zinc-500">Number:</span>
+                <input
+                  type="number"
+                  className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                  value={commonSeatNumber}
+                  onChange={(e) => updateBulkSeatInfo({ seatNumber: parseInt(e.target.value, 10) || 0 })}
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-zinc-500">Start Num:</span>
+                  <input
+                    type="number"
+                    className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                    value={rangeStart}
+                    onChange={(e) => setRangeStart(e.target.value)}
+                  />
+                </div>
+                <Button size="sm" className="w-full h-8 text-[10px]" onClick={applySeatRange}>
+                  Apply Range {rangeStart}...
+                </Button>
+                {rangeError && <p className="text-[10px] text-red-500 text-center">{rangeError}</p>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Categories */}
+        {isSeatSelection && categories.length > 0 && (
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+            <div className="text-[11px] uppercase font-bold text-zinc-400 mb-2">Assign Category</div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => updateBulkCategoryId(null)}
+                className={`px-2 py-1 text-[10px] rounded border ${!commonCategoryId ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border-zinc-200"}`}
+              >
+                None
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => updateBulkCategoryId(cat.id)}
+                  className={`flex items-center gap-1 px-2 py-1 text-[10px] rounded border ${commonCategoryId === cat.id ? "border-blue-500 ring-1 ring-blue-500" : "border-zinc-200"}`}
+                >
+                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+                  <span className="truncate max-w-[50px]">{cat.name || "Untitled"}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Colors (Shapes Only) */}
+        {isShapeSelection && (
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 space-y-4">
+            <div>
+              <div className="text-[11px] text-zinc-500 mb-2">Stroke Color</div>
+              <div className="grid grid-cols-6 gap-2">
+                <button
+                  type="button"
+                  className="h-6 w-6 rounded border text-[10px] uppercase border-zinc-300 dark:border-zinc-700"
+                  onClick={() => applyBulkColor("stroke", null)}
+                >
+                  T
+                </button>
+                {palette.map((color) => (
+                  <button
+                    key={`stroke-${color}`}
+                    type="button"
+                    className={`h-6 w-6 rounded border ${selectedIds.length === 1 && (nodes[selectedIds[0]] as any).stroke === color ? "border-zinc-900" : "border-zinc-200"}`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => applyBulkColor("stroke", color)}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] text-zinc-500 mb-2">Fill Color</div>
+              <div className="grid grid-cols-6 gap-2">
+                <button
+                  type="button"
+                  className="h-6 w-6 rounded border text-[10px] uppercase border-zinc-300 dark:border-zinc-700"
+                  onClick={() => applyBulkColor("fill", null)}
+                >
+                  T
+                </button>
+                {palette.map((color) => (
+                  <button
+                    key={`fill-${color}`}
+                    type="button"
+                    className={`h-6 w-6 rounded border ${selectedIds.length === 1 && (nodes[selectedIds[0]] as any).fill === color ? "border-zinc-900" : "border-zinc-200"}`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => applyBulkColor("fill", color)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      {isSeatSelection && categories.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-          <div className="text-xs text-zinc-500 mb-2 font-medium">Assign Category</div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => updateBulkCategoryId(null)}
-              className={`px-2 py-1 text-[10px] rounded border transition-colors ${!commonCategoryId ? "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900" : "bg-transparent border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
-            >
-              None
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => updateBulkCategoryId(cat.id)}
-                className={`flex items-center gap-1.5 px-2 py-1 text-[10px] rounded border transition-all ${commonCategoryId === cat.id ? "ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-zinc-900" : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"}`}
-              >
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                <span>{cat.name || "Untitled"}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {isShapeSelection && (
-        <div className="mt-4 space-y-4">
-          <div>
-            <div className="text-xs text-zinc-500 mb-2">Stroke Color</div>
-            <div className="grid grid-cols-6 gap-2">
-              <button
-                type="button"
-                className="h-6 w-6 rounded border text-[10px] uppercase border-zinc-300 dark:border-zinc-700 hover:border-zinc-900 dark:hover:border-zinc-100"
-                onClick={() => applyBulkColor("stroke", null)}
-              >
-                T
-              </button>
-              {palette.map((color) => (
-                <button
-                  key={`stroke-${color}`}
-                  type="button"
-                  className={`h-6 w-6 rounded border ${selectedIds.length === 1 && selectedNode.stroke === color ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-300 dark:border-zinc-700"}`}
-                  style={{ backgroundColor: color }}
-                  onClick={() => applyBulkColor("stroke", color)}
-                />
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-zinc-500 mb-2">Fill Color</div>
-            <div className="grid grid-cols-6 gap-2">
-              <button
-                type="button"
-                className="h-6 w-6 rounded border text-[10px] uppercase border-zinc-300 dark:border-zinc-700 hover:border-zinc-900 dark:hover:border-zinc-100"
-                onClick={() => applyBulkColor("fill", null)}
-              >
-                T
-              </button>
-              {palette.map((color) => (
-                <button
-                  key={`fill-${color}`}
-                  type="button"
-                  className={`h-6 w-6 rounded border ${selectedIds.length === 1 && selectedNode.fill === color ? "border-zinc-900 dark:border-zinc-100" : "border-zinc-300 dark:border-zinc-700"}`}
-                  style={{ backgroundColor: color }}
-                  onClick={() => applyBulkColor("fill", color)}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
