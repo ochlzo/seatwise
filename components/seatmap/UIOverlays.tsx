@@ -391,12 +391,56 @@ export function SelectionPanel() {
     }
   };
 
+  const getCommonValue = (key: string, isNestedPosition?: "x" | "y") => {
+    if (selectedIds.length === 0) return "";
+    let value: any = undefined;
+    for (let i = 0; i < selectedIds.length; i++) {
+      const node = nodes[selectedIds[i]] as any;
+      if (!node) continue;
+
+      let current: any;
+      if (isNestedPosition) {
+        current = node.position?.[isNestedPosition];
+      } else {
+        current = node[key];
+      }
+
+      // Default values for common properties if undefined
+      if (current === undefined) {
+        if (key === 'rotation') current = 0;
+        if (key === 'scaleX' || key === 'scaleY') current = 1;
+      }
+
+      if (i === 0) {
+        value = current;
+      } else if (value !== current) {
+        return ""; // Mixed
+      }
+    }
+    return value ?? "";
+  };
+
   const isShapeSelection = selectedIds.every(id => nodes[id]?.type === 'shape');
-  const commonRotation = selectedIds.length === 1 ? selectedNode.rotation : "";
-  const commonX = selectedIds.length === 1 ? selectedNode.position.x : "";
-  const commonY = selectedIds.length === 1 ? selectedNode.position.y : "";
-  const commonScaleX = selectedIds.length === 1 ? selectedNode.scaleX : "";
-  const commonScaleY = selectedIds.length === 1 ? selectedNode.scaleY : "";
+  const isTextSelection = selectedIds.every(id => nodes[id]?.type === 'shape' && (nodes[id] as any).shape === 'text');
+
+  const commonRotation = getCommonValue("rotation");
+  const commonX = getCommonValue("position", "x");
+  const commonY = getCommonValue("position", "y");
+  const commonScaleX = getCommonValue("scaleX");
+  const commonScaleY = getCommonValue("scaleY");
+  const commonText = getCommonValue("text");
+
+  const updateBulkText = (text: string) => {
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      if (nodes[id] && nodes[id].type === 'shape' && (nodes[id] as any).shape === 'text') {
+        changes[id] = { text };
+      }
+    });
+    if (Object.keys(changes).length) {
+      dispatch(updateNodes({ changes }));
+    }
+  };
 
   return (
     <div className="absolute top-4 right-4 z-20 w-64 bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
@@ -422,7 +466,7 @@ export function SelectionPanel() {
             step="1"
             className="w-20 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
             placeholder="Mixed"
-            value={Math.round(Number(commonRotation)) || ""}
+            value={commonRotation !== "" ? Math.round(Number(commonRotation)) : ""}
             onChange={(e) => updateBulkRotation(e.target.value)}
           />
         </div>
@@ -434,14 +478,14 @@ export function SelectionPanel() {
                 type="number"
                 step="1"
                 className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-                value={Math.round(Number(commonX))}
+                value={commonX !== "" ? Math.round(Number(commonX)) : ""}
                 onChange={(e) => updateBulkPosition("x", e.target.value)}
               />
               <input
                 type="number"
                 step="1"
                 className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
-                value={Math.round(Number(commonY))}
+                value={commonY !== "" ? Math.round(Number(commonY)) : ""}
                 onChange={(e) => updateBulkPosition("y", e.target.value)}
               />
             </div>
@@ -468,6 +512,17 @@ export function SelectionPanel() {
             />
           </div>
         </div>
+        {isTextSelection && (
+          <div className="flex flex-col gap-1">
+            <span className="text-zinc-500">Text:</span>
+            <textarea
+              className="w-full bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs min-h-[60px] resize-none"
+              placeholder={commonText === "" ? "Mixed" : "Enter text..."}
+              value={commonText}
+              onChange={(e) => updateBulkText(e.target.value)}
+            />
+          </div>
+        )}
       </div>
       {isShapeSelection && (
         <div className="mt-4 space-y-4">
