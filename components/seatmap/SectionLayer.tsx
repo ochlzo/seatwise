@@ -9,7 +9,7 @@ import {
     updateNode,
     updateNodesPositions,
 } from "@/lib/features/seatmap/seatmapSlice";
-import { SeatmapShapeNode } from "@/lib/seatmap/types";
+import { SeatmapNode, SeatmapShapeNode } from "@/lib/seatmap/types";
 
 const ROTATION_SNAP = 15;
 const MIN_SIZE = 10;
@@ -62,6 +62,8 @@ const ShapeItem = React.memo(({
     onMultiDragMove,
     onMultiDragEnd,
     selectionCount,
+    nodes,
+    onSnap,
 }: {
     shape: SeatmapShapeNode;
     isSelected: boolean;
@@ -74,6 +76,8 @@ const ShapeItem = React.memo(({
     onMultiDragMove?: (id: string, pos: { x: number; y: number }) => boolean;
     onMultiDragEnd?: (id: string, pos: { x: number; y: number }) => boolean;
     selectionCount: number;
+    nodes: Record<string, SeatmapNode>;
+    onSnap: (lines: { x: number | null; y: number | null }) => void;
 }) => {
     const shapeRef = React.useRef<any>(null);
     const transformerRef = React.useRef<any>(null);
@@ -155,14 +159,37 @@ const ShapeItem = React.memo(({
             }
             pendingPosRef.current = null;
             if (!handled) {
+                let nextPos = { x: e.target.x(), y: e.target.y() };
+                let bestSnapX: number | null = null;
+                let bestSnapY: number | null = null;
+                const SNAP_THRESHOLD = 8;
+
+                (Object.values(nodes) as SeatmapNode[]).forEach((node) => {
+                    if (node.id === shape.id) return;
+                    if (!("position" in node)) return;
+
+                    if (Math.abs(nextPos.x - node.position.x) < SNAP_THRESHOLD) {
+                        nextPos.x = node.position.x;
+                        bestSnapX = node.position.x;
+                    }
+                    if (Math.abs(nextPos.y - node.position.y) < SNAP_THRESHOLD) {
+                        nextPos.y = node.position.y;
+                        bestSnapY = node.position.y;
+                    }
+                });
+
+                e.target.position(nextPos);
+                onSnap({ x: bestSnapX, y: bestSnapY });
+
                 onChange(
                     shape.id,
                     {
-                        position: { x: e.target.x(), y: e.target.y() },
+                        position: nextPos,
                     },
                     true,
                 );
             }
+            onSnap({ x: null, y: null });
             if (onDragEnd) onDragEnd();
         },
         onDragMove: (e: any) => {
@@ -173,7 +200,30 @@ const ShapeItem = React.memo(({
                 })
                 : false;
             if (handled) return;
-            pendingPosRef.current = { x: e.target.x(), y: e.target.y() };
+
+            let nextPos = { x: e.target.x(), y: e.target.y() };
+            let bestSnapX: number | null = null;
+            let bestSnapY: number | null = null;
+            const SNAP_THRESHOLD = 8;
+
+            (Object.values(nodes) as SeatmapNode[]).forEach((node) => {
+                if (node.id === shape.id) return;
+                if (!("position" in node)) return;
+
+                if (Math.abs(nextPos.x - node.position.x) < SNAP_THRESHOLD) {
+                    nextPos.x = node.position.x;
+                    bestSnapX = node.position.x;
+                }
+                if (Math.abs(nextPos.y - node.position.y) < SNAP_THRESHOLD) {
+                    nextPos.y = node.position.y;
+                    bestSnapY = node.position.y;
+                }
+            });
+
+            e.target.position(nextPos);
+            onSnap({ x: bestSnapX, y: bestSnapY });
+
+            pendingPosRef.current = nextPos;
             if (rafRef.current === null) {
                 rafRef.current = requestAnimationFrame(flushDragPosition);
             }
@@ -535,10 +585,12 @@ export default function SectionLayer({
     onNodeDragStart,
     onNodeDragEnd,
     stageRef,
+    onSnap,
 }: {
     onNodeDragStart?: () => void;
     onNodeDragEnd?: () => void;
     stageRef?: React.RefObject<any>;
+    onSnap: (lines: { x: number | null; y: number | null }) => void;
 }) {
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
@@ -606,8 +658,31 @@ export default function SectionLayer({
         if (!state.active || state.draggedId !== id) return false;
         const origin = state.startPositions[id];
         if (!origin) return false;
-        const dx = pos.x - origin.x;
-        const dy = pos.y - origin.y;
+        let dx = pos.x - origin.x;
+        let dy = pos.y - origin.y;
+
+        let bestSnapX: number | null = null;
+        let bestSnapY: number | null = null;
+        const SNAP_THRESHOLD = 8;
+        const currentPos = { x: origin.x + dx, y: origin.y + dy };
+
+        // 1. Alignment Snapping
+        (Object.values(nodes) as SeatmapNode[]).forEach((node) => {
+            if (selectedIds.includes(node.id)) return;
+            if (!("position" in node)) return;
+
+            if (Math.abs(currentPos.x - node.position.x) < SNAP_THRESHOLD) {
+                dx = node.position.x - origin.x;
+                bestSnapX = node.position.x;
+            }
+            if (Math.abs(currentPos.y - node.position.y) < SNAP_THRESHOLD) {
+                dy = node.position.y - origin.y;
+                bestSnapY = node.position.y;
+            }
+        });
+
+        onSnap({ x: bestSnapX, y: bestSnapY });
+
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -703,6 +778,8 @@ export default function SectionLayer({
                         endMultiDrag(id, pos)
                     }
                     selectionCount={selectionCount}
+                    nodes={nodes}
+                    onSnap={onSnap}
                 />
             ))}
         </Group>

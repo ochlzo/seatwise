@@ -14,9 +14,11 @@ import { GuidePathNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 
 type GuidePathLayerProps = {
   stageRef?: React.RefObject<any>;
+  snapLines: { x: number | null; y: number | null };
+  onSnap: (lines: { x: number | null; y: number | null }) => void;
 };
 
-export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
+export default function GuidePathLayer({ stageRef, snapLines, onSnap }: GuidePathLayerProps) {
   const dispatch = useAppDispatch();
   const nodes = useAppSelector((state) => state.seatmap.nodes);
   const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
@@ -29,10 +31,6 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
   const endpointOffsetsRef = React.useRef<
     Record<string, Record<string, { t: number; distance: number }>>
   >({});
-  const [snapLines, setSnapLines] = React.useState<{
-    x: number | null;
-    y: number | null;
-  }>({ x: null, y: null });
 
   if (!showGuidePaths) return null;
 
@@ -159,27 +157,40 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
       otherEndpoints.push({ x: gpts[gLastIdx], y: gpts[gLastIdx + 1] });
     });
 
+    let minDiffX = SNAP_THRESHOLD;
+    let minDiffY = SNAP_THRESHOLD;
+
     otherEndpoints.forEach((ep) => {
-      // Snap X (check start and end)
-      if (Math.abs(start.x - ep.x) < SNAP_THRESHOLD) {
+      // Check X snaps
+      const dStartX = Math.abs(start.x - ep.x);
+      if (dStartX < minDiffX) {
+        minDiffX = dStartX;
         dx = ep.x - pts[0];
         bestSnapX = ep.x;
-      } else if (Math.abs(end.x - ep.x) < SNAP_THRESHOLD) {
+      }
+      const dEndX = Math.abs(end.x - ep.x);
+      if (dEndX < minDiffX) {
+        minDiffX = dEndX;
         dx = ep.x - pts[lastIdx];
         bestSnapX = ep.x;
       }
 
-      // Snap Y (check start and end)
-      if (Math.abs(start.y - ep.y) < SNAP_THRESHOLD) {
+      // Check Y snaps
+      const dStartY = Math.abs(start.y - ep.y);
+      if (dStartY < minDiffY) {
+        minDiffY = dStartY;
         dy = ep.y - pts[1];
         bestSnapY = ep.y;
-      } else if (Math.abs(end.y - ep.y) < SNAP_THRESHOLD) {
+      }
+      const dEndY = Math.abs(end.y - ep.y);
+      if (dEndY < minDiffY) {
+        minDiffY = dEndY;
         dy = ep.y - pts[lastIdx + 1];
         bestSnapY = ep.y;
       }
     });
 
-    setSnapLines({ x: bestSnapX, y: bestSnapY });
+    onSnap({ x: bestSnapX, y: bestSnapY });
 
     const nextPoints = guide.points.map((value, index) =>
       index % 2 === 0 ? value + dx : value + dy,
@@ -229,7 +240,7 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
     );
 
     delete dragStateRef.current[guideId];
-    setSnapLines({ x: null, y: null });
+    onSnap({ x: null, y: null });
   };
 
   const updateEndpoint = (
@@ -256,12 +267,19 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
       otherEndpoints.push({ x: pts[lastIdx], y: pts[lastIdx + 1] });
     });
 
+    let minDiffX = SNAP_THRESHOLD;
+    let minDiffY = SNAP_THRESHOLD;
+
     otherEndpoints.forEach((ep) => {
-      if (Math.abs(snapped.x - ep.x) < SNAP_THRESHOLD) {
+      const dX = Math.abs(snapped.x - ep.x);
+      if (dX < minDiffX) {
+        minDiffX = dX;
         snapped.x = ep.x;
         bestSnapX = ep.x;
       }
-      if (Math.abs(snapped.y - ep.y) < SNAP_THRESHOLD) {
+      const dY = Math.abs(snapped.y - ep.y);
+      if (dY < minDiffY) {
+        minDiffY = dY;
         snapped.y = ep.y;
         bestSnapY = ep.y;
       }
@@ -298,7 +316,7 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
       }
     }
 
-    setSnapLines({ x: bestSnapX, y: bestSnapY });
+    onSnap({ x: bestSnapX, y: bestSnapY });
 
     const points = [...guide.points];
     points[index] = snapped.x;
@@ -420,7 +438,7 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
                     e.target.position({ x: 0, y: 0 });
                     updateEndpoint(guide, 0, next, true, e.evt?.shiftKey);
                     delete endpointOffsetsRef.current[guide.id];
-                    setSnapLines({ x: null, y: null });
+                    onSnap({ x: null, y: null });
                   }}
                 />
                 <Circle
@@ -450,7 +468,7 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
                     e.target.position({ x: 0, y: 0 });
                     updateEndpoint(guide, endIndex, next, true, e.evt?.shiftKey);
                     delete endpointOffsetsRef.current[guide.id];
-                    setSnapLines({ x: null, y: null });
+                    onSnap({ x: null, y: null });
                   }}
                 />
               </>
@@ -458,28 +476,6 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
           </Group>
         );
       })}
-
-      {/* Snap Lines Rendering */}
-      {snapLines.x !== null && (
-        <Line
-          points={[snapLines.x, -10000, snapLines.x, 10000]}
-          stroke="#3b82f6"
-          strokeWidth={1}
-          dash={[4, 4]}
-          opacity={0.5}
-          listening={false}
-        />
-      )}
-      {snapLines.y !== null && (
-        <Line
-          points={[-10000, snapLines.y, 10000, snapLines.y]}
-          stroke="#3b82f6"
-          strokeWidth={1}
-          dash={[4, 4]}
-          opacity={0.5}
-          listening={false}
-        />
-      )}
     </Group>
   );
 }
