@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { SeatmapNode, SeatmapSeatNode, SeatmapShapeNode, SeatmapViewport } from "@/lib/seatmap/types";
+import { SeatCategory, SeatmapNode, SeatmapSeatNode, SeatmapShapeNode, SeatmapViewport } from "@/lib/seatmap/types";
 import { v4 as uuidv4 } from "uuid";
 
 interface SeatmapState {
@@ -25,6 +25,7 @@ interface SeatmapState {
     };
     zoomLocked: boolean;
     snapSpacing: number;
+    categories: SeatCategory[];
 }
 
 const initialState: SeatmapState = {
@@ -40,6 +41,7 @@ const initialState: SeatmapState = {
     history: { past: [], future: [] },
     zoomLocked: false,
     snapSpacing: 8,
+    categories: [],
 };
 
 const HISTORY_LIMIT = 15;
@@ -103,9 +105,12 @@ const seatmapSlice = createSlice({
         setSnapSpacing: (state, action: PayloadAction<number>) => {
             state.snapSpacing = action.payload;
         },
+        updateCategories: (state, action: PayloadAction<SeatCategory[]>) => {
+            state.categories = action.payload;
+        },
         addSeat: (
             state,
-            action: PayloadAction<{ x: number; y: number; seatType?: "standard" | "vip" }>
+            action: PayloadAction<{ x: number; y: number }>
         ) => {
             pushHistory(state);
             const id = uuidv4();
@@ -117,7 +122,7 @@ const seatmapSlice = createSlice({
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
-                seatType: action.payload.seatType ?? "standard",
+                seatType: "standard",
             };
             state.nodes[id] = newSeat;
         },
@@ -489,6 +494,7 @@ export const {
     redo,
     toggleZoomLock,
     setSnapSpacing,
+    updateCategories,
 } = seatmapSlice.actions;
 
 export default seatmapSlice.reducer;

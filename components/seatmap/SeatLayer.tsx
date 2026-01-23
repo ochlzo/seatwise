@@ -19,13 +19,17 @@ import {
 } from "@/lib/seatmap/geometry";
 import { GuidePathNode, SeatmapNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 
-const SEAT_IMAGE_URL = "/seat-default.svg";
-const SEAT_SELECTED_IMAGE_URL = "/seat-selected.svg";
-const VIP_SEAT_IMAGE_URL = "/default-vip-seat.svg";
-const VIP_SEAT_SELECTED_IMAGE_URL = "/selected-vip-seat.svg";
 const ROTATION_SNAP = 15;
 const MIN_SIZE = 16;
 const MAX_SIZE = 320;
+
+const COLOR_TO_SVG: Record<string, string> = {
+    "#ffd700": "/vip-seat-1.svg",
+    "#e005b9": "/vip-seat-2.svg",
+    "#111184": "/vip-seat-3.svg",
+    "#800020": "/vip-seat-4.svg",
+    "#046307": "/vip-seat-5.svg",
+};
 
 const SeatItem = React.memo(({
     seat,
@@ -44,12 +48,17 @@ const SeatItem = React.memo(({
     nodes,
     selectionCount,
     snapSpacing,
+    categories,
 }: any) => {
-    const seatType = seat.seatType ?? "standard";
-    const imageUrl =
-        seatType === "vip"
-            ? (isSelected ? VIP_SEAT_SELECTED_IMAGE_URL : VIP_SEAT_IMAGE_URL)
-            : (isSelected ? SEAT_SELECTED_IMAGE_URL : SEAT_IMAGE_URL);
+    let imageUrl = isSelected ? "/seat-selected.svg" : "/seat-default.svg";
+
+    if (seat.categoryId) {
+        const category = categories.find((c: any) => c.id === seat.categoryId);
+        if (category && COLOR_TO_SVG[category.color]) {
+            imageUrl = COLOR_TO_SVG[category.color];
+        }
+    }
+
     const [image] = useImage(imageUrl);
     const groupRef = React.useRef<any>(null);
     const transformerRef = React.useRef<any>(null);
@@ -280,7 +289,8 @@ const SeatItem = React.memo(({
         prev.selectionCount === next.selectionCount &&
         prev.isShiftDown === next.isShiftDown &&
         prev.showGuidePaths === next.showGuidePaths &&
-        prev.guidePaths.length === next.guidePaths.length
+        prev.guidePaths.length === next.guidePaths.length &&
+        prev.categories === next.categories
     );
 });
 
@@ -306,6 +316,7 @@ export default function SeatLayer({
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
     const showGuidePaths = useAppSelector((state) => state.seatmap.showGuidePaths);
+    const categories = useAppSelector((state) => state.seatmap.categories || []);
     const selectionCount = selectedIds.length;
     const dispatch = useAppDispatch();
     const [isShiftDown, setIsShiftDown] = React.useState(false);
@@ -520,6 +531,7 @@ export default function SeatLayer({
                     onSnap={onSnap}
                     nodes={nodes}
                     snapSpacing={snapSpacing}
+                    categories={categories}
                 />
             ))}
         </Group>
