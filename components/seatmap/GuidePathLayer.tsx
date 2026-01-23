@@ -29,6 +29,10 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
   const endpointOffsetsRef = React.useRef<
     Record<string, Record<string, { t: number; distance: number }>>
   >({});
+  const [snapLines, setSnapLines] = React.useState<{
+    x: number | null;
+    y: number | null;
+  }>({ x: null, y: null });
 
   if (!showGuidePaths) return null;
 
@@ -190,7 +194,35 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
     history: boolean,
     shiftKey?: boolean,
   ) => {
-    let snapped = next;
+    let snapped = { ...next };
+
+    const SNAP_THRESHOLD = 8;
+    let bestSnapX: number | null = null;
+    let bestSnapY: number | null = null;
+
+    // 1. Alignment Snapping to other guide endpoints
+    const otherEndpoints: { x: number; y: number }[] = [];
+    guides.forEach((g) => {
+      if (g.id === guide.id) return;
+      const pts = g.points;
+      if (pts.length < 4) return;
+      otherEndpoints.push({ x: pts[0], y: pts[1] });
+      const lastIdx = pts.length - 2;
+      otherEndpoints.push({ x: pts[lastIdx], y: pts[lastIdx + 1] });
+    });
+
+    otherEndpoints.forEach((ep) => {
+      if (Math.abs(snapped.x - ep.x) < SNAP_THRESHOLD) {
+        snapped.x = ep.x;
+        bestSnapX = ep.x;
+      }
+      if (Math.abs(snapped.y - ep.y) < SNAP_THRESHOLD) {
+        snapped.y = ep.y;
+        bestSnapY = ep.y;
+      }
+    });
+
+    // 2. Shift key snap (angle locking) - can override alignment if user is really forcing an angle
     if (shiftKey) {
       const otherIndex =
         index === 0
@@ -204,8 +236,8 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
         y: guide.points[otherIndex + 1],
       };
 
-      const dx = next.x - other.x;
-      const dy = next.y - other.y;
+      const dx = snapped.x - other.x;
+      const dy = snapped.y - other.y;
       const length = Math.hypot(dx, dy);
 
       if (length > 0) {
@@ -216,8 +248,12 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
           x: other.x + Math.cos(snappedAngle) * length,
           y: other.y + Math.sin(snappedAngle) * length,
         };
+        // Re-calculate snaps if shift snapped? 
+        // Usually shift is higher priority, but if shift snap aligns with x/y, we can still show lines if they match.
       }
     }
+
+    setSnapLines({ x: bestSnapX, y: bestSnapY });
 
     const points = [...guide.points];
     points[index] = snapped.x;
@@ -339,6 +375,7 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
                     e.target.position({ x: 0, y: 0 });
                     updateEndpoint(guide, 0, next, true, e.evt?.shiftKey);
                     delete endpointOffsetsRef.current[guide.id];
+                    setSnapLines({ x: null, y: null });
                   }}
                 />
                 <Circle
@@ -368,6 +405,7 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
                     e.target.position({ x: 0, y: 0 });
                     updateEndpoint(guide, endIndex, next, true, e.evt?.shiftKey);
                     delete endpointOffsetsRef.current[guide.id];
+                    setSnapLines({ x: null, y: null });
                   }}
                 />
               </>
@@ -375,6 +413,28 @@ export default function GuidePathLayer({ stageRef }: GuidePathLayerProps) {
           </Group>
         );
       })}
+
+      {/* Snap Lines Rendering */}
+      {snapLines.x !== null && (
+        <Line
+          points={[snapLines.x, -10000, snapLines.x, 10000]}
+          stroke="#3b82f6"
+          strokeWidth={1}
+          dash={[4, 4]}
+          opacity={0.5}
+          listening={false}
+        />
+      )}
+      {snapLines.y !== null && (
+        <Line
+          points={[-10000, snapLines.y, 10000, snapLines.y]}
+          stroke="#3b82f6"
+          strokeWidth={1}
+          dash={[4, 4]}
+          opacity={0.5}
+          listening={false}
+        />
+      )}
     </Group>
   );
 }
