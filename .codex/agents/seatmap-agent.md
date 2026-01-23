@@ -17,18 +17,31 @@
 - Circle/polygon radius uses min(width,height)/2; center at drag midpoint.
 - Text shape is placed on click (no drag sizing) with default styling.
 
-## Seat Types
+## Seat Types & Categories
 - `seatType` added to seat nodes: `"standard"` (default) or `"vip"`.
 - Sidebar has Standard Seat and VIP Seat drag tiles.
-- Seat rendering swaps SVGs based on type and selection:
-  - Standard: `/seat-default.svg`, `/seat-selected.svg`
-  - VIP: `/default-vip-seat.svg`, `/selected-vip-seat.svg`
+- **Seat Categories**: Added support for up to 5 custom seat categories (name + color).
+- Sidebar integration for managing categories with a fixed color palette.
+- Dynamic SVG swap based on category color mapping:
+  - `#ffd700` -> `/vip-seat-1.svg`
+  - `#e005b9` -> `/vip-seat-2.svg`
+  - `#111184` -> `/vip-seat-3.svg`
+  - `#800020` -> `/vip-seat-4.svg`
+  - `#046307` -> `/vip-seat-5.svg`
+- Category assignment panel in Selection Panel with active state highlighting.
+
+## Seat Labeling & Numbering
+- Added `rowLabel` (uppercase string) and `seatNumber` (integer) to seat nodes.
+- Labels rendered directly on seat icons using Konva `Text` components.
+- **Counter-Rotation**: Labels remain upright regardless of seat rotation for readability.
+- **Contrast Logic**: Text color automatically switches between black and white based on the seat's background/category color.
+- **Bulk Range Assignment**: Sequential numbering for multiple selected seats starting from a user-defined value.
+- **Validation**: Inputs allow clearing values (sets to `undefined`) to remove labels from specific seats.
 
 ## Selection Panel
 - Shows scale values (scaleX / scaleY).
-- Shows scale values (scaleX / scaleY).
 - Shape color palette split into Stroke Color and Fill Color pickers.
-  - Lines only use stroke; fill picker hidden for lines.
+- Lines only use stroke; fill picker hidden for lines.
 - Text shapes have a text input + font size control.
 - Dashed stroke toggle (checkbox) added for shapes.
 - Text shapes include transparent stroke/fill options.
@@ -46,14 +59,17 @@
 - Group rotation: default orbits around selection; Alt rotates in place; Shift snapping still applies.
 - Group multi-drag moves all selected nodes together with one history entry.
 
-## Seatmap Layout
+## Seatmap Layout & Performance
 - Seatmap layout now uses shadcn `SidebarProvider` + `SidebarInset`.
 - Seat palette moved into `SeatMapSidebar` (non-gutter offcanvas collapse).
 - New non-sticky `SeatmapPageHeader` mirrors `PageHeader` without `StickyHeader`.
 - Hexagon palette icon replaced with an SVG polygon for correct display.
+- **Konva Performance**: Consolidated the Stage tree into a single `Layer`, with `SeatLayer` and `SectionLayer` rendering `Group` wrappers instead of nested layers to reduce the layer count warning.
 
-## Konva Performance
-- Consolidated the Stage tree into a single `Layer`, with `SeatLayer` and `SectionLayer` rendering `Group` wrappers instead of nested layers to reduce the layer count warning.
+## Bug Fixes & Stability
+- **Vercel Build**: Updated `addSeat` reducer and `SeatmapSeatNode` types to explicitly handle `seatType: "vip" | "standard"`, resolving production compilation errors.
+- **Selection Consistency**: Fixed "Rules of Hooks" violation in `SelectionPanel` by stabilizing state hooks for range assignments.
+- **State Persistence**: Bulk update helpers (`updateBulkSeatInfo`) updated to support clearing properties by using the `in` operator to check for key existence rather than value check.
 
 ## Files Touched (Seatmap)
 - `components/seatmap/SeatmapCanvas.tsx`
@@ -64,4 +80,6 @@
 - `components/seatmap/seatmap-page-header.tsx`
 - `lib/features/seatmap/seatmapSlice.ts`
 - `lib/seatmap/types.ts`
+- `lib/seatmap/geometry.ts`
+- `app/(admin-user)/seat-builder/page.tsx`
 - `app/test/page.tsx`
