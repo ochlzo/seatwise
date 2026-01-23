@@ -56,9 +56,15 @@ export type SeatmapSeatNode = SeatmapNodeBase & {
   rowLabel?: string;
   seatNumber?: number;
   status: SeatStatus;
-  priceTierId?: string;
-  seatType?: "standard" | "vip";
+  seatType?: "standard";
   snapGuideId?: string;
+  categoryId?: string;
+};
+
+export type SeatCategory = {
+  id: string;
+  name: string;
+  color: string;
 };
 
 export type SeatmapRowNode = SeatmapNodeBase & {
@@ -155,4 +161,7 @@ export type SeatmapState = {
   viewport: SeatmapViewport;
   grid: SeatmapGrid;
   metadata?: SeatmapMetadata;
+  categories: SeatCategory[];
+  zoomLocked: boolean;
+  snapSpacing: number;
 };

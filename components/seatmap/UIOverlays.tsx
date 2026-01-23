@@ -42,24 +42,6 @@ export function Sidebar() {
           </div>
           <span className="text-sm font-medium">Standard Seat</span>
         </div>
-        <div
-          className="p-4 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData("type", "seat");
-            e.dataTransfer.setData("seatType", "vip");
-            e.dataTransfer.effectAllowed = "copy";
-          }}
-        >
-          <div className="w-12 h-12 relative flex items-center justify-center">
-            <img
-              src="/default-vip-seat.svg"
-              alt="VIP Seat"
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <span className="text-sm font-medium">VIP Seat</span>
-        </div>
 
         <div className="text-sm text-zinc-500 mb-2 mt-4">Shapes</div>
         <div className="grid grid-cols-2 gap-2">
@@ -306,6 +288,7 @@ export function SelectionPanel() {
   const dispatch = useAppDispatch();
   const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
   const nodes = useAppSelector((state) => state.seatmap.nodes);
+  const categories = useAppSelector((state) => state.seatmap.categories);
 
   if (selectedIds.length === 0) return null;
 
@@ -422,6 +405,7 @@ export function SelectionPanel() {
 
   const isShapeSelection = selectedIds.every(id => nodes[id]?.type === 'shape');
   const isTextSelection = selectedIds.every(id => nodes[id]?.type === 'shape' && (nodes[id] as any).shape === 'text');
+  const isSeatSelection = selectedIds.some(id => nodes[id]?.type === 'seat');
 
   const commonRotation = getCommonValue("rotation");
   const commonX = getCommonValue("position", "x");
@@ -429,6 +413,20 @@ export function SelectionPanel() {
   const commonScaleX = getCommonValue("scaleX");
   const commonScaleY = getCommonValue("scaleY");
   const commonText = getCommonValue("text");
+  const commonCategoryId = getCommonValue("categoryId");
+
+  const updateBulkCategoryId = (categoryId: string | null) => {
+    const changes: Record<string, any> = {};
+    selectedIds.forEach((id) => {
+      const node = nodes[id];
+      if (node && node.type === 'seat') {
+        changes[id] = { categoryId: categoryId || undefined };
+      }
+    });
+    if (Object.keys(changes).length) {
+      dispatch(updateNodes({ changes }));
+    }
+  };
 
   const updateBulkText = (text: string) => {
     const changes: Record<string, any> = {};
@@ -524,6 +522,29 @@ export function SelectionPanel() {
           </div>
         )}
       </div>
+      {isSeatSelection && categories.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="text-xs text-zinc-500 mb-2 font-medium">Assign Category</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => updateBulkCategoryId(null)}
+              className={`px-2 py-1 text-[10px] rounded border transition-colors ${!commonCategoryId ? "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900" : "bg-transparent border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-900"}`}
+            >
+              None
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => updateBulkCategoryId(cat.id)}
+                className={`flex items-center gap-1.5 px-2 py-1 text-[10px] rounded border transition-all ${commonCategoryId === cat.id ? "ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-zinc-900" : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"}`}
+              >
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                <span>{cat.name || "Untitled"}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {isShapeSelection && (
         <div className="mt-4 space-y-4">
           <div>

@@ -18,7 +18,10 @@ import {
   setMode,
   setShowGuidePaths,
   setSnapSpacing,
+  updateCategories,
 } from "@/lib/features/seatmap/seatmapSlice";
+import { Plus, Trash2 } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 
 export function SeatMapSidebar({
   ...props
@@ -29,6 +32,7 @@ export function SeatMapSidebar({
   const snapSpacing = useAppSelector((state) => state.seatmap.snapSpacing);
   const viewport = useAppSelector((state) => state.seatmap.viewport);
   const viewportSize = useAppSelector((state) => state.seatmap.viewportSize);
+  const categories = useAppSelector((state) => state.seatmap.categories);
   const [gridRows, setGridRows] = React.useState(3);
   const [gridCols, setGridCols] = React.useState(3);
   const { isMobile, setOpenMobile } = useSidebar();
@@ -67,23 +71,77 @@ export function SeatMapSidebar({
           </div>
           <span className="text-xs font-medium">Standard Seat</span>
         </div>
-        <div
-          className="p-3 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData("type", "seat");
-            e.dataTransfer.setData("seatType", "vip");
-            e.dataTransfer.effectAllowed = "copy";
-          }}
-        >
-          <div className="w-10 h-10 relative flex items-center justify-center">
-            <img
-              src="/default-vip-seat.svg"
-              alt="VIP Seat"
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <span className="text-xs font-medium">VIP Seat</span>
+
+        <div className="text-xs text-zinc-500 mb-2 mt-4">Seat Categories</div>
+        <div className="flex flex-col gap-2">
+          {categories.map((cat, idx) => (
+            <div key={cat.id} className="flex flex-col gap-1 p-2 border border-zinc-200 dark:border-zinc-800 rounded-md bg-zinc-50/50 dark:bg-zinc-900/50">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  className="flex-1 bg-transparent border-b border-zinc-200 dark:border-zinc-800 text-xs py-1 outline-none"
+                  placeholder="Category Name"
+                  value={cat.name}
+                  onChange={(e) => {
+                    const newCats = [...categories];
+                    newCats[idx] = { ...cat, name: e.target.value };
+                    dispatch(updateCategories(newCats));
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const newCats = categories.filter((_, i) => i !== idx);
+                    dispatch(updateCategories(newCats));
+                  }}
+                  className="p-1 hover:text-red-500 transition-colors"
+                  title="Remove Category"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+                {categories.length < 5 && idx === categories.length - 1 && (
+                  <button
+                    onClick={() => {
+                      dispatch(updateCategories([
+                        ...categories,
+                        { id: uuidv4(), name: "", color: "#ffd700" }
+                      ]));
+                    }}
+                    className="p-1 hover:text-blue-500 transition-colors"
+                    title="Add Category"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-1 mt-1">
+                {["#ffd700", "#e005b9", "#111184", "#800020", "#046307"].map((color) => (
+                  <button
+                    key={color}
+                    className={`w-4 h-4 rounded-full border ${cat.color === color ? "border-zinc-900 dark:border-zinc-100 scale-110" : "border-transparent"}`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => {
+                      const newCats = [...categories];
+                      newCats[idx] = { ...cat, color };
+                      dispatch(updateCategories(newCats));
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+          {categories.length === 0 && (
+            <button
+              onClick={() => {
+                dispatch(updateCategories([
+                  { id: uuidv4(), name: "", color: "#ffd700" }
+                ]));
+              }}
+              className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-xs">Add Category</span>
+            </button>
+          )}
         </div>
 
         <div className="text-xs text-zinc-500 mb-2 mt-4">Seat Grid</div>
