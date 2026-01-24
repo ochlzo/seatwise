@@ -32,11 +32,13 @@ import {
   undo,
   redo,
   addGuidePath,
+  fitView,
 } from "@/lib/features/seatmap/seatmapSlice";
 import SeatLayer from "@/components/seatmap/SeatLayer";
 import SectionLayer from "@/components/seatmap/SectionLayer";
 import { getRelativePointerPosition } from "@/lib/seatmap/geometry";
 import GuidePathLayer from "@/components/seatmap/GuidePathLayer";
+import { calculateNodesBounds } from "@/lib/seatmap/view-utils";
 
 export default function SeatmapCanvas() {
   const dispatch = useAppDispatch();
@@ -153,10 +155,72 @@ export default function SeatmapCanvas() {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("blur", handleBlur);
+
+    const handleExportPng = (e: any) => {
+      const stage = stageRef.current;
+      if (!stage) return;
+
+      const { fileName } = e.detail || { fileName: "seatmap.png" };
+
+      // Deselect all for a clean export
+      dispatch(deselectAll());
+
+      // Use a small timeout to ensure transformer is hidden before capture
+      setTimeout(() => {
+        const bounds = calculateNodesBounds(nodes);
+        const padding = 20;
+
+        // If no nodes, just export the current stage view (fallback)
+        const exportOptions: any = {
+          pixelRatio: 3,
+          mimeType: "image/png",
+        };
+
+        if (bounds) {
+          exportOptions.x = bounds.x - padding;
+          exportOptions.y = bounds.y - padding;
+          exportOptions.width = bounds.width + padding * 2;
+          exportOptions.height = bounds.height + padding * 2;
+        }
+
+        // Add white background
+        const background = new (window as any).Konva.Rect({
+          x: (exportOptions.x ?? -10000) - 100,
+          y: (exportOptions.y ?? -10000) - 100,
+          width: (exportOptions.width ?? 20000) + 200,
+          height: (exportOptions.height ?? 20000) + 200,
+          fill: "white",
+          listening: false,
+        });
+
+        const layer = stage.getLayers()[0];
+        layer.add(background);
+        background.moveToBottom();
+
+        const dataURL = stage.toDataURL(exportOptions);
+
+        // Cleanup background
+        background.destroy();
+
+        const link = document.createElement("a");
+        link.download = fileName;
+        link.href = dataURL;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Dispatch success toast via a second event or just rely on the component
+        window.dispatchEvent(new CustomEvent("seatmap-export-success", { detail: { type: "png" } }));
+      }, 50);
+    };
+
+    window.addEventListener("seatmap-export-png" as any, handleExportPng);
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("seatmap-export-png" as any, handleExportPng);
     };
   }, []);
 
@@ -281,28 +345,9 @@ export default function SeatmapCanvas() {
 
   // Center view on load
   useEffect(() => {
-    // Only center if we have actual dimensions (default is 800x600)
-    // and we haven't touched the viewport yet (scale is 1, position is 0,0) - optional check
-    // For this request, we just want to force center on mount when dimensions are ready
-
+    // Only center if we have actual dimensions
     if (dimensions.width !== 800 || dimensions.height !== 600) {
-      // Content center approximation
-      // X center is 0. Y center is around 200 (sections) to 400 (stage).
-      // Let's aim for the section center ~200.
-      const contentCenterX = 0;
-      const contentCenterY = 200;
-
-      const initialScale = 0.8; // Zoom out a bit to see everything
-
-      const newX = dimensions.width / 2 - contentCenterX * initialScale;
-      const newY = dimensions.height / 2 - contentCenterY * initialScale;
-
-      dispatch(
-        setViewport({
-          position: { x: newX, y: newY },
-          scale: initialScale,
-        }),
-      );
+      dispatch(fitView());
     }
   }, [dimensions, dispatch]);
 
