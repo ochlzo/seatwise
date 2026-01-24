@@ -19,6 +19,14 @@ interface UploadProgressProps {
   totalProgress: number;
   files: { name: string; size: number }[];
   onDone?: () => void;
+  title?: {
+    loading: string;
+    success: string;
+  };
+  description?: {
+    loading: string;
+    success: string;
+  };
 }
 
 export function UploadProgress({
@@ -26,6 +34,14 @@ export function UploadProgress({
   totalProgress,
   files,
   onDone,
+  title = {
+    loading: "Uploading Assets",
+    success: "Success!",
+  },
+  description = {
+    loading: "Please keep this window open until we finish.",
+    success: "Your assets have been updated successfully.",
+  },
 }: UploadProgressProps) {
   const isComplete = totalProgress === 100;
 
@@ -59,12 +75,10 @@ export function UploadProgress({
             )}
             <div>
               <DialogTitle className="text-lg font-bold font-brand">
-                {isComplete ? "Success!" : "Uploading Assets"}
+                {isComplete ? title.success : title.loading}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                {isComplete
-                  ? "Your profile has been updated successfully."
-                  : "Please keep this window open until we finish."}
+                {isComplete ? description.success : description.loading}
               </DialogDescription>
             </div>
           </div>
