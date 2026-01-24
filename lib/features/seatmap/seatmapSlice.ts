@@ -113,6 +113,18 @@ const seatmapSlice = createSlice({
         setTitle: (state, action: PayloadAction<string>) => {
             state.title = action.payload;
         },
+        loadSeatmap: (state, action: PayloadAction<Partial<SeatmapState>>) => {
+            const data = action.payload;
+            if (data.title !== undefined) state.title = data.title;
+            if (data.nodes !== undefined) state.nodes = data.nodes;
+            if (data.categories !== undefined) state.categories = data.categories;
+            if (data.viewport !== undefined) state.viewport = data.viewport;
+            if (data.snapSpacing !== undefined) state.snapSpacing = data.snapSpacing;
+            // Clear history and selection on load
+            state.selectedIds = [];
+            state.history.past = [];
+            state.history.future = [];
+        },
         addSeat: (
             state,
             action: PayloadAction<{ x: number; y: number; seatType?: "standard" | "vip" }>
@@ -501,6 +513,7 @@ export const {
     setSnapSpacing,
     updateCategories,
     setTitle,
+    loadSeatmap,
 } = seatmapSlice.actions;
 
 export default seatmapSlice.reducer;

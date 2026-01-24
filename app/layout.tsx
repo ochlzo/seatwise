@@ -42,7 +42,7 @@ export default function RootLayout({
             <SmoothScroll>
               {children}
             </SmoothScroll>
-            <Toaster />
+            <Toaster position="top-center" />
           </ThemeProvider>
         </StoreProvider>
       </body>
