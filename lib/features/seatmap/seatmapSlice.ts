@@ -26,6 +26,7 @@ interface SeatmapState {
     zoomLocked: boolean;
     snapSpacing: number;
     categories: SeatCategory[];
+    title: string;
 }
 
 const initialState: SeatmapState = {
@@ -42,6 +43,7 @@ const initialState: SeatmapState = {
     zoomLocked: false,
     snapSpacing: 8,
     categories: [],
+    title: "Untitled Seatmap Prototype",
 };
 
 const HISTORY_LIMIT = 15;
@@ -107,6 +109,9 @@ const seatmapSlice = createSlice({
         },
         updateCategories: (state, action: PayloadAction<SeatCategory[]>) => {
             state.categories = action.payload;
+        },
+        setTitle: (state, action: PayloadAction<string>) => {
+            state.title = action.payload;
         },
         addSeat: (
             state,
@@ -495,6 +500,7 @@ export const {
     toggleZoomLock,
     setSnapSpacing,
     updateCategories,
+    setTitle,
 } = seatmapSlice.actions;
 
 export default seatmapSlice.reducer;
