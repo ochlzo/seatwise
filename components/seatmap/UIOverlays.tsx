@@ -6,9 +6,9 @@ import {
   setMode,
   setViewport,
   setDrawShape,
-  updateNode,
   updateNodes,
   toggleZoomLock,
+  fitView,
 } from "@/lib/features/seatmap/seatmapSlice";
 import { LocateFixed, Move, MousePointer2, Pencil, Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -178,104 +178,7 @@ export function Toolbar() {
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => {
-          const items = Object.values(nodes);
-          if (items.length === 0) {
-            dispatch(setViewport({ position: { x: 0, y: 0 }, scale: 1 }));
-            return;
-          }
-
-          let minX = Infinity;
-          let minY = Infinity;
-          let maxX = -Infinity;
-          let maxY = -Infinity;
-
-          const expand = (
-            x: number,
-            y: number,
-            halfW: number,
-            halfH: number,
-          ) => {
-            minX = Math.min(minX, x - halfW);
-            maxX = Math.max(maxX, x + halfW);
-            minY = Math.min(minY, y - halfH);
-            maxY = Math.max(maxY, y + halfH);
-          };
-
-          items.forEach((node: any) => {
-            const sx = node.scaleX ?? 1;
-            const sy = node.scaleY ?? 1;
-
-            if (node.type === "seat") {
-              expand(node.position.x, node.position.y, 16 * sx, 16 * sy);
-              return;
-            }
-
-            if (node.type !== "shape") return;
-
-            if (node.shape === "rect" || node.shape === "stairs") {
-              const w = (node.width ?? 0) * sx;
-              const h = (node.height ?? 0) * sy;
-              expand(node.position.x, node.position.y, w / 2, h / 2);
-              return;
-            }
-            if (node.shape === "text") {
-              const w = (node.width ?? 0) * sx;
-              const h = (node.height ?? 0) * sy;
-              expand(node.position.x, node.position.y, w / 2, h / 2);
-              return;
-            }
-
-            if (node.shape === "circle" || node.shape === "polygon") {
-              const r = (node.radius ?? 0) * Math.max(sx, sy);
-              expand(node.position.x, node.position.y, r, r);
-              return;
-            }
-
-            if (node.shape === "line") {
-              const points = Array.isArray(node.points)
-                ? node.points
-                : [0, 0, 0, 0];
-              let pMinX = Infinity;
-              let pMinY = Infinity;
-              let pMaxX = -Infinity;
-              let pMaxY = -Infinity;
-              for (let i = 0; i < points.length; i += 2) {
-                const px = points[i] * sx;
-                const py = points[i + 1] * sy;
-                pMinX = Math.min(pMinX, px);
-                pMaxX = Math.max(pMaxX, px);
-                pMinY = Math.min(pMinY, py);
-                pMaxY = Math.max(pMaxY, py);
-              }
-              minX = Math.min(minX, node.position.x + pMinX);
-              maxX = Math.max(maxX, node.position.x + pMaxX);
-              minY = Math.min(minY, node.position.y + pMinY);
-              maxY = Math.max(maxY, node.position.y + pMaxY);
-            }
-          });
-
-          if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
-            dispatch(setViewport({ position: { x: 0, y: 0 }, scale: 1 }));
-            return;
-          }
-
-          const boundsW = Math.max(1, maxX - minX);
-          const boundsH = Math.max(1, maxY - minY);
-          const padding = 40;
-          const viewW = Math.max(1, viewportSize.width - padding * 2);
-          const viewH = Math.max(1, viewportSize.height - padding * 2);
-          const scale = Math.min(viewW / boundsW, viewH / boundsH);
-          const centerX = minX + boundsW / 2;
-          const centerY = minY + boundsH / 2;
-
-          const newPos = {
-            x: viewportSize.width / 2 - centerX * scale,
-            y: viewportSize.height / 2 - centerY * scale,
-          };
-
-          dispatch(setViewport({ position: newPos, scale }));
-        }}
+        onClick={() => dispatch(fitView())}
         title="Reset View"
       >
         <LocateFixed className="w-4 h-4" />

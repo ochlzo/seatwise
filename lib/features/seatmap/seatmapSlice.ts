@@ -46,6 +46,8 @@ const initialState: SeatmapState = {
     title: "Untitled Seatmap Prototype",
 };
 
+import { calculateFitViewport } from "@/lib/seatmap/view-utils";
+
 const HISTORY_LIMIT = 15;
 
 const snapshotState = (state: SeatmapState) => ({
@@ -124,6 +126,9 @@ const seatmapSlice = createSlice({
             state.selectedIds = [];
             state.history.past = [];
             state.history.future = [];
+        },
+        fitView(state) {
+            state.viewport = calculateFitViewport(state.nodes, state.viewportSize);
         },
         addSeat: (
             state,
@@ -514,6 +519,7 @@ export const {
     updateCategories,
     setTitle,
     loadSeatmap,
+    fitView,
 } = seatmapSlice.actions;
 
 export default seatmapSlice.reducer;

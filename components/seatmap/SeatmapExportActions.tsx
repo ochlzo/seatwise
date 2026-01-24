@@ -5,7 +5,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Download, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { loadSeatmap } from "@/lib/features/seatmap/seatmapSlice";
+import { loadSeatmap, fitView } from "@/lib/features/seatmap/seatmapSlice";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import {
     Dialog,
@@ -15,7 +15,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { AlertTriangle, ChevronDown, FileCode, FileImage } from "lucide-react";
+import { calculateFitViewport } from "@/lib/seatmap/view-utils";
 
 export function SeatmapExportActions() {
     const dispatch = useAppDispatch();
@@ -28,6 +35,17 @@ export function SeatmapExportActions() {
 
     const [isOverwriteDialogOpen, setIsOverwriteDialogOpen] = React.useState(false);
     const [pendingFile, setPendingFile] = React.useState<File | null>(null);
+
+    // Listen for PNG export completion from Canvas
+    React.useEffect(() => {
+        const handleSuccess = (e: any) => {
+            if (e.detail?.type === "png") {
+                setProgress(100); // Complete the progress bar
+            }
+        };
+        window.addEventListener("seatmap-export-success" as any, handleSuccess);
+        return () => window.removeEventListener("seatmap-export-success" as any, handleSuccess);
+    }, []);
 
     const startImport = (file: File) => {
         setActionType("import");
@@ -87,47 +105,71 @@ export function SeatmapExportActions() {
         setIsOverwriteDialogOpen(false);
     };
 
-    const handleDownload = () => {
+    const handleExport = (type: "json" | "png") => {
         setActionType("export");
-        const exportData = {
-            title: seatmap.title,
-            nodes: seatmap.nodes,
-            categories: seatmap.categories,
-            viewport: seatmap.viewport,
-            snapSpacing: seatmap.snapSpacing,
-            exportedAt: new Date().toISOString(),
-        };
+        const baseFileName = seatmap.title.toLowerCase().replace(/\s+/g, "-");
+        const fileName = type === "json" ? `${baseFileName}.json` : `${baseFileName}.png`;
 
-        const fileName = `${seatmap.title.toLowerCase().replace(/\s+/g, "-")}.json`;
-        const jsonString = JSON.stringify(exportData, null, 2);
-        const fileSize = new Blob([jsonString]).size;
-
-        setImportFiles([{ name: fileName, size: fileSize }]);
         setIsProgressOpen(true);
         setProgress(0);
 
-        // Simulate progress
-        let currentProgress = 0;
-        const interval = setInterval(() => {
-            currentProgress += Math.floor(Math.random() * 20) + 15;
-            if (currentProgress >= 95) {
-                clearInterval(interval);
-                setProgress(100);
+        if (type === "json") {
+            const targetViewport = calculateFitViewport(seatmap.nodes, seatmap.viewportSize);
 
-                // Trigger download
-                const blob = new Blob([jsonString], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = fileName;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-            } else {
-                setProgress(currentProgress);
-            }
-        }, 120);
+            const exportData = {
+                title: seatmap.title,
+                nodes: seatmap.nodes,
+                categories: seatmap.categories,
+                viewport: targetViewport,
+                snapSpacing: seatmap.snapSpacing,
+                exportedAt: new Date().toISOString(),
+            };
+            const jsonString = JSON.stringify(exportData, null, 2);
+            const fileSize = new Blob([jsonString]).size;
+            setImportFiles([{ name: fileName, size: fileSize }]);
+
+            dispatch(fitView());
+
+            // Simulate progress for JSON
+            let currentProgress = 0;
+            const interval = setInterval(() => {
+                currentProgress += Math.floor(Math.random() * 20) + 15;
+                if (currentProgress >= 95) {
+                    clearInterval(interval);
+                    setProgress(100);
+
+                    const blob = new Blob([jsonString], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                } else {
+                    setProgress(currentProgress);
+                }
+            }, 120);
+        } else {
+            dispatch(fitView());
+
+            // PNG Export - approximate size check won't work perfectly before capture
+            setImportFiles([{ name: fileName, size: 0 }]);
+
+            // Start progress dial
+            let currentProgress = 0;
+            const interval = setInterval(() => {
+                currentProgress += 5;
+                if (currentProgress >= 85) {
+                    clearInterval(interval);
+                    // Trigger the actual PNG capture from Canvas
+                    window.dispatchEvent(new CustomEvent("seatmap-export-png", { detail: { fileName } }));
+                } else {
+                    setProgress(currentProgress);
+                }
+            }, 50);
+        }
     };
 
     return (
@@ -175,8 +217,8 @@ export function SeatmapExportActions() {
                     success: actionType === "import" ? "Import Complete" : "Export Complete",
                 }}
                 description={{
-                    loading: actionType === "import" ? "Configuring layout and nodes..." : "Generating JSON bundle...",
-                    success: actionType === "import" ? "Your seatmap has been loaded successfully." : "Your seatmap has been exported as JSON.",
+                    loading: actionType === "import" ? "Configuring layout and nodes..." : "Processing export assets...",
+                    success: actionType === "import" ? "Your seatmap has been loaded successfully." : "Your seatmap has been exported successfully.",
                 }}
             />
             <input
@@ -195,15 +237,30 @@ export function SeatmapExportActions() {
                 <Upload className="w-3.5 h-3.5" />
                 <span>Import JSON</span>
             </Button>
-            <Button
-                variant="default"
-                size="sm"
-                onClick={handleDownload}
-                className="h-8 gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-sm"
-            >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export JSON</span>
-            </Button>
+
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="default"
+                        size="sm"
+                        className="h-8 gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-sm"
+                    >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Export Options</span>
+                        <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[180px]">
+                    <DropdownMenuItem onClick={() => handleExport("json")} className="gap-2 cursor-pointer">
+                        <FileCode className="w-4 h-4 text-blue-500" />
+                        <span>Export as JSON</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport("png")} className="gap-2 cursor-pointer">
+                        <FileImage className="w-4 h-4 text-purple-500" />
+                        <span>Export as PNG</span>
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 }
