@@ -6,6 +6,8 @@ import { Toolbar as ModeToolbar, SelectionPanel } from "@/components/seatmap/UIO
 import SeatmapToolbar from "@/components/seatmap/toolbar";
 import { SeatMapSidebar } from "@/components/seatmap/seatmap-sidebar";
 import { SeatmapPageHeader } from "@/components/seatmap/seatmap-page-header";
+import { SeatmapTitle } from "@/components/seatmap/SeatmapTitle";
+import { SeatmapExportActions } from "@/components/seatmap/SeatmapExportActions";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 // Dynamically import Konva component to avoid SSR issues
@@ -23,10 +25,15 @@ export default function Page() {
             <SeatMapSidebar />
             <SidebarInset className="overflow-hidden">
                 <SeatmapPageHeader
-                    title="Seatwise Prototype"
-                    parentLabel="Seatmap"
-                    parentHref="#"
-                    rightSlot={<span className="text-xs text-zinc-500">app/(admin-user)/seat-builder/page.tsx</span>}
+                    title="Seatmap Designer"
+                    parentLabel="Dashboard"
+                    parentHref="/dashboard"
+                    rightSlot={
+                        <div className="flex items-center">
+                            <SeatmapTitle />
+                            <SeatmapExportActions />
+                        </div>
+                    }
                 />
                 <div className="flex-1 relative bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
                     <ModeToolbar />
