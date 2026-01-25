@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AlertTriangle, ChevronDown, FileCode, FileImage } from "lucide-react";
 import { calculateFitViewport } from "@/lib/seatmap/view-utils";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 export function SeatmapExportActions() {
     const dispatch = useAppDispatch();
@@ -172,10 +174,15 @@ export function SeatmapExportActions() {
         }
     };
 
+    const isMobile = useIsMobile();
+
     return (
-        <div className="flex items-center gap-2 border-l border-zinc-200 dark:border-zinc-800 pl-4 ml-2">
+        <div className={cn(
+            "flex items-center gap-2",
+            !isMobile && "border-l border-zinc-200 dark:border-zinc-800 pl-4 ml-2"
+        )}>
             <Dialog open={isOverwriteDialogOpen} onOpenChange={setIsOverwriteDialogOpen}>
-                <DialogContent>
+                <DialogContent className={isMobile ? "w-[95vw] rounded-2xl" : ""}>
                     <DialogHeader>
                         <div className="flex items-center gap-3">
                             <div className="rounded-full bg-amber-100 p-2 text-amber-600">
@@ -187,19 +194,21 @@ export function SeatmapExportActions() {
                             Importing a new seatmap will permanently delete all current seats, shapes, and progress. This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter className="mt-4">
+                    <DialogFooter className="mt-4 gap-2 flex-col sm:flex-row">
                         <Button
                             variant="outline"
                             onClick={() => {
                                 setIsOverwriteDialogOpen(false);
                                 setPendingFile(null);
                             }}
+                            className="w-full sm:w-auto"
                         >
                             Cancel
                         </Button>
                         <Button
                             variant="destructive"
                             onClick={confirmOverwrite}
+                            className="w-full sm:w-auto"
                         >
                             Confirm Overwrite
                         </Button>
@@ -230,24 +239,30 @@ export function SeatmapExportActions() {
             />
             <Button
                 variant="outline"
-                size="sm"
+                size={isMobile ? "icon" : "sm"}
                 onClick={() => fileInputRef.current?.click()}
-                className="h-8 gap-2 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="h-8 md:gap-2 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                title="Import JSON"
             >
                 <Upload className="w-3.5 h-3.5" />
-                <span>Import JSON</span>
+                {!isMobile && <span>Import JSON</span>}
             </Button>
 
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="default"
-                        size="sm"
-                        className="h-8 gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-sm"
+                        size={isMobile ? "icon" : "sm"}
+                        className="h-8 md:gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-sm"
+                        title="Export Options"
                     >
                         <Download className="w-3.5 h-3.5" />
-                        <span>Export Options</span>
-                        <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+                        {!isMobile && (
+                            <>
+                                <span>Export Options</span>
+                                <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+                            </>
+                        )}
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[180px]">

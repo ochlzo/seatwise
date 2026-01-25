@@ -1,4 +1,4 @@
- "use client";
+"use client";
 
 import React from "react";
 import {
@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import {
   copySelected,
   pasteNodesAt,
@@ -75,40 +77,67 @@ export default function SeatmapToolbar() {
     dispatch(deleteSelected());
   };
 
+  const isMobile = useIsMobile();
+
   return (
-    <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
-      <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90">
+    <div className={cn(
+      "absolute bottom-4 left-1/2 z-20 -translate-x-1/2 max-w-[95vw]",
+      isMobile ? "bottom-2" : "bottom-4"
+    )}>
+      <div className={cn(
+        "flex items-center gap-1 rounded-full border border-zinc-200 bg-white/95 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 overflow-x-auto no-scrollbar max-w-full",
+        isMobile ? "px-2 py-1.5" : "px-3 py-2"
+      )}>
         <Button
           variant="ghost"
-          size="sm"
+          size={isMobile ? "icon" : "sm"}
           onClick={() => dispatch(copySelected())}
           disabled={!hasSelection}
+          title="Copy"
         >
-          <Copy className="mr-2 h-4 w-4" />
-          Copy
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handlePaste}>
-          <ClipboardPaste className="mr-2 h-4 w-4" />
-          Paste
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => dispatch(undo())}>
-          <Undo2 className="mr-2 h-4 w-4" />
-          Undo
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => dispatch(redo())}>
-          <Redo2 className="mr-2 h-4 w-4" />
-          Redo
+          <Copy className={cn("h-4 w-4", !isMobile && "mr-2")} />
+          {!isMobile && "Copy"}
         </Button>
         <Button
           variant="ghost"
-          size="sm"
+          size={isMobile ? "icon" : "sm"}
+          onClick={handlePaste}
+          title="Paste"
+        >
+          <ClipboardPaste className={cn("h-4 w-4", !isMobile && "mr-2")} />
+          {!isMobile && "Paste"}
+        </Button>
+        <Button
+          variant="ghost"
+          size={isMobile ? "icon" : "sm"}
+          onClick={() => dispatch(undo())}
+          title="Undo"
+        >
+          <Undo2 className={cn("h-4 w-4", !isMobile && "mr-2")} />
+          {!isMobile && "Undo"}
+        </Button>
+        <Button
+          variant="ghost"
+          size={isMobile ? "icon" : "sm"}
+          onClick={() => dispatch(redo())}
+          title="Redo"
+        >
+          <Redo2 className={cn("h-4 w-4", !isMobile && "mr-2")} />
+          {!isMobile && "Redo"}
+        </Button>
+        <Button
+          variant="ghost"
+          size={isMobile ? "icon" : "sm"}
           onClick={() => dispatch(deleteSelected())}
           disabled={!hasSelection}
+          title="Delete"
         >
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete
+          <Trash2 className={cn("h-4 w-4 text-red-500", !isMobile && "mr-2")} />
+          {!isMobile && "Delete"}
         </Button>
+
         <Separator orientation="vertical" className="mx-1 h-6" />
+
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
@@ -147,19 +176,28 @@ export default function SeatmapToolbar() {
             <ArrowDown className="h-4 w-4" />
           </Button>
         </div>
+
         <Separator orientation="vertical" className="mx-1 h-6" />
+
         <Button
           variant={showGrid ? "default" : "ghost"}
-          size="sm"
+          size={isMobile ? "icon" : "sm"}
           onClick={() => dispatch(setShowGrid(!showGrid))}
+          title="Grid"
         >
-          Grid
+          {!isMobile && "Grid"}
+          {isMobile && <div className="h-4 w-4 border-2 border-current rounded-sm opacity-60" />}
         </Button>
-        <Separator orientation="vertical" className="mx-1 h-6" />
-        <Button variant="ghost" size="sm" onClick={handleClearAll}>
-          <XCircle className="mr-2 h-4 w-4" />
-          Clear All
-        </Button>
+
+        {!isMobile && (
+          <>
+            <Separator orientation="vertical" className="mx-1 h-6" />
+            <Button variant="ghost" size="sm" onClick={handleClearAll}>
+              <XCircle className="mr-2 h-4 w-4" />
+              Clear All
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

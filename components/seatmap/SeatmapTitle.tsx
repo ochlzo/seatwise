@@ -17,8 +17,8 @@ export function SeatmapTitle({ className }: { className?: string }) {
                 <Input
                     value={title}
                     onChange={(e) => dispatch(setTitle(e.target.value))}
-                    placeholder="Enter seatmap title..."
-                    className="h-8 w-[280px] pr-8 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 focus-visible:ring-1 focus-visible:ring-blue-500 font-semibold text-sm transition-all"
+                    placeholder="Enter title..."
+                    className="h-8 md:w-[280px] w-[140px] pr-8 bg-zinc-50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-800 focus-visible:ring-1 focus-visible:ring-blue-500 font-semibold text-sm transition-all"
                 />
                 <Edit2 className="absolute right-2.5 w-3.5 h-3.5 text-zinc-400 group-hover:text-blue-500 transition-colors pointer-events-none" />
             </div>
