@@ -11,9 +11,6 @@ export default async function AdminDashboardLayout({
 }: {
     children: React.ReactNode
 }) {
-    // Shared admin verification
-    await verifyAdmin();
-
     return (
         <SidebarProvider className="h-svh overflow-hidden">
             <LoadingPage />

@@ -55,9 +55,13 @@ export function PageHeader({
 
     let currentHref = "";
 
-    // Add Dashboard as root if we are in a subpage of user routes
-    if (!pathname.startsWith("/admin") && segments[0] !== "dashboard" && segments.length > 0) {
+    // Logic for parent breadcrumb (Dashboard/Admin Dashboard)
+    const isAdminRoute = pathname.startsWith("/admin") || pathname === "/seat-builder";
+
+    if (!isAdminRoute && segments[0] !== "dashboard" && segments.length > 0) {
       crumbs.push({ label: "Dashboard", href: "/dashboard" });
+    } else if (pathname === "/seat-builder") {
+      crumbs.push({ label: "Admin Dashboard", href: "/admin" });
     }
 
     // Process segments

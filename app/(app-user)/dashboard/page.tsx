@@ -6,9 +6,7 @@ export default async function Page() {
   return (
     <>
       <PageHeader
-        title="Data Fetching"
-        parentLabel="Building Your Application"
-        parentHref="#"
+        title="Dashboard"
         rightSlot={
           <>
             <ThemeSwithcer />

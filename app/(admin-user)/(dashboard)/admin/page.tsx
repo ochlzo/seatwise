@@ -8,9 +8,7 @@ export default async function Page() {
         <>
             <WelcomeAdminDialog />
             <PageHeader
-                title="Data Fetching"
-                parentLabel="Building Your Application"
-                parentHref="#"
+                title="Admin Dashboard"
                 rightSlot={
                     <>
                         <ThemeSwithcer />

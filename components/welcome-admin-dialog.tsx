@@ -17,11 +17,16 @@ export function WelcomeAdminDialog() {
     const [isOpen, setIsOpen] = React.useState(false);
 
     React.useEffect(() => {
-        // Show dialog after a small delay to let the page load
-        const timer = setTimeout(() => {
-            setIsOpen(true);
-        }, 500);
-        return () => clearTimeout(timer);
+        // Check if we've already shown the welcome message in this session
+        const hasBeenWelcomed = sessionStorage.getItem("admin_welcomed");
+
+        if (!hasBeenWelcomed) {
+            const timer = setTimeout(() => {
+                setIsOpen(true);
+                sessionStorage.setItem("admin_welcomed", "true");
+            }, 500);
+            return () => clearTimeout(timer);
+        }
     }, []);
 
     return (

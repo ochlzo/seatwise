@@ -9,6 +9,8 @@ import {
   PieChart,
   Settings2,
   SquareTerminal,
+  UserRound,
+  ShieldUser,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -33,12 +35,12 @@ const data = {
   teams: [
     {
       name: "user",
-      logo: (props: React.ComponentProps<"img">) => <img src="/user.png" alt="user" {...props} />,
+      logo: UserRound,
       plan: "",
     },
     {
       name: "admin",
-      logo: (props: React.ComponentProps<"img">) => <img src="/admin.png" alt="admin" {...props} />,
+      logo: ShieldUser,
       plan: "",
     },
   ],
