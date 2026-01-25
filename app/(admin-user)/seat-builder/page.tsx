@@ -9,6 +9,7 @@ import { SeatmapPageHeader } from "@/components/seatmap/seatmap-page-header";
 import { SeatmapTitle } from "@/components/seatmap/SeatmapTitle";
 import { SeatmapExportActions } from "@/components/seatmap/SeatmapExportActions";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { useTheme } from "next-themes";
 
 // Dynamically import Konva component to avoid SSR issues
 const SeatmapCanvas = dynamic(
@@ -20,6 +21,12 @@ const SeatmapCanvas = dynamic(
 );
 
 export default function Page() {
+    const { setTheme } = useTheme();
+
+    React.useEffect(() => {
+        setTheme("light");
+    }, [setTheme]);
+
     return (
         <SidebarProvider className="h-svh overflow-hidden">
             <SeatMapSidebar />
@@ -35,7 +42,7 @@ export default function Page() {
                         </div>
                     }
                 />
-                <div className="flex-1 relative bg-zinc-100 dark:bg-zinc-900 overflow-hidden">
+                <div className="flex-1 relative bg-zinc-100 overflow-hidden">
                     <ModeToolbar />
                     <SeatmapToolbar />
                     <SelectionPanel />

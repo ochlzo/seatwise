@@ -66,20 +66,38 @@
 - Hexagon palette icon replaced with an SVG polygon for correct display.
 - **Konva Performance**: Consolidated the Stage tree into a single `Layer`, with `SeatLayer` and `SectionLayer` rendering `Group` wrappers instead of nested layers to reduce the layer count warning.
 
+## Export & Import (JSON & PNG)
+- **Export Options Dropdown**: Replaced single export button with a dropdown for JSON and PNG formats.
+- **JSON Persistence**: Full state (nodes, categories, title, snap settings) can be exported and re-imported.
+- **Overwrite Protection**: A confirmation dialog (shadcn `Dialog`) warns users if they try to import a file onto a non-empty canvas.
+- **High-Res PNG Export**:
+  - Resolution: Exported at 3x pixel ratio for high definition.
+  - Background: Solid white background added automatically during export.
+  - Intelligent Cropping: PNGs are tightly cropped to the bounding box of existing nodes with a 10px padding, rather than exporting the whole stage.
+- **Unified Fit-to-Content**:
+  - Created centralized `calculateFitViewport` and `calculateNodesBounds` utilities in `lib/seatmap/view-utils.ts`.
+  - **Auto-Fit on Mount**: Seatmap automatically centers and scales to fit all nodes when the page loads.
+  - **Auto-Fit on Export**: Viewport is reset to a "fit" state before capturing PNGs or saving JSON to ensure consistent viewing.
+  - **Fine-Tuning**: Standardized padding (10px) and max zoom scale (1.6x) for "fit" calculations.
+
 ## Bug Fixes & Stability
 - **Vercel Build**: Updated `addSeat` reducer and `SeatmapSeatNode` types to explicitly handle `seatType: "vip" | "standard"`, resolving production compilation errors.
 - **Selection Consistency**: Fixed "Rules of Hooks" violation in `SelectionPanel` by stabilizing state hooks for range assignments.
 - **State Persistence**: Bulk update helpers (`updateBulkSeatInfo`) updated to support clearing properties by using the `in` operator to check for key existence rather than value check.
+- **Export Cleanliness**: Automatic deselection and transformer hiding during PNG export.
 
 ## Files Touched (Seatmap)
 - `components/seatmap/SeatmapCanvas.tsx`
 - `components/seatmap/SeatLayer.tsx`
 - `components/seatmap/SectionLayer.tsx`
 - `components/seatmap/UIOverlays.tsx`
+- `components/seatmap/SeatmapExportActions.tsx` (New)
 - `components/seatmap/seatmap-sidebar.tsx`
 - `components/seatmap/seatmap-page-header.tsx`
+- `components/ui/upload-progress.tsx`
 - `lib/features/seatmap/seatmapSlice.ts`
 - `lib/seatmap/types.ts`
+- `lib/seatmap/view-utils.ts` (New)
 - `lib/seatmap/geometry.ts`
 - `app/(admin-user)/seat-builder/page.tsx`
 - `app/test/page.tsx`

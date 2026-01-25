@@ -81,7 +81,8 @@ export function SeatMapSidebar({
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  className="flex-1 bg-transparent border-b border-zinc-200 dark:border-zinc-800 text-xs py-1 outline-none"
+                  className="flex-1 bg-transparent border-b text-xs py-1 outline-none"
+                  style={{ borderBottomColor: cat.color }}
                   placeholder="Category Name"
                   value={cat.name}
                   onChange={(e) => {
@@ -297,7 +298,7 @@ export function SeatMapSidebar({
           />
           Show guide paths
         </label>
-      </SidebarContent>
+      </SidebarContent >
       <SidebarFooter className="px-3 py-3">
         <div className="text-xs text-zinc-500 space-y-1">
           <p>Controls:</p>
@@ -322,6 +323,6 @@ export function SeatMapSidebar({
         </div>
       </SidebarFooter>
       <SidebarRail />
-    </Sidebar>
+    </Sidebar >
   );
 }
