@@ -40,3 +40,40 @@ enum UserStatus {
   ACTIVE
   INACTIVE
 }
+
+model Show {
+  show_id          String      @id @default(cuid())
+  show_name        String      @unique
+  show_description String
+  venue            String      
+  address          String
+  show_status      ShowStatus
+  show_start_date  DateTime
+  show_end_date    DateTime
+  show_image_key   String?
+
+  scheds           Sched[]
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+enum ShowStatus {
+  OPEN
+  CLOSED
+  ON_GOING
+  CANCELLED
+  POSTPONED
+}
+
+model Sched {
+  sched_id          String      @id @default(cuid())
+  sched_start_time  DateTime
+  sched_end_time    DateTime
+
+  show_id           String
+  show              Show        @relation(fields: [show_id], references: [show_id])
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
