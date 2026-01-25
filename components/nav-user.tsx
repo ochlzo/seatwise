@@ -44,7 +44,7 @@ export function NavUser({ user }: { user: User | null }) {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
       dispatch(logout());
-      router.push("/login");
+      window.location.href = "/login";
     } catch (error) {
       console.error("Logout failed", error);
       dispatch(setLoading(false));

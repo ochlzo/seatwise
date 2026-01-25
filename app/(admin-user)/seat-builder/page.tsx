@@ -33,8 +33,8 @@ export default function Page() {
             <SidebarInset className="overflow-hidden">
                 <SeatmapPageHeader
                     title="Seatmap Designer"
-                    parentLabel="Dashboard"
-                    parentHref="/dashboard"
+                    parentLabel="Admin Dashboard"
+                    parentHref="/admin"
                     rightSlot={
                         <div className="flex items-center">
                             <SeatmapTitle />

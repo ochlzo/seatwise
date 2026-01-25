@@ -5,7 +5,9 @@ import {
     BookOpen,
     Settings2,
     Theater,
-    Armchair
+    Armchair,
+    UserRound,
+    ShieldUser
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -30,12 +32,12 @@ const data = {
     teams: [
         {
             name: "user",
-            logo: (props: React.ComponentProps<"img">) => <img src="/user.png" alt="user" {...props} />,
+            logo: UserRound,
             plan: "",
         },
         {
             name: "admin",
-            logo: (props: React.ComponentProps<"img">) => <img src="/admin.png" alt="admin" {...props} />,
+            logo: ShieldUser,
             plan: "",
         },
     ],
@@ -47,20 +49,20 @@ const data = {
             isActive: true,
             items: [
                 {
-                    title: "Settings",
-                    url: "/coming-soon",
-                },
-                {
                     title: "Dashboard",
                     url: "/admin",
                 },
                 {
+                    title: "Settings",
+                    url: "/admin/settings",
+                },
+                {
                     title: "Users",
-                    url: "/coming-soon",
+                    url: "/admin/users",
                 },
                 {
                     title: "Admin Access",
-                    url: "/coming-soon",
+                    url: "/admin/access",
                 },
             ],
         },
@@ -70,16 +72,12 @@ const data = {
             icon: Theater,
             items: [
                 {
-                    title: "Shows List",
-                    url: "/coming-soon",
-                },
-                {
-                    title: "Create Show",
-                    url: "/coming-soon",
+                    title: "Shows",
+                    url: "/admin/shows",
                 },
                 {
                     title: "Calendar",
-                    url: "/coming-soon",
+                    url: "/admin/calendar",
                 },
             ],
         },
@@ -90,15 +88,11 @@ const data = {
             items: [
                 {
                     title: "Templates",
-                    url: "/coming-soon",
+                    url: "/admin/templates",
                 },
                 {
-                    title: "Add Template",
+                    title: "Seatmap Designer",
                     url: "/seat-builder",
-                },
-                {
-                    title: "Venues",
-                    url: "/coming-soon",
                 },
             ],
         }

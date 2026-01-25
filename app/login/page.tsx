@@ -3,8 +3,16 @@ import { LoginForm } from "@/components/login-form";
 import { useAppDispatch } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 import LoadingPage from "../LoadingPage";
+import { useEffect } from "react";
 
 export default function LoginPage() {
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.href);
+    window.onpopstate = function () {
+      window.history.pushState(null, '', window.location.href);
+    };
+  }, []);
+
   const dispatch = useAppDispatch();
 
   const handleLoginStart = () => {

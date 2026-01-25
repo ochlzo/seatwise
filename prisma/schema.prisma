@@ -59,6 +59,8 @@ model Show {
 }
 
 enum ShowStatus {
+  UPCOMING
+  DRAFT
   OPEN
   CLOSED
   ON_GOING

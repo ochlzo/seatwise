@@ -129,8 +129,8 @@ export function TeamSwitcher({
                       team.name === currentTeam && "opacity-50 cursor-default"
                     )}
                   >
-                    <div className="flex size-6 items-center justify-center rounded-md border">
-                      <Logo className="size-3.5 shrink-0" />
+                    <div className="flex size-6 items-center justify-center rounded-md border bg-background">
+                      <Logo className="size-4 shrink-0" />
                     </div>
                     {team.name}
                     <span className={cn(
