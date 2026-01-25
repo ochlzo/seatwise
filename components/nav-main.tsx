@@ -1,9 +1,7 @@
 "use client"
 
 import { ChevronRight, type LucideIcon } from "lucide-react"
-import { usePathname } from "next/navigation"
-
-import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 
 import {
   Collapsible,
@@ -20,6 +18,8 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
+import { useAppDispatch } from "@/lib/hooks"
+import { setLoading } from "@/lib/features/loading/isLoadingSlice"
 
 export function NavMain({
   items,
@@ -36,6 +36,15 @@ export function NavMain({
   }[]
 }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const dispatch = useAppDispatch()
+
+  const handleNavigation = (url: string) => {
+    if (url !== "#" && url !== pathname) {
+      dispatch(setLoading(true))
+      router.push(url)
+    }
+  }
 
   return (
     <SidebarGroup>
@@ -65,16 +74,12 @@ export function NavMain({
                     {item.items?.map((subItem) => (
                       <SidebarMenuSubItem key={subItem.title}>
                         <SidebarMenuSubButton
-                          asChild
+                          className="cursor-pointer"
                           isActive={subItem.url === pathname}
                           aria-disabled={subItem.url === pathname}
+                          onClick={() => handleNavigation(subItem.url)}
                         >
-                          <Link
-                            href={subItem.url}
-                            className="aria-disabled:pointer-events-none"
-                          >
-                            <span>{subItem.title}</span>
-                          </Link>
+                          <span>{subItem.title}</span>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     ))}
