@@ -1,0 +1,31 @@
+import { PageHeader } from "@/components/page-header"
+import AdminShield from "@/components/AdminShield"
+import { ThemeSwithcer } from "@/components/theme-swithcer"
+import { WelcomeAdminDialog } from "@/components/welcome-admin-dialog"
+
+export default async function Page() {
+    return (
+        <>
+            <WelcomeAdminDialog />
+            <PageHeader
+                title="Data Fetching"
+                parentLabel="Building Your Application"
+                parentHref="#"
+                rightSlot={
+                    <>
+                        <ThemeSwithcer />
+                        <AdminShield />
+                    </>
+                }
+            />
+            <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+                <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+                    <div className="bg-muted/50 aspect-video rounded-xl" />
+                    <div className="bg-muted/50 aspect-video rounded-xl" />
+                    <div className="bg-muted/50 aspect-video rounded-xl" />
+                </div>
+                <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
+            </div>
+        </>
+    )
+}
