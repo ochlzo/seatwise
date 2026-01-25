@@ -150,3 +150,13 @@ html.lenis body {
   background-color: rgba(37, 99, 235, 0.2);
   color: inherit;
 }
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

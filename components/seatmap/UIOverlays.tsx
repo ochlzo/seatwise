@@ -10,8 +10,17 @@ import {
   toggleZoomLock,
   fitView,
 } from "@/lib/features/seatmap/seatmapSlice";
-import { LocateFixed, Move, MousePointer2, Pencil, Lock, Unlock } from "lucide-react";
+import { LocateFixed, Move, MousePointer2, Pencil, Lock, Unlock, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 export function Sidebar() {
   const dispatch = useAppDispatch();
@@ -139,62 +148,76 @@ export function Toolbar() {
   const viewportSize = useAppSelector((state) => state.seatmap.viewportSize);
   const zoomLocked = useAppSelector((state) => state.seatmap.zoomLocked);
 
+  const isMobile = useIsMobile();
+
   return (
-    <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 bg-white dark:bg-zinc-900 p-2 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
+    <div className={cn(
+      "absolute z-20 flex flex-col gap-2 bg-white dark:bg-zinc-900 shadow-lg border border-zinc-200 dark:border-zinc-800",
+      isMobile ? "top-2 left-2 p-1.5 rounded-md" : "top-4 left-4 p-2 rounded-lg"
+    )}>
       <Button
         variant={mode === "select" ? "default" : "ghost"}
-        size="icon"
+        size={isMobile ? "sm" : "icon"}
         onClick={() => dispatch(setMode("select"))}
         title="Select Mode"
+        className={cn(isMobile && "h-10 w-10")}
       >
-        <MousePointer2 className="w-4 h-4" />
+        <MousePointer2 className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
       </Button>
       <Button
         variant={mode === "pan" ? "default" : "ghost"}
-        size="icon"
+        size={isMobile ? "sm" : "icon"}
         onClick={() => dispatch(setMode("pan"))}
         title="Pan Mode"
+        className={cn(isMobile && "h-10 w-10")}
       >
-        <Move className="w-4 h-4" />
+        <Move className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
       </Button>
       <Button
         variant={mode === "draw" ? "default" : "ghost"}
-        size="icon"
+        size={isMobile ? "sm" : "icon"}
         onClick={() => dispatch(setMode("draw"))}
         title="Draw Mode"
+        className={cn(isMobile && "h-10 w-10")}
       >
-        <Pencil className="w-4 h-4" />
+        <Pencil className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
       </Button>
       <div className="w-full h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
       <Button
         variant={zoomLocked ? "default" : "ghost"}
-        size="icon"
+        size={isMobile ? "sm" : "icon"}
         onClick={() => dispatch(toggleZoomLock())}
         title={zoomLocked ? "Unlock Zoom" : "Lock Zoom"}
+        className={cn(isMobile && "h-10 w-10")}
       >
-        {zoomLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+        {zoomLocked ? (
+          <Lock className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
+        ) : (
+          <Unlock className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
+        )}
       </Button>
       <div className="w-full h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
       <Button
         variant="ghost"
-        size="icon"
+        size={isMobile ? "sm" : "icon"}
         onClick={() => dispatch(fitView())}
         title="Reset View"
+        className={cn(isMobile && "h-10 w-10")}
       >
-        <LocateFixed className="w-4 h-4" />
+        <LocateFixed className={cn(isMobile ? "w-5 h-5" : "w-4 h-4")} />
       </Button>
     </div>
   );
 }
 
 export function SelectionPanel() {
+  const [rangeStart, setRangeStart] = React.useState("1");
+  const [rangeError, setRangeError] = React.useState<string | null>(null);
   const dispatch = useAppDispatch();
   const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
   const nodes = useAppSelector((state) => state.seatmap.nodes);
   const categories = useAppSelector((state) => state.seatmap.categories);
-
-  const [rangeStart, setRangeStart] = React.useState("1");
-  const [rangeError, setRangeError] = React.useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   if (selectedIds.length === 0) return null;
 
@@ -351,8 +374,12 @@ export function SelectionPanel() {
     if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
   };
 
-  return (
-    <div className="absolute top-4 right-4 z-20 w-64 bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
+
+  const content = (
+    <div className={cn(
+      "text-sm space-y-4",
+      isMobile ? "pb-8" : ""
+    )}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-bold">Selection</h3>
         <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-500">
@@ -362,12 +389,12 @@ export function SelectionPanel() {
 
       <div className="text-sm space-y-4">
         {/* Transforms */}
-        <div className="space-y-2">
+        <div className="space-y-4">
           <div className="flex justify-between items-center text-xs">
             <span className="text-zinc-500">Rotation:</span>
             <input
               type="number"
-              className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+              className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right h-8"
               value={commonRotation !== "" ? Math.round(Number(commonRotation)) : ""}
               onChange={(e) => updateBulkRotation(e.target.value)}
             />
@@ -378,13 +405,13 @@ export function SelectionPanel() {
               <div className="flex gap-1">
                 <input
                   type="number"
-                  className="w-14 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                  className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right h-8"
                   value={commonX !== "" ? Math.round(Number(commonX)) : ""}
                   onChange={(e) => updateBulkPosition("x", e.target.value)}
                 />
                 <input
                   type="number"
-                  className="w-14 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                  className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right h-8"
                   value={commonY !== "" ? Math.round(Number(commonY)) : ""}
                   onChange={(e) => updateBulkPosition("y", e.target.value)}
                 />
@@ -397,14 +424,14 @@ export function SelectionPanel() {
               <input
                 type="number"
                 step="0.1"
-                className="w-14 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right h-8"
                 value={commonScaleX ? Number(commonScaleX).toFixed(1) : ""}
                 onChange={(e) => updateBulkScale("x", e.target.value)}
               />
               <input
                 type="number"
                 step="0.1"
-                className="w-14 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right h-8"
                 value={commonScaleY ? Number(commonScaleY).toFixed(1) : ""}
                 onChange={(e) => updateBulkScale("y", e.target.value)}
               />
@@ -414,10 +441,10 @@ export function SelectionPanel() {
 
         {/* Text Content */}
         {isTextSelection && (
-          <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
+          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
             <span className="text-xs text-zinc-500">Text Content:</span>
             <textarea
-              className="w-full mt-1 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-1 text-xs min-h-[50px] resize-none"
+              className="w-full mt-2 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-2 text-xs min-h-[60px] resize-none"
               value={commonText}
               onChange={(e) => updateBulkText(e.target.value)}
             />
@@ -432,7 +459,7 @@ export function SelectionPanel() {
               <span className="text-xs text-zinc-500">Row:</span>
               <input
                 type="text"
-                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right uppercase"
+                className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right uppercase h-8"
                 placeholder="A, B..."
                 value={commonRowLabel}
                 onChange={(e) => updateBulkSeatInfo({ rowLabel: e.target.value.toUpperCase() })}
@@ -443,7 +470,7 @@ export function SelectionPanel() {
                 <span className="text-xs text-zinc-500">Number:</span>
                 <input
                   type="text"
-                  className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                  className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right h-8"
                   value={commonSeatNumber ?? ""}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -459,12 +486,12 @@ export function SelectionPanel() {
                   <span className="text-xs text-zinc-500">Start Num:</span>
                   <input
                     type="number"
-                    className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right"
+                    className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right h-8"
                     value={rangeStart}
                     onChange={(e) => setRangeStart(e.target.value)}
                   />
                 </div>
-                <Button size="sm" className="w-full h-8 text-[10px]" onClick={applySeatRange}>
+                <Button size="sm" className="w-full h-9 text-[11px]" onClick={applySeatRange}>
                   Apply Range {rangeStart}...
                 </Button>
                 {rangeError && <p className="text-[10px] text-red-500 text-center">{rangeError}</p>}
@@ -480,7 +507,7 @@ export function SelectionPanel() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => updateBulkCategoryId(null)}
-                className={`px-2 py-1 text-[10px] rounded border ${!commonCategoryId ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border-zinc-200"}`}
+                className={`px-3 py-1.5 text-[10px] rounded border transition-colors ${!commonCategoryId ? "bg-zinc-900 text-white" : "border-zinc-200 hover:bg-zinc-50"}`}
               >
                 None
               </button>
@@ -488,10 +515,10 @@ export function SelectionPanel() {
                 <button
                   key={cat.id}
                   onClick={() => updateBulkCategoryId(cat.id)}
-                  className={`flex items-center gap-1 px-2 py-1 text-[10px] rounded border ${commonCategoryId === cat.id ? "border-blue-500 ring-1 ring-blue-500" : "border-zinc-200"}`}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] rounded border transition-all ${commonCategoryId === cat.id ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50" : "border-zinc-200 hover:bg-zinc-50"}`}
                 >
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-                  <span className="truncate max-w-[50px]">{cat.name || "Untitled"}</span>
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                  <span className="truncate max-w-[60px] font-medium">{cat.name || "Untitled"}</span>
                 </button>
               ))}
             </div>
@@ -506,7 +533,7 @@ export function SelectionPanel() {
               <div className="grid grid-cols-6 gap-2">
                 <button
                   type="button"
-                  className="h-6 w-6 rounded border text-[10px] uppercase border-zinc-300 dark:border-zinc-700"
+                  className="h-7 w-7 rounded border text-[10px] uppercase border-zinc-300 flex items-center justify-center"
                   onClick={() => applyBulkColor("stroke", null)}
                 >
                   T
@@ -515,7 +542,7 @@ export function SelectionPanel() {
                   <button
                     key={`stroke-${color}`}
                     type="button"
-                    className={`h-6 w-6 rounded border ${selectedIds.length === 1 && (nodes[selectedIds[0]] as any).stroke === color ? "border-zinc-900" : "border-zinc-200"}`}
+                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as any).stroke === color ? "border-blue-500 ring-2 ring-blue-200" : "border-zinc-200"}`}
                     style={{ backgroundColor: color }}
                     onClick={() => applyBulkColor("stroke", color)}
                   />
@@ -527,7 +554,7 @@ export function SelectionPanel() {
               <div className="grid grid-cols-6 gap-2">
                 <button
                   type="button"
-                  className="h-6 w-6 rounded border text-[10px] uppercase border-zinc-300 dark:border-zinc-700"
+                  className="h-7 w-7 rounded border text-[10px] uppercase border-zinc-300 flex items-center justify-center"
                   onClick={() => applyBulkColor("fill", null)}
                 >
                   T
@@ -536,7 +563,7 @@ export function SelectionPanel() {
                   <button
                     key={`fill-${color}`}
                     type="button"
-                    className={`h-6 w-6 rounded border ${selectedIds.length === 1 && (nodes[selectedIds[0]] as any).fill === color ? "border-zinc-900" : "border-zinc-200"}`}
+                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as any).fill === color ? "border-blue-500 ring-2 ring-blue-200" : "border-zinc-200"}`}
                     style={{ backgroundColor: color }}
                     onClick={() => applyBulkColor("fill", color)}
                   />
@@ -546,6 +573,34 @@ export function SelectionPanel() {
           </div>
         )}
       </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <div className="fixed bottom-[5.5rem] right-4 z-30">
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button size="icon" className="h-12 w-12 rounded-full shadow-2xl">
+              <Settings2 className="h-6 w-6 text-white" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-[70vh] rounded-t-3xl border-t border-zinc-200 px-6">
+            <SheetHeader className="pb-4">
+              <SheetTitle>Section Settings</SheetTitle>
+            </SheetHeader>
+            <div className="overflow-y-auto h-full pb-20">
+              {content}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute top-4 right-4 z-20 w-64 bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800">
+      {content}
     </div>
   );
 }
