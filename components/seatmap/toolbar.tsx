@@ -12,6 +12,7 @@ import {
   Trash2,
   Undo2,
   XCircle,
+  Grid3X3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -81,12 +82,14 @@ export default function SeatmapToolbar() {
 
   return (
     <div className={cn(
-      "absolute bottom-4 left-1/2 z-20 -translate-x-1/2 max-w-[95vw]",
-      isMobile ? "bottom-2" : "bottom-4"
+      "absolute z-20 transition-all duration-300",
+      isMobile
+        ? "right-2 top-2 flex flex-col items-center"
+        : "bottom-4 left-1/2 -translate-x-1/2"
     )}>
       <div className={cn(
-        "flex items-center gap-1 rounded-full border border-zinc-200 bg-white/95 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 overflow-x-auto no-scrollbar max-w-full",
-        isMobile ? "px-2 py-1.5" : "px-3 py-2"
+        "flex rounded-full border border-zinc-200 bg-white/95 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 no-scrollbar items-center",
+        isMobile ? "flex-col py-3 px-1.5 gap-2" : "flex-row px-3 py-2 gap-1"
       )}>
         <Button
           variant="ghost"
@@ -136,9 +139,12 @@ export default function SeatmapToolbar() {
           {!isMobile && "Delete"}
         </Button>
 
-        <Separator orientation="vertical" className="mx-1 h-6" />
+        <Separator
+          orientation={isMobile ? "horizontal" : "vertical"}
+          className={cn("mx-1", isMobile ? "h-px w-6 my-1" : "h-6 w-px")}
+        />
 
-        <div className="flex items-center gap-1">
+        <div className={cn("flex items-center gap-1", isMobile ? "flex-col" : "flex-row")}>
           <Button
             variant="ghost"
             size="icon"
@@ -177,27 +183,35 @@ export default function SeatmapToolbar() {
           </Button>
         </div>
 
-        <Separator orientation="vertical" className="mx-1 h-6" />
+        <Separator
+          orientation={isMobile ? "horizontal" : "vertical"}
+          className={cn("mx-1", isMobile ? "h-px w-6 my-1" : "h-6 w-px")}
+        />
 
         <Button
           variant={showGrid ? "default" : "ghost"}
           size={isMobile ? "icon" : "sm"}
           onClick={() => dispatch(setShowGrid(!showGrid))}
-          title="Grid"
+          title="Toggle Grid"
         >
+          <Grid3X3 className={cn("h-4 w-4", !isMobile && "mr-2")} />
           {!isMobile && "Grid"}
-          {isMobile && <div className="h-4 w-4 border-2 border-current rounded-sm opacity-60" />}
         </Button>
 
-        {!isMobile && (
-          <>
-            <Separator orientation="vertical" className="mx-1 h-6" />
-            <Button variant="ghost" size="sm" onClick={handleClearAll}>
-              <XCircle className="mr-2 h-4 w-4" />
-              Clear All
-            </Button>
-          </>
-        )}
+        <Separator
+          orientation={isMobile ? "horizontal" : "vertical"}
+          className={cn("mx-1", isMobile ? "h-px w-6 my-1" : "h-6 w-px")}
+        />
+
+        <Button
+          variant="ghost"
+          size={isMobile ? "icon" : "sm"}
+          onClick={handleClearAll}
+          title="Clear All"
+        >
+          <XCircle className={cn("h-4 w-4 text-orange-500/80", !isMobile && "mr-2")} />
+          {!isMobile && "Clear All"}
+        </Button>
       </div>
     </div>
   );

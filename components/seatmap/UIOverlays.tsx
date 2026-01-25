@@ -578,7 +578,7 @@ export function SelectionPanel() {
 
   if (isMobile) {
     return (
-      <div className="fixed bottom-[5.5rem] right-4 z-30">
+      <div className="fixed bottom-4 left-4 z-30">
         <Sheet>
           <SheetTrigger asChild>
             <Button size="icon" className="h-12 w-12 rounded-full shadow-2xl">
