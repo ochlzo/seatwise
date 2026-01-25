@@ -72,7 +72,7 @@ const data = {
             icon: Theater,
             items: [
                 {
-                    title: "Shows",
+                    title: "Shows List",
                     url: "/admin/shows",
                 },
                 {
