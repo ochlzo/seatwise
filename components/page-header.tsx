@@ -15,6 +15,22 @@ import { StickyHeader } from "@/components/sticky-header";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+const segmentMap: Record<string, string> = {
+  dashboard: "Dashboard",
+  profile: "Profile",
+  account: "Account",
+  admin: "Admin Dashboard",
+  "seat-builder": "Seatmap Builder",
+};
+
+const formatSegment = (segment: string) => {
+  if (segmentMap[segment]) return segmentMap[segment];
+  return segment
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
 type PageHeaderProps = {
   title: string;
   parentLabel?: string;
@@ -25,16 +41,36 @@ type PageHeaderProps = {
 
 export function PageHeader({
   title,
-  parentLabel,
-  parentHref = "#",
   rightSlot,
   className,
 }: PageHeaderProps) {
   const pathname = usePathname();
-  const resolvedParentLabel =
-    pathname === "/account" || pathname === "/profile" ? "Dashboard" : parentLabel;
-  const resolvedParentHref =
-    pathname === "/account" || pathname === "/profile" ? "/dashboard" : parentHref;
+
+  const breadcrumbs = React.useMemo(() => {
+    const segments = pathname.split("/").filter(Boolean);
+    const crumbs: { label: string; href: string }[] = [];
+
+    // Always start with Home
+    crumbs.push({ label: "Home", href: "/" });
+
+    let currentHref = "";
+
+    // Add Dashboard as root if we are in a subpage of user routes
+    if (!pathname.startsWith("/admin") && segments[0] !== "dashboard" && segments.length > 0) {
+      crumbs.push({ label: "Dashboard", href: "/dashboard" });
+    }
+
+    // Process segments
+    segments.forEach((segment) => {
+      currentHref += `/${segment}`;
+      crumbs.push({
+        label: formatSegment(segment),
+        href: currentHref,
+      });
+    });
+
+    return crumbs;
+  }, [pathname]);
 
   return (
     <StickyHeader
@@ -51,19 +87,23 @@ export function PageHeader({
         />
         <Breadcrumb className="hidden md:block">
           <BreadcrumbList>
-            {resolvedParentLabel && (
-              <>
-                <BreadcrumbItem>
-                  <BreadcrumbLink href={resolvedParentHref}>
-                    {resolvedParentLabel}
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-              </>
-            )}
-            <BreadcrumbItem>
-              <BreadcrumbPage>{title}</BreadcrumbPage>
-            </BreadcrumbItem>
+            {breadcrumbs.map((crumb, index) => {
+              const isLast = index === breadcrumbs.length - 1;
+              return (
+                <React.Fragment key={crumb.href}>
+                  <BreadcrumbItem>
+                    {isLast ? (
+                      <BreadcrumbPage>{title || crumb.label}</BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink href={crumb.href}>
+                        {crumb.label}
+                      </BreadcrumbLink>
+                    )}
+                  </BreadcrumbItem>
+                  {!isLast && <BreadcrumbSeparator />}
+                </React.Fragment>
+              );
+            })}
           </BreadcrumbList>
         </Breadcrumb>
         <span className="text-sm font-medium md:hidden">{title}</span>

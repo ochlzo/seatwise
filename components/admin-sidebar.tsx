@@ -48,19 +48,19 @@ const data = {
             items: [
                 {
                     title: "Settings",
-                    url: "#",
+                    url: "/coming-soon",
                 },
                 {
                     title: "Dashboard",
-                    url: "#",
+                    url: "/admin",
                 },
                 {
                     title: "Users",
-                    url: "#",
+                    url: "/coming-soon",
                 },
                 {
                     title: "Admin Access",
-                    url: "#",
+                    url: "/coming-soon",
                 },
             ],
         },
@@ -71,15 +71,15 @@ const data = {
             items: [
                 {
                     title: "Shows List",
-                    url: "#",
+                    url: "/coming-soon",
                 },
                 {
                     title: "Create Show",
-                    url: "#",
+                    url: "/coming-soon",
                 },
                 {
                     title: "Calendar",
-                    url: "#",
+                    url: "/coming-soon",
                 },
             ],
         },
@@ -90,15 +90,15 @@ const data = {
             items: [
                 {
                     title: "Templates",
-                    url: "#",
+                    url: "/coming-soon",
                 },
                 {
                     title: "Add Template",
-                    url: "#",
+                    url: "/seat-builder",
                 },
                 {
                     title: "Venues",
-                    url: "#",
+                    url: "/coming-soon",
                 },
             ],
         }
