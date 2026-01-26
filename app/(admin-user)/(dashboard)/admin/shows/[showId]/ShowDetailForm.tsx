@@ -550,14 +550,40 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                     </Card>
 
                     {isEditing ? (
-                        <Button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className="w-full h-14 font-black uppercase tracking-widest text-lg shadow-xl shadow-primary/20"
-                        >
-                            {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6 mr-2" />}
-                            {isSaving ? "Saving changes..." : "Save Production"}
-                        </Button>
+                        <div className="grid gap-3">
+                            <Button
+                                onClick={handleSave}
+                                disabled={isSaving}
+                                className="w-full h-12 font-black uppercase tracking-widest text-base shadow-xl shadow-primary/20"
+                            >
+                                {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}
+                                {isSaving ? "Saving changes..." : "Save Production"}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setIsEditing(false);
+                                    setFormData({
+                                        show_name: show.show_name,
+                                        show_description: show.show_description,
+                                        venue: show.venue,
+                                        address: show.address,
+                                        show_status: show.show_status,
+                                        show_start_date: new Date(show.show_start_date),
+                                        show_end_date: new Date(show.show_end_date),
+                                        scheds: show.scheds || [],
+                                    });
+                                    // Reset schedule helper state
+                                    setSelectedDates([]);
+                                    setTimeRanges([{ id: `time-${uuidv4()}`, start: "19:00", end: "21:00" }]);
+                                    setTempSeatmapId(null);
+                                }}
+                                disabled={isSaving}
+                                className="w-full h-12 font-semibold uppercase tracking-widest text-base"
+                            >
+                                Cancel
+                            </Button>
+                        </div>
                     ) : (
                         <div className="grid gap-3">
                             <Button
