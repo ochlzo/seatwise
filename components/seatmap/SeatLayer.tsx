@@ -65,6 +65,7 @@ const SeatItem = React.memo(({
         const category = categories.find((c: any) => c.id === seat.categoryId);
         if (!category) return "#4b5563";
         if (category.color === "#ffd700") return "#000000"; // Gold gets black
+        if (category.color === "transparent") return "#4b5563"; // Use default for Regular
         return "#ffffff"; // Dark colors get white
     };
 
