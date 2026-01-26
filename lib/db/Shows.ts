@@ -1,14 +1,34 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
-export async function getShows() {
+export async function getShows(params?: { status?: string; sort?: string }) {
+    const where: Prisma.ShowWhereInput = {};
+    if (params?.status && params.status !== "ALL") {
+        where.show_status = params.status as any;
+    }
+
+    let orderBy: Prisma.ShowOrderByWithRelationInput = { createdAt: "desc" };
+    if (params?.sort === "oldest") {
+        orderBy = { createdAt: "asc" };
+    }
+
     const shows = await prisma.show.findMany({
+        where,
         include: {
+            scheds: {
+                select: {
+                    sched_start_time: true,
+                    sched_end_time: true,
+                },
+                orderBy: {
+                    sched_start_time: "asc",
+                }
+            },
             _count: {
                 select: { scheds: true }
             }
         },
-        orderBy: { createdAt: "desc" },
+        orderBy,
     });
 
     return shows;
