@@ -117,11 +117,17 @@ export function SeatMapSidebar({
                 )}
               </div>
               <div className="flex gap-1 mt-1">
-                {["#ffd700", "#e005b9", "#111184", "#800020", "#046307"].map((color) => (
+                {["transparent", "#ffd700", "#e005b9", "#111184", "#800020", "#046307"].map((color) => (
                   <button
                     key={color}
-                    className={`w-4 h-4 rounded-full border ${cat.color === color ? "border-zinc-900 dark:border-zinc-100 scale-110" : "border-transparent"}`}
-                    style={{ backgroundColor: color }}
+                    className={`w-4 h-4 rounded-full border ${cat.color === color ? "border-zinc-900 dark:border-zinc-100 scale-110" : color === "transparent" ? "border-zinc-300 dark:border-zinc-700" : "border-transparent"}`}
+                    style={{
+                      backgroundColor: color,
+                      backgroundImage: color === "transparent"
+                        ? "linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent)"
+                        : undefined,
+                      backgroundSize: color === "transparent" ? "6px 6px" : undefined,
+                    }}
                     onClick={() => {
                       const newCats = [...categories];
                       newCats[idx] = { ...cat, color };

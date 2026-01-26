@@ -9,6 +9,14 @@ import { UploadProgress } from "@/components/ui/upload-progress";
 import { saveSeatmapTemplateAction } from "@/lib/actions/saveSeatmapTemplate";
 import { calculateFitViewport } from "@/lib/seatmap/view-utils";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export function SeatmapSaveTemplateButton() {
   const seatmap = useAppSelector((state) => state.seatmap);
@@ -17,11 +25,22 @@ export function SeatmapSaveTemplateButton() {
   const [isSaving, setIsSaving] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
   const [files, setFiles] = React.useState<{ name: string; size: number }[]>([]);
+  const [isCategoryWarningOpen, setIsCategoryWarningOpen] = React.useState(false);
+
+  const hasUnassignedSeats = React.useMemo(() => {
+    return Object.values(seatmap.nodes).some((node) => {
+      return node.type === "seat" && !("categoryId" in node && node.categoryId);
+    });
+  }, [seatmap.nodes]);
 
   const handleSave = async () => {
     const name = seatmap.title?.trim();
     if (!name) {
       toast.error("Seatmap name is required.");
+      return;
+    }
+    if (hasUnassignedSeats) {
+      setIsCategoryWarningOpen(true);
       return;
     }
 
@@ -92,6 +111,19 @@ export function SeatmapSaveTemplateButton() {
           success: "Your seatmap is now available in templates.",
         }}
       />
+      <Dialog open={isCategoryWarningOpen} onOpenChange={setIsCategoryWarningOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unassigned Seats Detected</DialogTitle>
+            <DialogDescription>
+              Some seats do not have a category yet. Assign categories before saving to templates. (e.g., Regular).
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button onClick={() => setIsCategoryWarningOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Button
         variant="outline"
         size="sm"

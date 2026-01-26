@@ -1,12 +1,13 @@
 "use server";
 
 import "server-only";
+import type { Prisma } from "@prisma/client";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 type SaveSeatmapPayload = {
   seatmap_name: string;
-  seatmap_json: Record<string, unknown>;
+  seatmap_json: Prisma.InputJsonValue;
   categories: Array<{ seat_category_id: string; category_name: string }>;
   seatmap_id?: string;
 };
@@ -22,9 +23,23 @@ async function assertAdmin() {
 
   const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
   const { prisma } = await import("@/lib/prisma");
-  const user = await prisma.user.findUnique({
-    where: { firebase_uid: decodedToken.uid },
-  });
+  const fetchUser = async () => {
+    return prisma.user.findUnique({
+      where: { firebase_uid: decodedToken.uid },
+    });
+  };
+  let user: Awaited<ReturnType<typeof fetchUser>> | null = null;
+  try {
+    user = await fetchUser();
+  } catch (error: any) {
+    const message = String(error?.message ?? "");
+    if (message.includes("connection pool")) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      user = await fetchUser();
+    } else {
+      throw error;
+    }
+  }
 
   if (user?.role !== "ADMIN") {
     throw new Error("Forbidden");

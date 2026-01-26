@@ -118,10 +118,30 @@ const seatmapSlice = createSlice({
         loadSeatmap: (state, action: PayloadAction<Partial<SeatmapState>>) => {
             const data = action.payload;
             if (data.title !== undefined) state.title = data.title;
-            if (data.nodes !== undefined) state.nodes = data.nodes;
-            if (data.categories !== undefined) state.categories = data.categories;
             if (data.viewport !== undefined) state.viewport = data.viewport;
             if (data.snapSpacing !== undefined) state.snapSpacing = data.snapSpacing;
+
+            const incomingCategories = data.categories ?? state.categories;
+            state.categories = incomingCategories;
+
+            if (data.nodes !== undefined) {
+                const normalizedNodes: Record<string, SeatmapNode> = {};
+                Object.entries(data.nodes).forEach(([key, node]) => {
+                    const seatNode = node as SeatmapSeatNode;
+                    if (seatNode.type === "seat") {
+                        normalizedNodes[key] = {
+                            ...seatNode,
+                            id: seatNode.id ?? key,
+                        };
+                    } else {
+                        normalizedNodes[key] = {
+                            ...node,
+                            id: (node as SeatmapNode).id ?? key,
+                        } as SeatmapNode;
+                    }
+                });
+                state.nodes = normalizedNodes;
+            }
             // Clear history and selection on load
             state.selectedIds = [];
             state.history.past = [];
