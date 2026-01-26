@@ -105,6 +105,7 @@ enum SeatmapStatus {
 model SeatCategory {
   seat_category_id  String      @id @default(cuid())
   category_name     String
+  price             String      @default("0")
 
   seatmap_id        String?
   seatmap           Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])

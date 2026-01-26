@@ -70,6 +70,7 @@ export function SeatmapSaveTemplateButton() {
         categories: seatmap.categories.map((category) => ({
           seat_category_id: category.id,
           category_name: category.name,
+          price: category.price,
         })),
         seatmap_id: seatmapId,
       });

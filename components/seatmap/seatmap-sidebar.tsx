@@ -77,7 +77,10 @@ export function SeatMapSidebar({
         <div className="text-xs text-zinc-500 mb-2 mt-4">Seat Categories</div>
         <div className="flex flex-col gap-2">
           {categories.map((cat, idx) => (
-            <div key={cat.id} className="flex flex-col gap-1 p-2 border border-zinc-200 dark:border-zinc-800 rounded-md bg-zinc-50/50 dark:bg-zinc-900/50">
+            <div
+              key={cat.id}
+              className="flex flex-col gap-1 p-2 border border-zinc-200 dark:border-zinc-800 rounded-md bg-zinc-50/50 dark:bg-zinc-900/50"
+            >
               <div className="flex items-center gap-2">
                 <input
                   type="text"
@@ -106,7 +109,7 @@ export function SeatMapSidebar({
                     onClick={() => {
                       dispatch(updateCategories([
                         ...categories,
-                        { id: uuidv4(), name: "", color: "#ffd700" }
+                        { id: uuidv4(), name: "", color: "#ffd700", price: "0" }
                       ]));
                     }}
                     className="p-1 hover:text-blue-500 transition-colors"
@@ -117,24 +120,58 @@ export function SeatMapSidebar({
                 )}
               </div>
               <div className="flex gap-1 mt-1">
-                {["transparent", "#ffd700", "#e005b9", "#111184", "#800020", "#046307"].map((color) => (
-                  <button
-                    key={color}
-                    className={`w-4 h-4 rounded-full border ${cat.color === color ? "border-zinc-900 dark:border-zinc-100 scale-110" : color === "transparent" ? "border-zinc-300 dark:border-zinc-700" : "border-transparent"}`}
-                    style={{
-                      backgroundColor: color,
-                      backgroundImage: color === "transparent"
-                        ? "linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent)"
-                        : undefined,
-                      backgroundSize: color === "transparent" ? "6px 6px" : undefined,
-                    }}
-                    onClick={() => {
+                  {["transparent", "#ffd700", "#e005b9", "#111184", "#800020", "#046307"].map((color) => (
+                    <button
+                      key={color}
+                      className={`w-4 h-4 rounded-full border ${cat.color === color ? "border-zinc-900 dark:border-zinc-100 scale-110" : color === "transparent" ? "border-zinc-300 dark:border-zinc-700" : "border-transparent"}`}
+                      style={{
+                        backgroundColor: color,
+                        backgroundImage: color === "transparent"
+                          ? "linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent)"
+                          : undefined,
+                        backgroundSize: color === "transparent" ? "6px 6px" : undefined,
+                      }}
+                      onClick={() => {
+                        const newCats = [...categories];
+                        newCats[idx] = { ...cat, color };
+                        dispatch(updateCategories(newCats));
+                      }}
+                    />
+                  ))}
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[10px] text-zinc-500">PHP</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  className="w-24 rounded border border-zinc-200 bg-transparent px-2 py-1 text-[10px] dark:border-zinc-800"
+                  placeholder="0.00"
+                  value={cat.price}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (next !== "" && !/^\d{0,4}(\.\d{0,2})?$/.test(next)) {
+                      return;
+                    }
+                    const newCats = [...categories];
+                    newCats[idx] = { ...cat, price: next };
+                    dispatch(updateCategories(newCats));
+                  }}
+                  onBlur={() => {
+                    const raw = String(cat.price ?? "").trim();
+                    const normalizedValue = raw === "" ? 0 : Number(raw);
+                    if (Number.isNaN(normalizedValue)) {
                       const newCats = [...categories];
-                      newCats[idx] = { ...cat, color };
+                      newCats[idx] = { ...cat, price: "0.00" };
                       dispatch(updateCategories(newCats));
-                    }}
-                  />
-                ))}
+                      return;
+                    }
+                    const clamped = Math.min(Math.max(normalizedValue, 0), 9999.99);
+                    const newCats = [...categories];
+                    newCats[idx] = { ...cat, price: clamped.toFixed(2) };
+                    dispatch(updateCategories(newCats));
+                  }}
+                />
               </div>
             </div>
           ))}
@@ -142,7 +179,7 @@ export function SeatMapSidebar({
             <button
               onClick={() => {
                 dispatch(updateCategories([
-                  { id: uuidv4(), name: "", color: "#ffd700" }
+                  { id: uuidv4(), name: "", color: "#ffd700", price: "0" }
                 ]));
               }}
               className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 transition-all"
