@@ -76,8 +76,8 @@ model Sched {
 
   show_id           String
   show              Show        @relation(fields: [show_id], references: [show_id])
-  seatmap_id        String
-  seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
+  seatmap_id        String?
+  seatmap           Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
   seats             Seat[]
 
   createdAt       DateTime    @default(now())
@@ -106,8 +106,8 @@ model SeatCategory {
   seat_category_id  String      @id @default(cuid())
   category_name     String
 
-  seatmap_id        String
-  seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
+  seatmap_id        String?
+  seatmap           Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
   seats             Seat[]
 
   createdAt         DateTime    @default(now())
@@ -122,8 +122,8 @@ model Seat {
   seat_category_id  String
   seat_category     SeatCategory @relation(fields: [seat_category_id], references: [seat_category_id])
 
-  sched_id          String
-  sched             Sched       @relation(fields: [sched_id], references: [sched_id])
+  sched_id          String?
+  sched             Sched?       @relation(fields: [sched_id], references: [sched_id])
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
@@ -132,4 +132,4 @@ model Seat {
 enum SeatStatus {
   OPEN
   RESERVED
-}1
+}

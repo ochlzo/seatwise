@@ -48,6 +48,19 @@ export default function Page() {
                     throw new Error("Failed to load seatmap");
                 }
                 const data = await response.json();
+                console.log("Seatmap JSON from DB:", data.seatmap_json);
+                const jsonBlob = new Blob(
+                    [JSON.stringify(data.seatmap_json ?? {}, null, 2)],
+                    { type: "application/json" }
+                );
+                const downloadUrl = URL.createObjectURL(jsonBlob);
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = `${data.seatmap_name ?? "seatmap"}-db.json`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(downloadUrl);
                 if (!isMounted) return;
                 dispatch(loadSeatmap(data.seatmap_json));
                 dispatch(setTitle(data.seatmap_name));
