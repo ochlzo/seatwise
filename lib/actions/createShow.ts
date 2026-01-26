@@ -25,18 +25,19 @@ type CreateShowPayload = {
 };
 
 const toDateOnly = (value: string | Date) => {
-  if (value instanceof Date) {
-    return new Date(
-      value.getFullYear(),
-      value.getMonth(),
-      value.getDate()
-    );
+  // Handle string input (YYYY-MM-DD) by forcing UTC midnight
+  if (typeof value === "string") {
+    return new Date(`${value}T00:00:00Z`);
   }
-  return new Date(`${value}T00:00:00`);
+  // For Date objects, return as-is (assuming already handled) or strip time if needed
+  // But typically input is string from form.
+  return value;
 };
 
 const toTime = (timeValue: string) => {
-  return new Date(`1970-01-01T${timeValue}:00`);
+  // Force UTC parsing to preserve the exact HH:mm entered by the user
+  // This prevents server timezone offsets from shifting the stored time
+  return new Date(`1970-01-01T${timeValue}:00Z`);
 };
 
 export async function createShowAction(data: CreateShowPayload) {

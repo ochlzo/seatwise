@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { format, differenceInDays, addDays, isSameDay, differenceInCalendarMonths } from "date-fns";
-import { CalendarIcon, MapPin, Ticket, Clock, Plus, Trash2, Save, Loader2, CalendarDays } from "lucide-react";
+import { format } from "date-fns";
+import { CalendarIcon, MapPin, Ticket, Clock, Save, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -19,14 +19,6 @@ import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type { ShowStatus } from "@prisma/client";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 
 const STATUS_COLORS: Record<string, string> = {
     UPCOMING: "#3B82F6",
@@ -36,13 +28,6 @@ const STATUS_COLORS: Record<string, string> = {
     ON_GOING: "#F59E0B",
     CANCELLED: "#EF4444",
     POSTPONED: "#A855F7",
-};
-
-type ShowSched = {
-    sched_id: string;
-    sched_date: string;
-    sched_start_time: string;
-    sched_end_time: string;
 };
 
 type ShowDetail = {
@@ -71,7 +56,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const router = useRouter();
     const [isSaving, setIsSaving] = React.useState(false);
     const [isEditing, setIsEditing] = React.useState(false);
-    const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
     const [formData, setFormData] = React.useState({
         show_name: show.show_name,
         show_description: show.show_description,
@@ -82,29 +66,12 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         show_end_date: new Date(show.show_end_date),
     });
 
-    const [scheds, setScheds] = React.useState<ShowSched[]>(
-        show.scheds.map((s) => ({
-            ...s,
-            sched_id:
-                s.sched_id ??
-                `sched-${format(new Date(s.sched_date), "yyyy-MM-dd")}-${format(new Date(s.sched_start_time), "HH:mm")}-${format(new Date(s.sched_end_time), "HH:mm")}-${Date.now()}`,
-            sched_date: format(new Date(s.sched_date), "yyyy-MM-dd"),
-            sched_start_time: format(new Date(s.sched_start_time), "HH:mm"),
-            sched_end_time: format(new Date(s.sched_end_time), "HH:mm"),
-        }))
-    );
-    const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
-    const [applyToAllDates, setApplyToAllDates] = React.useState(false);
-    const [timeRanges, setTimeRanges] = React.useState([
-        { id: `time-${Date.now()}`, start: "19:00", end: "21:00" },
-    ]);
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
             const result = await updateShowAction(show.show_id, {
                 ...formData,
-                scheds,
             });
 
             if (result.success) {
@@ -120,109 +87,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             setIsSaving(false);
         }
     };
-
-    // Calculate dates in range
-    const daysInRange = React.useMemo(() => {
-        const days = [];
-        const start = formData.show_start_date;
-        const end = formData.show_end_date;
-        const diff = differenceInDays(end, start);
-
-        for (let i = 0; i <= diff; i++) {
-            days.push(addDays(start, i));
-        }
-        return days;
-    }, [formData.show_start_date, formData.show_end_date]);
-
-    const removeSched = (id: string) => {
-        setScheds((prev) => prev.filter((s) => s.sched_id !== id));
-    };
-
-    const updateSchedTime = (id: string, patch: { sched_start_time?: string; sched_end_time?: string }) => {
-        setScheds((prev) =>
-            prev.map((s) =>
-                s.sched_id === id ? { ...s, ...patch } : s
-            )
-        );
-    };
-
-    const addTimeRange = () => {
-        setTimeRanges((prev) => [
-            ...prev,
-            { id: `time-${Date.now()}`, start: "19:00", end: "21:00" },
-        ]);
-    };
-
-    const updateTimeRange = (id: string, patch: { start?: string; end?: string }) => {
-        setTimeRanges((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-    };
-
-    const removeTimeRange = (id: string) => {
-        setTimeRanges((prev) => prev.filter((t) => t.id !== id));
-    };
-
-    const handleAddSchedules = () => {
-        if (!selectedDates.length) {
-            toast.error("Select at least one date.");
-            return;
-        }
-
-        const validRanges = timeRanges.filter((t) => t.start && t.end);
-        if (!validRanges.length) {
-            toast.error("Add at least one valid time range.");
-            return;
-        }
-
-        const newEntries: ShowSched[] = [];
-        selectedDates.forEach((date) => {
-            const dateKey = format(date, "yyyy-MM-dd");
-            validRanges.forEach((range) => {
-                newEntries.push({
-                    sched_id: `new-${dateKey}-${range.start}-${range.end}-${Date.now()}`,
-                    sched_date: dateKey,
-                    sched_start_time: range.start,
-                    sched_end_time: range.end,
-                });
-            });
-        });
-
-        setScheds((prev) => [...prev, ...newEntries]);
-        setSelectedDates([]);
-        setTimeRanges([{ id: `time-${Date.now()}`, start: "19:00", end: "21:00" }]);
-        setIsScheduleOpen(false);
-    };
-
-    const isDateRangeValid =
-        formData.show_start_date &&
-        formData.show_end_date &&
-        formData.show_start_date.getTime() <= formData.show_end_date.getTime();
-    const numberOfMonths =
-        differenceInCalendarMonths(formData.show_end_date, formData.show_start_date) >= 1 ? 2 : 1;
-
-    const getDatesInRange = React.useCallback(() => {
-        const dates: Date[] = [];
-        const cursor = new Date(formData.show_start_date);
-        while (cursor <= formData.show_end_date) {
-            dates.push(new Date(cursor));
-            cursor.setDate(cursor.getDate() + 1);
-        }
-        return dates;
-    }, [formData.show_start_date, formData.show_end_date]);
-
-    React.useEffect(() => {
-        if (applyToAllDates && isDateRangeValid) {
-            const nextDates = getDatesInRange();
-            setSelectedDates((prev) => {
-                if (prev.length !== nextDates.length) return nextDates;
-                for (let i = 0; i < prev.length; i += 1) {
-                    if (prev[i].getTime() !== nextDates[i].getTime()) {
-                        return nextDates;
-                    }
-                }
-                return prev;
-            });
-        }
-    }, [applyToAllDates, getDatesInRange, isDateRangeValid]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -400,90 +264,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         </CardContent>
                     </Card>
 
-                    {/* 3. Schedule Section */}
-                    <Card className="border-sidebar-border shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="text-lg md:text-xl font-semibold">Production Schedule</CardTitle>
-                            <CardDescription>Manage daily showtimes for the entire production run.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-8">
-                            {daysInRange.map((date, idx) => {
-                                const dayScheds = scheds.filter((s) => isSameDay(new Date(s.sched_date), date));
-                                return (
-                                    <div key={idx} className="space-y-4 pb-6 border-b border-sidebar-border last:border-0 last:pb-0">
-                                        <div className="flex items-center justify-between">
-                                            <div className="space-y-0.5">
-                                                <h3 className="text-sm font-semibold">
-                                                    {format(date, "EEEE, MMMM do")}
-                                                </h3>
-                                                <p className="text-[10px] text-muted-foreground font-semibold">Day {idx + 1}</p>
-                                            </div>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => setIsScheduleOpen(true)}
-                                                className="h-8 gap-1.5 text-[10px] font-semibold"
-                                                disabled={!isDateRangeValid || !isEditing}
-                                            >
-                                                <CalendarDays className="w-3 h-3" />
-                                                Add Schedule
-                                            </Button>
-                                        </div>
-
-                                        <div className="grid gap-3">
-                                            {dayScheds.map((s) => (
-                                                <div
-                                                    key={s.sched_id}
-                                                    className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg group/sched border border-sidebar-border/50"
-                                                >
-                                                    <div className="flex-1 grid grid-cols-2 gap-3">
-                                                        <div className="space-y-1.5">
-                                                            <Label className="text-[9px] font-semibold text-muted-foreground ml-1">Starts</Label>
-                                                            <Input
-                                                                type="time"
-                                                                className="h-9 bg-background"
-                                                                value={s.sched_start_time}
-                                                                disabled={!isEditing}
-                                                                onChange={(e) =>
-                                                                    updateSchedTime(s.sched_id, { sched_start_time: e.target.value })
-                                                                }
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1.5">
-                                                            <Label className="text-[9px] font-semibold text-muted-foreground ml-1">Ends</Label>
-                                                            <Input
-                                                                type="time"
-                                                                className="h-9 bg-background"
-                                                                value={s.sched_end_time}
-                                                                disabled={!isEditing}
-                                                                onChange={(e) =>
-                                                                    updateSchedTime(s.sched_id, { sched_end_time: e.target.value })
-                                                                }
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                                        onClick={() => removeSched(s.sched_id)}
-                                                        disabled={!isEditing}
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                            {dayScheds.length === 0 && (
-                                                <div className="p-4 rounded-lg bg-muted/20 border border-dashed border-sidebar-border flex items-center justify-center">
-                                                    <p className="text-xs text-muted-foreground italic font-medium">No schedules set for this day.</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </CardContent>
-                    </Card>
                 </div>
 
                 {/* 4. Sidebar Stats */}
@@ -498,11 +278,16 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         <CardContent className="space-y-4">
                             <div className="flex justify-between items-center py-2 border-b border-sidebar-border/50">
                                 <span className="text-xs font-semibold text-muted-foreground">Total Days</span>
-                                <span className="font-black text-xl">{daysInRange.length}</span>
+                                <span className="font-black text-xl">
+                                    {new Set(show.scheds.map(s => {
+                                        const d = new Date(s.sched_date);
+                                        return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+                                    })).size}
+                                </span>
                             </div>
                             <div className="flex justify-between items-center py-2 border-b border-sidebar-border/50">
                                 <span className="text-xs font-semibold text-muted-foreground">Total Shows</span>
-                                <span className="font-black text-xl">{scheds.length}</span>
+                                <span className="font-black text-xl">{show.scheds.length}</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -535,109 +320,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                     )}
                 </div>
             </div>
-
-            <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
-                    <DialogHeader>
-                        <DialogTitle className="text-sm sm:text-lg">Add schedules</DialogTitle>
-                        <DialogDescription className="text-[11px] sm:text-sm">
-                            Select dates within the show range, then add one or more time ranges.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-3 md:gap-6 md:grid-cols-[1.1fr_1fr]">
-                        <div className="rounded-lg border border-sidebar-border/60 p-3 flex justify-center md:block">
-                            <Calendar
-                                mode="multiple"
-                                selected={selectedDates}
-                                onSelect={(dates) => setSelectedDates(dates ?? [])}
-                                numberOfMonths={numberOfMonths}
-                                disabled={(date) =>
-                                    date < formData.show_start_date || date > formData.show_end_date
-                                }
-                                className="[--cell-size:--spacing(7)] text-xs"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold">Time ranges</p>
-                                <div className="flex items-center gap-3">
-                                    <label className="flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
-                                        <input
-                                            type="checkbox"
-                                            className="h-3.5 w-3.5 accent-primary"
-                                            checked={applyToAllDates}
-                                            onChange={(e) => {
-                                                const next = e.target.checked;
-                                                setApplyToAllDates(next);
-                                                if (next) {
-                                                    setSelectedDates(getDatesInRange());
-                                                }
-                                            }}
-                                            disabled={!isDateRangeValid || !isEditing}
-                                        />
-                                        Apply to all dates
-                                    </label>
-                                    <Button variant="outline" size="sm" onClick={addTimeRange} className="gap-1.5" disabled={!isEditing}>
-                                        <Plus className="h-3.5 w-3.5" />
-                                        Add time
-                                    </Button>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <div className="grid grid-cols-[1fr_1fr_auto] items-center text-[11px] font-semibold text-muted-foreground px-3">
-                                    <span>Starts</span>
-                                    <span>Ends</span>
-                                    <span className="sr-only">Actions</span>
-                                </div>
-                                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                                    {timeRanges.map((range) => (
-                                        <div
-                                            key={range.id}
-                                            className="grid gap-2 grid-cols-[1fr_1fr_auto] items-end rounded-lg border border-sidebar-border/60 p-2"
-                                        >
-                                            <div className="space-y-2">
-                                                <Input
-                                                    type="time"
-                                                    value={range.start}
-                                                    className="h-8 text-xs sm:h-9 sm:text-sm"
-                                                    onChange={(e) => updateTimeRange(range.id, { start: e.target.value })}
-                                                    disabled={!isEditing}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Input
-                                                    type="time"
-                                                    value={range.end}
-                                                    className="h-8 text-xs sm:h-9 sm:text-sm"
-                                                    onChange={(e) => updateTimeRange(range.id, { end: e.target.value })}
-                                                    disabled={!isEditing}
-                                                />
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                                onClick={() => removeTimeRange(range.id)}
-                                                disabled={timeRanges.length === 1 || !isEditing}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleAddSchedules} disabled={!isEditing}>
-                            Add schedules
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }
+
