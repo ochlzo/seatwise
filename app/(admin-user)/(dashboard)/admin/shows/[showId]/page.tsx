@@ -30,25 +30,11 @@ export default async function ShowIdPage({
                 }
             />
             <div className="relative flex flex-1 flex-col bg-background">
-                {/* Ambient Background Layer */}
-                {show.show_image_key && (
-                    <>
-                        <div
-                            className="fixed inset-0 z-0 bg-cover bg-center origin-center blur-[160px] opacity-30 pointer-events-none"
-                            style={{
-                                backgroundImage: `url(${show.show_image_key})`,
-                                backgroundPosition: "50% 35%",
-                            }}
-                        />
-                        <div className="fixed inset-0 z-0 bg-background/40 backdrop-blur-3xl pointer-events-none" />
-                    </>
-                )}
-
                 <div className="relative z-10 flex flex-1 flex-col p-4 md:p-8 pt-0 max-w-7xl mx-auto w-full">
                     {/* Header with back breadcrumb is already handled by PageHeader, 
                         but we can add a specific title if needed */}
                     <div className="mb-6">
-                        <h2 className="text-2xl font-bold tracking-tight italic uppercase">
+                        <h2 className="text-lg md:text-xl font-semibold">
                             Edit Production
                         </h2>
                         <p className="text-muted-foreground text-sm">

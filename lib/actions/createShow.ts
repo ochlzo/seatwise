@@ -1,0 +1,105 @@
+"use server";
+
+import "server-only";
+import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+
+type CreateShowPayload = {
+  show_name: string;
+  show_description: string;
+  venue: string;
+  address: string;
+  show_status: string;
+  show_start_date: string | Date;
+  show_end_date: string | Date;
+  show_image_key?: string;
+  scheds?: Array<{
+    sched_date: string;
+    sched_start_time: string;
+    sched_end_time: string;
+  }>;
+};
+
+const toDateOnly = (value: string | Date) => {
+  if (value instanceof Date) {
+    return new Date(
+      value.getFullYear(),
+      value.getMonth(),
+      value.getDate()
+    );
+  }
+  return new Date(`${value}T00:00:00`);
+};
+
+const toTime = (timeValue: string) => {
+  return new Date(`1970-01-01T${timeValue}:00`);
+};
+
+export async function createShowAction(data: CreateShowPayload) {
+  try {
+    const { adminAuth } = await import("@/lib/firebaseAdmin");
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get("session")?.value;
+
+    if (!sessionCookie) {
+      throw new Error("Unauthorized");
+    }
+
+    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+    const user = await prisma.user.findUnique({
+      where: { firebase_uid: decodedToken.uid },
+    });
+
+    if (user?.role !== "ADMIN") {
+      throw new Error("Forbidden");
+    }
+
+    const {
+      show_name,
+      show_description,
+      venue,
+      address,
+      show_status,
+      show_start_date,
+      show_end_date,
+      show_image_key,
+      scheds = [],
+    } = data;
+
+    const show = await prisma.$transaction(async (tx) => {
+      const created = await tx.show.create({
+        data: {
+          show_name,
+          show_description,
+          venue,
+          address,
+          show_status: show_status as any,
+          show_start_date: toDateOnly(show_start_date),
+          show_end_date: toDateOnly(show_end_date),
+          show_image_key,
+        },
+      });
+
+      if (scheds.length > 0) {
+        await tx.sched.createMany({
+          data: scheds.map((s) => ({
+            show_id: created.show_id,
+            sched_date: toDateOnly(s.sched_date),
+            sched_start_time: toTime(s.sched_start_time),
+            sched_end_time: toTime(s.sched_end_time),
+          })),
+        });
+      }
+
+      return created;
+    });
+
+    revalidatePath("/admin/shows");
+
+    return { success: true, showId: show.show_id };
+  } catch (error: any) {
+    console.error("Error in createShowAction:", error);
+    return { success: false, error: error.message || "Failed to create show" };
+  }
+}

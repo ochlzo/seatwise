@@ -133,7 +133,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                 <div className="absolute bottom-6 left-8 right-8 flex justify-between items-end">
                     <div className="space-y-1">
-                        <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase drop-shadow-md">
+                        <h1 className="text-3xl md:text-4xl font-semibold text-white drop-shadow-md">
                             {formData.show_name}
                         </h1>
                         <p className="text-white/80 font-medium flex items-center gap-2 drop-shadow-sm">
@@ -160,13 +160,13 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                 <div className="lg:col-span-2 space-y-6">
                     <Card className="border-sidebar-border shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-xl italic font-bold">Show Information</CardTitle>
+                            <CardTitle className="text-lg md:text-xl font-semibold">Show Information</CardTitle>
                             <CardDescription>Update the primary details of the production.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label htmlFor="name" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Show Name</Label>
+                                    <Label htmlFor="name" className="text-xs font-semibold text-muted-foreground">Show Name</Label>
                                     <Input
                                         id="name"
                                         value={formData.show_name}
@@ -175,7 +175,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="status" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Current Status</Label>
+                                    <Label htmlFor="status" className="text-xs font-semibold text-muted-foreground">Current Status</Label>
                                     <Input
                                         id="status"
                                         value={formData.show_status}
@@ -186,7 +186,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="description" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Production Description</Label>
+                                <Label htmlFor="description" className="text-xs font-semibold text-muted-foreground">Production Description</Label>
                                 <textarea
                                     id="description"
                                     value={formData.show_description}
@@ -198,7 +198,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label htmlFor="venue" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Venue</Label>
+                                    <Label htmlFor="venue" className="text-xs font-semibold text-muted-foreground">Venue</Label>
                                     <Input
                                         id="venue"
                                         value={formData.venue}
@@ -207,7 +207,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="address" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Full Address</Label>
+                                    <Label htmlFor="address" className="text-xs font-semibold text-muted-foreground">Full Address</Label>
                                     <Input
                                         id="address"
                                         value={formData.address}
@@ -219,7 +219,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Start Date</Label>
+                                    <Label className="text-xs font-semibold text-muted-foreground">Start Date</Label>
                                     <Popover>
                                         <PopoverTrigger asChild>
                                             <Button
@@ -244,7 +244,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                     </Popover>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">End Date</Label>
+                                    <Label className="text-xs font-semibold text-muted-foreground">End Date</Label>
                                     <Popover>
                                         <PopoverTrigger asChild>
                                             <Button
@@ -276,7 +276,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                     {/* 3. Schedule Section */}
                     <Card className="border-sidebar-border shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-xl italic font-bold">Production Schedule</CardTitle>
+                            <CardTitle className="text-lg md:text-xl font-semibold">Production Schedule</CardTitle>
                             <CardDescription>Manage daily showtimes for the entire production run.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-8">
@@ -286,16 +286,16 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                     <div key={idx} className="space-y-4 pb-6 border-b border-sidebar-border last:border-0 last:pb-0">
                                         <div className="flex items-center justify-between">
                                             <div className="space-y-0.5">
-                                                <h3 className="font-bold text-sm tracking-tight uppercase">
+                                                <h3 className="text-sm font-semibold">
                                                     {format(date, "EEEE, MMMM do")}
                                                 </h3>
-                                                <p className="text-[10px] text-muted-foreground font-bold tracking-[0.2em] uppercase">Day {idx + 1}</p>
+                                                <p className="text-[10px] text-muted-foreground font-semibold">Day {idx + 1}</p>
                                             </div>
                                             <Button
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => addSched(date)}
-                                                className="h-8 gap-1.5 font-bold uppercase tracking-wider text-[10px]"
+                                                className="h-8 gap-1.5 text-[10px] font-semibold"
                                             >
                                                 <Plus className="w-3 h-3" />
                                                 Add Time
@@ -310,7 +310,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                 >
                                                     <div className="flex-1 grid grid-cols-2 gap-3">
                                                         <div className="space-y-1.5">
-                                                            <Label className="text-[9px] uppercase font-bold text-muted-foreground ml-1">Starts</Label>
+                                                            <Label className="text-[9px] font-semibold text-muted-foreground ml-1">Starts</Label>
                                                             <Input
                                                                 type="time"
                                                                 className="h-9 bg-background"
@@ -324,7 +324,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                             />
                                                         </div>
                                                         <div className="space-y-1.5">
-                                                            <Label className="text-[9px] uppercase font-bold text-muted-foreground ml-1">Ends</Label>
+                                                            <Label className="text-[9px] font-semibold text-muted-foreground ml-1">Ends</Label>
                                                             <Input
                                                                 type="time"
                                                                 className="h-9 bg-background"
@@ -368,15 +368,15 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                             <Clock className="w-24 h-24" />
                         </div>
                         <CardHeader>
-                            <CardTitle className="text-lg italic font-bold">Summary</CardTitle>
+                            <CardTitle className="text-lg font-semibold">Summary</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex justify-between items-center py-2 border-b border-sidebar-border/50">
-                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Days</span>
+                                <span className="text-xs font-semibold text-muted-foreground">Total Days</span>
                                 <span className="font-black text-xl">{daysInRange.length}</span>
                             </div>
                             <div className="flex justify-between items-center py-2 border-b border-sidebar-border/50">
-                                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Shows</span>
+                                <span className="text-xs font-semibold text-muted-foreground">Total Shows</span>
                                 <span className="font-black text-xl">{scheds.length}</span>
                             </div>
                         </CardContent>

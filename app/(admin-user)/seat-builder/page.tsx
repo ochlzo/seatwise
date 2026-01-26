@@ -10,6 +10,7 @@ import { SeatmapTitle } from "@/components/seatmap/SeatmapTitle";
 import { SeatmapExportActions } from "@/components/seatmap/SeatmapExportActions";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
+import LoadingPage from "@/app/LoadingPage";
 
 // Dynamically import Konva component to avoid SSR issues
 const SeatmapCanvas = dynamic(
@@ -29,6 +30,7 @@ export default function Page() {
 
     return (
         <SidebarProvider className="h-svh overflow-hidden">
+            <LoadingPage />
             <SeatMapSidebar />
             <SidebarInset className="overflow-hidden">
                 <SeatmapPageHeader

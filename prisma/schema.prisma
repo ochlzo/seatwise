@@ -48,8 +48,8 @@ model Show {
   venue            String      
   address          String
   show_status      ShowStatus
-  show_start_date  DateTime
-  show_end_date    DateTime
+  show_start_date  DateTime    @db.Date
+  show_end_date    DateTime    @db.Date
   show_image_key   String?
 
   scheds           Sched[]
@@ -70,12 +70,57 @@ enum ShowStatus {
 
 model Sched {
   sched_id          String      @id @default(cuid())
-  sched_start_time  DateTime
-  sched_end_time    DateTime
+  sched_date        DateTime    @db.Date
+  sched_start_time  DateTime    @db.Time
+  sched_end_time    DateTime    @db.Time
 
   show_id           String
   show              Show        @relation(fields: [show_id], references: [show_id])
+  seatmaps          Seatmap[]
 
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+}
+
+model Seatmap {
+  seatmap_id        String      @id @default(cuid())
+  seatmap_name      String
+  seatmap_json      Json
+
+  sched_id          String
+  sched             Sched       @relation(fields: [sched_id], references: [sched_id])
+  seat_categories   SeatCategory[]
+  seats             Seat[]
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@unique([sched_id, seatmap_name])
+}
+
+model SeatCategory {
+  seat_category_id  String      @id @default(cuid())
+  category_name     String
+
+  seatmap_id        String
+  seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
+  seats             Seat[]
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+}
+
+model Seat {
+  seat_id           String      @id @default(cuid())
+  seat_number        String
+  seat_status       String
+
+  seat_category_id  String
+  seat_category     SeatCategory @relation(fields: [seat_category_id], references: [seat_category_id])
+
+  seatmap_id        String
+  seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 }

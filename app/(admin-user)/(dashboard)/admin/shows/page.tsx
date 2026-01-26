@@ -53,14 +53,14 @@ export default async function ShowsPage({
                 {/* Header Section */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex flex-col gap-1">
-                        <h2 className="text-2xl font-bold tracking-tight">Show Management</h2>
+                        <h2 className="text-lg md:text-xl font-semibold">Show Management</h2>
                         <p className="text-muted-foreground text-sm">
                             View and manage all events, venue details, and performance schedules.
                         </p>
                     </div>
                     <div className="flex flex-col md:flex-row items-center gap-3">
                         <ShowFilters />
-                        <Button asChild className="w-full md:w-auto font-bold uppercase tracking-wider shadow-md shadow-primary/10">
+                        <Button asChild className="w-full md:w-auto font-semibold shadow-md shadow-primary/10">
                             <Link href="/admin/shows/create">
                                 <Plus className="mr-2 h-4 w-4" />
                                 New Show
@@ -74,7 +74,7 @@ export default async function ShowsPage({
                         <div className="p-4 rounded-full bg-muted mb-4">
                             <Ticket className="w-8 h-8 text-muted-foreground" />
                         </div>
-                        <CardTitle className="text-xl mb-2 italic">
+                        <CardTitle className="text-lg md:text-xl mb-2 font-semibold">
                             {hasFilters ? "NO MATCHING PRODUCTIONS" : "AWAITING PRODUCTIONS"}
                         </CardTitle>
                         <CardDescription className="max-w-xs mx-auto mb-6">
@@ -108,7 +108,7 @@ export default async function ShowsPage({
                                 </div>
                                 <CardHeader className="pb-2">
                                     <div className="flex justify-between items-start gap-2">
-                                        <CardTitle className="text-xl font-bold italic tracking-tight line-clamp-1 truncate">
+                                        <CardTitle className="text-lg md:text-xl font-semibold line-clamp-1 truncate">
                                             {show.show_name}
                                         </CardTitle>
                                         <Badge
@@ -118,7 +118,7 @@ export default async function ShowsPage({
                                                 color: "white",
                                                 borderColor: "transparent"
                                             }}
-                                            className="shadow-sm font-bold italic px-3 py-1 text-xs shrink-0"
+                                            className="shadow-sm font-semibold px-3 py-1 text-xs shrink-0"
                                         >
                                             {show.show_status.replace('_', ' ')}
                                         </Badge>
@@ -144,14 +144,14 @@ export default async function ShowsPage({
 
                                     <div className="flex items-center justify-between pt-4 border-t border-sidebar-border">
                                         <div className="flex flex-col max-w-[180px]">
-                                            <span className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Schedules</span>
-                                            <span className="text-sm font-bold line-clamp-1 italic text-primary/90">
+                                            <span className="text-xs text-muted-foreground font-semibold">Schedules</span>
+                                            <span className="text-sm font-semibold line-clamp-1 text-primary/90">
                                                 {show.scheds.length > 0
                                                     ? show.scheds.map((s: any) => `${formatTime(new Date(s.sched_start_time))} - ${formatTime(new Date(s.sched_end_time))}`).join(', ')
                                                     : "None"}
                                             </span>
                                         </div>
-                                        <Button asChild variant="ghost" size="sm" className="font-bold text-primary hover:text-primary hover:bg-primary/10 group">
+                                        <Button asChild variant="ghost" size="sm" className="font-semibold text-primary hover:text-primary hover:bg-primary/10 group">
                                             <Link href={`/admin/shows/${show.show_id}`}>
                                                 View Details
                                             </Link>
