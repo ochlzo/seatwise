@@ -86,6 +86,7 @@ model Seatmap {
   seatmap_id        String      @id @default(cuid())
   seatmap_name      String
   seatmap_json      Json
+  seatmap_status    SeatmapStatus @default(ACTIVE)
 
   sched_id          String
   sched             Sched       @relation(fields: [sched_id], references: [sched_id])
@@ -96,6 +97,11 @@ model Seatmap {
   updatedAt         DateTime    @updatedAt
 
   @@unique([sched_id, seatmap_name])
+}
+
+enum SeatmapStatus {
+  ACTIVE
+  DISABLED
 }
 
 model SeatCategory {

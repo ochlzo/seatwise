@@ -82,9 +82,11 @@ Your job is to help implement features, fix bugs, and refactor code while preser
 - Media & Assets: **Cloudinary** (configured in `lib/cloudinary.ts`):
   - Shared default avatars stored in `seatwise/avatars/default_avatars`.
   - User custom uploads stored in `seatwise/avatars/user_custom`.
+  - Show thumbnails stored in `seatwise/show_thumbnails`.
   - **Auto-Cleanup**: When replacing a `google_avatars` entry, the server action automatically deletes the old asset from Cloudinary to prevent storage bloat.
 - Mutations: **Next.js Server Actions** (placed in `lib/actions/`):
   - Consolidated logic: `updateAvatarAction.ts` handles both preset selection and custom Cloudinary uploads in a single transactional flow.
+  - Show creation uses `createShowAction` with optional base64 image upload (Cloudinary) and schedule creation in a transaction.
   - Pattern: Perform DB update in action -> `revalidatePath` -> return success/error.
 
 ---
@@ -106,6 +108,13 @@ Your job is to help implement features, fix bugs, and refactor code while preser
 
 - **Overwrite Mode**: When `maxFiles` is 1, the uploader enters "Replacement Mode"—dropping a new file automatically replaces the current one instead of erroring.
 - **Hide Remove Option**: Supports a `showRemoveButton` prop to strip redundant "x" buttons in simplified selection flows.
+- **Shared Preview**: `FileImagePreview` is the shared preview component for uploaded images.
+
+### Show Schedule Modal
+
+- **Date Range Gate**: "Add Schedule" is disabled until `show_start_date` and `show_end_date` are valid.
+- **Multi-Date Select**: Schedules are created by selecting multiple dates, then adding one or more time ranges.
+- **Persisted Fields**: Each schedule row saves `sched_date`, `sched_start_time`, and `sched_end_time` (time-only fields).
 
 ---
 
