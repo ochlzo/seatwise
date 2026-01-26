@@ -59,13 +59,15 @@ export default async function ShowsPage({
                         </p>
                     </div>
                     <div className="flex flex-col md:flex-row items-center gap-3">
-                        <ShowFilters />
-                        <Button asChild className="w-full md:w-auto font-semibold shadow-md shadow-primary/10">
+                        <Button asChild className="w-full md:w-auto font-semibold shadow-md shadow-primary/10 order-1 md:order-none">
                             <Link href="/admin/shows/create">
                                 <Plus className="mr-2 h-4 w-4" />
                                 New Show
                             </Link>
                         </Button>
+                        <div className="w-full md:w-auto order-2 md:order-none">
+                            <ShowFilters />
+                        </div>
                     </div>
                 </div>
 

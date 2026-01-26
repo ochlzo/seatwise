@@ -48,11 +48,11 @@ export function ShowFilters() {
     };
 
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 md:w-auto">
             {/* Status Filter */}
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-2 border-sidebar-border bg-background shadow-sm hover:bg-sidebar-accent transition-colors">
+                    <Button variant="outline" size="sm" className="h-9 w-1/2 gap-2 border-sidebar-border bg-background shadow-sm hover:bg-sidebar-accent transition-colors md:w-auto">
                         <Filter className="h-4 w-4 text-muted-foreground" />
                         <span className="font-semibold text-xs">
                             {statuses.find(s => s.value === currentStatus)?.label || "Filter"}
@@ -80,7 +80,7 @@ export function ShowFilters() {
             {/* Sort Dropdown */}
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-2 border-sidebar-border bg-background shadow-sm hover:bg-sidebar-accent transition-colors">
+                    <Button variant="outline" size="sm" className="h-9 w-1/2 gap-2 border-sidebar-border bg-background shadow-sm hover:bg-sidebar-accent transition-colors md:w-auto">
                         <SortAsc className="h-4 w-4 text-muted-foreground" />
                         <span className="font-semibold text-xs">
                             {sorts.find(s => s.value === currentSort)?.label || "Sort"}

@@ -5,6 +5,22 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
+const toDateOnly = (value: string | Date) => {
+    if (value instanceof Date) {
+        return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    }
+    return new Date(`${value}T00:00:00`);
+};
+
+const toTime = (value: string | Date) => {
+    if (value instanceof Date) {
+        const hours = `${value.getHours()}`.padStart(2, "0");
+        const minutes = `${value.getMinutes()}`.padStart(2, "0");
+        return new Date(`1970-01-01T${hours}:${minutes}:00`);
+    }
+    return new Date(`1970-01-01T${value}:00`);
+};
+
 export async function updateShowAction(showId: string, data: any) {
     try {
         const { adminAuth } = await import("@/lib/firebaseAdmin");
@@ -54,8 +70,9 @@ export async function updateShowAction(showId: string, data: any) {
                 await tx.sched.createMany({
                     data: scheds.map((s: any) => ({
                         show_id: showId,
-                        sched_start_time: new Date(s.sched_start_time),
-                        sched_end_time: new Date(s.sched_end_time),
+                        sched_date: toDateOnly(s.sched_date),
+                        sched_start_time: toTime(s.sched_start_time),
+                        sched_end_time: toTime(s.sched_end_time),
                     }))
                 });
             }
