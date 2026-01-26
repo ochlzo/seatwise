@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import type { ShowStatus } from "@prisma/client";
 import {
     Dialog,
     DialogContent,
@@ -37,13 +38,39 @@ const STATUS_COLORS: Record<string, string> = {
     POSTPONED: "#A855F7",
 };
 
+type ShowSched = {
+    sched_id: string;
+    sched_date: string;
+    sched_start_time: string;
+    sched_end_time: string;
+};
+
+type ShowDetail = {
+    show_id: string;
+    show_name: string;
+    show_description: string;
+    venue: string;
+    address: string;
+    show_status: ShowStatus;
+    show_start_date: string | Date;
+    show_end_date: string | Date;
+    show_image_key?: string | null;
+    scheds: Array<{
+        sched_id?: string;
+        sched_date: string | Date;
+        sched_start_time: string | Date;
+        sched_end_time: string | Date;
+    }>;
+};
+
 interface ShowDetailFormProps {
-    show: any;
+    show: ShowDetail;
 }
 
 export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const router = useRouter();
     const [isSaving, setIsSaving] = React.useState(false);
+    const [isEditing, setIsEditing] = React.useState(false);
     const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
     const [formData, setFormData] = React.useState({
         show_name: show.show_name,
@@ -55,9 +82,12 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         show_end_date: new Date(show.show_end_date),
     });
 
-    const [scheds, setScheds] = React.useState(
-        show.scheds.map((s: any) => ({
+    const [scheds, setScheds] = React.useState<ShowSched[]>(
+        show.scheds.map((s) => ({
             ...s,
+            sched_id:
+                s.sched_id ??
+                `sched-${format(new Date(s.sched_date), "yyyy-MM-dd")}-${format(new Date(s.sched_start_time), "HH:mm")}-${format(new Date(s.sched_end_time), "HH:mm")}-${Date.now()}`,
             sched_date: format(new Date(s.sched_date), "yyyy-MM-dd"),
             sched_start_time: format(new Date(s.sched_start_time), "HH:mm"),
             sched_end_time: format(new Date(s.sched_end_time), "HH:mm"),
@@ -79,6 +109,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
             if (result.success) {
                 toast.success("Show updated successfully");
+                setIsEditing(false);
                 router.refresh();
             } else {
                 toast.error(result.error || "Failed to update show");
@@ -104,7 +135,15 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     }, [formData.show_start_date, formData.show_end_date]);
 
     const removeSched = (id: string) => {
-        setScheds(scheds.filter((s: any) => s.sched_id !== id));
+        setScheds((prev) => prev.filter((s) => s.sched_id !== id));
+    };
+
+    const updateSchedTime = (id: string, patch: { sched_start_time?: string; sched_end_time?: string }) => {
+        setScheds((prev) =>
+            prev.map((s) =>
+                s.sched_id === id ? { ...s, ...patch } : s
+            )
+        );
     };
 
     const addTimeRange = () => {
@@ -134,7 +173,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             return;
         }
 
-        const newEntries: any[] = [];
+        const newEntries: ShowSched[] = [];
         selectedDates.forEach((date) => {
             const dateKey = format(date, "yyyy-MM-dd");
             validRanges.forEach((range) => {
@@ -147,7 +186,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             });
         });
 
-        setScheds((prev: any) => [...prev, ...newEntries]);
+        setScheds((prev) => [...prev, ...newEntries]);
         setSelectedDates([]);
         setTimeRanges([{ id: `time-${Date.now()}`, start: "19:00", end: "21:00" }]);
         setIsScheduleOpen(false);
@@ -244,6 +283,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                         value={formData.show_name}
                                         onChange={(e) => setFormData({ ...formData, show_name: e.target.value })}
                                         className="font-medium bg-muted/30 focus-visible:ring-primary/20"
+                                        disabled={!isEditing}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -265,6 +305,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                     onChange={(e) => setFormData({ ...formData, show_description: e.target.value })}
                                     rows={4}
                                     className="w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 font-medium"
+                                    disabled={!isEditing}
                                 />
                             </div>
 
@@ -276,6 +317,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                         value={formData.venue}
                                         onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
                                         className="font-medium bg-muted/30"
+                                        disabled={!isEditing}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -285,6 +327,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                         value={formData.address}
                                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                                         className="font-medium bg-muted/30"
+                                        disabled={!isEditing}
                                     />
                                 </div>
                             </div>
@@ -300,6 +343,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                     "w-full justify-start text-left font-medium bg-muted/30",
                                                     !formData.show_start_date && "text-muted-foreground"
                                                 )}
+                                                disabled={!isEditing}
                                             >
                                                 <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
                                                 {formData.show_start_date ? format(formData.show_start_date, "PPP") : <span>Pick a date</span>}
@@ -309,7 +353,12 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                             <Calendar
                                                 mode="single"
                                                 selected={formData.show_start_date}
-                                                onSelect={(date) => date && setFormData({ ...formData, show_start_date: date })}
+                                                onSelect={(date) => {
+                                                    if (!isEditing) return;
+                                                    if (date) {
+                                                        setFormData({ ...formData, show_start_date: date });
+                                                    }
+                                                }}
                                                 initialFocus
                                             />
                                         </PopoverContent>
@@ -325,6 +374,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                     "w-full justify-start text-left font-medium bg-muted/30",
                                                     !formData.show_end_date && "text-muted-foreground"
                                                 )}
+                                                disabled={!isEditing}
                                             >
                                                 <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
                                                 {formData.show_end_date ? format(formData.show_end_date, "PPP") : <span>Pick a date</span>}
@@ -334,7 +384,12 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                             <Calendar
                                                 mode="single"
                                                 selected={formData.show_end_date}
-                                                onSelect={(date) => date && setFormData({ ...formData, show_end_date: date })}
+                                                onSelect={(date) => {
+                                                    if (!isEditing) return;
+                                                    if (date) {
+                                                        setFormData({ ...formData, show_end_date: date });
+                                                    }
+                                                }}
                                                 initialFocus
                                                 disabled={(date) => date < formData.show_start_date}
                                             />
@@ -353,7 +408,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         </CardHeader>
                         <CardContent className="space-y-8">
                             {daysInRange.map((date, idx) => {
-                                const dayScheds = scheds.filter((s: any) => isSameDay(new Date(s.sched_date), date));
+                                const dayScheds = scheds.filter((s) => isSameDay(new Date(s.sched_date), date));
                                 return (
                                     <div key={idx} className="space-y-4 pb-6 border-b border-sidebar-border last:border-0 last:pb-0">
                                         <div className="flex items-center justify-between">
@@ -368,7 +423,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                 size="sm"
                                                 onClick={() => setIsScheduleOpen(true)}
                                                 className="h-8 gap-1.5 text-[10px] font-semibold"
-                                                disabled={!isDateRangeValid}
+                                                disabled={!isDateRangeValid || !isEditing}
                                             >
                                                 <CalendarDays className="w-3 h-3" />
                                                 Add Schedule
@@ -376,7 +431,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                         </div>
 
                                         <div className="grid gap-3">
-                                            {dayScheds.map((s: any) => (
+                                            {dayScheds.map((s) => (
                                                 <div
                                                     key={s.sched_id}
                                                     className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg group/sched border border-sidebar-border/50"
@@ -388,7 +443,10 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                                 type="time"
                                                                 className="h-9 bg-background"
                                                                 value={s.sched_start_time}
-                                                                readOnly
+                                                                disabled={!isEditing}
+                                                                onChange={(e) =>
+                                                                    updateSchedTime(s.sched_id, { sched_start_time: e.target.value })
+                                                                }
                                                             />
                                                         </div>
                                                         <div className="space-y-1.5">
@@ -397,7 +455,10 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                                 type="time"
                                                                 className="h-9 bg-background"
                                                                 value={s.sched_end_time}
-                                                                readOnly
+                                                                disabled={!isEditing}
+                                                                onChange={(e) =>
+                                                                    updateSchedTime(s.sched_id, { sched_end_time: e.target.value })
+                                                                }
                                                             />
                                                         </div>
                                                     </div>
@@ -406,6 +467,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                         size="icon"
                                                         className="h-8 w-8 text-destructive hover:bg-destructive/10"
                                                         onClick={() => removeSched(s.sched_id)}
+                                                        disabled={!isEditing}
                                                     >
                                                         <Trash2 className="w-4 h-4" />
                                                     </Button>
@@ -445,14 +507,32 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         </CardContent>
                     </Card>
 
-                    <Button
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className="w-full h-14 font-black uppercase tracking-widest text-lg shadow-xl shadow-primary/20"
-                    >
-                        {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6 mr-2" />}
-                        {isSaving ? "Saving changes..." : "Save Production"}
-                    </Button>
+                    {isEditing ? (
+                        <Button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="w-full h-14 font-black uppercase tracking-widest text-lg shadow-xl shadow-primary/20"
+                        >
+                            {isSaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6 mr-2" />}
+                            {isSaving ? "Saving changes..." : "Save Production"}
+                        </Button>
+                    ) : (
+                        <div className="grid gap-3">
+                            <Button
+                                onClick={() => setIsEditing(true)}
+                                className="w-full h-12 font-black uppercase tracking-widest text-base shadow-xl shadow-primary/20"
+                            >
+                                Edit Production
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => router.push("/admin/shows")}
+                                className="w-full h-12 font-semibold uppercase tracking-widest text-base"
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -493,11 +573,11 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                     setSelectedDates(getDatesInRange());
                                                 }
                                             }}
-                                            disabled={!isDateRangeValid}
+                                            disabled={!isDateRangeValid || !isEditing}
                                         />
                                         Apply to all dates
                                     </label>
-                                    <Button variant="outline" size="sm" onClick={addTimeRange} className="gap-1.5">
+                                    <Button variant="outline" size="sm" onClick={addTimeRange} className="gap-1.5" disabled={!isEditing}>
                                         <Plus className="h-3.5 w-3.5" />
                                         Add time
                                     </Button>
@@ -521,6 +601,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                     value={range.start}
                                                     className="h-8 text-xs sm:h-9 sm:text-sm"
                                                     onChange={(e) => updateTimeRange(range.id, { start: e.target.value })}
+                                                    disabled={!isEditing}
                                                 />
                                             </div>
                                             <div className="space-y-2">
@@ -529,6 +610,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                     value={range.end}
                                                     className="h-8 text-xs sm:h-9 sm:text-sm"
                                                     onChange={(e) => updateTimeRange(range.id, { end: e.target.value })}
+                                                    disabled={!isEditing}
                                                 />
                                             </div>
                                             <Button
@@ -536,7 +618,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                 size="icon"
                                                 className="h-8 w-8 text-destructive hover:bg-destructive/10"
                                                 onClick={() => removeTimeRange(range.id)}
-                                                disabled={timeRanges.length === 1}
+                                                disabled={timeRanges.length === 1 || !isEditing}
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
@@ -550,7 +632,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleAddSchedules}>
+                        <Button onClick={handleAddSchedules} disabled={!isEditing}>
                             Add schedules
                         </Button>
                     </DialogFooter>

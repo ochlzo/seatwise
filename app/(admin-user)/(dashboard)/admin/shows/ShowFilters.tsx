@@ -12,7 +12,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 
 const statuses = [
     { label: "All Shows", value: "ALL" },

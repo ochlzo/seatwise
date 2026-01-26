@@ -172,7 +172,7 @@ const ShapeItem = React.memo(({
             }
             pendingPosRef.current = null;
             if (!handled) {
-                let nextPos = { x: e.target.x(), y: e.target.y() };
+                const nextPos = { x: e.target.x(), y: e.target.y() };
 
                 const draggedBB = getNodeBoundingBox({
                     ...shape,
@@ -228,7 +228,7 @@ const ShapeItem = React.memo(({
                 : false;
             if (handled) return;
 
-            let nextPos = { x: e.target.x(), y: e.target.y() };
+            const nextPos = { x: e.target.x(), y: e.target.y() };
 
             const draggedBB = getNodeBoundingBox({
                 ...shape,

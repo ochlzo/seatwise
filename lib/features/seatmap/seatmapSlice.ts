@@ -269,11 +269,11 @@ const seatmapSlice = createSlice({
             let defaultHeight = 50;
             let defaultRadius = 30;
             let defaultPoints = undefined;
-            let defaultText = text ?? "Text";
-            let defaultFontSize = fontSize ?? 18;
-            let defaultFontFamily = fontFamily ?? "Inter";
-            let defaultTextColor = textColor ?? "#111827";
-            let defaultPadding = padding ?? 8;
+            const defaultText = text ?? "Text";
+            const defaultFontSize = fontSize ?? 18;
+            const defaultFontFamily = fontFamily ?? "Inter";
+            const defaultTextColor = textColor ?? "#111827";
+            const defaultPadding = padding ?? 8;
 
             if (shape === "line") {
                 defaultWidth = 0;
@@ -351,7 +351,7 @@ const seatmapSlice = createSlice({
                     pushHistory(state);
                 }
                 const updated = { ...state.nodes[id], ...changes } as SeatmapNode;
-                // @ts-ignore - complex union type merging
+                // @ts-expect-error - complex union type merging
                 state.nodes[id] = updated;
             }
         },
@@ -372,7 +372,7 @@ const seatmapSlice = createSlice({
                 const node = state.nodes[id];
                 if (!node) return;
                 const updated = { ...node, ...changes[id] } as SeatmapNode;
-                // @ts-ignore - complex union type merging
+                // @ts-expect-error - complex union type merging
                 state.nodes[id] = updated;
             });
         },

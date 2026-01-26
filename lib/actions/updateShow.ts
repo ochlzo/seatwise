@@ -4,6 +4,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import type { Prisma, ShowStatus } from "@prisma/client";
 
 const toDateOnly = (value: string | Date) => {
     if (value instanceof Date) {
@@ -21,7 +22,25 @@ const toTime = (value: string | Date) => {
     return new Date(`1970-01-01T${value}:00`);
 };
 
-export async function updateShowAction(showId: string, data: any) {
+type UpdateShowSched = {
+    sched_date: string | Date;
+    sched_start_time: string | Date;
+    sched_end_time: string | Date;
+    seatmap_id?: string | null;
+};
+
+type UpdateShowPayload = {
+    show_name: string;
+    show_description: string;
+    venue: string;
+    address: string;
+    show_status: ShowStatus;
+    show_start_date: string | Date;
+    show_end_date: string | Date;
+    scheds?: UpdateShowSched[];
+};
+
+export async function updateShowAction(showId: string, data: UpdateShowPayload) {
     try {
         const { adminAuth } = await import("@/lib/firebaseAdmin");
         const cookieStore = await cookies();
@@ -67,13 +86,15 @@ export async function updateShowAction(showId: string, data: any) {
 
             // 3. Add new schedules
             if (scheds && scheds.length > 0) {
+                const schedData = scheds.map((s) => ({
+                    show_id: showId,
+                    sched_date: toDateOnly(s.sched_date),
+                    sched_start_time: toTime(s.sched_start_time),
+                    sched_end_time: toTime(s.sched_end_time),
+                    ...(s.seatmap_id ? { seatmap_id: s.seatmap_id } : {}),
+                })) as Prisma.SchedCreateManyInput[];
                 await tx.sched.createMany({
-                    data: scheds.map((s: any) => ({
-                        show_id: showId,
-                        sched_date: toDateOnly(s.sched_date),
-                        sched_start_time: toTime(s.sched_start_time),
-                        sched_end_time: toTime(s.sched_end_time),
-                    }))
+                    data: schedData,
                 });
             }
         });
@@ -82,8 +103,10 @@ export async function updateShowAction(showId: string, data: any) {
         revalidatePath(`/admin/shows/${showId}`);
 
         return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error in updateShowAction:", error);
-        return { success: false, error: error.message || "Failed to update show" };
+        const message =
+            error instanceof Error ? error.message : "Failed to update show";
+        return { success: false, error: message };
     }
 }

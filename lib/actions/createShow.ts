@@ -4,13 +4,14 @@ import "server-only";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import type { ShowStatus } from "@prisma/client";
 
 type CreateShowPayload = {
   show_name: string;
   show_description: string;
   venue: string;
   address: string;
-  show_status: string;
+  show_status: ShowStatus;
   show_start_date: string | Date;
   show_end_date: string | Date;
   show_image_key?: string;
@@ -87,7 +88,7 @@ export async function createShowAction(data: CreateShowPayload) {
           show_description,
           venue,
           address,
-          show_status: show_status as any,
+          show_status,
           show_start_date: toDateOnly(show_start_date),
           show_end_date: toDateOnly(show_end_date),
           show_image_key: finalImageUrl,
@@ -112,8 +113,9 @@ export async function createShowAction(data: CreateShowPayload) {
     revalidatePath("/admin/shows");
 
     return { success: true, showId: show.show_id };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in createShowAction:", error);
-    return { success: false, error: error.message || "Failed to create show" };
+    const message = error instanceof Error ? error.message : "Failed to create show";
+    return { success: false, error: message };
   }
 }

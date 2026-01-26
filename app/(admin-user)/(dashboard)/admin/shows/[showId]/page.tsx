@@ -35,10 +35,10 @@ export default async function ShowIdPage({
                         but we can add a specific title if needed */}
                     <div className="mb-6">
                         <h2 className="text-lg md:text-xl font-semibold">
-                            Edit Production
+                            Production Details
                         </h2>
                         <p className="text-muted-foreground text-sm">
-                            Manage asset details, run-dates, and daily performance schedules.
+                            Review production details, run-dates, and daily performance schedules.
                         </p>
                     </div>
 

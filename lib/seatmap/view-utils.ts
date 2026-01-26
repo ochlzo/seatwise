@@ -23,7 +23,7 @@ export function calculateNodesBounds(nodes: Record<string, SeatmapNode>): Bounds
         maxY = Math.max(maxY, y + halfH);
     };
 
-    items.forEach((node: any) => {
+    items.forEach((node) => {
         const sx = node.scaleX ?? 1;
         const sy = node.scaleY ?? 1;
 

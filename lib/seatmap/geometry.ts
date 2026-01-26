@@ -60,7 +60,12 @@ export function midAngle(startAngle: number, endAngle: number) {
     return startAngle + (endAngle - startAngle) / 2;
 }
 
-export function getRelativePointerPosition(node: any) {
+type KonvaLikeNode = {
+    getAbsoluteTransform: () => { copy: () => { invert: () => void; point: (pos: { x: number; y: number }) => { x: number; y: number } } };
+    getStage: () => { getPointerPosition: () => { x: number; y: number } | null };
+};
+
+export function getRelativePointerPosition(node: KonvaLikeNode) {
     const transform = node.getAbsoluteTransform().copy();
     transform.invert();
     const pos = node.getStage().getPointerPosition();
@@ -111,7 +116,7 @@ export function closestPointOnPolyline(px: number, py: number, points: number[])
     return { point: closest, distance: Math.sqrt(minDistSq) };
 }
 
-export function getNodeBoundingBox(node: any) {
+export function getNodeBoundingBox(node: { type: string; position: { x: number; y: number }; scaleX?: number; scaleY?: number; width?: number; height?: number; radius?: number; shape?: string; points?: number[]; helperType?: string }) {
     const sx = node.scaleX ?? 1;
     const sy = node.scaleY ?? 1;
 
@@ -130,10 +135,8 @@ export function getNodeBoundingBox(node: any) {
     if (node.type === "shape") {
         let w = 0;
         let h = 0;
-        let cx = node.position.x;
-        let cy = node.position.y;
-        let ox = 0;
-        let oy = 0;
+        const cx = node.position.x;
+        const cy = node.position.y;
 
         if (node.shape === "rect" || node.shape === "stairs" || node.shape === "text") {
             w = (node.width ?? 0) * sx;
@@ -204,7 +207,7 @@ export function getNodeBoundingBox(node: any) {
     return null;
 }
 
-export function getNodesBoundingBox(nodeList: any[]) {
+export function getNodesBoundingBox(nodeList: { type: string; position: { x: number; y: number }; scaleX?: number; scaleY?: number; width?: number; height?: number; radius?: number; shape?: string; points?: number[]; helperType?: string }[]) {
     if (nodeList.length === 0) return null;
     let minX = Infinity,
         minY = Infinity,
@@ -239,7 +242,7 @@ export function getSnapResults(
         centerX: number;
         centerY: number;
     },
-    allNodes: any[],
+    allNodes: { id: string; type: string; position: { x: number; y: number }; scaleX?: number; scaleY?: number; width?: number; height?: number; radius?: number; shape?: string; points?: number[]; helperType?: string }[],
     selectedIds: string[],
     spacing: number,
     threshold: number = 8

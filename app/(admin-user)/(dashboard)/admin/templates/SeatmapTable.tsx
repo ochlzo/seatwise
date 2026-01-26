@@ -27,7 +27,7 @@ import { toast } from "sonner";
 type SeatmapRow = {
   seatmap_id: string;
   seatmap_name: string;
-  seatmap_json: any;
+  seatmap_json: never;
   seatmap_status: "ACTIVE" | "DISABLED";
   updatedAt: string | Date;
   scheds: Array<{

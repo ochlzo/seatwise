@@ -18,6 +18,8 @@ interface ScrollRevealProps {
     wordAnimationEnd?: string;
 }
 
+type ReactElementWithClassName = React.ReactElement<{ className?: string; children?: ReactNode }>;
+
 const wrapWords = (node: ReactNode): ReactNode => {
     if (typeof node === 'string') {
         return node.split(/(\s+)/).map((word, index) => {
@@ -35,13 +37,14 @@ const wrapWords = (node: ReactNode): ReactNode => {
     }
 
     if (React.isValidElement(node)) {
-        if ((node.props as any)?.className?.includes('word')) {
+        const element = node as ReactElementWithClassName;
+        if (element.props?.className?.includes('word')) {
             return node;
         }
 
-        return React.cloneElement(node, {
-            ...(node.props as any),
-            children: wrapWords((node.props as any).children)
+        return React.cloneElement(element, {
+            ...element.props,
+            children: wrapWords(element.props?.children)
         });
     }
 

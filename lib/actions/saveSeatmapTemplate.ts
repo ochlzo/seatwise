@@ -31,8 +31,8 @@ async function assertAdmin() {
   let user: Awaited<ReturnType<typeof fetchUser>> | null = null;
   try {
     user = await fetchUser();
-  } catch (error: any) {
-    const message = String(error?.message ?? "");
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
     if (message.includes("connection pool")) {
       await new Promise((resolve) => setTimeout(resolve, 400));
       user = await fetchUser();
@@ -101,8 +101,9 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
 
     revalidatePath("/admin/templates");
     return { success: true, seatmapId: created.seatmap_id };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in saveSeatmapTemplateAction:", error);
-    return { success: false, error: error.message || "Failed to save seatmap" };
+    const message = error instanceof Error ? error.message : "Failed to save seatmap";
+    return { success: false, error: message };
   }
 }

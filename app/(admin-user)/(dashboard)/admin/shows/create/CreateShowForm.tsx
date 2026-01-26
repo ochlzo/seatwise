@@ -3,6 +3,7 @@
 import * as React from "react";
 import { format, differenceInCalendarMonths } from "date-fns";
 import { Plus, Trash2, Save, CalendarDays } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -79,7 +80,7 @@ export function CreateShowForm() {
   const [scheduleFilterEnd, setScheduleFilterEnd] = React.useState("");
   const [isLoadingSeatmaps, setIsLoadingSeatmaps] = React.useState(false);
   const [timeRanges, setTimeRanges] = React.useState<TimeRangeDraft[]>([
-    { id: `time-${Date.now()}`, start: "19:00", end: "21:00" },
+    { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
   ]);
 
   React.useEffect(() => {
@@ -166,7 +167,7 @@ export function CreateShowForm() {
   const addTimeRange = () => {
     setTimeRanges((prev) => [
       ...prev,
-      { id: `time-${Date.now()}`, start: "19:00", end: "21:00" },
+      { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
     ]);
   };
 
@@ -197,7 +198,7 @@ export function CreateShowForm() {
       const dateKey = format(date, "yyyy-MM-dd");
       validRanges.forEach((range) => {
         newEntries.push({
-          id: `new-${dateKey}-${range.start}-${range.end}-${Date.now()}`,
+          id: `new-${uuidv4()}`,
           sched_date: dateKey,
           sched_start_time: range.start,
           sched_end_time: range.end,
@@ -207,7 +208,7 @@ export function CreateShowForm() {
 
     setScheds((prev) => [...prev, ...newEntries]);
     setSelectedDates([]);
-    setTimeRanges([{ id: `time-${Date.now()}`, start: "19:00", end: "21:00" }]);
+    setTimeRanges([{ id: `time-${uuidv4()}`, start: "19:00", end: "21:00" }]);
     setIsScheduleOpen(false);
   };
 
