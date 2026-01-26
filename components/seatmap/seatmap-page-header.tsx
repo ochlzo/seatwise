@@ -18,6 +18,7 @@ type SeatmapPageHeaderProps = {
   title: string;
   parentLabel?: string;
   parentHref?: string;
+  breadcrumbs?: Array<{ label: string; href?: string }>;
   rightSlot?: React.ReactNode;
   className?: string;
 };
@@ -26,6 +27,7 @@ export function SeatmapPageHeader({
   title,
   parentLabel,
   parentHref = "#",
+  breadcrumbs,
   rightSlot,
   className,
 }: SeatmapPageHeaderProps) {
@@ -51,22 +53,46 @@ export function SeatmapPageHeader({
         />
         <Breadcrumb className="hidden md:block">
           <BreadcrumbList>
-            {resolvedParentLabel && (
-              <>
-                <BreadcrumbItem>
-                  <BreadcrumbLink href={resolvedParentHref}>
-                    {resolvedParentLabel}
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-              </>
-            )}
-            <BreadcrumbItem>
-              <BreadcrumbPage>{title}</BreadcrumbPage>
-            </BreadcrumbItem>
+            {breadcrumbs?.length
+              ? breadcrumbs.map((crumb, index) => {
+                  const isLast = index === breadcrumbs.length - 1;
+                  return (
+                    <React.Fragment key={`${crumb.label}-${index}`}>
+                      <BreadcrumbItem>
+                        {isLast ? (
+                          <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                        ) : (
+                          <BreadcrumbLink href={crumb.href ?? "#"}>
+                            {crumb.label}
+                          </BreadcrumbLink>
+                        )}
+                      </BreadcrumbItem>
+                      {!isLast && <BreadcrumbSeparator />}
+                    </React.Fragment>
+                  );
+                })
+              : (
+                <>
+                  {resolvedParentLabel && (
+                    <>
+                      <BreadcrumbItem>
+                        <BreadcrumbLink href={resolvedParentHref}>
+                          {resolvedParentLabel}
+                        </BreadcrumbLink>
+                      </BreadcrumbItem>
+                      <BreadcrumbSeparator />
+                    </>
+                  )}
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{title}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              )}
           </BreadcrumbList>
         </Breadcrumb>
-        <span className="text-sm font-medium md:hidden">{title}</span>
+        <span className="text-sm font-medium md:hidden">
+          {breadcrumbs?.length ? breadcrumbs[breadcrumbs.length - 1].label : title}
+        </span>
       </div>
       {rightSlot && (
         <div className="ml-auto flex items-center gap-3 px-4">{rightSlot}</div>

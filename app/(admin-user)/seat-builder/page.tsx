@@ -13,8 +13,8 @@ import { SeatmapSaveTemplateButton } from "@/components/seatmap/SeatmapSaveTempl
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import LoadingPage from "@/app/LoadingPage";
-import { useAppDispatch } from "@/lib/hooks";
-import { loadSeatmap, setTitle } from "@/lib/features/seatmap/seatmapSlice";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { loadSeatmap, setTitle, markSeatmapSaved } from "@/lib/features/seatmap/seatmapSlice";
 import { toast } from "sonner";
 
 // Dynamically import Konva component to avoid SSR issues
@@ -32,6 +32,8 @@ export default function Page() {
     const seatmapId = searchParams.get("seatmapId");
     const dispatch = useAppDispatch();
     const [isLoadingSeatmap, setIsLoadingSeatmap] = React.useState(false);
+    const hasUnsavedChanges = useAppSelector((state) => state.seatmap.hasUnsavedChanges);
+    const seatmapTitle = useAppSelector((state) => state.seatmap.title);
 
     React.useEffect(() => {
         setTheme("light");
@@ -65,6 +67,7 @@ export default function Page() {
                 if (!isMounted) return;
                 dispatch(loadSeatmap(data.seatmap_json));
                 dispatch(setTitle(data.seatmap_name));
+                dispatch(markSeatmapSaved());
             } catch (error: any) {
                 if (!isMounted) return;
                 toast.error(error.message || "Unable to load seatmap");
@@ -80,6 +83,57 @@ export default function Page() {
         };
     }, [seatmapId, dispatch]);
 
+    React.useEffect(() => {
+        return () => {
+            dispatch(markSeatmapSaved());
+        };
+    }, [dispatch]);
+
+    React.useEffect(() => {
+        if (!hasUnsavedChanges) return;
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = "";
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges]);
+
+    React.useEffect(() => {
+        if (!hasUnsavedChanges) return;
+
+        const confirmLeave = () =>
+            window.confirm("You have unsaved changes. Leave this page anyway?");
+
+        const handleLinkClick = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (!target) return;
+            const anchor = target.closest("a") as HTMLAnchorElement | null;
+            if (!anchor) return;
+            if (anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+            const href = anchor.getAttribute("href");
+            if (!href || href.startsWith("#")) return;
+            if (!confirmLeave()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
+
+        const handlePopState = () => {
+            if (!confirmLeave()) {
+                window.history.pushState(null, "", window.location.href);
+            }
+        };
+
+        document.addEventListener("click", handleLinkClick, true);
+        window.addEventListener("popstate", handlePopState);
+        return () => {
+            document.removeEventListener("click", handleLinkClick, true);
+            window.removeEventListener("popstate", handlePopState);
+        };
+    }, [hasUnsavedChanges]);
+
     return (
         <SidebarProvider className="h-svh overflow-hidden">
             <LoadingPage />
@@ -89,6 +143,16 @@ export default function Page() {
                     title="Seatmap Designer"
                     parentLabel="Admin Dashboard"
                     parentHref="/admin"
+                    breadcrumbs={
+                        seatmapId
+                            ? [
+                                { label: "Home", href: "/" },
+                                { label: "Admin Dashboard", href: "/admin" },
+                                { label: "Seatmap Templates", href: "/admin/templates" },
+                                { label: seatmapTitle || "Seatmap" },
+                            ]
+                            : undefined
+                    }
                     rightSlot={
                         <div className="flex items-center">
                             <SeatmapTitle />
