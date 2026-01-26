@@ -116,7 +116,7 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
                 <TeamSwitcher teams={data.teams} logo="/logo.png" logoMini="/logo-mini.png" currentTeam="admin" />
             </SidebarHeader>
             <SidebarContent>
-                <NavMain items={data.navMain} />
+                <NavMain items={data.navMain} openAll />
             </SidebarContent>
             <SidebarFooter>
                 <NavUser user={user} />

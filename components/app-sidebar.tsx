@@ -167,7 +167,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <TeamSwitcher teams={data.teams} logo="/logo.png" logoMini="/logo-mini.png" currentTeam="user" />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={data.navMain} openAll />
         <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
