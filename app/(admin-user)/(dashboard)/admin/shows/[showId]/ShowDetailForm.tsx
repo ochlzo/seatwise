@@ -237,12 +237,27 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="status" className="text-xs font-semibold text-muted-foreground">Current Status</Label>
-                                    <Input
-                                        id="status"
-                                        value={formData.show_status}
-                                        disabled
-                                        className="font-medium bg-muted/20 opacity-60 italic"
-                                    />
+                                    {isEditing ? (
+                                        <select
+                                            id="status"
+                                            value={formData.show_status}
+                                            onChange={(e) => setFormData({ ...formData, show_status: e.target.value as ShowStatus })}
+                                            className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 font-medium"
+                                        >
+                                            {Object.keys(STATUS_COLORS).map((status) => (
+                                                <option key={status} value={status}>
+                                                    {status.replace('_', ' ')}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <Input
+                                            id="status"
+                                            value={formData.show_status}
+                                            disabled
+                                            className="font-medium bg-muted/20 opacity-60 italic"
+                                        />
+                                    )}
                                 </div>
                             </div>
 
