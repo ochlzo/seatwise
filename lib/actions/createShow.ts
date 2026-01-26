@@ -19,6 +19,7 @@ type CreateShowPayload = {
     sched_date: string;
     sched_start_time: string;
     sched_end_time: string;
+    seatmap_id?: string | null;
   }>;
 };
 
@@ -100,6 +101,7 @@ export async function createShowAction(data: CreateShowPayload) {
             sched_date: toDateOnly(s.sched_date),
             sched_start_time: toTime(s.sched_start_time),
             sched_end_time: toTime(s.sched_end_time),
+            seatmap_id: s.seatmap_id ?? null,
           })),
         });
       }

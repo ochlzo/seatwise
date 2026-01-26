@@ -32,3 +32,15 @@ export async function getSeatmaps(params?: { query?: string; sort?: string }) {
     orderBy,
   });
 }
+
+export async function getActiveSeatmaps() {
+  return prisma.seatmap.findMany({
+    where: { seatmap_status: "ACTIVE" },
+    select: {
+      seatmap_id: true,
+      seatmap_name: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+}
