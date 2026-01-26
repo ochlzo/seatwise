@@ -300,6 +300,36 @@ export function FileUploader(props: FileUploaderProps) {
   );
 }
 
+interface FileImagePreviewProps {
+  src: string;
+  alt: string;
+  className?: string;
+  width?: number;
+  height?: number;
+}
+
+export function FileImagePreview({
+  src,
+  alt,
+  className,
+  width = 40,
+  height = 40,
+}: FileImagePreviewProps) {
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      loading="lazy"
+      className={cn(
+        "aspect-square size-8 md:size-12 shrink-0 rounded-md object-cover",
+        className
+      )}
+    />
+  );
+}
+
 interface FileCardProps {
   file: File;
   onRemove: () => void;
@@ -311,14 +341,7 @@ function FileCard({ file, onRemove, showRemoveButton = true }: FileCardProps) {
     <div className="relative flex items-center space-x-2 md:space-x-4">
       <div className="flex flex-1 items-center space-x-4 min-w-0">
         {isFileWithPreview(file) ? (
-          <Image
-            src={file.preview}
-            alt={file.name}
-            width={40}
-            height={40}
-            loading="lazy"
-            className="aspect-square size-8 md:size-12 shrink-0 rounded-md object-cover"
-          />
+          <FileImagePreview src={file.preview} alt={file.name} />
         ) : (
           <div className="flex size-8 md:size-10 items-center justify-center rounded-md bg-muted/20 shrink-0">
             <FileText
