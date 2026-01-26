@@ -23,6 +23,7 @@ import { setLoading } from "@/lib/features/loading/isLoadingSlice"
 
 export function NavMain({
   items,
+  openAll = false,
 }: {
   items: {
     title: string
@@ -34,6 +35,7 @@ export function NavMain({
       url: string
     }[]
   }[]
+  openAll?: boolean
 }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -58,7 +60,7 @@ export function NavMain({
             <Collapsible
               key={item.title}
               asChild
-              defaultOpen={item.isActive || hasActiveSubItem}
+              defaultOpen={openAll || item.isActive || hasActiveSubItem}
               className="group/collapsible"
             >
               <SidebarMenuItem>
