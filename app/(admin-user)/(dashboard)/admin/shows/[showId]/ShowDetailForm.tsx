@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { format, differenceInDays, addDays, isSameDay } from "date-fns";
-import { CalendarIcon, MapPin, Ticket, Clock, Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { format, differenceInDays, addDays, isSameDay, differenceInCalendarMonths } from "date-fns";
+import { CalendarIcon, MapPin, Ticket, Clock, Plus, Trash2, Save, Loader2, CalendarDays } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -18,6 +18,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 const STATUS_COLORS: Record<string, string> = {
     UPCOMING: "#3B82F6",
@@ -36,6 +44,7 @@ interface ShowDetailFormProps {
 export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const router = useRouter();
     const [isSaving, setIsSaving] = React.useState(false);
+    const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
     const [formData, setFormData] = React.useState({
         show_name: show.show_name,
         show_description: show.show_description,
@@ -49,10 +58,16 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const [scheds, setScheds] = React.useState(
         show.scheds.map((s: any) => ({
             ...s,
-            sched_start_time: new Date(s.sched_start_time),
-            sched_end_time: new Date(s.sched_end_time),
+            sched_date: format(new Date(s.sched_date), "yyyy-MM-dd"),
+            sched_start_time: format(new Date(s.sched_start_time), "HH:mm"),
+            sched_end_time: format(new Date(s.sched_end_time), "HH:mm"),
         }))
     );
+    const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
+    const [applyToAllDates, setApplyToAllDates] = React.useState(false);
+    const [timeRanges, setTimeRanges] = React.useState([
+        { id: `time-${Date.now()}`, start: "19:00", end: "21:00" },
+    ]);
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -88,30 +103,87 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         return days;
     }, [formData.show_start_date, formData.show_end_date]);
 
-    const addSched = (date: Date) => {
-        const start = new Date(date);
-        start.setHours(19, 0, 0, 0); // Default 7pm
-        const end = new Date(date);
-        end.setHours(21, 0, 0, 0); // Default 9pm
-
-        setScheds([...scheds, {
-            sched_id: `new-${Date.now()}`,
-            sched_start_time: start,
-            sched_end_time: end,
-        }]);
-    };
-
     const removeSched = (id: string) => {
         setScheds(scheds.filter((s: any) => s.sched_id !== id));
     };
 
-    const updateSched = (id: string, start: Date, end: Date) => {
-        setScheds(scheds.map((s: any) =>
-            s.sched_id === id
-                ? { ...s, sched_start_time: start, sched_end_time: end }
-                : s
-        ));
+    const addTimeRange = () => {
+        setTimeRanges((prev) => [
+            ...prev,
+            { id: `time-${Date.now()}`, start: "19:00", end: "21:00" },
+        ]);
     };
+
+    const updateTimeRange = (id: string, patch: { start?: string; end?: string }) => {
+        setTimeRanges((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    };
+
+    const removeTimeRange = (id: string) => {
+        setTimeRanges((prev) => prev.filter((t) => t.id !== id));
+    };
+
+    const handleAddSchedules = () => {
+        if (!selectedDates.length) {
+            toast.error("Select at least one date.");
+            return;
+        }
+
+        const validRanges = timeRanges.filter((t) => t.start && t.end);
+        if (!validRanges.length) {
+            toast.error("Add at least one valid time range.");
+            return;
+        }
+
+        const newEntries: any[] = [];
+        selectedDates.forEach((date) => {
+            const dateKey = format(date, "yyyy-MM-dd");
+            validRanges.forEach((range) => {
+                newEntries.push({
+                    sched_id: `new-${dateKey}-${range.start}-${range.end}-${Date.now()}`,
+                    sched_date: dateKey,
+                    sched_start_time: range.start,
+                    sched_end_time: range.end,
+                });
+            });
+        });
+
+        setScheds((prev: any) => [...prev, ...newEntries]);
+        setSelectedDates([]);
+        setTimeRanges([{ id: `time-${Date.now()}`, start: "19:00", end: "21:00" }]);
+        setIsScheduleOpen(false);
+    };
+
+    const isDateRangeValid =
+        formData.show_start_date &&
+        formData.show_end_date &&
+        formData.show_start_date.getTime() <= formData.show_end_date.getTime();
+    const numberOfMonths =
+        differenceInCalendarMonths(formData.show_end_date, formData.show_start_date) >= 1 ? 2 : 1;
+
+    const getDatesInRange = React.useCallback(() => {
+        const dates: Date[] = [];
+        const cursor = new Date(formData.show_start_date);
+        while (cursor <= formData.show_end_date) {
+            dates.push(new Date(cursor));
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        return dates;
+    }, [formData.show_start_date, formData.show_end_date]);
+
+    React.useEffect(() => {
+        if (applyToAllDates && isDateRangeValid) {
+            const nextDates = getDatesInRange();
+            setSelectedDates((prev) => {
+                if (prev.length !== nextDates.length) return nextDates;
+                for (let i = 0; i < prev.length; i += 1) {
+                    if (prev[i].getTime() !== nextDates[i].getTime()) {
+                        return nextDates;
+                    }
+                }
+                return prev;
+            });
+        }
+    }, [applyToAllDates, getDatesInRange, isDateRangeValid]);
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 pb-20">
@@ -281,7 +353,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         </CardHeader>
                         <CardContent className="space-y-8">
                             {daysInRange.map((date, idx) => {
-                                const dayScheds = scheds.filter((s: any) => isSameDay(new Date(s.sched_start_time), date));
+                                const dayScheds = scheds.filter((s: any) => isSameDay(new Date(s.sched_date), date));
                                 return (
                                     <div key={idx} className="space-y-4 pb-6 border-b border-sidebar-border last:border-0 last:pb-0">
                                         <div className="flex items-center justify-between">
@@ -294,11 +366,12 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() => addSched(date)}
+                                                onClick={() => setIsScheduleOpen(true)}
                                                 className="h-8 gap-1.5 text-[10px] font-semibold"
+                                                disabled={!isDateRangeValid}
                                             >
-                                                <Plus className="w-3 h-3" />
-                                                Add Time
+                                                <CalendarDays className="w-3 h-3" />
+                                                Add Schedule
                                             </Button>
                                         </div>
 
@@ -314,13 +387,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                             <Input
                                                                 type="time"
                                                                 className="h-9 bg-background"
-                                                                value={format(s.sched_start_time, "HH:mm")}
-                                                                onChange={(e) => {
-                                                                    const [h, m] = e.target.value.split(':').map(Number);
-                                                                    const newStart = new Date(s.sched_start_time);
-                                                                    newStart.setHours(h, m);
-                                                                    updateSched(s.sched_id, newStart, s.sched_end_time);
-                                                                }}
+                                                                value={s.sched_start_time}
+                                                                readOnly
                                                             />
                                                         </div>
                                                         <div className="space-y-1.5">
@@ -328,13 +396,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                             <Input
                                                                 type="time"
                                                                 className="h-9 bg-background"
-                                                                value={format(s.sched_end_time, "HH:mm")}
-                                                                onChange={(e) => {
-                                                                    const [h, m] = e.target.value.split(':').map(Number);
-                                                                    const newEnd = new Date(s.sched_end_time);
-                                                                    newEnd.setHours(h, m);
-                                                                    updateSched(s.sched_id, s.sched_start_time, newEnd);
-                                                                }}
+                                                                value={s.sched_end_time}
+                                                                readOnly
                                                             />
                                                         </div>
                                                     </div>
@@ -392,6 +455,107 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                     </Button>
                 </div>
             </div>
+
+            <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
+                    <DialogHeader>
+                        <DialogTitle className="text-sm sm:text-lg">Add schedules</DialogTitle>
+                        <DialogDescription className="text-[11px] sm:text-sm">
+                            Select dates within the show range, then add one or more time ranges.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-3 md:gap-6 md:grid-cols-[1.1fr_1fr]">
+                        <div className="rounded-lg border border-sidebar-border/60 p-3 flex justify-center md:block">
+                            <Calendar
+                                mode="multiple"
+                                selected={selectedDates}
+                                onSelect={(dates) => setSelectedDates(dates ?? [])}
+                                numberOfMonths={numberOfMonths}
+                                disabled={(date) =>
+                                    date < formData.show_start_date || date > formData.show_end_date
+                                }
+                                className="[--cell-size:--spacing(7)] text-xs"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold">Time ranges</p>
+                                <div className="flex items-center gap-3">
+                                    <label className="flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
+                                        <input
+                                            type="checkbox"
+                                            className="h-3.5 w-3.5 accent-primary"
+                                            checked={applyToAllDates}
+                                            onChange={(e) => {
+                                                const next = e.target.checked;
+                                                setApplyToAllDates(next);
+                                                if (next) {
+                                                    setSelectedDates(getDatesInRange());
+                                                }
+                                            }}
+                                            disabled={!isDateRangeValid}
+                                        />
+                                        Apply to all dates
+                                    </label>
+                                    <Button variant="outline" size="sm" onClick={addTimeRange} className="gap-1.5">
+                                        <Plus className="h-3.5 w-3.5" />
+                                        Add time
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-[1fr_1fr_auto] items-center text-[11px] font-semibold text-muted-foreground px-3">
+                                    <span>Starts</span>
+                                    <span>Ends</span>
+                                    <span className="sr-only">Actions</span>
+                                </div>
+                                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                                    {timeRanges.map((range) => (
+                                        <div
+                                            key={range.id}
+                                            className="grid gap-2 grid-cols-[1fr_1fr_auto] items-end rounded-lg border border-sidebar-border/60 p-2"
+                                        >
+                                            <div className="space-y-2">
+                                                <Input
+                                                    type="time"
+                                                    value={range.start}
+                                                    className="h-8 text-xs sm:h-9 sm:text-sm"
+                                                    onChange={(e) => updateTimeRange(range.id, { start: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Input
+                                                    type="time"
+                                                    value={range.end}
+                                                    className="h-8 text-xs sm:h-9 sm:text-sm"
+                                                    onChange={(e) => updateTimeRange(range.id, { end: e.target.value })}
+                                                />
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                                onClick={() => removeTimeRange(range.id)}
+                                                disabled={timeRanges.length === 1}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleAddSchedules}>
+                            Add schedules
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
