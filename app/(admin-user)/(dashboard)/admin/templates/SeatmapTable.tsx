@@ -129,14 +129,6 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
           </Button>
         </form>
         <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-          <select
-            value={searchParams.get("sort") ?? "newest"}
-            onChange={(event) => handleSortChange(event.target.value)}
-            className="border-input h-9 rounded-md border bg-transparent px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
-          >
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-          </select>
           {selectedIds.length > 0 && (
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => handleBulkStatus("ACTIVE")}>
@@ -153,6 +145,14 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
               </Button>
             </div>
           )}
+          <select
+            value={searchParams.get("sort") ?? "newest"}
+            onChange={(event) => handleSortChange(event.target.value)}
+            className="border-input h-9 rounded-md border bg-transparent px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
         </div>
       </div>
 
