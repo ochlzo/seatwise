@@ -15,7 +15,7 @@ export async function getDefaultAvatarsFromCloudinary() {
             .max_results(30)
             .execute();
 
-        return result.resources.map((resource: any) => resource.secure_url) as string[];
+        return result.resources.map((resource: { secure_url?: string }) => resource.secure_url ?? "") as string[];
     } catch (error) {
         console.error("Error fetching default avatars from Cloudinary:", error);
         // Return empty array or fallback to prevent page crash

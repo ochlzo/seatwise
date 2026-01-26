@@ -30,7 +30,6 @@ export async function deleteSeatmapsAction(seatmapIds: string[]) {
     await assertAdmin();
 
     await prisma.$transaction(async (tx) => {
-      await tx.seat.deleteMany({ where: { seatmap_id: { in: seatmapIds } } });
       await tx.sched.deleteMany({ where: { seatmap_id: { in: seatmapIds } } });
       await tx.seatCategory.deleteMany({
         where: { seatmap_id: { in: seatmapIds } },
@@ -42,9 +41,10 @@ export async function deleteSeatmapsAction(seatmapIds: string[]) {
 
     revalidatePath("/admin/templates");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in deleteSeatmapsAction:", error);
-    return { success: false, error: error.message || "Failed to delete seatmaps" };
+    const message = error instanceof Error ? error.message : "Failed to delete seatmaps";
+    return { success: false, error: message };
   }
 }
 
@@ -62,8 +62,9 @@ export async function updateSeatmapStatusAction(
 
     revalidatePath("/admin/templates");
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error in updateSeatmapStatusAction:", error);
-    return { success: false, error: error.message || "Failed to update seatmaps" };
+    const message = error instanceof Error ? error.message : "Failed to update seatmaps";
+    return { success: false, error: message };
   }
 }

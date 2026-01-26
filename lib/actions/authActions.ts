@@ -33,9 +33,13 @@ export async function abortSignUpAction() {
         // 2. Delete from Firebase Auth
         try {
             await adminAuth.deleteUser(uid);
-        } catch (fbError: any) {
+        } catch (fbError: unknown) {
             console.error("Firebase user deletion failed:", fbError);
-            if (fbError.code !== 'auth/user-not-found') {
+            const errorCode =
+                fbError && typeof fbError === "object" && "code" in fbError
+                    ? String((fbError as { code?: unknown }).code)
+                    : "";
+            if (errorCode !== "auth/user-not-found") {
                 return { success: false, error: "Failed to delete Firebase account." };
             }
         }

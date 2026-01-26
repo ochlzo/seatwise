@@ -267,7 +267,7 @@ export default function SeatmapCanvas() {
       const id = node.id();
       if (!id) return;
       const nodeData = nodes[id];
-      let scaleX = node.scaleX();
+      const scaleX = node.scaleX();
       let scaleY = node.scaleY();
       if (
         nodeData?.type === "seat" ||

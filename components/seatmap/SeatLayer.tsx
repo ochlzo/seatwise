@@ -154,7 +154,7 @@ const SeatItem = React.memo(({
                     }
                     pendingPosRef.current = null;
                     if (!handled) {
-                        let nextPos = { x: e.target.x(), y: e.target.y() };
+                        const nextPos = { x: e.target.x(), y: e.target.y() };
 
                         const draggedBB = getNodeBoundingBox({
                             type: "seat",
@@ -212,7 +212,7 @@ const SeatItem = React.memo(({
                         })
                         : false;
                     if (handled) return;
-                    let nextPos = { x: e.target.x(), y: e.target.y() };
+                    const nextPos = { x: e.target.x(), y: e.target.y() };
 
                     const draggedBB = getNodeBoundingBox({
                         type: "seat",
@@ -490,8 +490,8 @@ export default function SeatLayer({
         if (!state.active || state.draggedId !== id) return false;
         const origin = state.startPositions[id];
         if (!origin) return false;
-        let dx = pos.x - origin.x;
-        let dy = pos.y - origin.y;
+        const dx = pos.x - origin.x;
+        const dy = pos.y - origin.y;
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
