@@ -23,7 +23,7 @@ export async function getSeatmaps(params?: { query?: string; sort?: string }) {
   return prisma.seatmap.findMany({
     where,
     include: {
-      sched: {
+      scheds: {
         include: {
           show: true,
         },
