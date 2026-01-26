@@ -4,8 +4,22 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { Check, Trash2, Ban, CheckCircle2, Pencil, ExternalLink, CalendarSearch } from "lucide-react";
+import {
+  Pencil,
+  ExternalLink,
+  CalendarSearch,
+  MoreHorizontal,
+  Ban,
+  CheckCircle2,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn, formatBytes } from "@/lib/utils";
 import { deleteSeatmapsAction, updateSeatmapStatusAction } from "@/lib/actions/seatmapActions";
 import { toast } from "sonner";
@@ -96,26 +110,6 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
     }
     toast.success(status === "ACTIVE" ? "Seatmaps enabled" : "Seatmaps disabled");
     setSelectedIds([]);
-    router.refresh();
-  };
-
-  const handleRowStatus = async (id: string, status: "ACTIVE" | "DISABLED") => {
-    const result = await updateSeatmapStatusAction([id], status);
-    if (!result.success) {
-      toast.error(result.error || "Failed to update seatmap");
-      return;
-    }
-    toast.success(status === "ACTIVE" ? "Seatmap enabled" : "Seatmap disabled");
-    router.refresh();
-  };
-
-  const handleRowDelete = async (id: string) => {
-    const result = await deleteSeatmapsAction([id]);
-    if (!result.success) {
-      toast.error(result.error || "Failed to delete seatmap");
-      return;
-    }
-    toast.success("Seatmap deleted");
     router.refresh();
   };
 
@@ -228,7 +222,7 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                     </span>
                   </td>
                   <td className="px-4 py-4">
-                    <div className="flex flex-wrap justify-end gap-2">
+                    <div className="hidden flex-wrap justify-end gap-2 md:flex">
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/seat-builder?seatmapId=${seatmap.seatmap_id}`}>
                           <Pencil className="mr-2 h-4 w-4" />
@@ -247,36 +241,37 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                           Events
                         </Link>
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          handleRowStatus(
-                            seatmap.seatmap_id,
-                            seatmap.seatmap_status === "ACTIVE" ? "DISABLED" : "ACTIVE"
-                          )
-                        }
-                      >
-                        {seatmap.seatmap_status === "ACTIVE" ? (
-                          <>
-                            <Ban className="mr-2 h-4 w-4" />
-                            Disable
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Enable
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleRowDelete(seatmap.seatmap_id)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </Button>
+                    </div>
+                    <div className="flex justify-end md:hidden">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              router.push(`/seat-builder?seatmapId=${seatmap.seatmap_id}`)
+                            }
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => router.push("/seat-builder")}>
+                            <ExternalLink className="h-4 w-4" />
+                            Open
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              router.push(eventShowId ? `/admin/shows/${eventShowId}` : "/admin/shows")
+                            }
+                          >
+                            <CalendarSearch className="h-4 w-4" />
+                            Events
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </td>
                 </tr>
