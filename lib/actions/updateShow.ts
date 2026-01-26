@@ -7,19 +7,24 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma, ShowStatus } from "@prisma/client";
 
 const toDateOnly = (value: string | Date) => {
-    if (value instanceof Date) {
-        return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    if (typeof value === "string") {
+        return new Date(`${value}T00:00:00Z`);
     }
-    return new Date(`${value}T00:00:00`);
+    return value;
 };
 
 const toTime = (value: string | Date) => {
-    if (value instanceof Date) {
-        const hours = `${value.getHours()}`.padStart(2, "0");
-        const minutes = `${value.getMinutes()}`.padStart(2, "0");
-        return new Date(`1970-01-01T${hours}:${minutes}:00`);
+    if (typeof value === "string") {
+        return new Date(`1970-01-01T${value}:00Z`); // Force UTC
     }
-    return new Date(`1970-01-01T${value}:00`);
+    // If it's already a date, we assume it's correctly set, or we extract time in UTC
+    // Ideally the input is consistently a string HH:mm from the form.
+    if (value instanceof Date) {
+        const hours = `${value.getUTCHours()}`.padStart(2, "0");
+        const minutes = `${value.getUTCMinutes()}`.padStart(2, "0");
+        return new Date(`1970-01-01T${hours}:${minutes}:00Z`);
+    }
+    return value as Date;
 };
 
 type UpdateShowSched = {
