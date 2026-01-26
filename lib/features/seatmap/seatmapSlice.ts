@@ -27,6 +27,7 @@ interface SeatmapState {
     snapSpacing: number;
     categories: SeatCategory[];
     title: string;
+    hasUnsavedChanges: boolean;
 }
 
 const initialState: SeatmapState = {
@@ -44,6 +45,7 @@ const initialState: SeatmapState = {
     snapSpacing: 8,
     categories: [],
     title: "Untitled Seatmap Prototype",
+    hasUnsavedChanges: false,
 };
 
 import { calculateFitViewport } from "@/lib/seatmap/view-utils";
@@ -61,6 +63,7 @@ const pushHistory = (state: SeatmapState) => {
         state.history.past.shift();
     }
     state.history.future = [];
+    state.hasUnsavedChanges = true;
 };
 
 const restoreSnapshot = (
@@ -108,12 +111,21 @@ const seatmapSlice = createSlice({
         },
         setSnapSpacing: (state, action: PayloadAction<number>) => {
             state.snapSpacing = action.payload;
+            state.hasUnsavedChanges = true;
         },
         updateCategories: (state, action: PayloadAction<SeatCategory[]>) => {
             state.categories = action.payload;
+            state.hasUnsavedChanges = true;
         },
         setTitle: (state, action: PayloadAction<string>) => {
             state.title = action.payload;
+            state.hasUnsavedChanges = true;
+        },
+        markSeatmapSaved: (state) => {
+            state.hasUnsavedChanges = false;
+        },
+        markSeatmapDirty: (state) => {
+            state.hasUnsavedChanges = true;
         },
         loadSeatmap: (state, action: PayloadAction<Partial<SeatmapState>>) => {
             const data = action.payload;
@@ -149,6 +161,7 @@ const seatmapSlice = createSlice({
             state.selectedIds = [];
             state.history.past = [];
             state.history.future = [];
+            state.hasUnsavedChanges = false;
         },
         fitView(state) {
             state.viewport = calculateFitViewport(state.nodes, state.viewportSize);
@@ -541,6 +554,8 @@ export const {
     setSnapSpacing,
     updateCategories,
     setTitle,
+    markSeatmapSaved,
+    markSeatmapDirty,
     loadSeatmap,
     fitView,
 } = seatmapSlice.actions;

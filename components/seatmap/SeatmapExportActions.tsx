@@ -5,7 +5,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Download, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { loadSeatmap, fitView } from "@/lib/features/seatmap/seatmapSlice";
+import { loadSeatmap, fitView, markSeatmapDirty } from "@/lib/features/seatmap/seatmapSlice";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import {
     Dialog,
@@ -54,7 +54,7 @@ export function SeatmapExportActions() {
         };
         window.addEventListener("seatmap-export-success" as any, handleSuccess);
         return () => window.removeEventListener("seatmap-export-success" as any, handleSuccess);
-    }, []);
+    }, [dispatch]);
 
     const startImport = (file: File) => {
         setActionType("import");
@@ -75,6 +75,7 @@ export function SeatmapExportActions() {
                         clearInterval(interval);
                         setProgress(100);
                         dispatch(loadSeatmap(json));
+                        dispatch(markSeatmapDirty());
                     } else {
                         setProgress(currentProgress);
                     }

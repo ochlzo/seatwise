@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Save } from "lucide-react";
-import { useAppSelector } from "@/lib/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { UploadProgress } from "@/components/ui/upload-progress";
@@ -17,10 +17,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { markSeatmapSaved } from "@/lib/features/seatmap/seatmapSlice";
 
 export function SeatmapSaveTemplateButton() {
   const seatmap = useAppSelector((state) => state.seatmap);
   const searchParams = useSearchParams();
+  const dispatch = useAppDispatch();
   const seatmapId = searchParams.get("seatmapId") ?? undefined;
   const [isSaving, setIsSaving] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
@@ -82,6 +84,7 @@ export function SeatmapSaveTemplateButton() {
       currentProgress = 100;
       setProgress(currentProgress);
       toast.success(seatmapId ? "Seatmap updated." : "Seatmap saved to templates.");
+      dispatch(markSeatmapSaved());
     } catch (error: any) {
       console.error(error);
       toast.error(error.message || "Failed to save seatmap");
