@@ -36,12 +36,19 @@ type SchedDraft = {
   sched_date: string;
   sched_start_time: string;
   sched_end_time: string;
+  seatmap_id?: string | null;
 };
 
 type TimeRangeDraft = {
   id: string;
   start: string;
   end: string;
+};
+
+type SeatmapOption = {
+  seatmap_id: string;
+  seatmap_name: string;
+  updatedAt: string;
 };
 
 export function CreateShowForm() {
@@ -62,6 +69,15 @@ export function CreateShowForm() {
   const [scheds, setScheds] = React.useState<SchedDraft[]>([]);
   const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
   const [applyToAllDates, setApplyToAllDates] = React.useState(false);
+  const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
+  const [isSeatmapOpen, setIsSeatmapOpen] = React.useState(false);
+  const [isManualSeatmapOpen, setIsManualSeatmapOpen] = React.useState(false);
+  const [selectedSeatmapId, setSelectedSeatmapId] = React.useState<string | null>(null);
+  const [manualSeatmapId, setManualSeatmapId] = React.useState<string | null>(null);
+  const [selectedSchedIds, setSelectedSchedIds] = React.useState<string[]>([]);
+  const [scheduleFilterStart, setScheduleFilterStart] = React.useState("");
+  const [scheduleFilterEnd, setScheduleFilterEnd] = React.useState("");
+  const [isLoadingSeatmaps, setIsLoadingSeatmaps] = React.useState(false);
   const [timeRanges, setTimeRanges] = React.useState<TimeRangeDraft[]>([
     { id: `time-${Date.now()}`, start: "19:00", end: "21:00" },
   ]);
@@ -73,6 +89,33 @@ export function CreateShowForm() {
       }
     };
   }, [imagePreview]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadSeatmaps = async () => {
+      try {
+        setIsLoadingSeatmaps(true);
+        const response = await fetch("/api/seatmaps");
+        if (!response.ok) {
+          throw new Error("Failed to load seatmaps");
+        }
+        const data = await response.json();
+        if (!isMounted) return;
+        setSeatmaps(data.seatmaps ?? []);
+      } catch (error: any) {
+        if (!isMounted) return;
+        toast.error(error.message || "Unable to load seatmaps");
+      } finally {
+        if (isMounted) {
+          setIsLoadingSeatmaps(false);
+        }
+      }
+    };
+    loadSeatmaps();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const showStartDate = formData.show_start_date
     ? new Date(`${formData.show_start_date}T00:00:00`)
@@ -117,6 +160,7 @@ export function CreateShowForm() {
 
   const removeSched = (id: string) => {
     setScheds((prev) => prev.filter((s) => s.id !== id));
+    setSelectedSchedIds((prev) => prev.filter((schedId) => schedId !== id));
   };
 
   const addTimeRange = () => {
@@ -167,6 +211,74 @@ export function CreateShowForm() {
     setIsScheduleOpen(false);
   };
 
+  const handleApplySeatmapToAll = () => {
+    if (!selectedSeatmapId) {
+      toast.error("Select a seatmap to apply.");
+      return;
+    }
+    setScheds((prev) =>
+      prev.map((sched) => ({ ...sched, seatmap_id: selectedSeatmapId }))
+    );
+    setIsSeatmapOpen(false);
+  };
+
+  const allSchedulesAssigned = React.useMemo(() => {
+    if (scheds.length === 0) return true;
+    return scheds.every((sched) => Boolean(sched.seatmap_id));
+  }, [scheds]);
+
+  const handleManualApply = () => {
+    if (!manualSeatmapId) {
+      toast.error("Select a seatmap to assign.");
+      return;
+    }
+    if (!selectedSchedIds.length) {
+      toast.error("Select at least one schedule.");
+      return;
+    }
+    setScheds((prev) => {
+      const next = prev.map((sched) =>
+        selectedSchedIds.includes(sched.id)
+          ? { ...sched, seatmap_id: manualSeatmapId }
+          : sched
+      );
+      const hasUnassigned = next.some((sched) => !sched.seatmap_id);
+      if (!hasUnassigned) {
+        setIsManualSeatmapOpen(false);
+      } else {
+        toast.error("Assign a seatmap to every schedule before closing.");
+      }
+      return next;
+    });
+    setSelectedSchedIds([]);
+  };
+
+  const handleManualOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && !allSchedulesAssigned) {
+      toast.error("Assign a seatmap to every schedule before closing.");
+      return;
+    }
+    setIsManualSeatmapOpen(nextOpen);
+  };
+
+  const seatmapNameById = React.useCallback(
+    (seatmapId?: string | null) =>
+      seatmaps.find((seatmap) => seatmap.seatmap_id === seatmapId)?.seatmap_name ??
+      "Unassigned",
+    [seatmaps]
+  );
+
+  const filteredSchedules = React.useMemo(() => {
+    const start = scheduleFilterStart ? new Date(`${scheduleFilterStart}T00:00:00`) : null;
+    const end = scheduleFilterEnd ? new Date(`${scheduleFilterEnd}T00:00:00`) : null;
+    return scheds.filter((sched) => {
+      const schedDate = new Date(`${sched.sched_date}T00:00:00`);
+      if (start && schedDate < start) return false;
+      if (end && schedDate > end) return false;
+      return true;
+    });
+  }, [scheds, scheduleFilterStart, scheduleFilterEnd]);
+
   const handleSave = async () => {
     if (
       !formData.show_name ||
@@ -183,6 +295,10 @@ export function CreateShowForm() {
     const validScheds = scheds.filter(
       (s) => s.sched_date && s.sched_start_time && s.sched_end_time
     );
+    if (validScheds.length > 0 && validScheds.some((s) => !s.seatmap_id)) {
+      toast.error("Assign a seatmap to every schedule before creating the show.");
+      return;
+    }
 
     let imageBase64: string | undefined;
     if (imageFile) {
@@ -394,7 +510,7 @@ export function CreateShowForm() {
           {scheds.map((s) => (
             <div
               key={s.id}
-              className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto] items-end rounded-lg border border-sidebar-border/60 p-3"
+              className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_1.2fr_auto] items-end rounded-lg border border-sidebar-border/60 p-3"
             >
               <div className="space-y-2">
                 <Label className="text-[11px] font-semibold text-muted-foreground">
@@ -426,6 +542,12 @@ export function CreateShowForm() {
                   readOnly
                 />
               </div>
+              <div className="space-y-2">
+                <Label className="text-[11px] font-semibold text-muted-foreground">
+                  Seatmap
+                </Label>
+                <Input value={seatmapNameById(s.seatmap_id)} readOnly />
+              </div>
               <Button
                 variant="ghost"
                 size="icon"
@@ -436,6 +558,40 @@ export function CreateShowForm() {
               </Button>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="border-sidebar-border shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg md:text-xl font-semibold">
+              Seatmaps
+            </CardTitle>
+            <CardDescription>
+              Assign seatmaps to your schedules before saving.
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsSeatmapOpen(true)}
+            className="gap-2"
+            disabled={!scheds.length || isLoadingSeatmaps}
+          >
+            Add Seatmap
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!scheds.length && (
+            <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
+              Add schedules before assigning seatmaps.
+            </div>
+          )}
+          {scheds.length > 0 && (
+            <div className="text-sm text-muted-foreground">
+              {scheds.filter((s) => s.seatmap_id).length} of {scheds.length} schedules assigned.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -537,6 +693,179 @@ export function CreateShowForm() {
             <Button onClick={handleAddSchedules}>
               Add schedules
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSeatmapOpen} onOpenChange={setIsSeatmapOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-sm sm:text-lg">Assign seatmap</DialogTitle>
+            <DialogDescription className="text-[11px] sm:text-sm">
+              Choose a seatmap to apply to all schedules or assign manually.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {seatmaps.length === 0 && (
+              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
+                No active seatmaps found.
+              </div>
+            )}
+            {seatmaps.map((seatmap) => (
+              <div
+                key={seatmap.seatmap_id}
+                className="flex items-center gap-3 rounded-lg border border-sidebar-border/60 p-3"
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-primary"
+                  checked={selectedSeatmapId === seatmap.seatmap_id}
+                  onChange={() => {
+                    setSelectedSeatmapId(
+                      selectedSeatmapId === seatmap.seatmap_id ? null : seatmap.seatmap_id
+                    );
+                  }}
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{seatmap.seatmap_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Updated {format(new Date(seatmap.updatedAt), "PP")}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsSeatmapOpen(false);
+                setIsManualSeatmapOpen(true);
+              }}
+            >
+              Assign manually
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setIsSeatmapOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleApplySeatmapToAll}>
+                Apply to all schedules
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isManualSeatmapOpen} onOpenChange={handleManualOpenChange}>
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-sm sm:text-lg">Assign seatmaps manually</DialogTitle>
+            <DialogDescription className="text-[11px] sm:text-sm">
+              Select a seatmap and match it with one or more schedules.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-[1fr_1.2fr]">
+            <div className="space-y-3">
+              <div className="text-xs font-semibold text-muted-foreground">
+                Seatmaps
+              </div>
+              <div className="space-y-2">
+                {seatmaps.map((seatmap) => (
+                  <div
+                    key={seatmap.seatmap_id}
+                    className="flex items-center gap-3 rounded-lg border border-sidebar-border/60 p-3"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={manualSeatmapId === seatmap.seatmap_id}
+                      onChange={() => {
+                        setManualSeatmapId(
+                          manualSeatmapId === seatmap.seatmap_id ? null : seatmap.seatmap_id
+                        );
+                      }}
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{seatmap.seatmap_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Updated {format(new Date(seatmap.updatedAt), "PP")}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs font-semibold text-muted-foreground">
+                  Schedules
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span>From</span>
+                    <Input
+                      type="date"
+                      value={scheduleFilterStart}
+                      onChange={(e) => setScheduleFilterStart(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span>To</span>
+                    <Input
+                      type="date"
+                      value={scheduleFilterEnd}
+                      onChange={(e) => setScheduleFilterEnd(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                {filteredSchedules.map((sched) => (
+                  <div
+                    key={sched.id}
+                    className="flex items-center gap-3 rounded-lg border border-sidebar-border/60 p-3"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={selectedSchedIds.includes(sched.id)}
+                      onChange={() => {
+                        setSelectedSchedIds((prev) =>
+                          prev.includes(sched.id)
+                            ? prev.filter((id) => id !== sched.id)
+                            : [...prev, sched.id]
+                        );
+                      }}
+                    />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {format(new Date(`${sched.sched_date}T00:00:00`), "PP")}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {sched.sched_start_time} - {sched.sched_end_time}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {seatmapNameById(sched.seatmap_id)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {filteredSchedules.length === 0 && (
+                <div className="text-sm text-muted-foreground">
+                  No schedules match the current date filters.
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" onClick={() => handleManualOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleManualApply}>Apply</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
