@@ -65,6 +65,7 @@ export type SeatCategory = {
   id: string;
   name: string;
   color: string;
+  price: string;
 };
 
 export type SeatmapRowNode = SeatmapNodeBase & {

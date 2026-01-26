@@ -121,7 +121,10 @@ const seatmapSlice = createSlice({
             if (data.viewport !== undefined) state.viewport = data.viewport;
             if (data.snapSpacing !== undefined) state.snapSpacing = data.snapSpacing;
 
-            const incomingCategories = data.categories ?? state.categories;
+            const incomingCategories = (data.categories ?? state.categories).map((category) => ({
+                ...category,
+                price: category.price ?? "0",
+            }));
             state.categories = incomingCategories;
 
             if (data.nodes !== undefined) {

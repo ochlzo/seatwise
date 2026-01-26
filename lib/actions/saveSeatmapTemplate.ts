@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 type SaveSeatmapPayload = {
   seatmap_name: string;
   seatmap_json: Prisma.InputJsonValue;
-  categories: Array<{ seat_category_id: string; category_name: string }>;
+  categories: Array<{ seat_category_id: string; category_name: string; price: string }>;
   seatmap_id?: string;
 };
 
@@ -69,6 +69,7 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
             data: categories.map((category) => ({
               seat_category_id: category.seat_category_id,
               category_name: category.category_name,
+              price: category.price,
               seatmap_id,
             })),
           });
@@ -89,6 +90,7 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
           data: categories.map((category) => ({
             seat_category_id: category.seat_category_id,
             category_name: category.category_name,
+            price: category.price,
             seatmap_id: seatmap.seatmap_id,
           })),
         });
