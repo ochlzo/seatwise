@@ -22,6 +22,8 @@
 - Sidebar has Standard Seat and VIP Seat drag tiles.
 - **Seat Categories**: Added support for up to 5 custom seat categories (name + color).
 - Sidebar integration for managing categories with a fixed color palette.
+- **Transparent Palette Swatch**: Category palette includes a `transparent` option for no-color categories.
+- **No Default Category**: Seats remain uncategorized until the user assigns a category.
 - Dynamic SVG swap based on category color mapping:
   - `#ffd700` -> `/vip-seat-1.svg`
   - `#e005b9` -> `/vip-seat-2.svg`
@@ -70,6 +72,7 @@
 - **Export Options Dropdown**: Replaced single export button with a dropdown for JSON and PNG formats.
 - **JSON Persistence**: Full state (nodes, categories, title, snap settings) can be exported and re-imported.
 - **Overwrite Protection**: A confirmation dialog (shadcn `Dialog`) warns users if they try to import a file onto a non-empty canvas.
+- **Unassigned Seat Guard**: JSON export and template saves are blocked if any seat lacks a category, with a dialog warning (e.g., "Ex: Regular.").
 - **High-Res PNG Export**:
   - Resolution: Exported at 3x pixel ratio for high definition.
   - Background: Solid white background added automatically during export.

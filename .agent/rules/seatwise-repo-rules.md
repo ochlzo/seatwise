@@ -116,6 +116,12 @@ Your job is to help implement features, fix bugs, and refactor code while preser
 - **Multi-Date Select**: Schedules are created by selecting multiple dates, then adding one or more time ranges.
 - **Persisted Fields**: Each schedule row saves `sched_date`, `sched_start_time`, and `sched_end_time` (time-only fields).
 
+### Seatmap Categories & Validation
+
+- **No Default Category**: Seats are not auto-assigned to a default category on load/import.
+- **Transparent Palette Option**: Category color palette includes a `transparent` swatch for optional/no-color categories.
+- **Unassigned Blocker**: Export JSON and "Save to Templates" are blocked when seats are missing categories; a dialog warns the user and requires assignment.
+
 ---
 
 ## 4) API Response & Type Conventions
