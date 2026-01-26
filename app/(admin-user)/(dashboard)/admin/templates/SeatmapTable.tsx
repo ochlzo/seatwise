@@ -16,13 +16,13 @@ type SeatmapRow = {
   seatmap_json: any;
   seatmap_status: "ACTIVE" | "DISABLED";
   updatedAt: string | Date;
-  sched: {
+  scheds: Array<{
     show: {
       show_id: string;
       show_name: string;
       venue: string;
     };
-  };
+  }>;
 };
 
 type SeatmapTableProps = {
@@ -193,6 +193,11 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
               const jsonBytes = new Blob([JSON.stringify(seatmap.seatmap_json)]).size;
               const updatedOn = format(new Date(seatmap.updatedAt), "PP");
               const isDisabled = seatmap.seatmap_status === "DISABLED";
+              const firstShow = seatmap.scheds[0]?.show;
+              const showName = firstShow?.show_name ?? "Unassigned";
+              const showVenue = firstShow?.venue ?? "No venue";
+              const eventCount = seatmap.scheds.length;
+              const eventShowId = firstShow?.show_id;
               return (
                 <tr
                   key={seatmap.seatmap_id}
@@ -210,7 +215,7 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                     <div className="flex flex-col">
                       <span className="font-semibold">{seatmap.seatmap_name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {seatmap.sched.show.show_name} · {seatmap.sched.show.venue}
+                        {showName} · {showVenue}
                       </span>
                     </div>
                   </td>
@@ -219,13 +224,13 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                   <td className="px-4 py-4">
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
                       <CalendarSearch className="h-4 w-4" />
-                      1
+                      {eventCount}
                     </span>
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button variant="outline" size="sm" asChild>
-                        <Link href={`/admin/templates/${seatmap.seatmap_id}`}>
+                        <Link href={`/seat-builder?seatmapId=${seatmap.seatmap_id}`}>
                           <Pencil className="mr-2 h-4 w-4" />
                           Edit
                         </Link>
@@ -237,7 +242,7 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                         </Link>
                       </Button>
                       <Button variant="outline" size="sm" asChild>
-                        <Link href={`/admin/shows/${seatmap.sched.show.show_id}`}>
+                        <Link href={eventShowId ? `/admin/shows/${eventShowId}` : "/admin/shows"}>
                           <CalendarSearch className="mr-2 h-4 w-4" />
                           Events
                         </Link>

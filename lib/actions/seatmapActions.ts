@@ -31,6 +31,7 @@ export async function deleteSeatmapsAction(seatmapIds: string[]) {
 
     await prisma.$transaction(async (tx) => {
       await tx.seat.deleteMany({ where: { seatmap_id: { in: seatmapIds } } });
+      await tx.sched.deleteMany({ where: { seatmap_id: { in: seatmapIds } } });
       await tx.seatCategory.deleteMany({
         where: { seatmap_id: { in: seatmapIds } },
       });
