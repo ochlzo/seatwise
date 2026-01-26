@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createShowAction } from "@/lib/actions/createShow";
 import { Calendar } from "@/components/ui/calendar";
+import { FileImagePreview } from "@/components/ui/file-uploader";
 import {
   Dialog,
   DialogContent,
@@ -55,14 +56,23 @@ export function CreateShowForm() {
     show_status: "DRAFT",
     show_start_date: "",
     show_end_date: "",
-    show_image_key: "",
   });
+  const [imageFile, setImageFile] = React.useState<File | null>(null);
+  const [imagePreview, setImagePreview] = React.useState<string | null>(null);
   const [scheds, setScheds] = React.useState<SchedDraft[]>([]);
   const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
   const [applyToAllDates, setApplyToAllDates] = React.useState(false);
   const [timeRanges, setTimeRanges] = React.useState<TimeRangeDraft[]>([
     { id: `time-${Date.now()}`, start: "19:00", end: "21:00" },
   ]);
+
+  React.useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
 
   const showStartDate = formData.show_start_date
     ? new Date(`${formData.show_start_date}T00:00:00`)
@@ -174,11 +184,21 @@ export function CreateShowForm() {
       (s) => s.sched_date && s.sched_start_time && s.sched_end_time
     );
 
+    let imageBase64: string | undefined;
+    if (imageFile) {
+      imageBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Failed to read image file"));
+        reader.readAsDataURL(imageFile);
+      });
+    }
+
     setIsSaving(true);
     const result = await createShowAction({
       ...formData,
       scheds: validScheds,
-      show_image_key: formData.show_image_key || undefined,
+      image_base64: imageBase64,
     });
     setIsSaving(false);
 
@@ -293,14 +313,55 @@ export function CreateShowForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="image-key" className="text-xs font-semibold text-muted-foreground">
-              Image URL (optional)
+            <Label className="text-xs font-semibold text-muted-foreground">
+              Show Image
             </Label>
-            <Input
-              id="image-key"
-              value={formData.show_image_key}
-              onChange={(e) => setFormData({ ...formData, show_image_key: e.target.value })}
-            />
+            <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id="show-image-upload"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    setImageFile(file);
+                    setImagePreview(URL.createObjectURL(file));
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById("show-image-upload")?.click()}
+                >
+                  Upload Image
+                </Button>
+                {imageFile && (
+                  <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                    {imageFile.name}
+                  </span>
+                )}
+              </div>
+              {imagePreview && (
+                <div className="flex items-center gap-2">
+                  <FileImagePreview src={imagePreview} alt="Show preview" className="size-12 md:size-14" />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => {
+                      setImageFile(null);
+                      setImagePreview(null);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

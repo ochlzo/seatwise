@@ -14,6 +14,7 @@ type CreateShowPayload = {
   show_start_date: string | Date;
   show_end_date: string | Date;
   show_image_key?: string;
+  image_base64?: string;
   scheds?: Array<{
     sched_date: string;
     sched_start_time: string;
@@ -64,8 +65,19 @@ export async function createShowAction(data: CreateShowPayload) {
       show_start_date,
       show_end_date,
       show_image_key,
+      image_base64,
       scheds = [],
     } = data;
+
+    let finalImageUrl = show_image_key;
+    if (image_base64) {
+      const cloudinary = (await import("@/lib/cloudinary")).default;
+      const uploadResponse = await cloudinary.uploader.upload(image_base64, {
+        folder: "seatwise/show_thumbnails",
+        resource_type: "image",
+      });
+      finalImageUrl = uploadResponse.secure_url;
+    }
 
     const show = await prisma.$transaction(async (tx) => {
       const created = await tx.show.create({
@@ -77,7 +89,7 @@ export async function createShowAction(data: CreateShowPayload) {
           show_status: show_status as any,
           show_start_date: toDateOnly(show_start_date),
           show_end_date: toDateOnly(show_end_date),
-          show_image_key,
+          show_image_key: finalImageUrl,
         },
       });
 
