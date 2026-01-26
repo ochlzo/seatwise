@@ -138,6 +138,7 @@ function SidebarProvider({
               ...style,
             } as React.CSSProperties
           }
+          suppressHydrationWarning
           className={cn(
             "group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full",
             className
