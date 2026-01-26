@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { format } from "date-fns";
-import { CalendarIcon, MapPin, Ticket, Clock, Save, Loader2 } from "lucide-react";
+import { CalendarIcon, MapPin, Ticket, Clock, Save, Loader2, Plus, Trash2 } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -14,7 +15,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -42,6 +44,7 @@ type ShowDetail = {
     show_image_key?: string | null;
     scheds: Array<{
         sched_id?: string;
+        seatmap_id?: string | null;
         sched_date: string | Date;
         sched_start_time: string | Date;
         sched_end_time: string | Date;
@@ -52,10 +55,26 @@ interface ShowDetailFormProps {
     show: ShowDetail;
 }
 
+type SeatmapOption = {
+    seatmap_id: string;
+    seatmap_name: string;
+    updatedAt: string;
+};
+
 export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const router = useRouter();
     const [isSaving, setIsSaving] = React.useState(false);
     const [isEditing, setIsEditing] = React.useState(false);
+
+    // Schedule Editor State
+    const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
+    const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
+    const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
+    const [tempSeatmapId, setTempSeatmapId] = React.useState<string | null>(null);
+    const [timeRanges, setTimeRanges] = React.useState([
+        { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
+    ]);
+
     const [formData, setFormData] = React.useState({
         show_name: show.show_name,
         show_description: show.show_description,
@@ -64,8 +83,74 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         show_status: show.show_status,
         show_start_date: new Date(show.show_start_date),
         show_end_date: new Date(show.show_end_date),
+        scheds: show.scheds || [],
     });
 
+    React.useEffect(() => {
+        let isMounted = true;
+        const loadSeatmaps = async () => {
+            try {
+                const response = await fetch("/api/seatmaps");
+                if (!response.ok) throw new Error("Failed to load seatmaps");
+                const data = await response.json();
+                if (isMounted) setSeatmaps(data.seatmaps ?? []);
+            } catch (error) {
+                console.error("Failed to load seatmaps", error);
+            }
+        };
+        loadSeatmaps();
+        return () => { isMounted = false; };
+    }, []);
+
+    const addTimeRange = () => {
+        setTimeRanges(prev => [...prev, { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" }]);
+    };
+
+    const removeTimeRange = (id: string) => {
+        setTimeRanges(prev => prev.filter(t => t.id !== id));
+    };
+
+    const updateTimeRange = (id: string, patch: { start?: string; end?: string }) => {
+        setTimeRanges(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+    };
+
+    const handleAddSchedules = () => {
+        if (!selectedDates.length) {
+            toast.error("Select at least one date.");
+            return;
+        }
+
+        const validRanges = timeRanges.filter((t) => t.start && t.end);
+        if (!validRanges.length) {
+            toast.error("Add at least one valid time range.");
+            return;
+        }
+
+        const newEntries: any[] = [];
+        selectedDates.forEach((date) => {
+            const dateKey = format(date, "yyyy-MM-dd");
+            validRanges.forEach((range) => {
+                newEntries.push({
+                    seatmap_id: tempSeatmapId,
+                    sched_date: dateKey,
+                    sched_start_time: range.start,
+                    sched_end_time: range.end,
+                });
+            });
+        });
+
+        // @ts-ignore - Temporary loose typing for new sched items mixed with existing ones
+        setFormData(prev => ({
+            ...prev,
+            scheds: [...prev.scheds, ...newEntries]
+        }));
+
+        setSelectedDates([]);
+        setTimeRanges([{ id: `time-${uuidv4()}`, start: "19:00", end: "21:00" }]);
+        setTempSeatmapId(null);
+        setIsScheduleOpen(false);
+        if (!isEditing) setIsEditing(true); // Auto-enable edit mode if not already
+    };
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -264,9 +349,180 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         </CardContent>
                     </Card>
 
+
+
+                    {/* 3. Performance Schedule Section */}
+                    <Card className="border-sidebar-border shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg md:text-xl font-semibold">Performance Schedule</CardTitle>
+                                <CardDescription>Manage show dates and times.</CardDescription>
+                            </div>
+                            {isEditing && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsScheduleOpen(true)}
+                                    className="gap-2"
+                                >
+                                    <Clock className="h-4 w-4" />
+                                    Add Schedule
+                                </Button>
+                            )}
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {Object.entries(
+                                [...(formData.scheds || [])]
+                                    .sort((a, b) => new Date(a.sched_date).getTime() - new Date(b.sched_date).getTime())
+                                    .reduce((acc, sched) => {
+                                        const dateKey = format(new Date(sched.sched_date), "yyyy-MM-dd");
+                                        if (!acc[dateKey]) acc[dateKey] = [];
+                                        acc[dateKey].push(sched);
+                                        return acc;
+                                    }, {} as Record<string, typeof formData.scheds>)
+                            ).map(([dateKey, scheds]) => (
+                                <div key={dateKey} className="space-y-3">
+                                    <h4 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
+                                        <CalendarIcon className="w-4 h-4 text-primary" />
+                                        {format(new Date(dateKey), "EEEE, MMMM do, yyyy")}
+                                    </h4>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        {scheds
+                                            .sort((a, b) => new Date(a.sched_start_time).getTime() - new Date(b.sched_start_time).getTime())
+                                            .map((sched, idx) => (
+                                                <div
+                                                    key={sched.sched_id || `new-${idx}`}
+                                                    className="flex items-center justify-between p-3 rounded-lg border border-sidebar-border/60 bg-muted/20"
+                                                >
+                                                    <div className="space-y-1">
+                                                        <div className="text-sm font-medium flex items-center gap-2">
+                                                            {format(new Date(sched.sched_start_time), "h:mm a")}
+                                                            <span className="text-muted-foreground">-</span>
+                                                            {format(new Date(sched.sched_end_time), "h:mm a")}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                                            <Ticket className="w-3 h-3" />
+                                                            {seatmaps.find(s => s.seatmap_id === sched.seatmap_id)?.seatmap_name || "Unassigned"}
+                                                        </div>
+                                                    </div>
+                                                    {isEditing && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                                            onClick={() => {
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    scheds: prev.scheds.filter(s => s !== sched)
+                                                                }));
+                                                            }}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            ))}
+                            {(!formData.scheds || formData.scheds.length === 0) && (
+                                <div className="text-center py-8 text-muted-foreground text-sm border border-dashed rounded-lg">
+                                    No schedules found.
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
                 </div>
 
-                {/* 4. Sidebar Stats */}
+                <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
+                    <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+                        <DialogHeader>
+                            <DialogTitle>Add Schedules</DialogTitle>
+                            <DialogDescription>
+                                Select dates and times to add new performances.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-6 md:grid-cols-[1.1fr_1fr]">
+                            <div className="rounded-lg border p-3 flex justify-center md:block">
+                                <Calendar
+                                    mode="multiple"
+                                    selected={selectedDates}
+                                    onSelect={(dates) => setSelectedDates(dates ?? [])}
+                                    numberOfMonths={1}
+                                    disabled={(date) => {
+                                        const start = new Date(formData.show_start_date);
+                                        const end = new Date(formData.show_end_date);
+                                        return date < start || date > end;
+                                    }}
+                                    className="[--cell-size:--spacing(7)] text-xs"
+                                />
+                            </div>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Time Ranges</Label>
+                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                        {timeRanges.map((range) => (
+                                            <div key={range.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                                                <div className="grid gap-1">
+                                                    <Label className="text-[10px]">Start</Label>
+                                                    <Input
+                                                        type="time"
+                                                        value={range.start}
+                                                        onChange={(e) => updateTimeRange(range.id, { start: e.target.value })}
+                                                        className="h-8 text-xs"
+                                                    />
+                                                </div>
+                                                <div className="grid gap-1">
+                                                    <Label className="text-[10px]">End</Label>
+                                                    <Input
+                                                        type="time"
+                                                        value={range.end}
+                                                        onChange={(e) => updateTimeRange(range.id, { end: e.target.value })}
+                                                        className="h-8 text-xs"
+                                                    />
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-destructive"
+                                                    onClick={() => removeTimeRange(range.id)}
+                                                    disabled={timeRanges.length === 1}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={addTimeRange} className="w-full mt-2">
+                                        <Plus className="h-4 w-4 mr-2" /> Add Time Slot
+                                    </Button>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Assign Seatmap</Label>
+                                    <select
+                                        className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1"
+                                        value={tempSeatmapId || ""}
+                                        onChange={(e) => setTempSeatmapId(e.target.value)}
+                                    >
+                                        <option value="" disabled>Select a seatmap</option>
+                                        {seatmaps.map(sm => (
+                                            <option key={sm.seatmap_id} value={sm.seatmap_id}>
+                                                {sm.seatmap_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>Cancel</Button>
+                            <Button onClick={handleAddSchedules}>Add Schedules</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
                 <div className="space-y-6">
                     <Card className="border-sidebar-border shadow-md bg-primary/5 border-primary/10 overflow-hidden relative">
                         <div className="absolute top-0 right-0 p-4 opacity-5">
@@ -279,15 +535,16 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                             <div className="flex justify-between items-center py-2 border-b border-sidebar-border/50">
                                 <span className="text-xs font-semibold text-muted-foreground">Total Days</span>
                                 <span className="font-black text-xl">
-                                    {new Set(show.scheds.map(s => {
+                                    {new Set(formData.scheds.map(s => {
                                         const d = new Date(s.sched_date);
+                                        // Use UTC methods to ensure consistent counting regardless of local time
                                         return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
                                     })).size}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center py-2 border-b border-sidebar-border/50">
                                 <span className="text-xs font-semibold text-muted-foreground">Total Shows</span>
-                                <span className="font-black text-xl">{show.scheds.length}</span>
+                                <span className="font-black text-xl">{formData.scheds.length}</span>
                             </div>
                         </CardContent>
                     </Card>
@@ -314,13 +571,13 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                 onClick={() => router.push("/admin/shows")}
                                 className="w-full h-12 font-semibold uppercase tracking-widest text-base"
                             >
-                                Cancel
+                                Back to Shows
                             </Button>
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
 
