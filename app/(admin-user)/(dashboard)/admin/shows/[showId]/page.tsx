@@ -21,6 +21,7 @@ export default async function ShowIdPage({
         <>
             <PageHeader
                 title={show.show_name}
+                className="z-20"
                 rightSlot={
                     <>
                         <ThemeSwithcer />
@@ -28,7 +29,7 @@ export default async function ShowIdPage({
                     </>
                 }
             />
-            <div className="relative overflow-hidden bg-background">
+            <div className="relative flex flex-1 flex-col bg-background">
                 {/* Ambient Background Layer */}
                 {show.show_image_key && (
                     <>
@@ -43,7 +44,7 @@ export default async function ShowIdPage({
                     </>
                 )}
 
-                <div className="relative z-10 flex flex-col p-4 md:p-8 pt-0 max-w-7xl mx-auto w-full">
+                <div className="relative z-10 flex flex-1 flex-col p-4 md:p-8 pt-0 max-w-7xl mx-auto w-full">
                     {/* Header with back breadcrumb is already handled by PageHeader, 
                         but we can add a specific title if needed */}
                     <div className="mb-6">
