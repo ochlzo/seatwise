@@ -470,49 +470,6 @@ export function CreateShowForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
-                Seatmap
-              </Label>
-              <Combobox
-                value={formData.seatmap_id}
-                onValueChange={(value) => {
-                  const nextValue = value ?? "";
-                  setFormData({ ...formData, seatmap_id: nextValue });
-                  const match = seatmaps.find((seatmap) => seatmap.seatmap_id === nextValue);
-                  if (match) {
-                    setSeatmapQuery(match.seatmap_name);
-                  }
-                }}
-              >
-                <ComboboxInput
-                  id="seatmap"
-                  placeholder={isLoadingSeatmaps ? "Loading seatmaps..." : "Select a seatmap"}
-                  disabled={isLoadingSeatmaps}
-                  required
-                  value={seatmapQuery}
-                  onChange={(event) => setSeatmapQuery(event.target.value)}
-                />
-                <ComboboxContent>
-                  <ComboboxList>
-                    {isLoadingSeatmaps ? (
-                      <ComboboxItem value="loading" disabled>
-                        Loading seatmaps...
-                      </ComboboxItem>
-                    ) : (
-                      filteredSeatmaps.map((seatmap) => (
-                        <ComboboxItem key={seatmap.seatmap_id} value={seatmap.seatmap_id}>
-                          {seatmap.seatmap_name}
-                        </ComboboxItem>
-                      ))
-                    )}
-                    {!isLoadingSeatmaps && seatmaps.length === 0 && (
-                      <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>
-                    )}
-                  </ComboboxList>
-                </ComboboxContent>
-              </Combobox>
-            </div>
-            <div className="space-y-2">
               <Label className="text-xs font-semibold text-muted-foreground">
                 Show Poster
               </Label>
@@ -565,8 +522,6 @@ export function CreateShowForm() {
             </div>
 
           </div>
-
-          <SeatmapPreview seatmapId={formData.seatmap_id || undefined} />
         </CardContent>
       </Card>
 
@@ -641,6 +596,64 @@ export function CreateShowForm() {
               </Button>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="border-sidebar-border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg md:text-xl font-semibold">
+            Seatmap
+          </CardTitle>
+          <CardDescription>Select a seatmap template and preview the layout.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
+                Seatmap
+              </Label>
+              <Combobox
+                value={formData.seatmap_id}
+                onValueChange={(value) => {
+                  const nextValue = value ?? "";
+                  setFormData({ ...formData, seatmap_id: nextValue });
+                  const match = seatmaps.find((seatmap) => seatmap.seatmap_id === nextValue);
+                  if (match) {
+                    setSeatmapQuery(match.seatmap_name);
+                  }
+                }}
+              >
+                <ComboboxInput
+                  id="seatmap"
+                  placeholder={isLoadingSeatmaps ? "Loading seatmaps..." : "Select a seatmap"}
+                  disabled={isLoadingSeatmaps}
+                  required
+                  value={seatmapQuery}
+                  onChange={(event) => setSeatmapQuery(event.target.value)}
+                />
+                <ComboboxContent>
+                  <ComboboxList>
+                    {isLoadingSeatmaps ? (
+                      <ComboboxItem value="loading" disabled>
+                        Loading seatmaps...
+                      </ComboboxItem>
+                    ) : (
+                      filteredSeatmaps.map((seatmap) => (
+                        <ComboboxItem key={seatmap.seatmap_id} value={seatmap.seatmap_id}>
+                          {seatmap.seatmap_name}
+                        </ComboboxItem>
+                      ))
+                    )}
+                    {!isLoadingSeatmaps && seatmaps.length === 0 && (
+                      <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+            </div>
+          </div>
+
+          <SeatmapPreview seatmapId={formData.seatmap_id || undefined} />
         </CardContent>
       </Card>
 
