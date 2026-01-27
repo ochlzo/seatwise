@@ -16,6 +16,8 @@ import type { SeatmapNode, SeatmapSeatNode, SeatmapShapeNode, GuidePathNode } fr
 import { calculateFitViewport } from "@/lib/seatmap/view-utils";
 import useImage from "use-image";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
+import { LocateFixed } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type SeatmapPreviewProps = {
   seatmapId?: string;
@@ -138,8 +140,20 @@ export function SeatmapPreview({ seatmapId, className, heightClassName }: Seatma
       </div>
       <div
         ref={containerRef}
-        className={`mt-3 w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white ${heightClassName ?? "h-[320px]"}`}
+        className={`relative mt-3 w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white ${heightClassName ?? "h-[320px]"}`}
       >
+        <div className="absolute left-4 top-4 z-10">
+          <Button
+            type="button"
+            size="icon"
+            variant="secondary"
+            className="h-9 w-9"
+            onClick={() => setViewport(calculateFitViewport(nodes, dimensions))}
+            title="Reset View"
+          >
+            <LocateFixed className="h-4 w-4" />
+          </Button>
+        </div>
         {!seatmapId && (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             Select a seatmap to preview.
