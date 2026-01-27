@@ -511,59 +511,58 @@ export function CreateShowForm() {
                 </ComboboxContent>
               </Combobox>
             </div>
-
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground">
-              Show Poster
-            </Label>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center">
-              <div className="flex items-center gap-3">
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  id="show-image-upload"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (!file) return;
-                    setImageFile(file);
-                    setImagePreview(URL.createObjectURL(file));
-                  }}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => document.getElementById("show-image-upload")?.click()}
-                >
-                  Upload Image
-                </Button>
-                {imageFile && (
-                  <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-                    {imageFile.name}
-                  </span>
-                )}
-              </div>
-              {imagePreview && (
-                <div className="flex items-center gap-2">
-                  <FileImagePreview src={imagePreview} alt="Show preview" className="size-12 md:size-14" />
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground">
+                Show Poster
+              </Label>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id="show-image-upload"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      setImageFile(file);
+                      setImagePreview(URL.createObjectURL(file));
+                    }}
+                  />
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="text-destructive"
-                    onClick={() => {
-                      setImageFile(null);
-                      setImagePreview(null);
-                    }}
+                    onClick={() => document.getElementById("show-image-upload")?.click()}
                   >
-                    Remove
+                    Upload Image
                   </Button>
+                  {imageFile && (
+                    <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                      {imageFile.name}
+                    </span>
+                  )}
                 </div>
-              )}
+                {imagePreview && (
+                  <div className="flex items-center gap-2">
+                    <FileImagePreview src={imagePreview} alt="Show preview" className="size-12 md:size-14" />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={() => {
+                        setImageFile(null);
+                        setImagePreview(null);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
+
           </div>
         </CardContent>
       </Card>
