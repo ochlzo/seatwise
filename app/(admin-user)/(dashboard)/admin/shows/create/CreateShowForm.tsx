@@ -753,7 +753,14 @@ export function CreateShowForm() {
             </div>
           </div>
 
-          <SeatmapPreview seatmapId={formData.seatmap_id || undefined} />
+          <SeatmapPreview
+            seatmapId={formData.seatmap_id || undefined}
+            categories={categories.map((category) => ({
+              category_id: category.id,
+              name: category.category_name,
+              color_code: category.color_code,
+            }))}
+          />
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">

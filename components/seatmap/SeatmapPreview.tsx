@@ -23,12 +23,17 @@ type SeatmapPreviewProps = {
   seatmapId?: string;
   className?: string;
   heightClassName?: string;
+  categories?: Array<{
+    category_id: string;
+    name: string;
+    color_code: "NO_COLOR" | "GOLD" | "PINK" | "BLUE" | "BURGUNDY" | "GREEN";
+  }>;
 };
 
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 3;
 
-export function SeatmapPreview({ seatmapId, className, heightClassName }: SeatmapPreviewProps) {
+export function SeatmapPreview({ seatmapId, className, heightClassName, categories }: SeatmapPreviewProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = React.useState<Record<string, SeatmapNode>>({});
   const [isLoading, setIsLoading] = React.useState(false);
