@@ -80,6 +80,7 @@ type CategoryDraft = {
   color_code: "NO_COLOR" | "GOLD" | "PINK" | "BLUE" | "BURGUNDY" | "GREEN";
   apply_to_all: boolean;
   sched_ids: string[];
+  filter_date: string;
 };
 
 const COLOR_OPTIONS: Array<{ value: CategoryDraft["color_code"]; label: string; swatch: string | null }> = [
@@ -194,6 +195,12 @@ export function CreateShowForm() {
     if (Number.isNaN(date.getTime())) return timeValue;
     return format(date, "hh:mm a");
   }, []);
+  const formatDateLabel = React.useCallback((dateValue: string) => {
+    if (!dateValue) return "";
+    const date = new Date(`${dateValue}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return dateValue;
+    return format(date, "PPP");
+  }, []);
   const getAvailableScheds = React.useCallback((categoryId: string) => {
     const used = new Set<string>();
     categories.forEach((cat) => {
@@ -206,6 +213,11 @@ export function CreateShowForm() {
     });
     return scheds.filter((sched) => !used.has(sched.id));
   }, [categories, scheds]);
+  const getFilteredScheds = React.useCallback((category: CategoryDraft) => {
+    const available = getAvailableScheds(category.id);
+    if (!category.filter_date) return available;
+    return available.filter((sched) => sched.sched_date === category.filter_date);
+  }, [getAvailableScheds]);
   const missingFields = React.useMemo(() => {
     const missing: string[] = [];
     if (!formData.show_name.trim()) missing.push("Show name");
@@ -293,6 +305,7 @@ export function CreateShowForm() {
         color_code: "NO_COLOR",
         apply_to_all: true,
         sched_ids: [],
+        filter_date: "",
       },
     ]);
   };
@@ -852,9 +865,49 @@ export function CreateShowForm() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-[11px] font-semibold text-muted-foreground">
-                      Applies to schedules
-                    </Label>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label className="text-[11px] font-semibold text-muted-foreground">
+                        Applies to schedules
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={category.filter_date || "all"}
+                          onValueChange={(value) =>
+                            updateCategory(category.id, {
+                              filter_date: value === "all" ? "" : value,
+                            })
+                          }
+                          disabled={scheds.length === 0}
+                        >
+                          <SelectTrigger className="h-7 w-[160px] text-[11px]">
+                            <SelectValue placeholder="Filter date" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All dates</SelectItem>
+                            {Array.from(
+                              new Map(
+                                scheds.map((sched) => [sched.sched_date, sched])
+                              ).keys()
+                            ).map((dateValue) => (
+                              <SelectItem key={dateValue} value={dateValue}>
+                                {formatDateLabel(dateValue)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {category.filter_date && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => updateCategory(category.id, { filter_date: "" })}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
                       <input
                         type="checkbox"
@@ -867,7 +920,7 @@ export function CreateShowForm() {
                     </label>
                     {!category.apply_to_all && (
                       <div className="grid gap-2 md:grid-cols-2">
-                        {getAvailableScheds(category.id).map((sched) => (
+                        {getFilteredScheds(category).map((sched) => (
                           <label key={sched.id} className="flex items-center gap-2 text-xs text-muted-foreground">
                             <input
                               type="checkbox"
@@ -883,6 +936,9 @@ export function CreateShowForm() {
                         )}
                         {scheds.length > 0 && getAvailableScheds(category.id).length === 0 && (
                           <p className="text-xs text-muted-foreground">All schedules already assigned.</p>
+                        )}
+                        {scheds.length > 0 && getAvailableScheds(category.id).length > 0 && getFilteredScheds(category).length === 0 && (
+                          <p className="text-xs text-muted-foreground">No schedules match the selected date.</p>
                         )}
                       </div>
                     )}
