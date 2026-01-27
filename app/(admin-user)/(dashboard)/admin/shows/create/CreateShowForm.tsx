@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SeatmapPreview } from "./SeatmapPreview";
 
 const STATUS_OPTIONS = [
   "DRAFT",
@@ -564,6 +565,8 @@ export function CreateShowForm() {
             </div>
 
           </div>
+
+          <SeatmapPreview seatmapId={formData.seatmap_id || undefined} />
         </CardContent>
       </Card>
 
