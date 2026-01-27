@@ -188,6 +188,24 @@ export function CreateShowForm() {
     showStartDate && showEndDate && differenceInCalendarMonths(showEndDate, showStartDate) >= 1
       ? 2
       : 1;
+  const formatTime = React.useCallback((timeValue: string) => {
+    if (!timeValue) return "";
+    const date = new Date(`1970-01-01T${timeValue}:00`);
+    if (Number.isNaN(date.getTime())) return timeValue;
+    return format(date, "hh:mm a");
+  }, []);
+  const getAvailableScheds = React.useCallback((categoryId: string) => {
+    const used = new Set<string>();
+    categories.forEach((cat) => {
+      if (cat.id === categoryId) return;
+      if (cat.apply_to_all) {
+        scheds.forEach((sched) => used.add(sched.id));
+        return;
+      }
+      cat.sched_ids.forEach((id) => used.add(id));
+    });
+    return scheds.filter((sched) => !used.has(sched.id));
+  }, [categories, scheds]);
   const missingFields = React.useMemo(() => {
     const missing: string[] = [];
     if (!formData.show_name.trim()) missing.push("Show name");
@@ -849,7 +867,7 @@ export function CreateShowForm() {
                     </label>
                     {!category.apply_to_all && (
                       <div className="grid gap-2 md:grid-cols-2">
-                        {scheds.map((sched) => (
+                        {getAvailableScheds(category.id).map((sched) => (
                           <label key={sched.id} className="flex items-center gap-2 text-xs text-muted-foreground">
                             <input
                               type="checkbox"
@@ -857,11 +875,14 @@ export function CreateShowForm() {
                               checked={category.sched_ids.includes(sched.id)}
                               onChange={() => toggleCategorySched(category.id, sched.id)}
                             />
-                            {sched.sched_date} • {sched.sched_start_time}–{sched.sched_end_time}
+                            {sched.sched_date} • {formatTime(sched.sched_start_time)}–{formatTime(sched.sched_end_time)}
                           </label>
                         ))}
                         {scheds.length === 0 && (
                           <p className="text-xs text-muted-foreground">Add schedules first to target specific dates.</p>
+                        )}
+                        {scheds.length > 0 && getAvailableScheds(category.id).length === 0 && (
+                          <p className="text-xs text-muted-foreground">All schedules already assigned.</p>
                         )}
                       </div>
                     )}
