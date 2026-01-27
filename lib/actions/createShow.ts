@@ -4,7 +4,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import type { ShowStatus } from "@prisma/client";
+import type { ColorCodes, ShowStatus } from "@prisma/client";
 
 type CreateShowPayload = {
   show_name: string;
@@ -16,11 +16,19 @@ type CreateShowPayload = {
   show_end_date: string | Date;
   show_image_key?: string;
   image_base64?: string;
-  seatmap_id?: string | null;
+  seatmap_id: string;
   scheds?: Array<{
+    client_id: string;
     sched_date: string;
     sched_start_time: string;
     sched_end_time: string;
+  }>;
+  categories?: Array<{
+    category_name: string;
+    price: string;
+    color_code: ColorCodes;
+    apply_to_all: boolean;
+    sched_ids: string[];
   }>;
 };
 
@@ -71,6 +79,7 @@ export async function createShowAction(data: CreateShowPayload) {
       image_base64,
       seatmap_id,
       scheds = [],
+      categories = [],
     } = data;
 
     let finalImageUrl = show_image_key;
@@ -94,19 +103,47 @@ export async function createShowAction(data: CreateShowPayload) {
           show_start_date: toDateOnly(show_start_date),
           show_end_date: toDateOnly(show_end_date),
           show_image_key: finalImageUrl,
-          seatmap_id: seatmap_id || null,
+          seatmap_id,
         },
       });
 
-      if (scheds.length > 0) {
-        await tx.sched.createMany({
-          data: scheds.map((s) => ({
+      const schedIdMap = new Map<string, string>();
+      for (const sched of scheds) {
+        const createdSched = await tx.sched.create({
+          data: {
             show_id: created.show_id,
-            sched_date: toDateOnly(s.sched_date),
-            sched_start_time: toTime(s.sched_start_time),
-            sched_end_time: toTime(s.sched_end_time),
-          })),
+            sched_date: toDateOnly(sched.sched_date),
+            sched_start_time: toTime(sched.sched_start_time),
+            sched_end_time: toTime(sched.sched_end_time),
+          },
         });
+        schedIdMap.set(sched.client_id, createdSched.sched_id);
+      }
+
+      if (categories.length > 0) {
+        for (const category of categories) {
+          const createdCategory = await tx.seatCategory.create({
+            data: {
+              category_name: category.category_name,
+              price: category.price,
+              color_code: category.color_code,
+              seatmap_id,
+            },
+          });
+
+          const targetSchedIds = category.apply_to_all
+            ? Array.from(schedIdMap.values())
+            : category.sched_ids.map((id) => schedIdMap.get(id)).filter(Boolean) as string[];
+
+          if (targetSchedIds.length > 0) {
+            await tx.schedSeatCategory.createMany({
+              data: targetSchedIds.map((sched_id) => ({
+                sched_id,
+                seat_category_id: createdCategory.seat_category_id,
+              })),
+            });
+          }
+        }
       }
 
       return created;
