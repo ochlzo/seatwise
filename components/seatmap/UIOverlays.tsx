@@ -216,7 +216,6 @@ export function SelectionPanel() {
   const dispatch = useAppDispatch();
   const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
   const nodes = useAppSelector((state) => state.seatmap.nodes);
-  const categories = useAppSelector((state) => state.seatmap.categories);
   const isMobile = useIsMobile();
 
   if (selectedIds.length === 0) return null;
@@ -268,7 +267,6 @@ export function SelectionPanel() {
   const commonScaleX = getCommonValue("scaleX");
   const commonScaleY = getCommonValue("scaleY");
   const commonText = getCommonValue("text");
-  const commonCategoryId = getCommonValue("categoryId");
   const commonRowLabel = getCommonValue("rowLabel");
   const commonSeatNumber = getCommonValue("seatNumber");
 
@@ -353,15 +351,6 @@ export function SelectionPanel() {
     if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
   };
 
-  const updateBulkCategoryId = (categoryId: string | null) => {
-    const changes: Record<string, any> = {};
-    selectedIds.forEach((id) => {
-      if (nodes[id]?.type === 'seat') {
-        changes[id] = { categoryId: categoryId || undefined };
-      }
-    });
-    if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
-  };
 
   const applyBulkColor = (type: "fill" | "stroke", color: string | null) => {
     const changes: Record<string, any> = {};
@@ -497,31 +486,6 @@ export function SelectionPanel() {
                 {rangeError && <p className="text-[10px] text-red-500 text-center">{rangeError}</p>}
               </div>
             )}
-          </div>
-        )}
-
-        {/* Categories */}
-        {isSeatSelection && categories.length > 0 && (
-          <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <div className="text-[11px] uppercase font-bold text-zinc-400 mb-2">Assign Category</div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => updateBulkCategoryId(null)}
-                className={`px-3 py-1.5 text-[10px] rounded border transition-colors ${!commonCategoryId ? "bg-zinc-900 text-white" : "border-zinc-200 hover:bg-zinc-50"}`}
-              >
-                None
-              </button>
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => updateBulkCategoryId(cat.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] rounded border transition-all ${commonCategoryId === cat.id ? "border-blue-500 ring-1 ring-blue-500 bg-blue-50" : "border-zinc-200 hover:bg-zinc-50"}`}
-                >
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
-                  <span className="truncate max-w-[60px] font-medium">{cat.name || "Untitled"}</span>
-                </button>
-              ))}
-            </div>
           </div>
         )}
 

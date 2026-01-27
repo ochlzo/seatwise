@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { SeatCategory, SeatmapNode, SeatmapSeatNode, SeatmapShapeNode, SeatmapViewport } from "@/lib/seatmap/types";
+import { SeatmapNode, SeatmapSeatNode, SeatmapShapeNode, SeatmapViewport } from "@/lib/seatmap/types";
 import { v4 as uuidv4 } from "uuid";
 
 interface SeatmapState {
@@ -25,7 +25,6 @@ interface SeatmapState {
     };
     zoomLocked: boolean;
     snapSpacing: number;
-    categories: SeatCategory[];
     title: string;
     hasUnsavedChanges: boolean;
 }
@@ -43,7 +42,6 @@ const initialState: SeatmapState = {
     history: { past: [], future: [] },
     zoomLocked: false,
     snapSpacing: 8,
-    categories: [],
     title: "Untitled Seatmap Prototype",
     hasUnsavedChanges: false,
 };
@@ -113,10 +111,6 @@ const seatmapSlice = createSlice({
             state.snapSpacing = action.payload;
             state.hasUnsavedChanges = true;
         },
-        updateCategories: (state, action: PayloadAction<SeatCategory[]>) => {
-            state.categories = action.payload;
-            state.hasUnsavedChanges = true;
-        },
         setTitle: (state, action: PayloadAction<string>) => {
             state.title = action.payload;
             state.hasUnsavedChanges = true;
@@ -132,12 +126,6 @@ const seatmapSlice = createSlice({
             if (data.title !== undefined) state.title = data.title;
             if (data.viewport !== undefined) state.viewport = data.viewport;
             if (data.snapSpacing !== undefined) state.snapSpacing = data.snapSpacing;
-
-            const incomingCategories = (data.categories ?? state.categories).map((category) => ({
-                ...category,
-                price: category.price ?? "0",
-            }));
-            state.categories = incomingCategories;
 
             if (data.nodes !== undefined) {
                 const normalizedNodes: Record<string, SeatmapNode> = {};
@@ -176,7 +164,6 @@ const seatmapSlice = createSlice({
                 id,
                 type: "seat",
                 position: { x: action.payload.x, y: action.payload.y },
-                status: "available",
                 rotation: 0,
                 scaleX: 1,
                 scaleY: 1,
@@ -210,7 +197,6 @@ const seatmapSlice = createSlice({
                             x: startX + col * step,
                             y: startY + row * step,
                         },
-                        status: "available",
                         rotation: 0,
                         scaleX: 1,
                         scaleY: 1,
@@ -351,7 +337,6 @@ const seatmapSlice = createSlice({
                     pushHistory(state);
                 }
                 const updated = { ...state.nodes[id], ...changes } as SeatmapNode;
-                // @ts-expect-error - complex union type merging
                 state.nodes[id] = updated;
             }
         },
@@ -372,7 +357,6 @@ const seatmapSlice = createSlice({
                 const node = state.nodes[id];
                 if (!node) return;
                 const updated = { ...node, ...changes[id] } as SeatmapNode;
-                // @ts-expect-error - complex union type merging
                 state.nodes[id] = updated;
             });
         },
@@ -552,7 +536,6 @@ export const {
     redo,
     toggleZoomLock,
     setSnapSpacing,
-    updateCategories,
     setTitle,
     markSeatmapSaved,
     markSeatmapDirty,

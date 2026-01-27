@@ -8,7 +8,6 @@ export type SeatmapNodeType =
   | "shape"
   | "helper";
 
-export type SeatStatus = "available" | "reserved" | "sold" | "blocked";
 
 export type SeatmapPoint = {
   x: number;
@@ -55,7 +54,6 @@ export type SeatmapSeatNode = SeatmapNodeBase & {
   rowId?: string;
   rowLabel?: string;
   seatNumber?: number;
-  status: SeatStatus;
   seatType?: "standard" | "vip";
   snapGuideId?: string;
   categoryId?: string;

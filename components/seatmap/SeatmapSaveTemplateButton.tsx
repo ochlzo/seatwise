@@ -9,14 +9,6 @@ import { UploadProgress } from "@/components/ui/upload-progress";
 import { saveSeatmapTemplateAction } from "@/lib/actions/saveSeatmapTemplate";
 import { calculateFitViewport } from "@/lib/seatmap/view-utils";
 import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { markSeatmapSaved } from "@/lib/features/seatmap/seatmapSlice";
 
 export function SeatmapSaveTemplateButton() {
@@ -27,13 +19,6 @@ export function SeatmapSaveTemplateButton() {
   const [isSaving, setIsSaving] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
   const [files, setFiles] = React.useState<{ name: string; size: number }[]>([]);
-  const [isCategoryWarningOpen, setIsCategoryWarningOpen] = React.useState(false);
-
-  const hasUnassignedSeats = React.useMemo(() => {
-    return Object.values(seatmap.nodes).some((node) => {
-      return node.type === "seat" && !("categoryId" in node && node.categoryId);
-    });
-  }, [seatmap.nodes]);
 
   const handleSave = async () => {
     const name = seatmap.title?.trim();
@@ -41,18 +26,12 @@ export function SeatmapSaveTemplateButton() {
       toast.error("Seatmap name is required.");
       return;
     }
-    if (hasUnassignedSeats) {
-      setIsCategoryWarningOpen(true);
-      return;
-    }
-
     setIsSaving(true);
     setProgress(0);
 
     const exportData = {
       title: seatmap.title,
       nodes: seatmap.nodes,
-      categories: seatmap.categories,
       viewport: calculateFitViewport(seatmap.nodes, seatmap.viewportSize),
       snapSpacing: seatmap.snapSpacing,
       exportedAt: new Date().toISOString(),
@@ -69,11 +48,6 @@ export function SeatmapSaveTemplateButton() {
       const result = await saveSeatmapTemplateAction({
         seatmap_name: name,
         seatmap_json: exportData,
-        categories: seatmap.categories.map((category) => ({
-          seat_category_id: category.id,
-          category_name: category.name,
-          price: category.price,
-        })),
         seatmap_id: seatmapId,
       });
 
@@ -115,19 +89,6 @@ export function SeatmapSaveTemplateButton() {
           success: "Your seatmap is now available in templates.",
         }}
       />
-      <Dialog open={isCategoryWarningOpen} onOpenChange={setIsCategoryWarningOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Unassigned Seats Detected</DialogTitle>
-            <DialogDescription>
-              Some seats do not have a category yet. Assign categories before saving to templates. (e.g., Regular).
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button onClick={() => setIsCategoryWarningOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       <Button
         variant="outline"
         size="sm"

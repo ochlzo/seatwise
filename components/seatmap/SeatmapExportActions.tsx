@@ -37,13 +37,6 @@ export function SeatmapExportActions() {
 
     const [isOverwriteDialogOpen, setIsOverwriteDialogOpen] = React.useState(false);
     const [pendingFile, setPendingFile] = React.useState<File | null>(null);
-    const [isCategoryWarningOpen, setIsCategoryWarningOpen] = React.useState(false);
-
-    const hasUnassignedSeats = React.useMemo(() => {
-        return Object.values(seatmap.nodes).some((node) => {
-            return node.type === "seat" && !("categoryId" in node && node.categoryId);
-        });
-    }, [seatmap.nodes]);
 
     // Listen for PNG export completion from Canvas
     React.useEffect(() => {
@@ -116,10 +109,6 @@ export function SeatmapExportActions() {
     };
 
     const handleExport = (type: "json" | "png") => {
-        if (type === "json" && hasUnassignedSeats) {
-            setIsCategoryWarningOpen(true);
-            return;
-        }
         setActionType("export");
         const baseFileName = seatmap.title.toLowerCase().replace(/\s+/g, "-");
         const fileName = type === "json" ? `${baseFileName}.json` : `${baseFileName}.png`;
@@ -133,7 +122,6 @@ export function SeatmapExportActions() {
             const exportData = {
                 title: seatmap.title,
                 nodes: seatmap.nodes,
-                categories: seatmap.categories,
                 viewport: targetViewport,
                 snapSpacing: seatmap.snapSpacing,
                 exportedAt: new Date().toISOString(),
@@ -227,20 +215,6 @@ export function SeatmapExportActions() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-            <Dialog open={isCategoryWarningOpen} onOpenChange={setIsCategoryWarningOpen}>
-                <DialogContent className={isMobile ? "w-[95vw] rounded-2xl" : ""}>
-                    <DialogHeader>
-                        <DialogTitle>Unassigned Seats Detected</DialogTitle>
-                        <DialogDescription>
-                            Some seats do not have a category yet. Assign categories before exporting to JSON. (e.g., Regular).
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter className="mt-4">
-                        <Button onClick={() => setIsCategoryWarningOpen(false)}>Close</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
             <UploadProgress
                 isOpen={isProgressOpen}
                 totalProgress={progress}

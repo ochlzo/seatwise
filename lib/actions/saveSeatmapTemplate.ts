@@ -8,7 +8,6 @@ import { revalidatePath } from "next/cache";
 type SaveSeatmapPayload = {
   seatmap_name: string;
   seatmap_json: Prisma.InputJsonValue;
-  categories: Array<{ seat_category_id: string; category_name: string; price: string }>;
   seatmap_id?: string;
 };
 
@@ -51,7 +50,7 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
     await assertAdmin();
     const { prisma } = await import("@/lib/prisma");
 
-    const { seatmap_name, seatmap_json, categories, seatmap_id } = payload;
+    const { seatmap_name, seatmap_json, seatmap_id } = payload;
 
     const created = await prisma.$transaction(async (tx) => {
       if (seatmap_id) {
@@ -63,18 +62,6 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
           },
         });
 
-        await tx.seatCategory.deleteMany({ where: { seatmap_id } });
-        if (categories.length > 0) {
-          await tx.seatCategory.createMany({
-            data: categories.map((category) => ({
-              seat_category_id: category.seat_category_id,
-              category_name: category.category_name,
-              price: category.price,
-              seatmap_id,
-            })),
-          });
-        }
-
         return updated;
       }
 
@@ -84,17 +71,6 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
           seatmap_json,
         },
       });
-
-      if (categories.length > 0) {
-        await tx.seatCategory.createMany({
-          data: categories.map((category) => ({
-            seat_category_id: category.seat_category_id,
-            category_name: category.category_name,
-            price: category.price,
-            seatmap_id: seatmap.seatmap_id,
-          })),
-        });
-      }
 
       return seatmap;
     });
