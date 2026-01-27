@@ -16,11 +16,11 @@ type CreateShowPayload = {
   show_end_date: string | Date;
   show_image_key?: string;
   image_base64?: string;
+  seatmap_id?: string | null;
   scheds?: Array<{
     sched_date: string;
     sched_start_time: string;
     sched_end_time: string;
-    seatmap_id?: string | null;
   }>;
 };
 
@@ -69,6 +69,7 @@ export async function createShowAction(data: CreateShowPayload) {
       show_end_date,
       show_image_key,
       image_base64,
+      seatmap_id,
       scheds = [],
     } = data;
 
@@ -93,6 +94,7 @@ export async function createShowAction(data: CreateShowPayload) {
           show_start_date: toDateOnly(show_start_date),
           show_end_date: toDateOnly(show_end_date),
           show_image_key: finalImageUrl,
+          seatmap_id: seatmap_id || null,
         },
       });
 
@@ -103,7 +105,6 @@ export async function createShowAction(data: CreateShowPayload) {
             sched_date: toDateOnly(s.sched_date),
             sched_start_time: toTime(s.sched_start_time),
             sched_end_time: toTime(s.sched_end_time),
-            seatmap_id: s.seatmap_id ?? null,
           })),
         });
       }

@@ -31,7 +31,6 @@ type UpdateShowSched = {
     sched_date: string | Date;
     sched_start_time: string | Date;
     sched_end_time: string | Date;
-    seatmap_id?: string | null;
 };
 
 type UpdateShowPayload = {
@@ -42,6 +41,7 @@ type UpdateShowPayload = {
     show_status: ShowStatus;
     show_start_date: string | Date;
     show_end_date: string | Date;
+    seatmap_id?: string | null;
     scheds?: UpdateShowSched[];
 };
 
@@ -65,7 +65,7 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
             throw new Error("Forbidden");
         }
 
-        const { show_name, show_description, venue, address, show_status, show_start_date, show_end_date, scheds } = data;
+        const { show_name, show_description, venue, address, show_status, show_start_date, show_end_date, seatmap_id, scheds } = data;
 
         // Transaction to update show and its schedules
         await prisma.$transaction(async (tx) => {
@@ -80,6 +80,7 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                     show_status,
                     show_start_date: new Date(show_start_date),
                     show_end_date: new Date(show_end_date),
+                    seatmap_id: seatmap_id || null,
                 }
             });
 
@@ -96,7 +97,6 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                     sched_date: toDateOnly(s.sched_date),
                     sched_start_time: toTime(s.sched_start_time),
                     sched_end_time: toTime(s.sched_end_time),
-                    ...(s.seatmap_id ? { seatmap_id: s.seatmap_id } : {}),
                 })) as Prisma.SchedCreateManyInput[];
                 await tx.sched.createMany({
                     data: schedData,

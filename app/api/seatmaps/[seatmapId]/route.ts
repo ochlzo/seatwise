@@ -6,6 +6,7 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ seatmapId: string }> }
 ) {
+  // Force TS Re-eval
   try {
     const { adminAuth } = await import("@/lib/firebaseAdmin");
     const cookieStore = await cookies();
@@ -28,7 +29,7 @@ export async function GET(
     const seatmap = await prisma.seatmap.findUnique({
       where: { seatmap_id: seatmapId },
       include: {
-        seat_categories: true,
+        seatCategories: true,
       },
     });
 
@@ -40,7 +41,7 @@ export async function GET(
       seatmap_id: seatmap.seatmap_id,
       seatmap_name: seatmap.seatmap_name,
       seatmap_json: seatmap.seatmap_json,
-      seat_categories: seatmap.seat_categories,
+      seat_categories: seatmap.seatCategories,
     });
   } catch (error) {
     console.error("Error loading seatmap:", error);

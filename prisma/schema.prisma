@@ -52,6 +52,9 @@ model Show {
   show_end_date    DateTime    @db.Date
   show_image_key   String?
 
+  seatmap_id       String?
+  seatmap          Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
+
   scheds           Sched[]
 
   createdAt        DateTime    @default(now())
@@ -74,14 +77,14 @@ model Sched {
   sched_start_time  DateTime    @db.Time
   sched_end_time    DateTime    @db.Time
 
-  show_id           String
-  show              Show        @relation(fields: [show_id], references: [show_id])
-  seatmap_id        String?
-  seatmap           Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
-  seats             Seat[]
+  show_id           String?
+  show              Show?       @relation(fields: [show_id], references: [show_id])
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  seatCategories    SeatCategory[]
+  seatAssignments   SeatAssignment[]
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 }
 
 model Seatmap {
@@ -90,8 +93,8 @@ model Seatmap {
   seatmap_json      Json
   seatmap_status    SeatmapStatus @default(ACTIVE)
 
-  scheds            Sched[]
-  seat_categories   SeatCategory[]
+  shows             Show[]
+  seatCategories    SeatCategory[]
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
@@ -109,7 +112,12 @@ model SeatCategory {
 
   seatmap_id        String?
   seatmap           Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
+
+  sched_id          String?
+  sched             Sched?       @relation(fields: [sched_id], references: [sched_id])
+
   seats             Seat[]
+  seatAssignments   SeatAssignment[]
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
@@ -118,13 +126,11 @@ model SeatCategory {
 model Seat {
   seat_id           String      @id @default(cuid())
   seat_number       String
-  seat_status       SeatStatus  @default(OPEN)
 
-  seat_category_id  String
-  seat_category     SeatCategory @relation(fields: [seat_category_id], references: [seat_category_id])
+  seat_category_id  String?
+  seat_category     SeatCategory? @relation(fields: [seat_category_id], references: [seat_category_id])
 
-  sched_id          String?
-  sched             Sched?       @relation(fields: [sched_id], references: [sched_id])
+  seatAssignments   SeatAssignment[]
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
@@ -133,4 +139,19 @@ model Seat {
 enum SeatStatus {
   OPEN
   RESERVED
+}
+
+model SeatAssignment {
+  seat_assignment_id String @id @default(cuid())
+  seat_status        SeatStatus @default(OPEN)
+
+  seat_id            String
+  sched_id           String
+  seat_category_id   String
+  seat               Seat @relation(fields: [seat_id], references: [seat_id])
+  sched              Sched @relation(fields: [sched_id], references: [sched_id])
+  seat_category      SeatCategory @relation(fields: [seat_category_id], references: [seat_category_id])
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 }
