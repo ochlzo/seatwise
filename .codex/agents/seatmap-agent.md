@@ -104,3 +104,9 @@
 - `lib/seatmap/geometry.ts`
 - `app/(admin-user)/seat-builder/page.tsx`
 - `app/test/page.tsx`
+
+## Create Show Seatmap Preview (Jan 2026)
+- Added reusable `components/seatmap/SeatmapPreview.tsx` for read-only seatmap rendering.
+- Preview loads `seatmap_json` from `/api/seatmaps/:id` and supports pan/zoom + reset view.
+- Seat-only selection with optional marquee selection (`allowMarqueeSelection`), enabled in Create Show.
+- Create Show passes selected seatmap + category data to the preview component for future use.
