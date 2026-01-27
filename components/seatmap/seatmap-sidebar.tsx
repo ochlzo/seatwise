@@ -24,6 +24,8 @@ import { DialogTrigger } from "@/components/ui/dialog";
 import { SeatmapHowToDialog } from "@/components/seatmap/how-to";
 import { Plus, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import Image from "next/image";
+import type { SeatmapShapeNode } from "@/lib/seatmap/types";
 
 export function SeatMapSidebar({
   ...props
@@ -65,9 +67,11 @@ export function SeatMapSidebar({
           }}
         >
           <div className="w-10 h-10 relative flex items-center justify-center">
-            <img
+            <Image
               src="/seat-default.svg"
               alt="Seat"
+              width={40}
+              height={40}
               className="w-full h-full object-contain"
             />
           </div>
@@ -245,7 +249,8 @@ export function SeatMapSidebar({
 
         <div className="text-xs text-zinc-500 mb-2 mt-4">Shapes (click and draw)</div>
         <div className="grid grid-cols-2 gap-2">
-          {[
+          {(
+            [
             {
               label: "Square",
               shape: "rect",
@@ -293,7 +298,13 @@ export function SeatMapSidebar({
                 </div>
               ),
             },
-          ].map((item, i) => (
+          ] as Array<{
+              label: string;
+              shape: SeatmapShapeNode["shape"];
+              icon: React.ReactNode;
+              sides?: number;
+            }>
+          ).map((item, i) => (
             <div
               key={i}
               className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${drawShape.shape === item.shape &&
@@ -305,7 +316,7 @@ export function SeatMapSidebar({
                 dispatch(setMode("draw"));
                 dispatch(
                   setDrawShape({
-                    shape: item.shape as any,
+                    shape: item.shape,
                     sides: item.sides,
                   }),
                 );
