@@ -42,7 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SeatmapPreview } from "./SeatmapPreview";
+import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 
 const STATUS_OPTIONS = [
   "DRAFT",
