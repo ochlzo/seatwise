@@ -31,12 +31,12 @@ const formatTime = (date: Date) => {
 export default async function ShowsPage({
     searchParams
 }: {
-    searchParams: Promise<{ status?: string; sort?: string }>
+    searchParams: Promise<{ status?: string; sort?: string; seatmapId?: string }>
 }) {
     const params = await searchParams;
     const shows = await getShows(params);
 
-    const hasFilters = params.status || params.sort;
+    const hasFilters = params.status || params.sort || params.seatmapId;
 
     return (
         <>

@@ -189,7 +189,6 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
               const shows = seatmap.shows ?? [];
               const isAssigned = shows.length > 0;
               const eventCount = shows.length;
-              const eventShowId = shows[0]?.show_id;
               return (
                 <tr
                   key={seatmap.seatmap_id}
@@ -234,7 +233,7 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                         </Link>
                       </Button>
                       <Button variant="outline" size="sm" asChild>
-                        <Link href={eventShowId ? `/admin/shows/${eventShowId}` : "/admin/shows"}>
+                        <Link href={`/admin/shows?seatmapId=${seatmap.seatmap_id}`}>
                           <CalendarSearch className="mr-2 h-4 w-4" />
                           Events
                         </Link>
@@ -262,7 +261,7 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() =>
-                              router.push(eventShowId ? `/admin/shows/${eventShowId}` : "/admin/shows")
+                              router.push(`/admin/shows?seatmapId=${seatmap.seatmap_id}`)
                             }
                           >
                             <CalendarSearch className="h-4 w-4" />

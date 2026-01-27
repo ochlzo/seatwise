@@ -17,6 +17,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -60,6 +67,8 @@ type SeatmapOption = {
     seatmap_name: string;
     updatedAt: string;
 };
+
+type SchedDraft = ShowDetail["scheds"][number];
 
 export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const router = useRouter();
@@ -126,7 +135,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             return;
         }
 
-        const newEntries: any[] = [];
+        const newEntries: SchedDraft[] = [];
         selectedDates.forEach((date) => {
             const dateKey = format(date, "yyyy-MM-dd");
             validRanges.forEach((range) => {
@@ -138,7 +147,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             });
         });
 
-        // @ts-ignore
         setFormData(prev => ({
             ...prev,
             scheds: [...prev.scheds, ...newEntries]
@@ -153,7 +161,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            // @ts-ignore
             const result = await updateShowAction(show.show_id, {
                 ...formData,
             });
@@ -237,18 +244,23 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                 <div className="space-y-2">
                                     <Label htmlFor="status" className="text-xs font-semibold text-muted-foreground">Current Status</Label>
                                     {isEditing ? (
-                                        <select
-                                            id="status"
+                                        <Select
                                             value={formData.show_status}
-                                            onChange={(e) => setFormData({ ...formData, show_status: e.target.value as ShowStatus })}
-                                            className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 font-medium"
+                                            onValueChange={(value) =>
+                                                setFormData({ ...formData, show_status: value as ShowStatus })
+                                            }
                                         >
-                                            {Object.keys(STATUS_COLORS).map((status) => (
-                                                <option key={status} value={status}>
-                                                    {status.replace('_', ' ')}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            <SelectTrigger id="status" className="h-9 w-full font-medium">
+                                                <SelectValue placeholder="Select status" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {Object.keys(STATUS_COLORS).map((status) => (
+                                                    <SelectItem key={status} value={status}>
+                                                        {status.replace("_", " ")}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     ) : (
                                         <Input
                                             id="status"
