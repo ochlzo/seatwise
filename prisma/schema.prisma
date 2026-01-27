@@ -1,74 +1,22 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-generator client {
-  provider = "prisma-client-js"
-  engineType = "library"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-model User {
-  user_id         String      @id @default(cuid())
-  firebase_uid    String      @unique
-  username        String?     @unique
-  email           String      @unique
-  first_name      String
-  last_name       String
-  status          UserStatus
-  role            UserRole
-
-  avatar_key       String?
-
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-}
-
-enum UserRole {
-  USER
-  ADMIN
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-}
-
 model Show {
   show_id          String      @id @default(cuid())
   show_name        String      @unique
   show_description String
-  venue            String      
+  venue            String
   address          String
   show_status      ShowStatus
   show_start_date  DateTime    @db.Date
   show_end_date    DateTime    @db.Date
   show_image_key   String?
 
-  seatmap_id       String?
-  seatmap          Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
+  // REQUIRED: show has exactly 1 seatmap
+  seatmap_id       String
+  seatmap          Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
 
   scheds           Sched[]
 
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
-}
-
-enum ShowStatus {
-  UPCOMING
-  DRAFT
-  OPEN
-  CLOSED
-  ON_GOING
-  CANCELLED
-  POSTPONED
 }
 
 model Sched {
@@ -77,32 +25,29 @@ model Sched {
   sched_start_time  DateTime    @db.Time
   sched_end_time    DateTime    @db.Time
 
-  show_id           String?
-  show              Show?       @relation(fields: [show_id], references: [show_id])
+  // REQUIRED: schedule belongs to a show
+  show_id           String
+  show              Show        @relation(fields: [show_id], references: [show_id])
 
   seatAssignments   SeatAssignment[]
-  seatCategories    SeatCategory[]
+  seatCategoryLinks SchedSeatCategory[]
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 }
 
 model Seatmap {
-  seatmap_id        String      @id @default(cuid())
-  seatmap_name      String      @unique
+  seatmap_id        String        @id @default(cuid())
+  seatmap_name      String        @unique
   seatmap_json      Json
   seatmap_status    SeatmapStatus @default(ACTIVE)
 
   shows             Show[]
   seatCategories    SeatCategory[]
+  seats             Seat[]
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
-}
-
-enum SeatmapStatus {
-  ACTIVE
-  DISABLED
 }
 
 model SeatCategory {
@@ -112,30 +57,35 @@ model SeatCategory {
   color_code        ColorCodes
 
   seatmap_id        String
-  seatmap           Seatmap    @relation(fields: [seatmap_id], references: [seatmap_id])
-
-  sched_id          String
-  sched             Sched      @relation(fields: [sched_id], references: [sched_id])
+  seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
 
   seats             Seat[]
+  schedLinks        SchedSeatCategory[]
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 }
 
-enum ColorCodes {
-  NO_COLOR      @map("NO COLOR")
-  GOLD          @map("#ffd700")
-  PINK          @map("#e005b9")
-  BLUE          @map("#111184")
-  BURGUNDY      @map("#800020")
-  GREEN         @map("#046307")
+// Join table: seat_category can be assigned to many schedules (and vice versa)
+model SchedSeatCategory {
+  sched_id         String
+  seat_category_id String
+
+  sched            Sched         @relation(fields: [sched_id], references: [sched_id])
+  seatCategory     SeatCategory  @relation(fields: [seat_category_id], references: [seat_category_id])
+
+  @@id([sched_id, seat_category_id])
 }
 
 model Seat {
   seat_id           String      @id @default(cuid())
   seat_number       String
 
+  // Seat belongs to a seatmap (physical seat)
+  seatmap_id        String
+  seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
+
+  // Optional: seat is part of a category
   seat_category_id  String?
   seat_category     SeatCategory? @relation(fields: [seat_category_id], references: [seat_category_id])
 
@@ -145,20 +95,18 @@ model Seat {
   updatedAt         DateTime    @updatedAt
 }
 
-enum SeatStatus {
-  OPEN
-  RESERVED
-}
-
 model SeatAssignment {
   seat_assignment_id String @id @default(cuid())
   seat_status        SeatStatus @default(OPEN)
 
   seat_id            String
   sched_id           String
-  seat               Seat @relation(fields: [seat_id], references: [seat_id])
+  seat               Seat  @relation(fields: [seat_id], references: [seat_id])
   sched              Sched @relation(fields: [sched_id], references: [sched_id])
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
+
+  // Prevent duplicates for the same seat in the same schedule
+  @@unique([seat_id, sched_id])
 }
