@@ -21,16 +21,28 @@ import { LocateFixed, Move, MousePointer2, Lock, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+type SeatmapPreviewCategory = {
+  category_id: string;
+  name: string;
+  color_code: "NO_COLOR" | "GOLD" | "PINK" | "BLUE" | "BURGUNDY" | "GREEN";
+};
+
+const COLOR_CODE_TO_HEX: Record<SeatmapPreviewCategory["color_code"], string> = {
+  NO_COLOR: "transparent",
+  GOLD: "#ffd700",
+  PINK: "#e005b9",
+  BLUE: "#111184",
+  BURGUNDY: "#800020",
+  GREEN: "#046307",
+};
+
 type SeatmapPreviewProps = {
   seatmapId?: string;
   className?: string;
   heightClassName?: string;
-  categories?: Array<{
-    category_id: string;
-    name: string;
-    color_code: "NO_COLOR" | "GOLD" | "PINK" | "BLUE" | "BURGUNDY" | "GREEN";
-  }>;
+  categories?: SeatmapPreviewCategory[];
   allowMarqueeSelection?: boolean;
+  allowCategoryAssign?: boolean;
 };
 
 const MIN_SCALE = 0.4;
@@ -40,9 +52,11 @@ export function SeatmapPreview({
   seatmapId,
   className,
   heightClassName,
-  categories,
+  categories: _categories,
   allowMarqueeSelection = false,
+  allowCategoryAssign = false,
 }: SeatmapPreviewProps) {
+  const categories = _categories ?? [];
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = React.useState<Record<string, SeatmapNode>>({});
   const [isLoading, setIsLoading] = React.useState(false);
@@ -50,6 +64,7 @@ export function SeatmapPreview({
   const [dimensions, setDimensions] = React.useState({ width: 800, height: 400 });
   const [viewport, setViewport] = React.useState({ position: { x: 0, y: 0 }, scale: 1 });
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
+  const [seatCategories, setSeatCategories] = React.useState<Record<string, SeatmapPreviewCategory["color_code"]>>({});
   const [isShiftDown, setIsShiftDown] = React.useState(false);
   const [isCtrlDown, setIsCtrlDown] = React.useState(false);
   const [mode, setMode] = React.useState<"select" | "pan">("select");
@@ -144,6 +159,7 @@ export function SeatmapPreview({
     setSelectedSeatIds([]);
     setMarqueeRect((prev) => ({ ...prev, visible: false }));
     marqueeStartRef.current = null;
+    setSeatCategories({});
   }, [nodes, dimensions]);
 
   const handleWheel = (e: { evt: WheelEvent; target: { getStage: () => KonvaStage | null } }) => {
@@ -281,7 +297,7 @@ export function SeatmapPreview({
     setMarqueeRect((prev) => ({ ...prev, visible: false }));
   };
 
-  const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
+  const handleStageClick = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (mode !== "select") return;
     const stage = e.target.getStage();
     if (!stage) return;
@@ -355,6 +371,70 @@ export function SeatmapPreview({
             <LocateFixed className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
           </Button>
         </div>
+        {allowCategoryAssign && selectedSeatIds.length > 0 && categories.length > 0 && (
+          <div className="absolute right-3 top-3 z-10 w-52 rounded-lg border border-zinc-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-semibold text-zinc-700">Assign Category</span>
+              <span className="text-[10px] text-zinc-400">
+                {selectedSeatIds.length} seat{selectedSeatIds.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {categories.map((category) => (
+                <button
+                  key={category.category_id}
+                  type="button"
+                  className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
+                  onClick={() => {
+                    setSeatCategories((prev) => {
+                      const next = { ...prev };
+                      selectedSeatIds.forEach((id) => {
+                        next[id] = category.color_code;
+                      });
+                      return next;
+                    });
+                  }}
+                >
+                  <span
+                    className={cn(
+                      "h-2.5 w-2.5 rounded-full border border-zinc-300",
+                      category.color_code === "NO_COLOR" && "bg-transparent"
+                    )}
+                    style={{
+                      backgroundColor:
+                        category.color_code === "NO_COLOR"
+                          ? "transparent"
+                          : COLOR_CODE_TO_HEX[category.color_code],
+                      backgroundImage:
+                        category.color_code === "NO_COLOR"
+                          ? "linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent)"
+                          : undefined,
+                      backgroundSize:
+                        category.color_code === "NO_COLOR" ? "6px 6px" : undefined,
+                    }}
+                  />
+                  <span className="truncate">{category.name || "Untitled"}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
+                onClick={() => {
+                  setSeatCategories((prev) => {
+                    const next = { ...prev };
+                    selectedSeatIds.forEach((id) => {
+                      delete next[id];
+                    });
+                    return next;
+                  });
+                }}
+              >
+                <span className="h-2.5 w-2.5 rounded-full border border-zinc-300 bg-transparent" />
+                <span>Clear</span>
+              </button>
+            </div>
+          </div>
+        )}
         {!seatmapId && (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             Select a seatmap to preview.
@@ -410,6 +490,7 @@ export function SeatmapPreview({
                 onSelectSeat={setSelectedSeatIds}
                 isShiftDown={isShiftDown}
                 isCtrlDown={isCtrlDown}
+                seatCategories={seatCategories}
               />
               <ShapeNodes nodes={nodes} />
               <GuidePathNodes nodes={nodes} />
@@ -427,21 +508,41 @@ function SeatNodes({
   onSelectSeat,
   isShiftDown,
   isCtrlDown,
+  seatCategories,
 }: {
   nodes: Record<string, SeatmapNode>;
   selectedSeatIds: string[];
   onSelectSeat: (ids: string[]) => void;
   isShiftDown: boolean;
   isCtrlDown: boolean;
+  seatCategories: Record<string, SeatmapPreviewCategory["color_code"]>;
 }) {
   const seats = Object.values(nodes).filter((node): node is SeatmapSeatNode => node.type === "seat");
-  const [image] = useImage("/seat-default.svg");
+  const [defaultImage] = useImage("/seat-default.svg");
+  const [goldImage] = useImage("/vip-seat-1.svg");
+  const [pinkImage] = useImage("/vip-seat-2.svg");
+  const [blueImage] = useImage("/vip-seat-3.svg");
+  const [burgundyImage] = useImage("/vip-seat-4.svg");
+  const [greenImage] = useImage("/vip-seat-5.svg");
 
   return (
     <>
       {seats.map((seat) => {
         const label = `${seat.rowLabel ?? ""}${seat.seatNumber ?? ""}`;
         const isSelected = selectedSeatIds.includes(seat.id);
+        const colorCode = seatCategories[seat.id] ?? "NO_COLOR";
+        const image =
+          colorCode === "GOLD"
+            ? goldImage
+            : colorCode === "PINK"
+              ? pinkImage
+              : colorCode === "BLUE"
+                ? blueImage
+                : colorCode === "BURGUNDY"
+                  ? burgundyImage
+                  : colorCode === "GREEN"
+                    ? greenImage
+                    : defaultImage;
         return (
           <Group
             key={seat.id}
@@ -484,8 +585,8 @@ function SeatNodes({
             <KonvaImage image={image} width={32} height={32} name="seat-image" />
             {isSelected && (
               <Rect
-                x={0}
-                y={0}
+                x={16}
+                y={16}
                 width={32}
                 height={32}
                 offsetX={16}
