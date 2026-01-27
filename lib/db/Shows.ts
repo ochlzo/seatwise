@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
-export async function getShows(params?: { status?: string; sort?: string }) {
+export async function getShows(params?: { status?: string; sort?: string; seatmapId?: string }) {
   const where: Prisma.ShowWhereInput = {};
   if (params?.status && params.status !== "ALL") {
     where.show_status = params.status as never;
+  }
+  if (params?.seatmapId) {
+    where.seatmap_id = params.seatmapId;
   }
 
   let orderBy: Prisma.ShowOrderByWithRelationInput = { createdAt: "desc" };
