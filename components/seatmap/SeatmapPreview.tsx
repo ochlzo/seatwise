@@ -16,7 +16,9 @@ import type { SeatmapNode, SeatmapSeatNode, SeatmapShapeNode, GuidePathNode } fr
 import { calculateFitViewport } from "@/lib/seatmap/view-utils";
 import useImage from "use-image";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
-import { LocateFixed } from "lucide-react";
+import type { KonvaEventObject } from "konva/lib/Node";
+import { LocateFixed, Move, MousePointer2, Lock, Unlock } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 type SeatmapPreviewProps = {
@@ -28,18 +30,41 @@ type SeatmapPreviewProps = {
     name: string;
     color_code: "NO_COLOR" | "GOLD" | "PINK" | "BLUE" | "BURGUNDY" | "GREEN";
   }>;
+  allowMarqueeSelection?: boolean;
 };
 
 const MIN_SCALE = 0.4;
 const MAX_SCALE = 3;
 
-export function SeatmapPreview({ seatmapId, className, heightClassName, categories }: SeatmapPreviewProps) {
+export function SeatmapPreview({
+  seatmapId,
+  className,
+  heightClassName,
+  categories,
+  allowMarqueeSelection = false,
+}: SeatmapPreviewProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = React.useState<Record<string, SeatmapNode>>({});
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [dimensions, setDimensions] = React.useState({ width: 800, height: 400 });
   const [viewport, setViewport] = React.useState({ position: { x: 0, y: 0 }, scale: 1 });
+  const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
+  const [isShiftDown, setIsShiftDown] = React.useState(false);
+  const [isCtrlDown, setIsCtrlDown] = React.useState(false);
+  const [mode, setMode] = React.useState<"select" | "pan">("select");
+  const [zoomLocked, setZoomLocked] = React.useState(false);
+  const [isPanning, setIsPanning] = React.useState(false);
+  const lastStagePointerPosRef = React.useRef<{ x: number; y: number } | null>(null);
+  const stageRef = React.useRef<KonvaStage | null>(null);
+  const marqueeStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const [marqueeRect, setMarqueeRect] = React.useState({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    visible: false,
+  });
 
   React.useEffect(() => {
     if (!seatmapId) {
@@ -90,7 +115,35 @@ export function SeatmapPreview({ seatmapId, className, heightClassName, categori
   }, []);
 
   React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setIsShiftDown(true);
+      if (e.key === "Control" || e.key === "Meta") setIsCtrlDown(true);
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setIsShiftDown(false);
+      if (e.key === "Control" || e.key === "Meta") setIsCtrlDown(false);
+    };
+    const handleBlur = () => {
+      setIsShiftDown(false);
+      setIsCtrlDown(false);
+      marqueeStartRef.current = null;
+      setMarqueeRect((prev) => ({ ...prev, visible: false }));
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
+  React.useEffect(() => {
     setViewport(calculateFitViewport(nodes, dimensions));
+    setSelectedSeatIds([]);
+    setMarqueeRect((prev) => ({ ...prev, visible: false }));
+    marqueeStartRef.current = null;
   }, [nodes, dimensions]);
 
   const handleWheel = (e: { evt: WheelEvent; target: { getStage: () => KonvaStage | null } }) => {
@@ -103,6 +156,7 @@ export function SeatmapPreview({ seatmapId, className, heightClassName, categori
 
     const isZoom = e.evt.ctrlKey === true;
     if (isZoom) {
+      if (zoomLocked) return;
       const scaleBy = 1.06;
       const nextScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy;
       const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, nextScale));
@@ -137,6 +191,110 @@ export function SeatmapPreview({ seatmapId, className, heightClassName, categori
     }));
   };
 
+  const getWorldPointer = (stage: KonvaStage) => {
+    const p = stage.getPointerPosition();
+    if (!p) return null;
+    const t = stage.getAbsoluteTransform().copy().invert();
+    return t.point(p);
+  };
+
+  const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
+    if (mode === "pan") {
+      setIsPanning(true);
+      lastStagePointerPosRef.current = e.target.getStage()?.getPointerPosition() ?? null;
+      return;
+    }
+    if (!allowMarqueeSelection) return;
+    const stage = e.target.getStage();
+    if (!stage || e.evt.button !== 0) return;
+    if (e.target !== stage) return;
+    const pos = getWorldPointer(stage);
+    if (!pos) return;
+    marqueeStartRef.current = pos;
+    setMarqueeRect({ x: pos.x, y: pos.y, width: 0, height: 0, visible: true });
+  };
+
+  const handleStageMouseMove = (e: KonvaEventObject<MouseEvent>) => {
+    if (mode === "pan" && isPanning) {
+      const stage = e.target.getStage();
+      if (!stage) return;
+      const pointerPos = stage.getPointerPosition();
+      const lastPos = lastStagePointerPosRef.current;
+      if (pointerPos && lastPos) {
+        const dx = pointerPos.x - lastPos.x;
+        const dy = pointerPos.y - lastPos.y;
+        setViewport((prev) => ({
+          position: { x: prev.position.x + dx, y: prev.position.y + dy },
+          scale: prev.scale,
+        }));
+        lastStagePointerPosRef.current = pointerPos;
+      }
+      return;
+    }
+    if (!allowMarqueeSelection || !marqueeStartRef.current) return;
+    const stage = e.target.getStage();
+    if (!stage) return;
+    const pos = getWorldPointer(stage);
+    if (!pos) return;
+    const start = marqueeStartRef.current;
+    const x = Math.min(start.x, pos.x);
+    const y = Math.min(start.y, pos.y);
+    const width = Math.abs(pos.x - start.x);
+    const height = Math.abs(pos.y - start.y);
+    setMarqueeRect({ x, y, width, height, visible: true });
+  };
+
+  const handleStageMouseUp = () => {
+    if (mode === "pan") {
+      setIsPanning(false);
+      lastStagePointerPosRef.current = null;
+      return;
+    }
+    if (!allowMarqueeSelection || !marqueeStartRef.current) return;
+    const stage = stageRef.current;
+    if (stage) {
+      const { x, y, width, height } = marqueeRect;
+      const intersectingIds = stage
+        .find(".selectable")
+        .filter((node) => {
+          const rect = node.getClientRect({ relativeTo: stage });
+          return (
+            rect.x < x + width &&
+            rect.x + rect.width > x &&
+            rect.y < y + height &&
+            rect.y + rect.height > y
+          );
+        })
+        .map((node) => node.id() || node.getParent()?.id())
+        .filter(Boolean) as string[];
+
+      setSelectedSeatIds((prev) => {
+        if (isShiftDown || isCtrlDown) {
+          const merged = new Set(prev);
+          intersectingIds.forEach((id) => merged.add(id));
+          return Array.from(merged);
+        }
+        return intersectingIds;
+      });
+    }
+    marqueeStartRef.current = null;
+    setMarqueeRect((prev) => ({ ...prev, visible: false }));
+  };
+
+  const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
+    if (mode !== "select") return;
+    const stage = e.target.getStage();
+    if (!stage) return;
+    const additive = e.evt.shiftKey || e.evt.ctrlKey || e.evt.metaKey;
+    if (e.target === stage) {
+      if (!additive) setSelectedSeatIds([]);
+      return;
+    }
+    if (!e.target.hasName("seat-item") && !e.target.hasName("seat-image")) {
+      if (!additive) setSelectedSeatIds([]);
+    }
+  };
+
   return (
     <div className={`rounded-lg border border-sidebar-border/60 bg-zinc-50/50 p-3 ${className ?? ""}`.trim()}>
       <div className="flex items-center justify-between">
@@ -147,16 +305,54 @@ export function SeatmapPreview({ seatmapId, className, heightClassName, categori
         ref={containerRef}
         className={`relative mt-3 w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white ${heightClassName ?? "h-[320px]"}`}
       >
-        <div className="absolute left-4 top-4 z-10">
+        <div className={cn(
+          "absolute z-10 flex flex-col gap-2 bg-white shadow-lg border border-zinc-200 dark:border-zinc-800",
+          "left-4 top-4 p-2 rounded-lg",
+          "sm:left-4 sm:top-4 left-2 top-2 sm:p-2 p-1.5 sm:rounded-lg rounded-md",
+          "sm:gap-2 gap-1.5"
+        )}>
+          <Button
+            variant={mode === "select" ? "default" : "ghost"}
+            size="icon"
+            onClick={() => setMode("select")}
+            title="Select Mode"
+            className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+          >
+            <MousePointer2 className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant={mode === "pan" ? "default" : "ghost"}
+            size="icon"
+            onClick={() => setMode("pan")}
+            title="Pan Mode"
+            className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+          >
+            <Move className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+          </Button>
+          <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 sm:my-1 my-0.5" />
+          <Button
+            variant={zoomLocked ? "default" : "ghost"}
+            size="icon"
+            onClick={() => setZoomLocked((prev) => !prev)}
+            title={zoomLocked ? "Unlock Zoom" : "Lock Zoom"}
+            className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+          >
+            {zoomLocked ? (
+              <Lock className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+            ) : (
+              <Unlock className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+            )}
+          </Button>
+          <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 sm:my-1 my-0.5" />
           <Button
             type="button"
             size="icon"
-            variant="secondary"
-            className="h-9 w-9"
+            variant="ghost"
+            className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
             onClick={() => setViewport(calculateFitViewport(nodes, dimensions))}
             title="Reset View"
           >
-            <LocateFixed className="h-4 w-4" />
+            <LocateFixed className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
           </Button>
         </div>
         {!seatmapId && (
@@ -178,16 +374,43 @@ export function SeatmapPreview({ seatmapId, className, heightClassName, categori
           <Stage
             width={dimensions.width}
             height={dimensions.height}
-            draggable
+            draggable={mode === "pan"}
             onDragEnd={handleDragEnd}
             onWheel={handleWheel}
+            onMouseDown={handleStageMouseDown}
+            onMouseMove={handleStageMouseMove}
+            onMouseUp={handleStageMouseUp}
+            onClick={handleStageClick}
+            onTap={handleStageClick}
             x={viewport.position.x}
             y={viewport.position.y}
             scaleX={viewport.scale}
             scaleY={viewport.scale}
+            ref={(node) => {
+              stageRef.current = node;
+            }}
           >
             <Layer>
-              <SeatNodes nodes={nodes} />
+              {marqueeRect.visible && (
+                <Rect
+                  x={marqueeRect.x}
+                  y={marqueeRect.y}
+                  width={marqueeRect.width}
+                  height={marqueeRect.height}
+                  stroke="#3b82f6"
+                  strokeWidth={1}
+                  dash={[4, 4]}
+                  fill="rgba(59, 130, 246, 0.12)"
+                  listening={false}
+                />
+              )}
+              <SeatNodes
+                nodes={nodes}
+                selectedSeatIds={selectedSeatIds}
+                onSelectSeat={setSelectedSeatIds}
+                isShiftDown={isShiftDown}
+                isCtrlDown={isCtrlDown}
+              />
               <ShapeNodes nodes={nodes} />
               <GuidePathNodes nodes={nodes} />
             </Layer>
@@ -198,7 +421,19 @@ export function SeatmapPreview({ seatmapId, className, heightClassName, categori
   );
 }
 
-function SeatNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
+function SeatNodes({
+  nodes,
+  selectedSeatIds,
+  onSelectSeat,
+  isShiftDown,
+  isCtrlDown,
+}: {
+  nodes: Record<string, SeatmapNode>;
+  selectedSeatIds: string[];
+  onSelectSeat: (ids: string[]) => void;
+  isShiftDown: boolean;
+  isCtrlDown: boolean;
+}) {
   const seats = Object.values(nodes).filter((node): node is SeatmapSeatNode => node.type === "seat");
   const [image] = useImage("/seat-default.svg");
 
@@ -206,9 +441,11 @@ function SeatNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
     <>
       {seats.map((seat) => {
         const label = `${seat.rowLabel ?? ""}${seat.seatNumber ?? ""}`;
+        const isSelected = selectedSeatIds.includes(seat.id);
         return (
           <Group
             key={seat.id}
+            id={seat.id}
             x={seat.position.x}
             y={seat.position.y}
             width={32}
@@ -218,8 +455,47 @@ function SeatNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
             rotation={seat.rotation}
             scaleX={seat.scaleX}
             scaleY={seat.scaleY}
+            name="seat-item selectable"
+            onClick={(e) => {
+              e.cancelBubble = true;
+              if (isShiftDown || isCtrlDown) {
+                onSelectSeat(
+                  isSelected
+                    ? selectedSeatIds.filter((id) => id !== seat.id)
+                    : [...selectedSeatIds, seat.id],
+                );
+                return;
+              }
+              onSelectSeat([seat.id]);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              if (isShiftDown || isCtrlDown) {
+                onSelectSeat(
+                  isSelected
+                    ? selectedSeatIds.filter((id) => id !== seat.id)
+                    : [...selectedSeatIds, seat.id],
+                );
+                return;
+              }
+              onSelectSeat([seat.id]);
+            }}
           >
-            <KonvaImage image={image} width={32} height={32} />
+            <KonvaImage image={image} width={32} height={32} name="seat-image" />
+            {isSelected && (
+              <Rect
+                x={0}
+                y={0}
+                width={32}
+                height={32}
+                offsetX={16}
+                offsetY={16}
+                stroke="#3b82f6"
+                strokeWidth={2}
+                cornerRadius={4}
+                listening={false}
+              />
+            )}
             {label && (
               <Text
                 text={label}

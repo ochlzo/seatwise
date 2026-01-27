@@ -86,7 +86,7 @@ Your job is to help implement features, fix bugs, and refactor code while preser
   - **Auto-Cleanup**: When replacing a `google_avatars` entry, the server action automatically deletes the old asset from Cloudinary to prevent storage bloat.
 - Mutations: **Next.js Server Actions** (placed in `lib/actions/`):
   - Consolidated logic: `updateAvatarAction.ts` handles both preset selection and custom Cloudinary uploads in a single transactional flow.
-  - Show creation uses `createShowAction` with optional base64 image upload (Cloudinary) and schedule creation in a transaction.
+  - Show creation uses `createShowAction` with optional base64 image upload (Cloudinary), schedule creation, and (now) seat category + schedule link creation in a transaction.
   - Pattern: Perform DB update in action -> `revalidatePath` -> return success/error.
 
 ---
@@ -116,11 +116,11 @@ Your job is to help implement features, fix bugs, and refactor code while preser
 - **Multi-Date Select**: Schedules are created by selecting multiple dates, then adding one or more time ranges.
 - **Persisted Fields**: Each schedule row saves `sched_date`, `sched_start_time`, and `sched_end_time` (time-only fields).
 
-### Seatmap Categories & Validation
+### Seatmap Preview (Create Show)
 
-- **No Default Category**: Seats are not auto-assigned to a default category on load/import.
-- **Transparent Palette Option**: Category color palette includes a `transparent` swatch for optional/no-color categories.
-- **Unassigned Blocker**: Export JSON and "Save to Templates" are blocked when seats are missing categories; a dialog warns the user and requires assignment.
+- **Seatmap Preview Component**: `components/seatmap/SeatmapPreview.tsx` renders a read-only, pannable/zoomable seatmap from `seatmap_json` (JSONB) for Create Show.
+- **Selection**: Seat-only selection is supported; marquee selection is enabled only when `allowMarqueeSelection` is passed (used in Create Show).
+- **Reset View**: Preview includes a reset view overlay button (fit-to-content).
 
 ---
 

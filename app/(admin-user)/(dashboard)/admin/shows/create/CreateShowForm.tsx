@@ -760,6 +760,7 @@ export function CreateShowForm() {
               name: category.category_name,
               color_code: category.color_code,
             }))}
+            allowMarqueeSelection
           />
 
           <div className="space-y-4">
