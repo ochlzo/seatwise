@@ -21,6 +21,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const STATUS_OPTIONS = [
   "DRAFT",
@@ -72,9 +87,17 @@ export function CreateShowForm() {
   const [applyToAllDates, setApplyToAllDates] = React.useState(false);
   const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
   const [isLoadingSeatmaps, setIsLoadingSeatmaps] = React.useState(false);
+  const [seatmapQuery, setSeatmapQuery] = React.useState("");
   const [timeRanges, setTimeRanges] = React.useState<TimeRangeDraft[]>([
     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
   ]);
+  const filteredSeatmaps = React.useMemo(() => {
+    const query = seatmapQuery.trim().toLowerCase();
+    if (!query) return seatmaps;
+    return seatmaps.filter((seatmap) =>
+      seatmap.seatmap_name.toLowerCase().includes(query)
+    );
+  }, [seatmapQuery, seatmaps]);
 
   React.useEffect(() => {
     return () => {
@@ -96,9 +119,10 @@ export function CreateShowForm() {
         const data = await response.json();
         if (!isMounted) return;
         setSeatmaps(data.seatmaps ?? []);
-      } catch (error: any) {
+      } catch (error: unknown) {
         if (!isMounted) return;
-        toast.error(error.message || "Unable to load seatmaps");
+        const message = error instanceof Error ? error.message : "Unable to load seatmaps";
+        toast.error(message);
       } finally {
         if (isMounted) {
           setIsLoadingSeatmaps(false);
@@ -111,12 +135,20 @@ export function CreateShowForm() {
     };
   }, []);
 
-  const showStartDate = formData.show_start_date
-    ? new Date(`${formData.show_start_date}T00:00:00`)
-    : null;
-  const showEndDate = formData.show_end_date
-    ? new Date(`${formData.show_end_date}T00:00:00`)
-    : null;
+  const showStartDate = React.useMemo(
+    () =>
+      formData.show_start_date
+        ? new Date(`${formData.show_start_date}T00:00:00`)
+        : null,
+    [formData.show_start_date]
+  );
+  const showEndDate = React.useMemo(
+    () =>
+      formData.show_end_date
+        ? new Date(`${formData.show_end_date}T00:00:00`)
+        : null,
+    [formData.show_end_date]
+  );
   const isDateRangeValid =
     showStartDate &&
     showEndDate &&
@@ -151,6 +183,19 @@ export function CreateShowForm() {
       });
     }
   }, [applyToAllDates, getDatesInRange]);
+
+  React.useEffect(() => {
+    if (!formData.seatmap_id) {
+      if (seatmapQuery) {
+        setSeatmapQuery("");
+      }
+      return;
+    }
+    const match = seatmaps.find((seatmap) => seatmap.seatmap_id === formData.seatmap_id);
+    if (match && match.seatmap_name !== seatmapQuery) {
+      setSeatmapQuery(match.seatmap_name);
+    }
+  }, [formData.seatmap_id, seatmapQuery, seatmaps]);
 
   const removeSched = (id: string) => {
     setScheds((prev) => prev.filter((s) => s.id !== id));
@@ -211,7 +256,8 @@ export function CreateShowForm() {
       !formData.venue ||
       !formData.address ||
       !formData.show_start_date ||
-      !formData.show_end_date
+      !formData.show_end_date ||
+      !formData.seatmap_id
     ) {
       toast.error("Please fill out all required fields.");
       return;
@@ -232,7 +278,7 @@ export function CreateShowForm() {
     }
 
     setIsSaving(true);
-    // @ts-ignore
+    // @ts-expect-error server action typing isn't compatible with direct client invocation
     const result = await createShowAction({
       ...formData,
       seatmap_id: formData.seatmap_id || null,
@@ -272,103 +318,70 @@ export function CreateShowForm() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="show-status" className="text-xs font-semibold text-muted-foreground">
-                Status
+              <div className="space-y-2">
+                <Label htmlFor="show-status" className="text-xs font-semibold text-muted-foreground">
+                  Status
+                </Label>
+                <Select
+                  value={formData.show_status}
+                  onValueChange={(value) => setFormData({ ...formData, show_status: value })}
+                >
+                  <SelectTrigger id="show-status" className="h-9 w-full">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {status.replace("_", " ")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
+                Seatmap
               </Label>
-              <select
-                id="show-status"
-                value={formData.show_status}
-                onChange={(e) => setFormData({ ...formData, show_status: e.target.value })}
-                className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+              <Combobox
+                value={formData.seatmap_id}
+                onValueChange={(value) => {
+                  const nextValue = value ?? "";
+                  setFormData({ ...formData, seatmap_id: nextValue });
+                  const match = seatmaps.find((seatmap) => seatmap.seatmap_id === nextValue);
+                  if (match) {
+                    setSeatmapQuery(match.seatmap_name);
+                  }
+                }}
               >
-                {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {status.replace("_", " ")}
-                  </option>
-                ))}
-              </select>
+                <ComboboxInput
+                  id="seatmap"
+                  placeholder={isLoadingSeatmaps ? "Loading seatmaps..." : "Select a seatmap"}
+                  disabled={isLoadingSeatmaps}
+                  required
+                  value={seatmapQuery}
+                  onChange={(event) => setSeatmapQuery(event.target.value)}
+                />
+                <ComboboxContent>
+                  <ComboboxList>
+                    {isLoadingSeatmaps ? (
+                      <ComboboxItem value="loading" disabled>
+                        Loading seatmaps...
+                      </ComboboxItem>
+                    ) : (
+                      filteredSeatmaps.map((seatmap) => (
+                        <ComboboxItem key={seatmap.seatmap_id} value={seatmap.seatmap_id}>
+                          {seatmap.seatmap_name}
+                        </ComboboxItem>
+                      ))
+                    )}
+                    {!isLoadingSeatmaps && <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="show-description" className="text-xs font-semibold text-muted-foreground">
-              Production Description
-            </Label>
-            <textarea
-              id="show-description"
-              value={formData.show_description}
-              onChange={(e) => setFormData({ ...formData, show_description: e.target.value })}
-              rows={4}
-              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="venue" className="text-xs font-semibold text-muted-foreground">
-                Venue
-              </Label>
-              <Input
-                id="venue"
-                value={formData.venue}
-                onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="address" className="text-xs font-semibold text-muted-foreground">
-                Full Address
-              </Label>
-              <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="start-date" className="text-xs font-semibold text-muted-foreground">
-                Start Date
-              </Label>
-              <Input
-                id="start-date"
-                type="date"
-                value={formData.show_start_date}
-                onChange={(e) => setFormData({ ...formData, show_start_date: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="end-date" className="text-xs font-semibold text-muted-foreground">
-                End Date
-              </Label>
-              <Input
-                id="end-date"
-                type="date"
-                value={formData.show_end_date}
-                onChange={(e) => setFormData({ ...formData, show_end_date: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
-              Seatmap
-            </Label>
-            <select
-              id="seatmap"
-              value={formData.seatmap_id}
-              onChange={(e) => setFormData({ ...formData, seatmap_id: e.target.value })}
-              className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 font-medium"
-              disabled={isLoadingSeatmaps}
-            >
-              <option value="">Select a seatmap (optional)</option>
-              {seatmaps.map((seatmap) => (
-                <option key={seatmap.seatmap_id} value={seatmap.seatmap_id}>
-                  {seatmap.seatmap_name}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="space-y-2">
