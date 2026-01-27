@@ -100,10 +100,14 @@ export function CreateShowForm() {
   const filteredSeatmaps = React.useMemo(() => {
     const query = seatmapQuery.trim().toLowerCase();
     if (!query) return seatmaps;
+    const selected = seatmaps.find((seatmap) => seatmap.seatmap_id === formData.seatmap_id);
+    if (selected && selected.seatmap_name.toLowerCase() === query) {
+      return seatmaps;
+    }
     return seatmaps.filter((seatmap) =>
       seatmap.seatmap_name.toLowerCase().includes(query)
     );
-  }, [seatmapQuery, seatmaps]);
+  }, [seatmapQuery, seatmaps, formData.seatmap_id]);
 
   React.useEffect(() => {
     return () => {
@@ -163,16 +167,22 @@ export function CreateShowForm() {
     showStartDate && showEndDate && differenceInCalendarMonths(showEndDate, showStartDate) >= 1
       ? 2
       : 1;
-  const isFormValid = Boolean(
-    formData.show_name &&
-      formData.show_description &&
-      formData.venue &&
-      formData.address &&
-      formData.show_start_date &&
-      formData.show_end_date &&
-      formData.seatmap_id &&
-      isDateRangeValid
-  );
+  const missingFields = React.useMemo(() => {
+    const missing: string[] = [];
+    if (!formData.show_name.trim()) missing.push("Show name");
+    if (!formData.show_description.trim()) missing.push("Description");
+    if (!formData.venue.trim()) missing.push("Venue");
+    if (!formData.address.trim()) missing.push("Address");
+    if (!formData.show_start_date) missing.push("Start date");
+    if (!formData.show_end_date) missing.push("End date");
+    if (!formData.seatmap_id) missing.push("Seatmap");
+    if (formData.show_start_date && formData.show_end_date && !isDateRangeValid) {
+      missing.push("Date range (start must be before end)");
+    }
+    return missing;
+  }, [formData, isDateRangeValid]);
+
+  const isFormValid = missingFields.length === 0;
 
   const getDatesInRange = React.useCallback(() => {
     if (!showStartDate || !showEndDate) return [];
@@ -354,6 +364,37 @@ export function CreateShowForm() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="show-description" className="text-xs font-semibold text-muted-foreground">
+                Description
+              </Label>
+              <textarea
+                id="show-description"
+                value={formData.show_description}
+                onChange={(e) => setFormData({ ...formData, show_description: e.target.value })}
+                className="min-h-[96px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="show-venue" className="text-xs font-semibold text-muted-foreground">
+                Venue
+              </Label>
+              <Input
+                id="show-venue"
+                value={formData.venue}
+                onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="show-address" className="text-xs font-semibold text-muted-foreground">
+                Address
+              </Label>
+              <Input
+                id="show-address"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              />
             </div>
 
             <div className="space-y-2">
@@ -704,10 +745,17 @@ export function CreateShowForm() {
       </Dialog>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={isSaving || !isFormValid} className="gap-2">
+        <div className="flex flex-col items-end gap-2">
+          {!isFormValid && !isSaving && (
+            <p className="text-xs text-red-600">
+              Missing: {missingFields.join(", ")}
+            </p>
+          )}
+          <Button onClick={handleSave} disabled={isSaving || !isFormValid} className="gap-2">
           <Save className="h-4 w-4" />
           {isSaving ? "Creating..." : "Create Show"}
-        </Button>
+          </Button>
+        </div>
       </div>
     </div>
   );

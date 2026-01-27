@@ -1,3 +1,30 @@
+generator client { 
+  provider = "prisma-client-js" 
+  engineType = "library" 
+}
+
+datasource db { 
+  provider = "postgresql" 
+  url = env("DATABASE_URL") 
+}
+
+model User {
+  user_id       String     @id @default(cuid())
+  firebase_uid  String     @unique
+  username      String?    @unique
+  email         String     @unique
+  first_name    String
+  last_name     String
+  status        UserStatus
+  role          UserRole
+
+  avatar_key    String?
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+
 model Show {
   show_id          String      @id @default(cuid())
   show_name        String      @unique
@@ -109,4 +136,43 @@ model SeatAssignment {
 
   // Prevent duplicates for the same seat in the same schedule
   @@unique([seat_id, sched_id])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ShowStatus {
+  UPCOMING
+  DRAFT
+  OPEN
+  CLOSED
+  ON_GOING
+  CANCELLED
+  POSTPONED
+}
+
+enum SeatmapStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum ColorCodes {
+  NO_COLOR      @map("NO COLOR")
+  GOLD          @map("#ffd700")
+  PINK          @map("#e005b9")
+  BLUE          @map("#111184")
+  BURGUNDY      @map("#800020")
+  GREEN         @map("#046307")
+}
+
+enum SeatStatus {
+  OPEN
+  RESERVED
 }
