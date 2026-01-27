@@ -22,20 +22,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn, formatBytes } from "@/lib/utils";
 import { deleteSeatmapsAction, updateSeatmapStatusAction } from "@/lib/actions/seatmapActions";
+import type { Prisma } from "@prisma/client";
 import { toast } from "sonner";
 
 type SeatmapRow = {
   seatmap_id: string;
   seatmap_name: string;
-  seatmap_json: never;
+  seatmap_json: Prisma.JsonValue;
   seatmap_status: "ACTIVE" | "DISABLED";
   updatedAt: string | Date;
-  scheds: Array<{
-    show: {
-      show_id: string;
-      show_name: string;
-      venue: string;
-    };
+  shows?: Array<{
+    show_id: string;
+    show_name: string;
+    venue: string;
   }>;
 };
 
@@ -187,11 +186,10 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
               const jsonBytes = new Blob([JSON.stringify(seatmap.seatmap_json)]).size;
               const updatedOn = format(new Date(seatmap.updatedAt), "PP");
               const isDisabled = seatmap.seatmap_status === "DISABLED";
-              const firstShow = seatmap.scheds[0]?.show;
-              const showName = firstShow?.show_name ?? "Unassigned";
-              const showVenue = firstShow?.venue ?? "No venue";
-              const eventCount = seatmap.scheds.length;
-              const eventShowId = firstShow?.show_id;
+              const shows = seatmap.shows ?? [];
+              const isAssigned = shows.length > 0;
+              const eventCount = shows.length;
+              const eventShowId = shows[0]?.show_id;
               return (
                 <tr
                   key={seatmap.seatmap_id}
@@ -209,7 +207,7 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                     <div className="flex flex-col">
                       <span className="font-semibold">{seatmap.seatmap_name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {showName} · {showVenue}
+                        {isAssigned ? "Assigned" : "Unassigned"}
                       </span>
                     </div>
                   </td>
