@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
 export async function getSeatmaps(params?: { query?: string; sort?: string }) {
+  // Force TS Re-eval
   const where: Prisma.SeatmapWhereInput = {};
 
   if (params?.query) {
@@ -9,8 +10,8 @@ export async function getSeatmaps(params?: { query?: string; sort?: string }) {
     if (query) {
       where.OR = [
         { seatmap_name: { contains: query, mode: "insensitive" } },
-        { sched: { show: { show_name: { contains: query, mode: "insensitive" } } } },
-        { sched: { show: { venue: { contains: query, mode: "insensitive" } } } },
+        { shows: { some: { show_name: { contains: query, mode: "insensitive" } } } },
+        { shows: { some: { venue: { contains: query, mode: "insensitive" } } } },
       ];
     }
   }
@@ -23,11 +24,7 @@ export async function getSeatmaps(params?: { query?: string; sort?: string }) {
   return prisma.seatmap.findMany({
     where,
     include: {
-      scheds: {
-        include: {
-          show: true,
-        },
-      },
+      shows: true,
     },
     orderBy,
   });

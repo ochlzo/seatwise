@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "sonner";
@@ -42,9 +42,9 @@ type ShowDetail = {
     show_start_date: string | Date;
     show_end_date: string | Date;
     show_image_key?: string | null;
+    seatmap_id?: string | null;
     scheds: Array<{
         sched_id?: string;
-        seatmap_id?: string | null;
         sched_date: string | Date;
         sched_start_time: string | Date;
         sched_end_time: string | Date;
@@ -70,7 +70,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
     const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
     const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
-    const [tempSeatmapId, setTempSeatmapId] = React.useState<string | null>(null);
     const [timeRanges, setTimeRanges] = React.useState([
         { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
     ]);
@@ -83,6 +82,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         show_status: show.show_status,
         show_start_date: new Date(show.show_start_date),
         show_end_date: new Date(show.show_end_date),
+        seatmap_id: show.seatmap_id || "",
         scheds: show.scheds || [],
     });
 
@@ -131,7 +131,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             const dateKey = format(date, "yyyy-MM-dd");
             validRanges.forEach((range) => {
                 newEntries.push({
-                    seatmap_id: tempSeatmapId,
                     sched_date: dateKey,
                     sched_start_time: range.start,
                     sched_end_time: range.end,
@@ -139,7 +138,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             });
         });
 
-        // @ts-ignore - Temporary loose typing for new sched items mixed with existing ones
+        // @ts-ignore
         setFormData(prev => ({
             ...prev,
             scheds: [...prev.scheds, ...newEntries]
@@ -147,14 +146,14 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
         setSelectedDates([]);
         setTimeRanges([{ id: `time-${uuidv4()}`, start: "19:00", end: "21:00" }]);
-        setTempSeatmapId(null);
         setIsScheduleOpen(false);
-        if (!isEditing) setIsEditing(true); // Auto-enable edit mode if not already
+        if (!isEditing) setIsEditing(true);
     };
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
+            // @ts-ignore
             const result = await updateShowAction(show.show_id, {
                 ...formData,
             });
@@ -361,10 +360,34 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                     </Popover>
                                 </div>
                             </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">Seatmap</Label>
+                                {isEditing ? (
+                                    <select
+                                        id="seatmap"
+                                        value={formData.seatmap_id}
+                                        onChange={(e) => setFormData({ ...formData, seatmap_id: e.target.value })}
+                                        className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 font-medium"
+                                    >
+                                        <option value="">Select a seatmap</option>
+                                        {seatmaps.map((sm) => (
+                                            <option key={sm.seatmap_id} value={sm.seatmap_id}>
+                                                {sm.seatmap_name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <Input
+                                        id="seatmap"
+                                        value={seatmaps.find(s => s.seatmap_id === formData.seatmap_id)?.seatmap_name || "Unassigned"}
+                                        disabled
+                                        className="font-medium bg-muted/20 opacity-60 italic"
+                                    />
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
-
-
 
                     {/* 3. Performance Schedule Section */}
                     <Card className="border-sidebar-border shadow-sm">
@@ -415,10 +438,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                             <span className="text-muted-foreground">-</span>
                                                             {format(new Date(sched.sched_end_time), "h:mm a")}
                                                         </div>
-                                                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                                            <Ticket className="w-3 h-3" />
-                                                            {seatmaps.find(s => s.seatmap_id === sched.seatmap_id)?.seatmap_name || "Unassigned"}
-                                                        </div>
                                                     </div>
                                                     {isEditing && (
                                                         <Button
@@ -447,96 +466,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                             )}
                         </CardContent>
                     </Card>
-
                 </div>
-
-                <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-                    <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-                        <DialogHeader>
-                            <DialogTitle>Add Schedules</DialogTitle>
-                            <DialogDescription>
-                                Select dates and times to add new performances.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-6 md:grid-cols-[1.1fr_1fr]">
-                            <div className="rounded-lg border p-3 flex justify-center md:block">
-                                <Calendar
-                                    mode="multiple"
-                                    selected={selectedDates}
-                                    onSelect={(dates) => setSelectedDates(dates ?? [])}
-                                    numberOfMonths={1}
-                                    disabled={(date) => {
-                                        const start = new Date(formData.show_start_date);
-                                        const end = new Date(formData.show_end_date);
-                                        return date < start || date > end;
-                                    }}
-                                    className="[--cell-size:--spacing(7)] text-xs"
-                                />
-                            </div>
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label>Time Ranges</Label>
-                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                                        {timeRanges.map((range) => (
-                                            <div key={range.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
-                                                <div className="grid gap-1">
-                                                    <Label className="text-[10px]">Start</Label>
-                                                    <Input
-                                                        type="time"
-                                                        value={range.start}
-                                                        onChange={(e) => updateTimeRange(range.id, { start: e.target.value })}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </div>
-                                                <div className="grid gap-1">
-                                                    <Label className="text-[10px]">End</Label>
-                                                    <Input
-                                                        type="time"
-                                                        value={range.end}
-                                                        onChange={(e) => updateTimeRange(range.id, { end: e.target.value })}
-                                                        className="h-8 text-xs"
-                                                    />
-                                                </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-destructive"
-                                                    onClick={() => removeTimeRange(range.id)}
-                                                    disabled={timeRanges.length === 1}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <Button variant="outline" size="sm" onClick={addTimeRange} className="w-full mt-2">
-                                        <Plus className="h-4 w-4 mr-2" /> Add Time Slot
-                                    </Button>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Assign Seatmap</Label>
-                                    <select
-                                        className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1"
-                                        value={tempSeatmapId || ""}
-                                        onChange={(e) => setTempSeatmapId(e.target.value)}
-                                    >
-                                        <option value="" disabled>Select a seatmap</option>
-                                        {seatmaps.map(sm => (
-                                            <option key={sm.seatmap_id} value={sm.seatmap_id}>
-                                                {sm.seatmap_name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>Cancel</Button>
-                            <Button onClick={handleAddSchedules}>Add Schedules</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
 
                 <div className="space-y-6">
                     <Card className="border-sidebar-border shadow-md bg-primary/5 border-primary/10 overflow-hidden relative">
@@ -552,7 +482,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                 <span className="font-black text-xl">
                                     {new Set(formData.scheds.map(s => {
                                         const d = new Date(s.sched_date);
-                                        // Use UTC methods to ensure consistent counting regardless of local time
                                         return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
                                     })).size}
                                 </span>
@@ -586,12 +515,11 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                         show_status: show.show_status,
                                         show_start_date: new Date(show.show_start_date),
                                         show_end_date: new Date(show.show_end_date),
+                                        seatmap_id: show.seatmap_id || "",
                                         scheds: show.scheds || [],
                                     });
-                                    // Reset schedule helper state
                                     setSelectedDates([]);
                                     setTimeRanges([{ id: `time-${uuidv4()}`, start: "19:00", end: "21:00" }]);
-                                    setTempSeatmapId(null);
                                 }}
                                 disabled={isSaving}
                                 className="w-full h-12 font-semibold uppercase tracking-widest text-base"
@@ -617,8 +545,79 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         </div>
                     )}
                 </div>
-            </div >
+            </div>
+
+            <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+                    <DialogHeader>
+                        <DialogTitle>Add Schedules</DialogTitle>
+                        <DialogDescription>
+                            Select dates and times to add new performances.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-6 md:grid-cols-[1.1fr_1fr]">
+                        <div className="rounded-lg border p-3 flex justify-center md:block">
+                            <Calendar
+                                mode="multiple"
+                                selected={selectedDates}
+                                onSelect={(dates) => setSelectedDates(dates ?? [])}
+                                numberOfMonths={1}
+                                disabled={(date) => {
+                                    const start = new Date(formData.show_start_date);
+                                    const end = new Date(formData.show_end_date);
+                                    return date < start || date > end;
+                                }}
+                                className="[--cell-size:--spacing(7)] text-xs"
+                            />
+                        </div>
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>Time Ranges</Label>
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                    {timeRanges.map((range) => (
+                                        <div key={range.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                                            <div className="grid gap-1">
+                                                <Label className="text-[10px]">Start</Label>
+                                                <Input
+                                                    type="time"
+                                                    value={range.start}
+                                                    onChange={(e) => updateTimeRange(range.id, { start: e.target.value })}
+                                                    className="h-8 text-xs"
+                                                />
+                                            </div>
+                                            <div className="grid gap-1">
+                                                <Label className="text-[10px]">End</Label>
+                                                <Input
+                                                    type="time"
+                                                    value={range.end}
+                                                    onChange={(e) => updateTimeRange(range.id, { end: e.target.value })}
+                                                    className="h-8 text-xs"
+                                                />
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-destructive"
+                                                onClick={() => removeTimeRange(range.id)}
+                                                disabled={timeRanges.length === 1}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <Button variant="outline" size="sm" onClick={addTimeRange} className="w-full mt-2">
+                                    <Plus className="h-4 w-4 mr-2" /> Add Time Slot
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>Cancel</Button>
+                        <Button onClick={handleAddSchedules}>Add Schedules</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div >
     );
 }
-
