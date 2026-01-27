@@ -56,6 +56,7 @@ model Show {
   seatmap          Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
 
   scheds           Sched[]
+  seatCategories   SeatCategory[]
 
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -80,7 +81,6 @@ model Sched {
   show_id           String?
   show              Show?       @relation(fields: [show_id], references: [show_id])
 
-  seatCategories    SeatCategory[]
   seatAssignments   SeatAssignment[]
 
   createdAt         DateTime    @default(now())
@@ -109,12 +109,13 @@ model SeatCategory {
   seat_category_id  String      @id @default(cuid())
   category_name     String
   price             String      @default("0")
+  version           Int         @unique @default(autoincrement())
 
   seatmap_id        String?
   seatmap           Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
 
-  sched_id          String?
-  sched             Sched?       @relation(fields: [sched_id], references: [sched_id])
+  show_id           String?
+  show              Show?       @relation(fields: [show_id], references: [show_id])
 
   seats             Seat[]
   seatAssignments   SeatAssignment[]
