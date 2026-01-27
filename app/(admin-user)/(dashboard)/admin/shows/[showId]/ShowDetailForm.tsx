@@ -18,6 +18,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+    Combobox,
+    ComboboxContent,
+    ComboboxEmpty,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxList,
+} from "@/components/ui/combobox";
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -78,10 +86,18 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     // Schedule Editor State
     const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
     const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
+    const [seatmapQuery, setSeatmapQuery] = React.useState("");
     const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
     const [timeRanges, setTimeRanges] = React.useState([
         { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
     ]);
+    const filteredSeatmaps = React.useMemo(() => {
+        const query = seatmapQuery.trim().toLowerCase();
+        if (!query) return seatmaps;
+        return seatmaps.filter((seatmap) =>
+            seatmap.seatmap_name.toLowerCase().includes(query)
+        );
+    }, [seatmapQuery, seatmaps]);
 
     const [formData, setFormData] = React.useState({
         show_name: show.show_name,
@@ -110,6 +126,19 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         loadSeatmaps();
         return () => { isMounted = false; };
     }, []);
+
+    React.useEffect(() => {
+        if (!formData.seatmap_id) {
+            if (seatmapQuery) {
+                setSeatmapQuery("");
+            }
+            return;
+        }
+        const match = seatmaps.find((seatmap) => seatmap.seatmap_id === formData.seatmap_id);
+        if (match && match.seatmap_name !== seatmapQuery) {
+            setSeatmapQuery(match.seatmap_name);
+        }
+    }, [formData.seatmap_id, seatmapQuery, seatmaps]);
 
     const addTimeRange = () => {
         setTimeRanges(prev => [...prev, { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" }]);
@@ -376,19 +405,36 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                             <div className="space-y-2">
                                 <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">Seatmap</Label>
                                 {isEditing ? (
-                                    <select
-                                        id="seatmap"
+                                    <Combobox
                                         value={formData.seatmap_id}
-                                        onChange={(e) => setFormData({ ...formData, seatmap_id: e.target.value })}
-                                        className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 font-medium"
+                                        onValueChange={(value) => {
+                                            const nextValue = value ?? "";
+                                            setFormData({ ...formData, seatmap_id: nextValue });
+                                            const match = seatmaps.find((seatmap) => seatmap.seatmap_id === nextValue);
+                                            if (match) {
+                                                setSeatmapQuery(match.seatmap_name);
+                                            }
+                                        }}
                                     >
-                                        <option value="">Select a seatmap</option>
-                                        {seatmaps.map((sm) => (
-                                            <option key={sm.seatmap_id} value={sm.seatmap_id}>
-                                                {sm.seatmap_name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        <ComboboxInput
+                                            id="seatmap"
+                                            placeholder="Select a seatmap"
+                                            value={seatmapQuery}
+                                            onChange={(event) => setSeatmapQuery(event.target.value)}
+                                        />
+                                        <ComboboxContent>
+                                            <ComboboxList>
+                                                {filteredSeatmaps.map((seatmap) => (
+                                                    <ComboboxItem key={seatmap.seatmap_id} value={seatmap.seatmap_id}>
+                                                        {seatmap.seatmap_name}
+                                                    </ComboboxItem>
+                                                ))}
+                                                {seatmaps.length === 0 && (
+                                                    <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>
+                                                )}
+                                            </ComboboxList>
+                                        </ComboboxContent>
+                                    </Combobox>
                                 ) : (
                                     <Input
                                         id="seatmap"

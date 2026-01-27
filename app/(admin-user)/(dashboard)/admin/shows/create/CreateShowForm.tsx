@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { format, differenceInCalendarMonths } from "date-fns";
-import { Plus, Trash2, Save, CalendarDays } from "lucide-react";
+import { Plus, Trash2, Save, CalendarDays, CalendarIcon } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,6 +13,12 @@ import { useRouter } from "next/navigation";
 import { createShowAction } from "@/lib/actions/createShow";
 import { Calendar } from "@/components/ui/calendar";
 import { FileImagePreview } from "@/components/ui/file-uploader";
+import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -157,6 +163,16 @@ export function CreateShowForm() {
     showStartDate && showEndDate && differenceInCalendarMonths(showEndDate, showStartDate) >= 1
       ? 2
       : 1;
+  const isFormValid = Boolean(
+    formData.show_name &&
+      formData.show_description &&
+      formData.venue &&
+      formData.address &&
+      formData.show_start_date &&
+      formData.show_end_date &&
+      formData.seatmap_id &&
+      isDateRangeValid
+  );
 
   const getDatesInRange = React.useCallback(() => {
     if (!showStartDate || !showEndDate) return [];
@@ -341,6 +357,77 @@ export function CreateShowForm() {
             </div>
 
             <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground">
+                Start Date
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "h-9 w-full justify-start text-left font-medium",
+                      !showStartDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                    {showStartDate ? format(showStartDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={showStartDate ?? undefined}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      setFormData({
+                        ...formData,
+                        show_start_date: format(date, "yyyy-MM-dd"),
+                        show_end_date:
+                          formData.show_end_date &&
+                          new Date(`${formData.show_end_date}T00:00:00`) < date
+                            ? ""
+                            : formData.show_end_date,
+                      });
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground">
+                End Date
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "h-9 w-full justify-start text-left font-medium",
+                      !showEndDate && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                    {showEndDate ? format(showEndDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={showEndDate ?? undefined}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      setFormData({ ...formData, show_end_date: format(date, "yyyy-MM-dd") });
+                    }}
+                    initialFocus
+                    disabled={(date) => !!showStartDate && date < showStartDate}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
                 Seatmap
               </Label>
@@ -388,7 +475,7 @@ export function CreateShowForm() {
 
           <div className="space-y-2">
             <Label className="text-xs font-semibold text-muted-foreground">
-              Show Image
+              Show Poster
             </Label>
             <div className="flex flex-col gap-3 md:flex-row md:items-center">
               <div className="flex items-center gap-3">
@@ -617,7 +704,7 @@ export function CreateShowForm() {
       </Dialog>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+        <Button onClick={handleSave} disabled={isSaving || !isFormValid} className="gap-2">
           <Save className="h-4 w-4" />
           {isSaving ? "Creating..." : "Create Show"}
         </Button>
