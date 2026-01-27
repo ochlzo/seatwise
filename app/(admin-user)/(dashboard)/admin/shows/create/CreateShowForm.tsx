@@ -376,7 +376,9 @@ export function CreateShowForm() {
                         </ComboboxItem>
                       ))
                     )}
-                    {!isLoadingSeatmaps && <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>}
+                    {!isLoadingSeatmaps && seatmaps.length === 0 && (
+                      <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>
+                    )}
                   </ComboboxList>
                 </ComboboxContent>
               </Combobox>

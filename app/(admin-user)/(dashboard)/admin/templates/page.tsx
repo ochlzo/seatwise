@@ -30,7 +30,7 @@ export default async function TemplatesPage({
             Manage templates, schedules, and event associations.
           </p>
         </div>
-        <SeatmapTable seatmaps={seatmaps as any} />
+        <SeatmapTable seatmaps={seatmaps} />
       </div>
     </>
   );
