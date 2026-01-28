@@ -70,7 +70,6 @@ model Seatmap {
   seatmap_status    SeatmapStatus @default(ACTIVE)
 
   shows             Show[]
-  seatCategories    SeatCategory[]
   seats             Seat[]
 
   createdAt         DateTime    @default(now())
@@ -82,9 +81,6 @@ model SeatCategory {
   category_name     String
   price             Decimal     @db.Decimal(10, 2) @default(0.00)
   color_code        ColorCodes
-
-  seatmap_id        String
-  seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
 
   seats             Seat[]
   schedLinks        SchedSeatCategory[]

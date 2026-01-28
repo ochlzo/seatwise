@@ -32,9 +32,6 @@ export async function deleteSeatmapsAction(seatmapIds: string[]) {
     await prisma.$transaction(async (tx) => {
       // Scheduler references to seatmap removed in schema refactor
       // await tx.sched.deleteMany({ where: { seatmap_id: { in: seatmapIds } } });
-      await tx.seatCategory.deleteMany({
-        where: { seatmap_id: { in: seatmapIds } },
-      });
       await tx.seatmap.deleteMany({
         where: { seatmap_id: { in: seatmapIds } },
       });
