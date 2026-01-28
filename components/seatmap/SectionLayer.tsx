@@ -2,6 +2,11 @@
 
 import React from "react";
 import { Rect, Circle, RegularPolygon, Line, Group, Transformer, Text } from "react-konva";
+import type { KonvaEventObject } from "konva/lib/Node";
+import type { Node as KonvaNode } from "konva/lib/Node";
+import type { Group as KonvaGroup } from "konva/lib/Group";
+import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
+import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
     selectNode,
@@ -73,8 +78,8 @@ const ShapeItem = React.memo(({
 }: {
     shape: SeatmapShapeNode;
     isSelected: boolean;
-    onSelect: any;
-    onChange: any;
+    onSelect: (id: string, evt?: KonvaEventObject<MouseEvent | TouchEvent>) => void;
+    onChange: (id: string, changes: Partial<SeatmapShapeNode>, history?: boolean) => void;
     onDragStart?: () => void;
     onDragEnd?: () => void;
     isShiftDown?: boolean;
@@ -92,8 +97,8 @@ const ShapeItem = React.memo(({
     }) => void;
     snapSpacing: number;
 }) => {
-    const shapeRef = React.useRef<any>(null);
-    const transformerRef = React.useRef<any>(null);
+    const shapeRef = React.useRef<KonvaGroup | KonvaNode | null>(null);
+    const transformerRef = React.useRef<KonvaTransformer | null>(null);
     const rafRef = React.useRef<number | null>(null);
     const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
 
@@ -114,7 +119,7 @@ const ShapeItem = React.memo(({
     const applyTransform = (evt?: Event, history?: boolean) => {
         if (!shapeRef.current) return;
         let rotation = shapeRef.current.rotation();
-        const shiftKey = (evt as any)?.shiftKey || isShiftDown;
+        const shiftKey = (evt && "shiftKey" in evt ? (evt as MouseEvent).shiftKey : false) || isShiftDown;
         if (shiftKey) {
             rotation = Math.round(rotation / ROTATION_SNAP) * ROTATION_SNAP;
             shapeRef.current.rotation(rotation);
@@ -151,15 +156,15 @@ const ShapeItem = React.memo(({
                 });
             }
         },
-        onClick: (e: any) => {
+        onClick: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
             e.cancelBubble = true;
             onSelect(shape.id, e);
         },
-        onTap: (e: any) => {
+        onTap: (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
             e.cancelBubble = true;
             onSelect(shape.id, e);
         },
-        onDragEnd: (e: any) => {
+        onDragEnd: (e: KonvaEventObject<DragEvent>) => {
             const handled = onMultiDragEnd
                 ? onMultiDragEnd(shape.id, {
                     x: e.target.x(),
@@ -219,7 +224,7 @@ const ShapeItem = React.memo(({
             onSnap({ x: null, y: null });
             if (onDragEnd) onDragEnd();
         },
-        onDragMove: (e: any) => {
+        onDragMove: (e: KonvaEventObject<DragEvent>) => {
             const handled = onMultiDragMove
                 ? onMultiDragMove(shape.id, {
                     x: e.target.x(),
@@ -269,8 +274,8 @@ const ShapeItem = React.memo(({
                 rafRef.current = requestAnimationFrame(flushDragPosition);
             }
         },
-        onTransform: (e: any) => applyTransform(e?.evt, false),
-        onTransformEnd: (e: any) => applyTransform(e?.evt, true),
+        onTransform: (e: KonvaEventObject<Event>) => applyTransform(e?.evt, false),
+        onTransformEnd: (e: KonvaEventObject<Event>) => applyTransform(e?.evt, true),
         shadowColor: "black",
         shadowBlur: isSelected ? 10 : 0,
         shadowOpacity: 0.3
@@ -292,7 +297,7 @@ const ShapeItem = React.memo(({
             return (
                 <>
                     <Group
-                        ref={shapeRef}
+                        ref={shapeRef as any}
                         {...commonProps}
                         offsetX={width / 2}
                         offsetY={height / 2}
@@ -346,7 +351,7 @@ const ShapeItem = React.memo(({
         case "rect":
             return (
                 <>
-                    <Rect ref={shapeRef} {...commonProps} width={shape.width || 50} height={shape.height || 50} offsetX={(shape.width || 50) / 2} offsetY={(shape.height || 50) / 2} cornerRadius={4} />
+                    <Rect ref={shapeRef as any} {...commonProps} width={shape.width || 50} height={shape.height || 50} offsetX={(shape.width || 50) / 2} offsetY={(shape.height || 50) / 2} cornerRadius={4} />
                     {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
@@ -372,7 +377,7 @@ const ShapeItem = React.memo(({
         case "circle":
             return (
                 <>
-                    <Circle ref={shapeRef} {...commonProps} radius={shape.radius || 30} />
+                    <Circle ref={shapeRef as any} {...commonProps} radius={shape.radius || 30} />
                     {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
@@ -398,7 +403,7 @@ const ShapeItem = React.memo(({
         case "polygon":
             return (
                 <>
-                    <RegularPolygon ref={shapeRef} {...commonProps} sides={shape.sides || 6} radius={shape.radius || 30} />
+                    <RegularPolygon ref={shapeRef as any} {...commonProps} sides={shape.sides || 6} radius={shape.radius || 30} />
                     {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
@@ -446,7 +451,7 @@ const ShapeItem = React.memo(({
                 x: shape.position.x + rawPoints[2],
                 y: shape.position.y + rawPoints[3],
             };
-            const getLinePositionFromTarget = (target: any) => ({
+            const getLinePositionFromTarget = (target: KonvaNode) => ({
                 x: target.x() - centerX,
                 y: target.y() - centerY,
             });
@@ -487,7 +492,7 @@ const ShapeItem = React.memo(({
             return (
                 <>
                     <Line
-                        ref={shapeRef}
+                        ref={shapeRef as any}
                         {...commonProps}
                         x={shape.position.x + centerX}
                         y={shape.position.y + centerY}
@@ -496,7 +501,7 @@ const ShapeItem = React.memo(({
                         scaleY={1}
                         tension={0}
                         hitStrokeWidth={10}
-                        onDragMove={(e: any) => {
+                        onDragMove={(e: KonvaEventObject<DragEvent>) => {
                             const nextPos = getLinePositionFromTarget(e.target);
                             const handled = onMultiDragMove
                                 ? onMultiDragMove(shape.id, nextPos)
@@ -507,7 +512,7 @@ const ShapeItem = React.memo(({
                                 rafRef.current = requestAnimationFrame(flushDragPosition);
                             }
                         }}
-                        onDragEnd={(e: any) => {
+                        onDragEnd={(e: KonvaEventObject<DragEvent>) => {
                             const nextPos = getLinePositionFromTarget(e.target);
                             const handled = onMultiDragEnd
                                 ? onMultiDragEnd(shape.id, nextPos)
@@ -574,7 +579,7 @@ const ShapeItem = React.memo(({
 
             return (
                 <>
-                    <Group ref={shapeRef} {...commonProps} offsetX={w / 2} offsetY={h / 2}>
+                    <Group ref={shapeRef as any} {...commonProps} offsetX={w / 2} offsetY={h / 2}>
                         {/* Bounding box / Background */}
                         <Rect width={w} height={h} stroke={commonProps.stroke} strokeWidth={commonProps.strokeWidth} fill={shape.fill} cornerRadius={2} />
 
@@ -631,7 +636,7 @@ export default function SectionLayer({
 }: {
     onNodeDragStart?: () => void;
     onNodeDragEnd?: () => void;
-    stageRef?: React.RefObject<any>;
+    stageRef?: React.RefObject<KonvaStage>;
     onSnap: (lines: {
         x: number | null;
         y: number | null;
@@ -653,7 +658,7 @@ export default function SectionLayer({
     }>({ active: false, draggedId: null, startPositions: {} });
     const multiDragRafRef = React.useRef<number | null>(null);
     const pendingMultiDragRef = React.useRef<Record<string, { x: number; y: number }> | null>(null);
-    const multiDragKonvaNodesRef = React.useRef<Record<string, any>>({});
+    const multiDragKonvaNodesRef = React.useRef<Record<string, KonvaNode>>({});
 
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -670,13 +675,12 @@ export default function SectionLayer({
         };
     }, []);
 
-    // @ts-ignore
     const shapes = Object.values(nodes).filter((node): node is SeatmapShapeNode => node.type === "shape");
 
     const beginMultiDrag = (id: string) => {
         if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
         const startPositions: Record<string, { x: number; y: number }> = {};
-        const konvaNodes: Record<string, any> = {};
+        const konvaNodes: Record<string, KonvaNode> = {};
         const stage = stageRef?.current;
 
         selectedIds.forEach((selectedId) => {
@@ -710,8 +714,9 @@ export default function SectionLayer({
         let dx = pos.x - origin.x;
         let dy = pos.y - origin.y;
 
-        const draggedNodes = selectedIds.map(sid => {
+        const draggedNodes = selectedIds.map((sid) => {
             const node = nodes[sid];
+            if (!node || node.type !== "shape") return null;
             if (sid === id) {
                 return { ...node, position: { x: origin.x + dx, y: origin.y + dy } };
             }
@@ -722,7 +727,7 @@ export default function SectionLayer({
                     y: state.startPositions[sid].y + dy
                 }
             };
-        });
+        }).filter(Boolean) as SeatmapShapeNode[];
 
         const draggedBB = getNodesBoundingBox(draggedNodes);
 
@@ -823,7 +828,7 @@ export default function SectionLayer({
                     key={shape.id}
                     shape={shape}
                     isSelected={selectedIds.includes(shape.id)}
-                    onSelect={(id: string, evt?: any) => {
+                    onSelect={(id: string, evt?: KonvaEventObject<MouseEvent | TouchEvent>) => {
                         const additive =
                             evt?.evt?.shiftKey ||
                             evt?.evt?.ctrlKey ||
@@ -835,7 +840,7 @@ export default function SectionLayer({
                         }
                         dispatch(selectNode(id));
                     }}
-                    onChange={(id: string, changes: any, history?: boolean) =>
+                    onChange={(id: string, changes: Partial<SeatmapShapeNode>, history?: boolean) =>
                         dispatch(updateNode({ id, changes, history }))
                     }
                     onDragStart={onNodeDragStart}

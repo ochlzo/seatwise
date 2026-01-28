@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { SeatmapNode, SeatmapSeatNode, SeatmapShapeNode, SeatmapViewport } from "@/lib/seatmap/types";
+import { SeatmapNode, SeatmapSeatNode, SeatmapShapeNode, SeatmapViewport, SeatCategory } from "@/lib/seatmap/types";
 import { v4 as uuidv4 } from "uuid";
 
 interface SeatmapState {
@@ -27,6 +27,7 @@ interface SeatmapState {
     snapSpacing: number;
     title: string;
     hasUnsavedChanges: boolean;
+    categories: SeatCategory[];
 }
 
 const initialState: SeatmapState = {
@@ -44,6 +45,7 @@ const initialState: SeatmapState = {
     snapSpacing: 8,
     title: "Untitled Seatmap Prototype",
     hasUnsavedChanges: false,
+    categories: [],
 };
 
 import { calculateFitViewport } from "@/lib/seatmap/view-utils";
@@ -126,6 +128,7 @@ const seatmapSlice = createSlice({
             if (data.title !== undefined) state.title = data.title;
             if (data.viewport !== undefined) state.viewport = data.viewport;
             if (data.snapSpacing !== undefined) state.snapSpacing = data.snapSpacing;
+            if (data.categories !== undefined) state.categories = data.categories;
 
             if (data.nodes !== undefined) {
                 const normalizedNodes: Record<string, SeatmapNode> = {};

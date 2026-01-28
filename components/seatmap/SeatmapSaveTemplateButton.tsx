@@ -59,9 +59,10 @@ export function SeatmapSaveTemplateButton() {
       setProgress(currentProgress);
       toast.success(seatmapId ? "Seatmap updated." : "Seatmap saved to templates.");
       dispatch(markSeatmapSaved());
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error.message || "Failed to save seatmap");
+      const message = error instanceof Error ? error.message : "Failed to save seatmap";
+      toast.error(message);
       setIsSaving(false);
       setProgress(0);
       return;

@@ -13,6 +13,11 @@ import {
   Line,
   Transformer,
 } from "react-konva";
+import Konva from "konva";
+import type { KonvaEventObject } from "konva/lib/Node";
+import type { Node as KonvaNode } from "konva/lib/Node";
+import type { Stage as KonvaStage } from "konva/lib/Stage";
+import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
   setViewport,
@@ -39,15 +44,16 @@ import SectionLayer from "@/components/seatmap/SectionLayer";
 import { getRelativePointerPosition } from "@/lib/seatmap/geometry";
 import GuidePathLayer from "@/components/seatmap/GuidePathLayer";
 import { calculateNodesBounds } from "@/lib/seatmap/view-utils";
+import type { SeatmapNode, SeatmapShapeNode } from "@/lib/seatmap/types";
 
 export default function SeatmapCanvas() {
   const dispatch = useAppDispatch();
   const { viewport, mode, drawShape, selectedIds, nodes, showGrid, zoomLocked, showGuidePaths, snapSpacing } = useAppSelector(
     (state) => state.seatmap,
   );
-  const stageRef = useRef<any>(null);
+  const stageRef = useRef<KonvaStage | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const transformerRef = useRef<any>(null);
+  const transformerRef = useRef<KonvaTransformer | null>(null);
   const [isDraggingNode, setIsDraggingNode] = React.useState(false);
   const [isRightPanning, setIsRightPanning] = React.useState(false);
   const [isShiftDown, setIsShiftDown] = React.useState(false);
@@ -156,11 +162,12 @@ export default function SeatmapCanvas() {
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("blur", handleBlur);
 
-    const handleExportPng = (e: any) => {
+    const handleExportPng = (e: Event) => {
       const stage = stageRef.current;
       if (!stage) return;
 
-      const { fileName } = e.detail || { fileName: "seatmap.png" };
+      const event = e as CustomEvent<{ fileName?: string }>;
+      const { fileName } = event.detail || { fileName: "seatmap.png" };
 
       // Deselect all for a clean export
       dispatch(deselectAll());
@@ -171,7 +178,14 @@ export default function SeatmapCanvas() {
         const padding = 20;
 
         // If no nodes, just export the current stage view (fallback)
-        const exportOptions: any = {
+        const exportOptions: {
+          pixelRatio: number;
+          mimeType: string;
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+        } = {
           pixelRatio: 3,
           mimeType: "image/png",
         };
@@ -184,7 +198,7 @@ export default function SeatmapCanvas() {
         }
 
         // Add white background
-        const background = new (window as any).Konva.Rect({
+        const background = new Konva.Rect({
           x: (exportOptions.x ?? -10000) - 100,
           y: (exportOptions.y ?? -10000) - 100,
           width: (exportOptions.width ?? 20000) + 200,
@@ -203,7 +217,7 @@ export default function SeatmapCanvas() {
         background.destroy();
 
         const link = document.createElement("a");
-        link.download = fileName;
+        link.download = fileName || "seatmap.png";
         link.href = dataURL;
         document.body.appendChild(link);
         link.click();
@@ -214,13 +228,13 @@ export default function SeatmapCanvas() {
       }, 50);
     };
 
-    window.addEventListener("seatmap-export-png" as any, handleExportPng);
+    window.addEventListener("seatmap-export-png", handleExportPng as EventListener);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("seatmap-export-png" as any, handleExportPng);
+      window.removeEventListener("seatmap-export-png", handleExportPng as EventListener);
     };
   }, []);
 
@@ -252,7 +266,7 @@ export default function SeatmapCanvas() {
       })
       .filter(Boolean);
 
-    transformer.nodes(selectedNodes);
+    transformer.nodes(selectedNodes as KonvaNode[]);
     transformer.getLayer()?.batchDraw();
   }, [selectedIds]);
 
@@ -262,8 +276,8 @@ export default function SeatmapCanvas() {
     const targetNodes = transformer.nodes();
     if (!targetNodes.length) return;
 
-    const changes: Record<string, any> = {};
-    targetNodes.forEach((node: any) => {
+    const changes: Record<string, Partial<SeatmapNode>> = {};
+    targetNodes.forEach((node: KonvaNode) => {
       const id = node.id();
       if (!id) return;
       const nodeData = nodes[id];
@@ -305,9 +319,9 @@ export default function SeatmapCanvas() {
       : transformer.rotation() - rotationState.baseRotation;
     rotationState.lastDelta = delta;
 
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
 
-    transformer.nodes().forEach((node: any) => {
+    transformer.nodes().forEach((node: KonvaNode) => {
       const id = node.id();
       const base = rotationState.baseNodes[id];
       if (!id || !base) return;
@@ -436,7 +450,7 @@ export default function SeatmapCanvas() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [dispatch, dimensions, viewport]);
 
-  const handleWheel = (e: any) => {
+  const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
     const stage = stageRef.current;
     if (!stage) return;
@@ -475,7 +489,7 @@ export default function SeatmapCanvas() {
     dispatch(setViewport({ position: newPos, scale: viewport.scale }));
   };
 
-  const handleDragEnd = (e: any) => {
+  const handleDragEnd = (e: KonvaEventObject<DragEvent>) => {
     const stage = stageRef.current;
     if (!stage || e.target !== stage) return;
 
@@ -488,7 +502,7 @@ export default function SeatmapCanvas() {
     );
   };
 
-  const handleStageClick = (e: any) => {
+  const handleStageClick = (e: KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (mode === "draw") return;
     const additive = e?.evt?.shiftKey || e?.evt?.ctrlKey || e?.evt?.metaKey;
     if (e.target === e.target.getStage()) {
@@ -513,7 +527,7 @@ export default function SeatmapCanvas() {
 
   // HELPERS FOR GROUP ROTATE (ORBIT MODE)
 
-  function getSelectionPivot(stage: any, nodes: any[]) {
+  function getSelectionPivot(stage: KonvaStage, nodes: KonvaNode[]) {
     if (!nodes.length) return null;
 
     // bounding box in STAGE/world coords
@@ -558,7 +572,7 @@ export default function SeatmapCanvas() {
   }
 
   // Use stage transform to get pointer in WORLD coords (works with pan/zoom)
-  function getWorldPointer(stage: any) {
+  function getWorldPointer(stage: KonvaStage) {
     const p = stage.getPointerPosition();
     if (!p) return null;
     const t = stage.getAbsoluteTransform().copy().invert();
@@ -577,9 +591,9 @@ export default function SeatmapCanvas() {
     const currentAngle = angleFrom(wp, state.pivot);
     const delta = normalizeDelta(currentAngle - state.startPointerAngle);
 
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
 
-    transformer.nodes().forEach((node: any) => {
+    transformer.nodes().forEach((node: KonvaNode) => {
       const id = node.id();
       const base = state.baseNodes[id];
       if (!id || !base) return;
@@ -646,7 +660,7 @@ export default function SeatmapCanvas() {
         addShape({
           x: pos.x,
           y: pos.y,
-          shape: shape as any,
+          shape: shape as SeatmapShapeNode["shape"],
           sides: sides ? parseInt(sides) : undefined,
           dash: dash,
         }),
@@ -663,7 +677,7 @@ export default function SeatmapCanvas() {
     }
   };
 
-  const handleMouseDown = (e: any) => {
+  const handleMouseDown = (e: KonvaEventObject<MouseEvent>) => {
     const stage = stageRef.current;
     if (stage) {
       const pos = getRelativePointerPosition(stage);
@@ -677,7 +691,7 @@ export default function SeatmapCanvas() {
       e.evt.button === 0 &&
       e.target === e.target.getStage()
     ) {
-      const pos = getRelativePointerPosition(stage);
+      const pos = getRelativePointerPosition(stage!);
       if (!pos) return;
       marqueeStartRef.current = pos;
       setIsMarqueeSelecting(true);
@@ -692,7 +706,7 @@ export default function SeatmapCanvas() {
     }
     if (e.evt && e.evt.button === 2) {
       setIsRightPanning(true);
-      lastStagePointerPosRef.current = stage.getPointerPosition();
+      lastStagePointerPosRef.current = stage?.getPointerPosition() ?? null;
       return;
     }
     if (mode !== "draw") return;
@@ -711,7 +725,7 @@ export default function SeatmapCanvas() {
     });
   };
 
-  const handleMouseMove = (e: any) => {
+  const handleMouseMove = (e: KonvaEventObject<MouseEvent>) => {
     const stage = stageRef.current;
     if (!stage) return;
     const pos = getRelativePointerPosition(stage);
@@ -763,7 +777,7 @@ export default function SeatmapCanvas() {
         const height = marqueeRect.height;
         const intersectingIds = stage
           .find(".selectable")
-          .filter((node: any) => {
+          .filter((node: KonvaNode) => {
             const rect = node.getClientRect({ relativeTo: stage });
             const intersects =
               rect.x < x + width &&
@@ -772,17 +786,18 @@ export default function SeatmapCanvas() {
               rect.y + rect.height > y;
             return intersects;
           })
-          .map((node: any) => node.id() || node.getParent()?.id())
+          .map((node: KonvaNode) => node.id() || node.getParent()?.id())
           .filter(Boolean);
 
         const current = new Set(selectedIds);
+        const ids = intersectingIds as string[];
         if (isAltDown) {
-          intersectingIds.forEach((id: string) => current.delete(id));
+          ids.forEach((id) => current.delete(id));
         } else if (isShiftDown || isCtrlDown) {
-          intersectingIds.forEach((id: string) => current.add(id));
+          ids.forEach((id) => current.add(id));
         } else {
           current.clear();
-          intersectingIds.forEach((id: string) => current.add(id));
+          ids.forEach((id) => current.add(id));
         }
         dispatch(setSelectedIds(Array.from(current)));
       }
@@ -1031,7 +1046,7 @@ export default function SeatmapCanvas() {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onContextMenu={(e) => e.evt?.preventDefault()}
-        ref={stageRef}
+        ref={stageRef as React.LegacyRef<KonvaStage>}
         x={viewport.position.x}
         y={viewport.position.y}
         scaleX={viewport.scale}
@@ -1057,14 +1072,14 @@ export default function SeatmapCanvas() {
           {renderDraft()}
 
           <GuidePathLayer
-            stageRef={stageRef}
+            stageRef={stageRef as React.RefObject<KonvaStage>}
             snapLines={snapLines}
             onSnap={setSnapLines}
             snapSpacing={snapSpacing}
           />
 
           <SectionLayer
-            stageRef={stageRef}
+            stageRef={stageRef as React.RefObject<KonvaStage>}
             onNodeDragStart={() => setIsDraggingNode(true)}
             onNodeDragEnd={() => {
               setIsDraggingNode(false);
@@ -1077,7 +1092,7 @@ export default function SeatmapCanvas() {
           {/* Stage Label Removed */}
 
           <SeatLayer
-            stageRef={stageRef}
+            stageRef={stageRef as React.RefObject<KonvaStage>}
             onNodeDragStart={() => setIsDraggingNode(true)}
             onNodeDragEnd={() => {
               setIsDraggingNode(false);
@@ -1145,7 +1160,7 @@ export default function SeatmapCanvas() {
                 string,
                 { rotation: number; position: { x: number; y: number } }
               > = {};
-              selected.forEach((node: any) => {
+              selected.forEach((node: KonvaNode) => {
                 const id = node.id();
                 if (!id) return;
                 baseNodes[id] = {

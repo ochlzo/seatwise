@@ -68,9 +68,10 @@ export default function Page() {
                 dispatch(loadSeatmap(data.seatmap_json));
                 dispatch(setTitle(data.seatmap_name));
                 dispatch(markSeatmapSaved());
-            } catch (error: any) {
+            } catch (error: unknown) {
                 if (!isMounted) return;
-                toast.error(error.message || "Unable to load seatmap");
+                const message = error instanceof Error ? error.message : "Unable to load seatmap";
+                toast.error(message);
             } finally {
                 if (isMounted) {
                     setIsLoadingSeatmap(false);

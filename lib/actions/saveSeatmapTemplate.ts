@@ -2,6 +2,7 @@
 
 import "server-only";
 import type { Prisma } from "@prisma/client";
+import type { SeatmapNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 
@@ -9,6 +10,26 @@ type SaveSeatmapPayload = {
   seatmap_name: string;
   seatmap_json: Prisma.InputJsonValue;
   seatmap_id?: string;
+};
+
+const extractSeatNodes = (seatmapJson: Prisma.InputJsonValue): SeatmapSeatNode[] => {
+  if (!seatmapJson || typeof seatmapJson !== "object") return [];
+  const nodes = (seatmapJson as { nodes?: Record<string, SeatmapNode> }).nodes;
+  if (!nodes || typeof nodes !== "object") return [];
+  return Object.values(nodes).filter(
+    (node): node is SeatmapSeatNode =>
+      Boolean(node) && typeof node === "object" && node.type === "seat",
+  );
+};
+
+const buildSeatNumber = (seat: SeatmapSeatNode) => {
+  const rowLabel = seat.rowLabel ?? "";
+  const seatNumber =
+    seat.seatNumber !== undefined && seat.seatNumber !== null
+      ? String(seat.seatNumber)
+      : "";
+  const combined = `${rowLabel}${seatNumber}`.trim();
+  return combined || seat.id;
 };
 
 async function assertAdmin() {
@@ -62,6 +83,19 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
           },
         });
 
+        const seatNodes = extractSeatNodes(seatmap_json);
+        await tx.seat.deleteMany({ where: { seatmap_id } });
+        if (seatNodes.length > 0) {
+          await tx.seat.createMany({
+            data: seatNodes.map((seat) => ({
+              seat_id: seat.id,
+              seat_number: buildSeatNumber(seat),
+              seatmap_id,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
         return updated;
       }
 
@@ -71,6 +105,18 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
           seatmap_json,
         },
       });
+
+      const seatNodes = extractSeatNodes(seatmap_json);
+      if (seatNodes.length > 0) {
+        await tx.seat.createMany({
+          data: seatNodes.map((seat) => ({
+            seat_id: seat.id,
+            seat_number: buildSeatNumber(seat),
+            seatmap_id: seatmap.seatmap_id,
+          })),
+          skipDuplicates: true,
+        });
+      }
 
       return seatmap;
     });

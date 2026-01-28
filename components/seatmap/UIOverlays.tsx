@@ -21,6 +21,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import type { SeatmapNode, SeatmapShapeNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 
 export function Sidebar() {
   const dispatch = useAppDispatch();
@@ -113,7 +114,7 @@ export function Sidebar() {
                 dispatch(setMode("draw"));
                 dispatch(
                   setDrawShape({
-                    shape: item.shape as any,
+                    shape: item.shape as SeatmapShapeNode["shape"],
                     sides: item.sides,
                   }),
                 );
@@ -231,16 +232,16 @@ export function SelectionPanel() {
 
   const getCommonValue = (key: string, isNestedPosition?: "x" | "y") => {
     if (selectedIds.length === 0) return "";
-    let value: any = undefined;
+    let value: unknown = undefined;
     for (let i = 0; i < selectedIds.length; i++) {
-      const node = nodes[selectedIds[i]] as any;
+      const node = nodes[selectedIds[i]] as SeatmapNode | undefined;
       if (!node) continue;
 
-      let current: any;
+      let current: unknown;
       if (isNestedPosition) {
         current = node.position?.[isNestedPosition];
       } else {
-        current = node[key];
+        current = (node as Record<string, unknown>)[key];
       }
 
       if (current === undefined) {
@@ -258,7 +259,10 @@ export function SelectionPanel() {
   };
 
   const isShapeSelection = selectedIds.every(id => nodes[id]?.type === 'shape');
-  const isTextSelection = selectedIds.every(id => nodes[id]?.type === 'shape' && (nodes[id] as any).shape === 'text');
+  const isTextSelection = selectedIds.every((id) => {
+    const node = nodes[id];
+    return node?.type === "shape" && (node as SeatmapShapeNode).shape === "text";
+  });
   const isSeatSelection = selectedIds.some(id => nodes[id]?.type === 'seat');
 
   const commonRotation = getCommonValue("rotation");
@@ -273,7 +277,7 @@ export function SelectionPanel() {
   const updateBulkRotation = (value: string) => {
     const next = Number(value);
     if (Number.isNaN(next)) return;
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
     selectedIds.forEach((id) => {
       if (nodes[id]) changes[id] = { rotation: next };
     });
@@ -283,7 +287,7 @@ export function SelectionPanel() {
   const updateBulkPosition = (axis: "x" | "y", value: string) => {
     const next = Number(value);
     if (Number.isNaN(next)) return;
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
     selectedIds.forEach((id) => {
       const node = nodes[id];
       if (!node || !("position" in node)) return;
@@ -300,7 +304,7 @@ export function SelectionPanel() {
   const updateBulkScale = (axis: "x" | "y", value: string) => {
     const next = Number(value);
     if (Number.isNaN(next)) return;
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
     selectedIds.forEach((id) => {
       if (nodes[id]) {
         changes[id] = {
@@ -313,9 +317,9 @@ export function SelectionPanel() {
   };
 
   const updateBulkText = (text: string) => {
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
     selectedIds.forEach((id) => {
-      if (nodes[id] && nodes[id].type === 'shape' && (nodes[id] as any).shape === 'text') {
+      if (nodes[id] && nodes[id].type === "shape" && (nodes[id] as SeatmapShapeNode).shape === "text") {
         changes[id] = { text };
       }
     });
@@ -323,13 +327,13 @@ export function SelectionPanel() {
   };
 
   const updateBulkSeatInfo = (changesToApply: { rowLabel?: string; seatNumber?: number }) => {
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
     selectedIds.forEach((id) => {
       const node = nodes[id];
       if (node && node.type === 'seat') {
-        const nodeChanges: any = {};
-        if ('rowLabel' in changesToApply) nodeChanges.rowLabel = changesToApply.rowLabel;
-        if ('seatNumber' in changesToApply) nodeChanges.seatNumber = changesToApply.seatNumber;
+        const nodeChanges: Partial<SeatmapSeatNode> = {};
+        if ("rowLabel" in changesToApply) nodeChanges.rowLabel = changesToApply.rowLabel;
+        if ("seatNumber" in changesToApply) nodeChanges.seatNumber = changesToApply.seatNumber;
         changes[id] = nodeChanges;
       }
     });
@@ -343,7 +347,7 @@ export function SelectionPanel() {
       return;
     }
     setRangeError(null);
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
     const selectedSeats = selectedIds.filter(id => nodes[id]?.type === 'seat');
     selectedSeats.forEach((id, idx) => {
       changes[id] = { seatNumber: startNum + idx };
@@ -353,7 +357,7 @@ export function SelectionPanel() {
 
 
   const applyBulkColor = (type: "fill" | "stroke", color: string | null) => {
-    const changes: Record<string, any> = {};
+    const changes: Record<string, Partial<SeatmapNode>> = {};
     selectedIds.forEach((id) => {
       const node = nodes[id];
       if (!node || node.type !== "shape") return;
@@ -434,7 +438,7 @@ export function SelectionPanel() {
             <span className="text-xs text-zinc-500">Text Content:</span>
             <textarea
               className="w-full mt-2 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-2 py-2 text-xs min-h-[60px] resize-none"
-              value={commonText}
+              value={commonText as string}
               onChange={(e) => updateBulkText(e.target.value)}
             />
           </div>
@@ -450,7 +454,7 @@ export function SelectionPanel() {
                 type="text"
                 className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right uppercase h-8"
                 placeholder="A, B..."
-                value={commonRowLabel}
+                value={commonRowLabel as string}
                 onChange={(e) => updateBulkSeatInfo({ rowLabel: e.target.value.toUpperCase() })}
               />
             </div>
@@ -460,7 +464,7 @@ export function SelectionPanel() {
                 <input
                   type="text"
                   className="w-16 bg-transparent border border-zinc-200 dark:border-zinc-700 rounded px-1 text-right h-8"
-                  value={commonSeatNumber ?? ""}
+                  value={(commonSeatNumber ?? "") as string}
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val === "" || /^\d+$/.test(val)) {
@@ -506,7 +510,7 @@ export function SelectionPanel() {
                   <button
                     key={`stroke-${color}`}
                     type="button"
-                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as any).stroke === color ? "border-blue-500 ring-2 ring-blue-200" : "border-zinc-200"}`}
+                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as SeatmapShapeNode).stroke === color ? "border-blue-500 ring-2 ring-blue-200" : "border-zinc-200"}`}
                     style={{ backgroundColor: color }}
                     onClick={() => applyBulkColor("stroke", color)}
                   />
@@ -527,7 +531,7 @@ export function SelectionPanel() {
                   <button
                     key={`fill-${color}`}
                     type="button"
-                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as any).fill === color ? "border-blue-500 ring-2 ring-blue-200" : "border-zinc-200"}`}
+                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as SeatmapShapeNode).fill === color ? "border-blue-500 ring-2 ring-blue-200" : "border-zinc-200"}`}
                     style={{ backgroundColor: color }}
                     onClick={() => applyBulkColor("fill", color)}
                   />
