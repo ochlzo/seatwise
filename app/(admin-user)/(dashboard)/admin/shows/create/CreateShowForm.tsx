@@ -587,16 +587,30 @@ export function CreateShowForm() {
         sched_start_time: sched.sched_start_time,
         sched_end_time: sched.sched_end_time,
       })),
-      category_sets: categorySets.map((setItem, index) => ({
-        set_name: setItem.set_name.trim() || `Set ${index + 1}`,
-        apply_to_all: setItem.apply_to_all,
-        sched_ids: setItem.sched_ids,
-        categories: setItem.categories.map((category) => ({
-          category_name: category.category_name.trim() || "Untitled",
-          price: category.price,
-          color_code: category.color_code,
-        })),
-      })),
+      category_sets: categorySets.map((setItem, index) => {
+        // Map seatAssignments (seatId -> categoryId) to (seatId -> categoryName)
+        const assignmentsByName: Record<string, string> = {};
+        if (setItem.seatAssignments) {
+          Object.entries(setItem.seatAssignments).forEach(([seatId, categoryId]) => {
+            const category = setItem.categories.find((c) => c.id === categoryId);
+            if (category) {
+              assignmentsByName[seatId] = category.category_name.trim() || "Untitled";
+            }
+          });
+        }
+
+        return {
+          set_name: setItem.set_name.trim() || `Set ${index + 1}`,
+          apply_to_all: setItem.apply_to_all,
+          sched_ids: setItem.sched_ids,
+          categories: setItem.categories.map((category) => ({
+            category_name: category.category_name.trim() || "Untitled",
+            price: category.price,
+            color_code: category.color_code,
+          })),
+          seat_assignments: assignmentsByName,
+        };
+      }),
       image_base64: imageBase64,
     });
     setIsSaving(false);
