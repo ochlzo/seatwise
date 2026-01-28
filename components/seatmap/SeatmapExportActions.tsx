@@ -110,6 +110,24 @@ export function SeatmapExportActions() {
     };
 
     const handleExport = (type: "json" | "png") => {
+        // Check if canvas is empty
+        if (Object.keys(seatmap.nodes).length === 0) {
+            toast.error("Cannot export an empty seatmap. Please add some seats or shapes first.");
+            return;
+        }
+
+        // Check for seats without seat numbers
+        const seats = Object.values(seatmap.nodes).filter((node) => node.type === "seat");
+        const seatsWithoutNumbers = seats.filter(
+            (seat) => seat.seatNumber === undefined || seat.seatNumber === null
+        );
+        if (seatsWithoutNumbers.length > 0) {
+            toast.error(
+                `${seatsWithoutNumbers.length} seat(s) don't have seat numbers assigned. Please assign seat numbers before exporting.`
+            );
+            return;
+        }
+
         setActionType("export");
         const baseFileName = seatmap.title.toLowerCase().replace(/\s+/g, "-");
         const fileName = type === "json" ? `${baseFileName}.json` : `${baseFileName}.png`;
