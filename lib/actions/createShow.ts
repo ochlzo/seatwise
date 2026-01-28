@@ -36,7 +36,6 @@ type CreateShowPayload = {
   categories?: Array<{
     category_name: string;
     price: string;
-    price: string;
     color_code: ColorCodes;
     apply_to_all: boolean;
     sched_ids: string[];
@@ -92,7 +91,10 @@ export async function createShowAction(data: CreateShowPayload) {
       throw new Error("Unauthorized");
     }
 
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+    const decodedToken = await adminAuth.verifySessionCookie(
+      sessionCookie,
+      true,
+    );
     const user = await prisma.user.findUnique({
       where: { firebase_uid: decodedToken.uid },
     });
@@ -128,6 +130,14 @@ export async function createShowAction(data: CreateShowPayload) {
     }
 
     const show = await prisma.$transaction(async (tx) => {
+      const existingShow = await tx.show.findUnique({
+        where: { show_name },
+        select: { show_id: true },
+      });
+      if (existingShow) {
+        throw new Error("Show name already exists");
+      }
+
       const created = await tx.show.create({
         data: {
           show_name,
@@ -172,8 +182,81 @@ export async function createShowAction(data: CreateShowPayload) {
             }));
 
       if (normalizedCategorySets.length > 0) {
-        const flatCategories = normalizedCategorySets.flatMap((setItem) => setItem.categories);
-        const uniqueCategoryMap = new Map<string, typeof flatCategories[number]>();
+        // 1) Validate unique set_name within this request (per show)
+        const normalizedNames = normalizedCategorySets.map((s, i) => {
+          const name = s.set_name?.trim() || `Set ${i + 1}`;
+          return name;
+        });
+
+        const seenNames = new Set<string>();
+        for (const name of normalizedNames) {
+          const key = name.toLowerCase();
+          if (seenNames.has(key)) {
+            throw new Error(
+              `Duplicate category set name in request: "${name}"`,
+            );
+          }
+          seenNames.add(key);
+        }
+
+        // 2) Validate schedules are not assigned to more than one set
+        const allSchedIds = Array.from(schedIdMap.values());
+
+        let applyToAllCount = 0;
+        for (const s of normalizedCategorySets) {
+          if (s.apply_to_all) applyToAllCount += 1;
+        }
+        if (applyToAllCount > 1) {
+          throw new Error(`Only one category set can have apply_to_all=true.`);
+        }
+        if (applyToAllCount === 1 && normalizedCategorySets.length > 1) {
+          throw new Error(
+            `If a category set has apply_to_all=true, it must be the only category set.`,
+          );
+        }
+
+        // Track per-schedule assignment
+        const schedToSetName = new Map<string, string>();
+
+        normalizedCategorySets.forEach((setItem, i) => {
+          const setName = normalizedNames[i];
+
+          const targetSchedIds = setItem.apply_to_all
+            ? allSchedIds
+            : (setItem.sched_ids
+                .map((id) => schedIdMap.get(id))
+                .filter(Boolean) as string[]);
+
+          for (const schedId of targetSchedIds) {
+            const existing = schedToSetName.get(schedId);
+            if (existing && existing !== setName) {
+              throw new Error(
+                `Schedule is assigned to multiple category sets: "${existing}" and "${setName}".`,
+              );
+            }
+            schedToSetName.set(schedId, setName);
+          }
+        });
+
+        // Enforce every schedule gets exactly one set (optional but you said "Yes")
+        if (
+          allSchedIds.length > 0 &&
+          schedToSetName.size !== allSchedIds.length
+        ) {
+          const unassigned = allSchedIds.filter(
+            (id) => !schedToSetName.has(id),
+          );
+          throw new Error(
+            `Some schedules have no category set assigned: ${unassigned.join(", ")}`,
+          );
+        }
+        const flatCategories = normalizedCategorySets.flatMap(
+          (setItem) => setItem.categories,
+        );
+        const uniqueCategoryMap = new Map<
+          string,
+          (typeof flatCategories)[number]
+        >();
         flatCategories.forEach((category) => {
           if (!uniqueCategoryMap.has(category.category_name)) {
             uniqueCategoryMap.set(category.category_name, category);
@@ -181,7 +264,9 @@ export async function createShowAction(data: CreateShowPayload) {
         });
 
         const uniqueCategories = Array.from(uniqueCategoryMap.values());
-        const uniqueNames = uniqueCategories.map((category) => category.category_name);
+        const uniqueNames = uniqueCategories.map(
+          (category) => category.category_name,
+        );
 
         const existingCategories = await tx.seatCategory.findMany({
           where: {
@@ -191,11 +276,14 @@ export async function createShowAction(data: CreateShowPayload) {
         });
 
         const existingMap = new Map(
-          existingCategories.map((category) => [category.category_name, category.seat_category_id])
+          existingCategories.map((category) => [
+            category.category_name,
+            category.seat_category_id,
+          ]),
         );
 
         const missing = uniqueCategories.filter(
-          (category) => !existingMap.has(category.category_name)
+          (category) => !existingMap.has(category.category_name),
         );
 
         if (missing.length > 0) {
@@ -218,11 +306,18 @@ export async function createShowAction(data: CreateShowPayload) {
         });
 
         const categoryIdByName = new Map(
-          allCategories.map((category) => [category.category_name, category.seat_category_id])
+          allCategories.map((category) => [
+            category.category_name,
+            category.seat_category_id,
+          ]),
         );
 
         const categorySetItemRows: Array<{
           category_set_id: string;
+          seat_category_id: string;
+        }> = [];
+        const setRows: Array<{
+          sched_id: string;
           seat_category_id: string;
         }> = [];
 
@@ -238,7 +333,9 @@ export async function createShowAction(data: CreateShowPayload) {
 
           const targetSchedIds = setItem.apply_to_all
             ? Array.from(schedIdMap.values())
-            : setItem.sched_ids.map((id) => schedIdMap.get(id)).filter(Boolean) as string[];
+            : (setItem.sched_ids
+                .map((id) => schedIdMap.get(id))
+                .filter(Boolean) as string[]);
 
           if (targetSchedIds.length > 0) {
             await tx.sched.updateMany({
@@ -248,11 +345,19 @@ export async function createShowAction(data: CreateShowPayload) {
           }
 
           setItem.categories.forEach((category) => {
-            const seat_category_id = categoryIdByName.get(category.category_name);
+            const seat_category_id = categoryIdByName.get(
+              category.category_name,
+            );
             if (!seat_category_id) return;
             categorySetItemRows.push({
               category_set_id: createdSet.category_set_id,
               seat_category_id,
+            });
+            targetSchedIds.forEach((sched_id) => {
+              setRows.push({
+                sched_id,
+                seat_category_id,
+              });
             });
           });
         }
@@ -262,6 +367,9 @@ export async function createShowAction(data: CreateShowPayload) {
             data: categorySetItemRows,
             skipDuplicates: true,
           });
+        }
+        if (setRows.length > 0) {
+          await tx.set.createMany({ data: setRows, skipDuplicates: true });
         }
       }
 
@@ -273,7 +381,8 @@ export async function createShowAction(data: CreateShowPayload) {
     return { success: true, showId: show.show_id };
   } catch (error: unknown) {
     console.error("Error in createShowAction:", error);
-    const message = error instanceof Error ? error.message : "Failed to create show";
+    const message =
+      error instanceof Error ? error.message : "Failed to create show";
     return { success: false, error: message };
   }
 }
