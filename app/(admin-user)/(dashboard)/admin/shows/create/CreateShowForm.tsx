@@ -43,7 +43,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
-import { CategoryAssignPanel, type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
+import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const STATUS_OPTIONS = [
   "DRAFT",
@@ -90,6 +91,8 @@ type CategorySetDraft = {
   sched_ids: string[];
   filter_date: string;
   categories: CategoryDraft[];
+  /** Maps seat ID -> category ID for this set */
+  seatAssignments: Record<string, string>;
 };
 
 const COLOR_OPTIONS: Array<{ value: CategoryDraft["color_code"]; label: string; swatch: string | null }> = [
@@ -128,8 +131,8 @@ export function CreateShowForm() {
   ]);
   const [categorySets, setCategorySets] = React.useState<CategorySetDraft[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
-  /** Maps seat ID -> category ID (not color_code) */
-  const [seatCategoryAssignments, setSeatCategoryAssignments] = React.useState<Record<string, string>>({});
+  /** Active category set ID for tabs */
+  const [activeSetId, setActiveSetId] = React.useState<string | null>(null);
   const unassignedSchedCount = React.useMemo(() => {
     if (scheds.length === 0) return 0;
     const used = new Set<string>();
@@ -404,17 +407,20 @@ export function CreateShowForm() {
   };
 
   const addCategorySet = () => {
+    const newSetId = `set-${uuidv4()}`;
     setCategorySets((prev) => [
       ...prev,
       {
-        id: `set-${uuidv4()}`,
+        id: newSetId,
         set_name: `Set ${prev.length + 1}`,
         apply_to_all: true,
         sched_ids: [],
         filter_date: "",
         categories: [],
+        seatAssignments: {},
       },
     ]);
+    setActiveSetId(newSetId);
   };
 
   const updateCategorySet = (id: string, patch: Partial<CategorySetDraft>) => {
@@ -422,7 +428,14 @@ export function CreateShowForm() {
   };
 
   const removeCategorySet = (id: string) => {
-    setCategorySets((prev) => prev.filter((setItem) => setItem.id !== id));
+    setCategorySets((prev) => {
+      const filtered = prev.filter((setItem) => setItem.id !== id);
+      // If we removed the active set, switch to the first remaining set (or null)
+      if (activeSetId === id) {
+        setActiveSetId(filtered.length > 0 ? filtered[0].id : null);
+      }
+      return filtered;
+    });
   };
 
   const addCategoryToSet = (setId: string) => {
@@ -486,6 +499,20 @@ export function CreateShowForm() {
             ? setItem.sched_ids.filter((id) => id !== schedId)
             : [...setItem.sched_ids, schedId],
         };
+      })
+    );
+  };
+
+  const updateSetSeatAssignments = (
+    setId: string,
+    updater: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)
+  ) => {
+    setCategorySets((prev) =>
+      prev.map((setItem) => {
+        if (setItem.id !== setId) return setItem;
+        const nextAssignments =
+          typeof updater === "function" ? updater(setItem.seatAssignments) : updater;
+        return { ...setItem, seatAssignments: nextAssignments };
       })
     );
   };
@@ -919,53 +946,76 @@ export function CreateShowForm() {
             </div>
           </div>
 
-          <div className="relative">
-            <SeatmapPreview
-              seatmapId={formData.seatmap_id || undefined}
-              allowMarqueeSelection
-              selectedSeatIds={selectedSeatIds}
-              onSelectionChange={setSelectedSeatIds}
-              categories={categorySets.flatMap((setItem) =>
-                setItem.categories.map((category) => ({
+          {/* Tabbed Seatmap Preview - one tab per category set */}
+          {categorySets.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Add a category set below to start assigning seats.
+              </p>
+            </div>
+          ) : (
+            <Tabs
+              value={activeSetId ?? categorySets[0]?.id}
+              onValueChange={setActiveSetId}
+              className="w-full"
+            >
+              <TabsList className="w-full justify-start overflow-x-auto">
+                {categorySets.map((setItem, index) => (
+                  <TabsTrigger key={setItem.id} value={setItem.id} className="min-w-[100px]">
+                    {setItem.set_name || `Set ${index + 1}`}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {categorySets.map((setItem) => {
+                const setCategories = setItem.categories.map((category) => ({
                   category_id: category.id,
                   name: category.category_name,
                   color_code: category.color_code,
-                }))
-              )}
-              seatCategories={seatCategoryAssignments}
-              onSeatCategoriesChange={setSeatCategoryAssignments}
-            />
-            <CategoryAssignPanel
-              className="absolute right-3 top-14 z-10"
-              selectedSeatIds={selectedSeatIds}
-              categories={categorySets.flatMap((setItem) =>
-                setItem.categories.map((category) => ({
-                  category_id: category.id,
-                  name: category.category_name,
-                  color_code: category.color_code,
-                }))
-              )}
-              seatCategories={seatCategoryAssignments}
-              onAssign={(seatIds, categoryId) => {
-                setSeatCategoryAssignments((prev) => {
-                  const next = { ...prev };
-                  seatIds.forEach((id) => {
-                    next[id] = categoryId;
-                  });
-                  return next;
-                });
-              }}
-              onClear={(seatIds) => {
-                setSeatCategoryAssignments((prev) => {
-                  const next = { ...prev };
-                  seatIds.forEach((id) => {
-                    delete next[id];
-                  });
-                  return next;
-                });
-              }}
-            />
-          </div>
+                }));
+                return (
+                  <TabsContent key={setItem.id} value={setItem.id} className="mt-3">
+                    <div className="relative">
+                      <SeatmapPreview
+                        seatmapId={formData.seatmap_id || undefined}
+                        allowMarqueeSelection
+                        selectedSeatIds={selectedSeatIds}
+                        onSelectionChange={setSelectedSeatIds}
+                        categories={setCategories}
+                        seatCategories={setItem.seatAssignments}
+                        onSeatCategoriesChange={(newAssignments) =>
+                          updateSetSeatAssignments(setItem.id, newAssignments)
+                        }
+                      />
+                      <CategoryAssignPanel
+                        className="absolute right-3 top-14 z-10"
+                        selectedSeatIds={selectedSeatIds}
+                        categories={setCategories}
+                        seatCategories={setItem.seatAssignments}
+                        onAssign={(seatIds, categoryId) => {
+                          updateSetSeatAssignments(setItem.id, (prev) => {
+                            const next = { ...prev };
+                            seatIds.forEach((id) => {
+                              next[id] = categoryId;
+                            });
+                            return next;
+                          });
+                        }}
+                        onClear={(seatIds) => {
+                          updateSetSeatAssignments(setItem.id, (prev) => {
+                            const next = { ...prev };
+                            seatIds.forEach((id) => {
+                              delete next[id];
+                            });
+                            return next;
+                          });
+                        }}
+                      />
+                    </div>
+                  </TabsContent>
+                );
+              })}
+            </Tabs>
+          )}
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
