@@ -126,6 +126,18 @@ export function CreateShowForm() {
     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
   ]);
   const [categorySets, setCategorySets] = React.useState<CategorySetDraft[]>([]);
+  const unassignedSchedCount = React.useMemo(() => {
+    if (scheds.length === 0) return 0;
+    const used = new Set<string>();
+    categorySets.forEach((setItem) => {
+      if (setItem.apply_to_all) {
+        scheds.forEach((sched) => used.add(sched.id));
+        return;
+      }
+      setItem.sched_ids.forEach((id) => used.add(id));
+    });
+    return scheds.filter((sched) => !used.has(sched.id)).length;
+  }, [categorySets, scheds]);
   const groupedScheds = React.useMemo(() => {
     const grouped = scheds.reduce<Record<string, SchedDraft[]>>((acc, sched) => {
       if (!acc[sched.sched_date]) acc[sched.sched_date] = [];
@@ -253,6 +265,22 @@ export function CreateShowForm() {
       year: "numeric",
     }).format(date);
   }, []);
+  const scheduleCoverage = React.useMemo(() => {
+    if (!showStartDate || !showEndDate) {
+      return { hasSchedules: scheds.length > 0, missingDates: [] as string[] };
+    }
+    const scheduleDates = new Set(scheds.map((sched) => sched.sched_date));
+    const missingDates: string[] = [];
+    const cursor = new Date(showStartDate);
+    while (cursor <= showEndDate) {
+      const dateKey = toManilaDateKey(cursor);
+      if (!scheduleDates.has(dateKey)) {
+        missingDates.push(dateKey);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return { hasSchedules: scheds.length > 0, missingDates };
+  }, [scheds, showStartDate, showEndDate, toManilaDateKey]);
   const getAvailableScheds = React.useCallback((setId: string) => {
     const used = new Set<string>();
     categorySets.forEach((setItem) => {
@@ -282,8 +310,13 @@ export function CreateShowForm() {
     if (formData.show_start_date && formData.show_end_date && !isDateRangeValid) {
       missing.push("Date range (start must be before end)");
     }
+    if (scheds.length === 0) {
+      missing.push("Schedules");
+    } else if (showStartDate && showEndDate && scheduleCoverage.missingDates.length > 0) {
+      missing.push("Schedules (missing dates)");
+    }
     return missing;
-  }, [formData, isDateRangeValid]);
+  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate]);
 
   const isFormValid = missingFields.length === 0;
 
@@ -764,7 +797,7 @@ export function CreateShowForm() {
                 {group.items.map((s) => (
                   <div
                     key={s.id}
-                    className="grid gap-3 md:grid-cols-[1fr_1fr_auto] items-end rounded-lg border border-sidebar-border/60 p-3"
+                    className="relative grid gap-3 md:grid-cols-[1fr_1fr_auto] items-end rounded-lg border border-sidebar-border/60 p-3 pr-12 md:pr-3"
                   >
                     <div className="space-y-2">
                       <Label className="text-[11px] font-semibold text-muted-foreground">
@@ -773,6 +806,7 @@ export function CreateShowForm() {
                       <Input
                         type="time"
                         value={s.sched_start_time}
+                        className="h-8 text-xs sm:h-9 sm:text-sm"
                         readOnly
                       />
                     </div>
@@ -783,13 +817,14 @@ export function CreateShowForm() {
                       <Input
                         type="time"
                         value={s.sched_end_time}
+                        className="h-8 text-xs sm:h-9 sm:text-sm"
                         readOnly
                       />
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-9 w-9 text-destructive hover:bg-destructive/10"
+                      className="absolute right-2 top-2 h-7 w-7 text-destructive hover:bg-destructive/10 md:static md:h-9 md:w-9"
                       onClick={() => removeSched(s.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -883,7 +918,12 @@ export function CreateShowForm() {
                 size="sm"
                 onClick={addCategorySet}
                 className="gap-1.5"
-                disabled={!hasSeatmapSelected}
+                disabled={
+                  !hasSeatmapSelected ||
+                  scheds.length === 0 ||
+                  scheduleCoverage.missingDates.length > 0 ||
+                  (scheds.length > 0 && unassignedSchedCount === 0)
+                }
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add Category Set
@@ -893,6 +933,21 @@ export function CreateShowForm() {
             {!hasSeatmapSelected && (
               <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
                 Select a seatmap before adding category sets.
+              </div>
+            )}
+            {hasSeatmapSelected && scheds.length === 0 && (
+              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-4 text-xs text-muted-foreground">
+                Add schedules before creating category sets.
+              </div>
+            )}
+            {hasSeatmapSelected && scheds.length > 0 && scheduleCoverage.missingDates.length > 0 && (
+              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-4 text-xs text-muted-foreground">
+                Add schedules for every date in the show range before creating category sets.
+              </div>
+            )}
+            {hasSeatmapSelected && scheds.length > 0 && unassignedSchedCount === 0 && (
+              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-4 text-xs text-muted-foreground">
+                All schedules are already assigned to category sets.
               </div>
             )}
 
