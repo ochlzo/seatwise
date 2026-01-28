@@ -24,12 +24,14 @@ import { cn, formatBytes } from "@/lib/utils";
 import { deleteSeatmapsAction, updateSeatmapStatusAction } from "@/lib/actions/seatmapActions";
 import type { Prisma } from "@prisma/client";
 import { toast } from "sonner";
+import { SeatmapPreviewModal } from "./SeatmapPreviewModal";
 
 type SeatmapRow = {
   seatmap_id: string;
   seatmap_name: string;
   seatmap_json: Prisma.JsonValue;
   seatmap_status: "ACTIVE" | "DISABLED";
+  createdAt: string | Date;
   updatedAt: string | Date;
   shows?: Array<{
     show_id: string;
@@ -169,6 +171,7 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
               </th>
               <th className="px-4 py-3 text-left font-semibold">Seatmap</th>
               <th className="px-4 py-3 text-left font-semibold">JSON Size</th>
+              <th className="px-4 py-3 text-left font-semibold">Created On</th>
               <th className="px-4 py-3 text-left font-semibold">Updated On</th>
               <th className="px-4 py-3 text-left font-semibold">Events</th>
               <th className="px-4 py-3 text-right font-semibold">Actions</th>
@@ -177,14 +180,15 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
           <tbody>
             {seatmaps.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">
+                <td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">
                   No seatmaps found.
                 </td>
               </tr>
             )}
             {seatmaps.map((seatmap) => {
               const jsonBytes = new Blob([JSON.stringify(seatmap.seatmap_json)]).size;
-              const updatedOn = format(new Date(seatmap.updatedAt), "PP");
+              const createdOn = format(new Date(seatmap.createdAt), "PP p");
+              const updatedOn = format(new Date(seatmap.updatedAt), "PP p");
               const isDisabled = seatmap.seatmap_status === "DISABLED";
               const shows = seatmap.shows ?? [];
               const isAssigned = shows.length > 0;
@@ -211,6 +215,7 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                     </div>
                   </td>
                   <td className="px-4 py-4 text-muted-foreground">{formatBytes(jsonBytes)}</td>
+                  <td className="px-4 py-4 text-muted-foreground">{createdOn}</td>
                   <td className="px-4 py-4 text-muted-foreground">{updatedOn}</td>
                   <td className="px-4 py-4">
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground">
@@ -226,12 +231,10 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
                           Edit
                         </Link>
                       </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href="/seat-builder">
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          Open
-                        </Link>
-                      </Button>
+                      <SeatmapPreviewModal
+                        seatmapId={seatmap.seatmap_id}
+                        seatmapName={seatmap.seatmap_name}
+                      />
                       <Button variant="outline" size="sm" asChild>
                         <Link href={`/admin/shows?seatmapId=${seatmap.seatmap_id}`}>
                           <CalendarSearch className="mr-2 h-4 w-4" />
