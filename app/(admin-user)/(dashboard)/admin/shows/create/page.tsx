@@ -15,7 +15,7 @@ export default function CreateShowPage() {
           </>
         }
       />
-      <div className="flex flex-1 flex-col gap-6 p-4 md:p-8 pt-0 max-w-5xl mx-auto w-full">
+      <div className="flex flex-1 flex-col gap-6 p-2 md:p-8 pt-0 max-w-5xl mx-auto w-full">
         <div className="flex flex-col gap-1">
           <h2 className="text-lg md:text-xl font-semibold">New Production</h2>
           <p className="text-muted-foreground text-sm">
