@@ -98,7 +98,7 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                     show_status,
                     show_start_date: toDateOnly(show_start_date),
                     show_end_date: toDateOnly(show_end_date),
-                    seatmap_id: seatmap_id || null,
+                    seatmap_id: seatmap_id || undefined,
                 }
             });
 
