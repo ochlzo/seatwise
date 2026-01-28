@@ -73,59 +73,70 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
 
     const { seatmap_name, seatmap_json, seatmap_id } = payload;
 
-    const created = await prisma.$transaction(async (tx) => {
-      if (seatmap_id) {
-        const updated = await tx.seatmap.update({
-          where: { seatmap_id },
+    // 1. Pre-calculate seat data outside the transaction
+    const seatNodes = extractSeatNodes(seatmap_json);
+    const seatDataForCreate = seatNodes.map((seat) => ({
+      seat_id: seat.id,
+      seat_number: buildSeatNumber(seat),
+      // seatmap_id will be assigned inside the transaction if creating new
+    }));
+
+    const created = await prisma.$transaction(
+      async (tx) => {
+        if (seatmap_id) {
+          const updated = await tx.seatmap.update({
+            where: { seatmap_id },
+            data: {
+              seatmap_name,
+              seatmap_json,
+            },
+          });
+
+          await tx.seat.deleteMany({ where: { seatmap_id } });
+
+          if (seatDataForCreate.length > 0) {
+            // Using createMany with chunks could be even safer if thousands of seats,
+            // but for now, moving logic out + timeout is the main fix.
+            await tx.seat.createMany({
+              data: seatDataForCreate.map((s) => ({ ...s, seatmap_id })),
+              skipDuplicates: true,
+            });
+          }
+
+          return updated;
+        }
+
+        const seatmap = await tx.seatmap.create({
           data: {
             seatmap_name,
             seatmap_json,
           },
         });
 
-        const seatNodes = extractSeatNodes(seatmap_json);
-        await tx.seat.deleteMany({ where: { seatmap_id } });
-        if (seatNodes.length > 0) {
+        if (seatDataForCreate.length > 0) {
           await tx.seat.createMany({
-            data: seatNodes.map((seat) => ({
-              seat_id: seat.id,
-              seat_number: buildSeatNumber(seat),
-              seatmap_id,
+            data: seatDataForCreate.map((s) => ({
+              ...s,
+              seatmap_id: seatmap.seatmap_id,
             })),
             skipDuplicates: true,
           });
         }
 
-        return updated;
+        return seatmap;
+      },
+      {
+        maxWait: 5000,
+        timeout: 20000,
       }
-
-      const seatmap = await tx.seatmap.create({
-        data: {
-          seatmap_name,
-          seatmap_json,
-        },
-      });
-
-      const seatNodes = extractSeatNodes(seatmap_json);
-      if (seatNodes.length > 0) {
-        await tx.seat.createMany({
-          data: seatNodes.map((seat) => ({
-            seat_id: seat.id,
-            seat_number: buildSeatNumber(seat),
-            seatmap_id: seatmap.seatmap_id,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
-      return seatmap;
-    });
+    );
 
     revalidatePath("/admin/templates");
     return { success: true, seatmapId: created.seatmap_id };
   } catch (error: unknown) {
     console.error("Error in saveSeatmapTemplateAction:", error);
-    const message = error instanceof Error ? error.message : "Failed to save seatmap";
+    const message =
+      error instanceof Error ? error.message : "Failed to save seatmap";
     return { success: false, error: message };
   }
 }
