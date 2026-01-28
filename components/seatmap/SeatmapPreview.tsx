@@ -506,6 +506,12 @@ function SeatNodes({
         // Look up the category by ID to get the current color_code
         const categoryId = seatCategories[seat.id];
         const category = categoryId ? categories.find(c => c.category_id === categoryId) : null;
+
+        // DEBUG: Trace why lookup might fail
+        if (categoryId && !category) {
+          console.warn(`SeatNodes: Found assignment ${categoryId} for seat ${seat.id} but no matching category in list`, categories);
+        }
+
         const colorCode = category?.color_code ?? "NO_COLOR";
         const textColor = getContrastingTextColor(colorCode);
         const image =
