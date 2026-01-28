@@ -6,25 +6,43 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { Prisma, ShowStatus } from "@prisma/client";
 
+const MANILA_TZ = "Asia/Manila";
+
+const toManilaDateKey = (value: Date) => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: MANILA_TZ,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(value);
+    const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+    const month = parts.find((part) => part.type === "month")?.value ?? "00";
+    const day = parts.find((part) => part.type === "day")?.value ?? "00";
+    return `${year}-${month}-${day}`;
+};
+
+const toManilaTimeKey = (value: Date) =>
+    new Intl.DateTimeFormat("en-GB", {
+        timeZone: MANILA_TZ,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).format(value);
+
 const toDateOnly = (value: string | Date) => {
     if (typeof value === "string") {
-        return new Date(`${value}T00:00:00Z`);
+        return new Date(`${value}T00:00:00+08:00`);
     }
-    return value;
+    const dateKey = toManilaDateKey(value);
+    return new Date(`${dateKey}T00:00:00+08:00`);
 };
 
 const toTime = (value: string | Date) => {
     if (typeof value === "string") {
-        return new Date(`1970-01-01T${value}:00Z`); // Force UTC
+        return new Date(`1970-01-01T${value}:00+08:00`);
     }
-    // If it's already a date, we assume it's correctly set, or we extract time in UTC
-    // Ideally the input is consistently a string HH:mm from the form.
-    if (value instanceof Date) {
-        const hours = `${value.getUTCHours()}`.padStart(2, "0");
-        const minutes = `${value.getUTCMinutes()}`.padStart(2, "0");
-        return new Date(`1970-01-01T${hours}:${minutes}:00Z`);
-    }
-    return value as Date;
+    const timeKey = toManilaTimeKey(value);
+    return new Date(`1970-01-01T${timeKey}:00+08:00`);
 };
 
 type UpdateShowSched = {
@@ -78,8 +96,8 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                     venue,
                     address,
                     show_status,
-                    show_start_date: new Date(show_start_date),
-                    show_end_date: new Date(show_end_date),
+                    show_start_date: toDateOnly(show_start_date),
+                    show_end_date: toDateOnly(show_end_date),
                     seatmap_id: seatmap_id || null,
                 }
             });

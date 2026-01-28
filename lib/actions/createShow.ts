@@ -23,6 +23,15 @@ type CreateShowPayload = {
     sched_start_time: string;
     sched_end_time: string;
   }>;
+  category_sets?: Array<{
+    apply_to_all: boolean;
+    sched_ids: string[];
+    categories: Array<{
+      category_name: string;
+      price: string;
+      color_code: ColorCodes;
+    }>;
+  }>;
   categories?: Array<{
     category_name: string;
     price: string;
@@ -32,20 +41,43 @@ type CreateShowPayload = {
   }>;
 };
 
-const toDateOnly = (value: string | Date) => {
-  // Handle string input (YYYY-MM-DD) by forcing UTC midnight
-  if (typeof value === "string") {
-    return new Date(`${value}T00:00:00Z`);
-  }
-  // For Date objects, return as-is (assuming already handled) or strip time if needed
-  // But typically input is string from form.
-  return value;
+const MANILA_TZ = "Asia/Manila";
+
+const toManilaDateKey = (value: Date) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: MANILA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "00";
+  const day = parts.find((part) => part.type === "day")?.value ?? "00";
+  return `${year}-${month}-${day}`;
 };
 
-const toTime = (timeValue: string) => {
-  // Force UTC parsing to preserve the exact HH:mm entered by the user
-  // This prevents server timezone offsets from shifting the stored time
-  return new Date(`1970-01-01T${timeValue}:00Z`);
+const toManilaTimeKey = (value: Date) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: MANILA_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
+
+const toDateOnly = (value: string | Date) => {
+  if (typeof value === "string") {
+    return new Date(`${value}T00:00:00+08:00`);
+  }
+  const dateKey = toManilaDateKey(value);
+  return new Date(`${dateKey}T00:00:00+08:00`);
+};
+
+const toTime = (timeValue: string | Date) => {
+  if (typeof timeValue === "string") {
+    return new Date(`1970-01-01T${timeValue}:00+08:00`);
+  }
+  const timeKey = toManilaTimeKey(timeValue);
+  return new Date(`1970-01-01T${timeKey}:00+08:00`);
 };
 
 export async function createShowAction(data: CreateShowPayload) {
@@ -79,6 +111,7 @@ export async function createShowAction(data: CreateShowPayload) {
       image_base64,
       seatmap_id,
       scheds = [],
+      category_sets = [],
       categories = [],
     } = data;
 
@@ -120,10 +153,32 @@ export async function createShowAction(data: CreateShowPayload) {
         schedIdMap.set(sched.client_id, createdSched.sched_id);
       }
 
-      if (categories.length > 0) {
-        const uniqueNames = Array.from(
-          new Set(categories.map((category) => category.category_name))
-        );
+      const normalizedCategorySets =
+        category_sets.length > 0
+          ? category_sets
+          : categories.map((category) => ({
+              apply_to_all: category.apply_to_all,
+              sched_ids: category.sched_ids,
+              categories: [
+                {
+                  category_name: category.category_name,
+                  price: category.price,
+                  color_code: category.color_code,
+                },
+              ],
+            }));
+
+      if (normalizedCategorySets.length > 0) {
+        const flatCategories = normalizedCategorySets.flatMap((setItem) => setItem.categories);
+        const uniqueCategoryMap = new Map<string, typeof flatCategories[number]>();
+        flatCategories.forEach((category) => {
+          if (!uniqueCategoryMap.has(category.category_name)) {
+            uniqueCategoryMap.set(category.category_name, category);
+          }
+        });
+
+        const uniqueCategories = Array.from(uniqueCategoryMap.values());
+        const uniqueNames = uniqueCategories.map((category) => category.category_name);
 
         const existingCategories = await tx.seatCategory.findMany({
           where: {
@@ -136,7 +191,7 @@ export async function createShowAction(data: CreateShowPayload) {
           existingCategories.map((category) => [category.category_name, category.seat_category_id])
         );
 
-        const missing = categories.filter(
+        const missing = uniqueCategories.filter(
           (category) => !existingMap.has(category.category_name)
         );
 
@@ -168,17 +223,19 @@ export async function createShowAction(data: CreateShowPayload) {
           seat_category_id: string;
         }> = [];
 
-        categories.forEach((category) => {
-          const seat_category_id = categoryIdByName.get(category.category_name);
-          if (!seat_category_id) return;
-          const targetSchedIds = category.apply_to_all
+        normalizedCategorySets.forEach((setItem) => {
+          const targetSchedIds = setItem.apply_to_all
             ? Array.from(schedIdMap.values())
-            : category.sched_ids.map((id) => schedIdMap.get(id)).filter(Boolean) as string[];
+            : setItem.sched_ids.map((id) => schedIdMap.get(id)).filter(Boolean) as string[];
 
-          targetSchedIds.forEach((sched_id) => {
-            setRows.push({
-              sched_id,
-              seat_category_id,
+          setItem.categories.forEach((category) => {
+            const seat_category_id = categoryIdByName.get(category.category_name);
+            if (!seat_category_id) return;
+            targetSchedIds.forEach((sched_id) => {
+              setRows.push({
+                sched_id,
+                seat_category_id,
+              });
             });
           });
         });
