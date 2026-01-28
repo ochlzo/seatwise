@@ -379,60 +379,79 @@ export function SeatmapPreview({
                 {selectedSeatIds.length} seat{selectedSeatIds.length === 1 ? "" : "s"}
               </span>
             </div>
-            <div className="flex flex-col gap-2">
-              {categories.map((category) => (
-                <button
-                  key={category.category_id}
-                  type="button"
-                  className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
-                  onClick={() => {
-                    setSeatCategories((prev) => {
-                      const next = { ...prev };
-                      selectedSeatIds.forEach((id) => {
-                        next[id] = category.color_code;
+            {(() => {
+              const selectedCategoryCodes = new Set(
+                selectedSeatIds
+                  .map((id) => seatCategories[id])
+                  .filter((code): code is SeatmapPreviewCategory["color_code"] => Boolean(code))
+              );
+              const hasSelection = selectedCategoryCodes.size > 0;
+              return (
+                <div className="flex flex-col gap-2">
+                  {categories.map((category) => {
+                    const isAssigned = selectedCategoryCodes.has(category.color_code);
+                    return (
+                      <button
+                        key={category.category_id}
+                        type="button"
+                        className={cn(
+                          "flex items-center gap-2 rounded-md border px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50",
+                          isAssigned
+                            ? "border-primary ring-1 ring-primary/40"
+                            : "border-zinc-200",
+                          !hasSelection && "border-zinc-200"
+                        )}
+                        onClick={() => {
+                          setSeatCategories((prev) => {
+                            const next = { ...prev };
+                            selectedSeatIds.forEach((id) => {
+                              next[id] = category.color_code;
+                            });
+                            return next;
+                          });
+                        }}
+                      >
+                        <span
+                          className={cn(
+                            "h-2.5 w-2.5 rounded-full border border-zinc-300",
+                            category.color_code === "NO_COLOR" && "bg-transparent"
+                          )}
+                          style={{
+                            backgroundColor:
+                              category.color_code === "NO_COLOR"
+                                ? "transparent"
+                                : COLOR_CODE_TO_HEX[category.color_code],
+                            backgroundImage:
+                              category.color_code === "NO_COLOR"
+                                ? "linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent)"
+                                : undefined,
+                            backgroundSize:
+                              category.color_code === "NO_COLOR" ? "6px 6px" : undefined,
+                          }}
+                        />
+                        <span className="truncate">{category.name || "Untitled"}</span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
+                    onClick={() => {
+                      setSeatCategories((prev) => {
+                        const next = { ...prev };
+                        selectedSeatIds.forEach((id) => {
+                          delete next[id];
+                        });
+                        return next;
                       });
-                      return next;
-                    });
-                  }}
-                >
-                  <span
-                    className={cn(
-                      "h-2.5 w-2.5 rounded-full border border-zinc-300",
-                      category.color_code === "NO_COLOR" && "bg-transparent"
-                    )}
-                    style={{
-                      backgroundColor:
-                        category.color_code === "NO_COLOR"
-                          ? "transparent"
-                          : COLOR_CODE_TO_HEX[category.color_code],
-                      backgroundImage:
-                        category.color_code === "NO_COLOR"
-                          ? "linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent)"
-                          : undefined,
-                      backgroundSize:
-                        category.color_code === "NO_COLOR" ? "6px 6px" : undefined,
                     }}
-                  />
-                  <span className="truncate">{category.name || "Untitled"}</span>
-                </button>
-              ))}
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
-                onClick={() => {
-                  setSeatCategories((prev) => {
-                    const next = { ...prev };
-                    selectedSeatIds.forEach((id) => {
-                      delete next[id];
-                    });
-                    return next;
-                  });
-                }}
-              >
-                <span className="h-2.5 w-2.5 rounded-full border border-zinc-300 bg-transparent" />
-                <span>Clear</span>
-              </button>
-            </div>
+                  >
+                    <span className="h-2.5 w-2.5 rounded-full border border-zinc-300 bg-transparent" />
+                    <span>Clear</span>
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         )}
         {!seatmapId && (
