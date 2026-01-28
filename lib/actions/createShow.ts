@@ -121,27 +121,70 @@ export async function createShowAction(data: CreateShowPayload) {
       }
 
       if (categories.length > 0) {
-        for (const category of categories) {
-          const createdCategory = await tx.seatCategory.create({
-            data: {
+        const uniqueNames = Array.from(
+          new Set(categories.map((category) => category.category_name))
+        );
+
+        const existingCategories = await tx.seatCategory.findMany({
+          where: {
+            seatmap_id,
+            category_name: { in: uniqueNames },
+          },
+        });
+
+        const existingMap = new Map(
+          existingCategories.map((category) => [category.category_name, category.seat_category_id])
+        );
+
+        const missing = categories.filter(
+          (category) => !existingMap.has(category.category_name)
+        );
+
+        if (missing.length > 0) {
+          await tx.seatCategory.createMany({
+            data: missing.map((category) => ({
               category_name: category.category_name,
               price: category.price,
               color_code: category.color_code,
-            },
+              seatmap_id,
+            })),
+            skipDuplicates: true,
           });
+        }
 
+        const allCategories = await tx.seatCategory.findMany({
+          where: {
+            seatmap_id,
+            category_name: { in: uniqueNames },
+          },
+        });
+
+        const categoryIdByName = new Map(
+          allCategories.map((category) => [category.category_name, category.seat_category_id])
+        );
+
+        const setRows: Array<{
+          sched_id: string;
+          seat_category_id: string;
+        }> = [];
+
+        categories.forEach((category) => {
+          const seat_category_id = categoryIdByName.get(category.category_name);
+          if (!seat_category_id) return;
           const targetSchedIds = category.apply_to_all
             ? Array.from(schedIdMap.values())
             : category.sched_ids.map((id) => schedIdMap.get(id)).filter(Boolean) as string[];
 
-          if (targetSchedIds.length > 0) {
-            await tx.schedSeatCategory.createMany({
-              data: targetSchedIds.map((sched_id) => ({
-                sched_id,
-                seat_category_id: createdCategory.seat_category_id,
-              })),
+          targetSchedIds.forEach((sched_id) => {
+            setRows.push({
+              sched_id,
+              seat_category_id,
             });
-          }
+          });
+        });
+
+        if (setRows.length > 0) {
+          await tx.set.createMany({ data: setRows, skipDuplicates: true });
         }
       }
 

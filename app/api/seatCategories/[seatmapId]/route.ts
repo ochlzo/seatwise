@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export async function GET(
   _req: Request,
@@ -24,11 +25,22 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    await params;
-    return NextResponse.json(
-      { error: "Seat category lookup by seatmap is no longer supported." },
-      { status: 410 }
-    );
+    const { seatmapId } = await params;
+
+    const seatCategories = await prisma.seatCategory.findMany({
+      where: { seatmap_id: seatmapId },
+      include: {
+        seatmap: true,
+        sets: {
+          include: {
+            sched: true,
+          },
+        },
+      } as Prisma.SeatCategoryInclude,
+      orderBy: { category_name: "asc" } as Prisma.SeatCategoryOrderByWithRelationInput,
+    });
+
+    return NextResponse.json({ seatCategories });
   } catch (error) {
     console.error("Error loading seat categories:", error);
     return NextResponse.json(
