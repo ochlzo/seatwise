@@ -15,8 +15,18 @@ export function StickyHeader({ className, ...props }: StickyHeaderProps) {
     );
     if (!inset) return;
 
+    // Hysteresis thresholds to prevent flickering
+    const SCROLL_DOWN_THRESHOLD = 20;
+    const SCROLL_UP_THRESHOLD = 5;
+
     const handleScroll = () => {
-      setIsScrolled(inset.scrollTop > 10);
+      const scrollTop = inset.scrollTop;
+      setIsScrolled((prev) => {
+        // If currently scrolled, only reset when scrolling above the lower threshold
+        if (prev) return scrollTop > SCROLL_UP_THRESHOLD;
+        // If not scrolled, only trigger when scrolling past the higher threshold
+        return scrollTop > SCROLL_DOWN_THRESHOLD;
+      });
     };
 
     handleScroll();
