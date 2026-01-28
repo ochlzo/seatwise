@@ -971,7 +971,7 @@ export function CreateShowForm() {
           ) : (
             <div className="flex flex-col gap-3 w-full">
               {/* Tab Navigation */}
-              <div className="flex w-full justify-start overflow-x-auto rounded-lg bg-muted p-1">
+              <div className="flex w-fit max-w-full justify-start overflow-x-auto rounded-lg bg-muted p-1">
                 {categorySets.map((setItem, index) => {
                   const isActive = (activeSetId ?? categorySets[0]?.id) === setItem.id;
                   return (

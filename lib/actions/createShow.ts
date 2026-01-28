@@ -180,6 +180,7 @@ export async function createShowAction(data: CreateShowPayload) {
                 color_code: category.color_code,
               },
             ],
+            seat_assignments: undefined,
           }));
 
       if (normalizedCategorySets.length > 0) {
