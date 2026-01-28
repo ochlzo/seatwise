@@ -127,7 +127,6 @@ export async function createShowAction(data: CreateShowPayload) {
               category_name: category.category_name,
               price: category.price,
               color_code: category.color_code,
-              seatmap_id,
             },
           });
 
