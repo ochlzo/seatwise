@@ -32,6 +32,7 @@ type CreateShowPayload = {
       price: string;
       color_code: ColorCodes;
     }>;
+    seat_assignments?: Record<string, string>; // seat_id -> category_name (using name to resolve ID later)
   }>;
   categories?: Array<{
     category_name: string;
@@ -169,17 +170,17 @@ export async function createShowAction(data: CreateShowPayload) {
         category_sets.length > 0
           ? category_sets
           : categories.map((category) => ({
-              set_name: "Default Set",
-              apply_to_all: category.apply_to_all,
-              sched_ids: category.sched_ids,
-              categories: [
-                {
-                  category_name: category.category_name,
-                  price: category.price,
-                  color_code: category.color_code,
-                },
-              ],
-            }));
+            set_name: "Default Set",
+            apply_to_all: category.apply_to_all,
+            sched_ids: category.sched_ids,
+            categories: [
+              {
+                category_name: category.category_name,
+                price: category.price,
+                color_code: category.color_code,
+              },
+            ],
+          }));
 
       if (normalizedCategorySets.length > 0) {
         // 1) Validate unique set_name within this request (per show)
@@ -224,8 +225,8 @@ export async function createShowAction(data: CreateShowPayload) {
           const targetSchedIds = setItem.apply_to_all
             ? allSchedIds
             : (setItem.sched_ids
-                .map((id) => schedIdMap.get(id))
-                .filter(Boolean) as string[]);
+              .map((id) => schedIdMap.get(id))
+              .filter(Boolean) as string[]);
 
           for (const schedId of targetSchedIds) {
             const existing = schedToSetName.get(schedId);
@@ -334,8 +335,8 @@ export async function createShowAction(data: CreateShowPayload) {
           const targetSchedIds = setItem.apply_to_all
             ? Array.from(schedIdMap.values())
             : (setItem.sched_ids
-                .map((id) => schedIdMap.get(id))
-                .filter(Boolean) as string[]);
+              .map((id) => schedIdMap.get(id))
+              .filter(Boolean) as string[]);
 
           if (targetSchedIds.length > 0) {
             await tx.sched.updateMany({
@@ -370,6 +371,69 @@ export async function createShowAction(data: CreateShowPayload) {
         }
         if (setRows.length > 0) {
           await tx.set.createMany({ data: setRows, skipDuplicates: true });
+        }
+
+        // --- NEW: Create SeatAssignments ---
+        // 1. Fetch the just-created 'Set' records to get their IDs
+        // We need (sched_id, seat_category_id) -> set_id
+        const createdSets = await tx.set.findMany({
+          where: {
+            sched_id: { in: allSchedIds },
+          },
+        });
+
+        const setLookup = new Map<string, string>(); // "sched_id:seat_category_id" -> set_id
+        createdSets.forEach((r) => {
+          setLookup.set(`${r.sched_id}:${r.seat_category_id}`, r.set_id);
+        });
+
+        const seatAssignmentRows: Array<{
+          seat_id: string;
+          sched_id: string;
+          set_id: string;
+          seat_status: "OPEN";
+        }> = [];
+
+        // 2. Iterate sets again to process seat assignments
+        for (const setItem of normalizedCategorySets) {
+          if (!setItem.seat_assignments) continue;
+
+          const targetSchedIds = setItem.apply_to_all
+            ? Array.from(schedIdMap.values())
+            : (setItem.sched_ids
+              .map((id) => schedIdMap.get(id))
+              .filter(Boolean) as string[]);
+
+          for (const [seatId, catName] of Object.entries(setItem.seat_assignments)) {
+            // Resolve category name to ID
+            const seat_category_id = categoryIdByName.get(catName);
+            if (!seat_category_id) continue;
+
+            for (const schedId of targetSchedIds) {
+              const lookupKey = `${schedId}:${seat_category_id}`;
+              const set_id = setLookup.get(lookupKey);
+
+              if (set_id) {
+                seatAssignmentRows.push({
+                  seat_id: seatId,
+                  sched_id: schedId,
+                  set_id: set_id,
+                  seat_status: "OPEN",
+                });
+              }
+            }
+          }
+        }
+
+        if (seatAssignmentRows.length > 0) {
+          // Chunk inserts to avoid parameter limits if many seats
+          const chunkSize = 1000;
+          for (let i = 0; i < seatAssignmentRows.length; i += chunkSize) {
+            await tx.seatAssignment.createMany({
+              data: seatAssignmentRows.slice(i, i + chunkSize),
+              skipDuplicates: true
+            });
+          }
         }
       }
 
