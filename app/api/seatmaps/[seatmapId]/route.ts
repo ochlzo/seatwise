@@ -28,6 +28,9 @@ export async function GET(
     const { seatmapId } = await params;
     const seatmap = await prisma.seatmap.findUnique({
       where: { seatmap_id: seatmapId },
+      include: {
+        seatCategories: true,
+      },
     });
 
     if (!seatmap) {
@@ -38,6 +41,7 @@ export async function GET(
       seatmap_id: seatmap.seatmap_id,
       seatmap_name: seatmap.seatmap_name,
       seatmap_json: seatmap.seatmap_json,
+      seat_categories: seatmap.seatCategories,
     });
   } catch (error) {
     console.error("Error loading seatmap:", error);

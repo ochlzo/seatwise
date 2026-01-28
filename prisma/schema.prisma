@@ -1,11 +1,15 @@
-generator client { 
-  provider = "prisma-client-js" 
-  engineType = "library" 
+// Prisma schema for Seatwise v2
+// Schedules can share the same category set across scheds or use different category sets.
+// SeatAssignment maps to a schedule-specific Set, which maps to a SeatCategory.
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
 }
 
-datasource db { 
-  provider = "postgresql" 
-  url = env("DATABASE_URL") 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -23,7 +27,6 @@ model User {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 }
-
 
 model Show {
   show_id          String      @id @default(cuid())
@@ -57,10 +60,12 @@ model Sched {
   show              Show        @relation(fields: [show_id], references: [show_id])
 
   seatAssignments   SeatAssignment[]
-  seatCategoryLinks SchedSeatCategory[]
+  sets              Set[]
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
+
+  @@index([show_id])
 }
 
 model Seatmap {
@@ -71,33 +76,10 @@ model Seatmap {
 
   shows             Show[]
   seats             Seat[]
+  seatCategories    SeatCategory[]
 
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-}
-
-model SeatCategory {
-  seat_category_id  String      @id @default(cuid())
-  category_name     String
-  price             Decimal     @db.Decimal(10, 2) @default(0.00)
-  color_code        ColorCodes
-
-  seats             Seat[]
-  schedLinks        SchedSeatCategory[]
-
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-}
-
-// Join table: seat_category can be assigned to many schedules (and vice versa)
-model SchedSeatCategory {
-  sched_id         String
-  seat_category_id String
-
-  sched            Sched         @relation(fields: [sched_id], references: [sched_id])
-  seatCategory     SeatCategory  @relation(fields: [seat_category_id], references: [seat_category_id])
-
-  @@id([sched_id, seat_category_id])
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 }
 
 model Seat {
@@ -108,30 +90,78 @@ model Seat {
   seatmap_id        String
   seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
 
-  // Optional: seat is part of a category
-  seat_category_id  String?
-  seat_category     SeatCategory? @relation(fields: [seat_category_id], references: [seat_category_id])
-
   seatAssignments   SeatAssignment[]
 
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
+
+  @@index([seatmap_id])
+  @@unique([seatmap_id, seat_number])
+}
+
+model SeatCategory {
+  seat_category_id  String     @id @default(cuid())
+  category_name     String
+  price             Decimal    @db.Decimal(10, 2) @default(0.00)
+  color_code        ColorCodes
+
+  // Scope categories to a seatmap (prevents mixing categories across unrelated seatmaps/shows)
+  seatmap_id        String
+  seatmap           Seatmap    @relation(fields: [seatmap_id], references: [seatmap_id])
+
+  // relation back to Set
+  sets              Set[]
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@unique([seatmap_id, category_name])
+  @@index([seatmap_id])
+}
+
+model Set {
+  set_id            String       @id @default(cuid())
+
+  sched_id          String
+  sched             Sched        @relation(fields: [sched_id], references: [sched_id])
+
+  seat_category_id  String
+  seatCategory      SeatCategory @relation(fields: [seat_category_id], references: [seat_category_id])
+
+  seatAssignments   SeatAssignment[]
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  // Prevent linking the same category more than once to the same schedule
+  @@unique([sched_id, seat_category_id])
+  @@index([sched_id])
+  @@index([seat_category_id])
 }
 
 model SeatAssignment {
-  seat_assignment_id String @id @default(cuid())
-  seat_status        SeatStatus @default(OPEN)
+  seat_assignment_id String      @id @default(cuid())
+  seat_status        SeatStatus  @default(OPEN)
 
   seat_id            String
   sched_id           String
-  seat               Seat  @relation(fields: [seat_id], references: [seat_id])
-  sched              Sched @relation(fields: [sched_id], references: [sched_id])
 
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  // Which category/set this seat belongs to for this schedule
+  set_id             String?
+  set                Set?        @relation(fields: [set_id], references: [set_id])
 
-  // Prevent duplicates for the same seat in the same schedule
+  seat               Seat        @relation(fields: [seat_id], references: [seat_id])
+  sched              Sched       @relation(fields: [sched_id], references: [sched_id])
+
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  // One seat-state row per seat per schedule
   @@unique([seat_id, sched_id])
+
+  @@index([sched_id])
+  @@index([seat_id])
+  @@index([set_id])
 }
 
 enum UserRole {
@@ -160,12 +190,12 @@ enum SeatmapStatus {
 }
 
 enum ColorCodes {
-  NO_COLOR      @map("NO COLOR")
-  GOLD          @map("#ffd700")
-  PINK          @map("#e005b9")
-  BLUE          @map("#111184")
-  BURGUNDY      @map("#800020")
-  GREEN         @map("#046307")
+  NO_COLOR @map("NO COLOR")
+  GOLD     @map("#ffd700")
+  PINK     @map("#e005b9")
+  BLUE     @map("#111184")
+  BURGUNDY @map("#800020")
+  GREEN    @map("#046307")
 }
 
 enum SeatStatus {
