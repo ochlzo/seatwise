@@ -314,11 +314,30 @@ export function CreateShowForm() {
       missing.push("Schedules");
     } else if (showStartDate && showEndDate && scheduleCoverage.missingDates.length > 0) {
       missing.push("Schedules (missing dates)");
+    } else if (categorySets.length > 0 && scheds.length > 0 && unassignedSchedCount > 0) {
+      missing.push("Assigned Scheds");
+    }
+    const hasInvalidCategory = categorySets.some((setItem) =>
+      setItem.categories.some((category) => {
+        const nameValid = category.category_name.trim().length > 0;
+        const priceValue = String(category.price ?? "").trim();
+        const priceValid =
+          priceValue !== "" &&
+          /^\d{1,4}(\.\d{1,2})?$/.test(priceValue) &&
+          !Number.isNaN(Number(priceValue)) &&
+          Number(priceValue) >= 0;
+        return !nameValid || !priceValid;
+      })
+    );
+    if (hasInvalidCategory) {
+      missing.push("Category name/price");
     }
     return missing;
-  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate]);
+  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets]);
 
-  const isFormValid = missingFields.length === 0;
+  const isFormValid =
+    missingFields.length === 0 &&
+    (scheds.length === 0 || unassignedSchedCount === 0);
 
   const getDatesInRange = React.useCallback(() => {
     if (!showStartDate || !showEndDate) return [];
@@ -561,8 +580,9 @@ export function CreateShowForm() {
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-      <Card className="border-sidebar-border shadow-sm">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20 px-0 md:px-0">
+      <div className="h-px bg-border/60 md:hidden" />
+      <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
         <CardHeader>
           <CardTitle className="text-lg md:text-xl font-semibold">
             Show Details
@@ -762,7 +782,9 @@ export function CreateShowForm() {
         </CardContent>
       </Card>
 
-      <Card className="border-sidebar-border shadow-sm">
+      <div className="h-px bg-border/60 md:hidden" />
+
+      <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
             <CardTitle className="text-lg md:text-xl font-semibold">
@@ -837,7 +859,9 @@ export function CreateShowForm() {
         </CardContent>
       </Card>
 
-      <Card className="border-sidebar-border shadow-sm">
+      <div className="h-px bg-border/60 md:hidden" />
+
+      <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
         <CardHeader>
           <CardTitle className="text-lg md:text-xl font-semibold">
             Seatmap
@@ -929,6 +953,11 @@ export function CreateShowForm() {
                 Add Category Set
               </Button>
             </div>
+            {hasSeatmapSelected && scheds.length > 0 && scheduleCoverage.missingDates.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                Add schedules for every date in the show range before creating category sets.
+              </p>
+            )}
 
             {!hasSeatmapSelected && (
               <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
@@ -938,16 +967,6 @@ export function CreateShowForm() {
             {hasSeatmapSelected && scheds.length === 0 && (
               <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-4 text-xs text-muted-foreground">
                 Add schedules before creating category sets.
-              </div>
-            )}
-            {hasSeatmapSelected && scheds.length > 0 && scheduleCoverage.missingDates.length > 0 && (
-              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-4 text-xs text-muted-foreground">
-                Add schedules for every date in the show range before creating category sets.
-              </div>
-            )}
-            {hasSeatmapSelected && scheds.length > 0 && unassignedSchedCount === 0 && (
-              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-4 text-xs text-muted-foreground">
-                All schedules are already assigned to category sets.
               </div>
             )}
 
