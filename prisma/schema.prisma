@@ -1,5 +1,6 @@
 // Prisma schema for Seatwise v2
-// Schedules can share the same category set across scheds or use different category sets.
+// Adds CategorySet (bundle) so schedules can share a named set of SeatCategories,
+// while still allowing schedules to have different category bundles or custom categories.
 // SeatAssignment maps to a schedule-specific Set, which maps to a SeatCategory.
 
 generator client {
@@ -44,6 +45,7 @@ model Show {
   seatmap          Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
 
   scheds           Sched[]
+  categorySets     CategorySet[]
 
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -59,6 +61,10 @@ model Sched {
   show_id           String
   show              Show        @relation(fields: [show_id], references: [show_id])
 
+  // OPTIONAL: schedule can reference a reusable bundle of categories
+  category_set_id   String?
+  categorySet       CategorySet? @relation(fields: [category_set_id], references: [category_set_id])
+
   seatAssignments   SeatAssignment[]
   sets              Set[]
 
@@ -66,6 +72,7 @@ model Sched {
   updatedAt         DateTime    @updatedAt
 
   @@index([show_id])
+  @@index([category_set_id])
 }
 
 model Seatmap {
@@ -109,8 +116,11 @@ model SeatCategory {
   seatmap_id        String
   seatmap           Seatmap    @relation(fields: [seatmap_id], references: [seatmap_id])
 
-  // relation back to Set
+  // relation back to Set (per-schedule instance)
   sets              Set[]
+
+  // relation to CategorySet bundles
+  categorySetItems  CategorySetItem[]
 
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -119,6 +129,46 @@ model SeatCategory {
   @@index([seatmap_id])
 }
 
+//
+// A reusable named bundle of SeatCategories for a Show.
+// Example: "SET A" = VIP + REGULAR + BALCONY
+//
+model CategorySet {
+  category_set_id String   @id @default(cuid())
+  set_name        String
+
+  show_id         String
+  show            Show     @relation(fields: [show_id], references: [show_id])
+
+  items           CategorySetItem[]
+  scheds          Sched[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // "SET A" can repeat across different shows, but not within the same show
+  @@unique([show_id, set_name])
+  @@index([show_id])
+}
+
+//
+// Join table: which SeatCategories belong to a CategorySet bundle
+//
+model CategorySetItem {
+  category_set_id  String
+  seat_category_id String
+
+  categorySet      CategorySet  @relation(fields: [category_set_id], references: [category_set_id])
+  seatCategory     SeatCategory @relation(fields: [seat_category_id], references: [seat_category_id])
+
+  @@id([category_set_id, seat_category_id])
+  @@index([seat_category_id])
+}
+
+//
+// Per-schedule link: which SeatCategory is used for this specific schedule.
+// SeatAssignment points here via set_id.
+//
 model Set {
   set_id            String       @id @default(cuid())
 
@@ -135,6 +185,7 @@ model Set {
 
   // Prevent linking the same category more than once to the same schedule
   @@unique([sched_id, seat_category_id])
+  @@unique([set_id, sched_id])
   @@index([sched_id])
   @@index([seat_category_id])
 }
@@ -146,9 +197,9 @@ model SeatAssignment {
   seat_id            String
   sched_id           String
 
-  // Which category/set this seat belongs to for this schedule
-  set_id             String?
-  set                Set?        @relation(fields: [set_id], references: [set_id])
+  // Which category (via Set) this seat belongs to for this schedule
+  set_id             String
+  set Set @relation(fields: [set_id, sched_id], references: [set_id, sched_id])
 
   seat               Seat        @relation(fields: [seat_id], references: [seat_id])
   sched              Sched       @relation(fields: [sched_id], references: [sched_id])

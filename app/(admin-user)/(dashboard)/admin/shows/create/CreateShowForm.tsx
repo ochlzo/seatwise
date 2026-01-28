@@ -84,6 +84,7 @@ type CategoryDraft = {
 
 type CategorySetDraft = {
   id: string;
+  set_name: string;
   apply_to_all: boolean;
   sched_ids: string[];
   filter_date: string;
@@ -125,6 +126,19 @@ export function CreateShowForm() {
     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
   ]);
   const [categorySets, setCategorySets] = React.useState<CategorySetDraft[]>([]);
+  const groupedScheds = React.useMemo(() => {
+    const grouped = scheds.reduce<Record<string, SchedDraft[]>>((acc, sched) => {
+      if (!acc[sched.sched_date]) acc[sched.sched_date] = [];
+      acc[sched.sched_date].push(sched);
+      return acc;
+    }, {});
+    return Object.entries(grouped)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dateKey, items]) => ({
+        dateKey,
+        items: items.sort((a, b) => a.sched_start_time.localeCompare(b.sched_start_time)),
+      }));
+  }, [scheds]);
   const filteredSeatmaps = React.useMemo(() => {
     const query = seatmapQuery.trim().toLowerCase();
     if (!query) return seatmaps;
@@ -338,6 +352,7 @@ export function CreateShowForm() {
       ...prev,
       {
         id: `set-${uuidv4()}`,
+        set_name: `Set ${prev.length + 1}`,
         apply_to_all: true,
         sched_ids: [],
         filter_date: "",
@@ -489,7 +504,8 @@ export function CreateShowForm() {
         sched_start_time: sched.sched_start_time,
         sched_end_time: sched.sched_end_time,
       })),
-      category_sets: categorySets.map((setItem) => ({
+      category_sets: categorySets.map((setItem, index) => ({
+        set_name: setItem.set_name.trim() || `Set ${index + 1}`,
         apply_to_all: setItem.apply_to_all,
         sched_ids: setItem.sched_ids,
         categories: setItem.categories.map((category) => ({
@@ -738,50 +754,49 @@ export function CreateShowForm() {
               No schedules yet. Add at least one if you want predefined showtimes.
             </div>
           )}
-          {scheds.map((s) => (
-            <div
-              key={s.id}
-              className="grid gap-3 md:grid-cols-[1.2fr_1fr_1fr_auto] items-end rounded-lg border border-sidebar-border/60 p-3"
-            >
-              <div className="space-y-2">
-                <Label className="text-[11px] font-semibold text-muted-foreground">
-                  Date
-                </Label>
-                <Input
-                  type="date"
-                  value={s.sched_date}
-                  readOnly
-                />
+          {groupedScheds.map((group) => (
+            <div key={group.dateKey} className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                <CalendarDays className="h-4 w-4 text-primary" />
+                {formatDateLabel(group.dateKey)}
               </div>
               <div className="space-y-2">
-                <Label className="text-[11px] font-semibold text-muted-foreground">
-                  Starts
-                </Label>
-                <Input
-                  type="time"
-                  value={s.sched_start_time}
-                  readOnly
-                />
+                {group.items.map((s) => (
+                  <div
+                    key={s.id}
+                    className="grid gap-3 md:grid-cols-[1fr_1fr_auto] items-end rounded-lg border border-sidebar-border/60 p-3"
+                  >
+                    <div className="space-y-2">
+                      <Label className="text-[11px] font-semibold text-muted-foreground">
+                        Starts
+                      </Label>
+                      <Input
+                        type="time"
+                        value={s.sched_start_time}
+                        readOnly
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[11px] font-semibold text-muted-foreground">
+                        Ends
+                      </Label>
+                      <Input
+                        type="time"
+                        value={s.sched_end_time}
+                        readOnly
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive hover:bg-destructive/10"
+                      onClick={() => removeSched(s.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-2">
-                <Label className="text-[11px] font-semibold text-muted-foreground">
-                  Ends
-                </Label>
-                <Input
-                  type="time"
-                  value={s.sched_end_time}
-                  readOnly
-                />
-              </div>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 text-destructive hover:bg-destructive/10"
-                onClick={() => removeSched(s.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
             </div>
           ))}
         </CardContent>
@@ -891,11 +906,20 @@ export function CreateShowForm() {
               {categorySets.map((setItem, index) => (
                 <div key={setItem.id} className="rounded-lg border border-sidebar-border/60 p-4 space-y-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div>
+                    <div className="space-y-1 w-full">
                       <p className="text-sm font-semibold">Category Set {index + 1}</p>
                       <p className="text-xs text-muted-foreground">
                         Assign schedules, then add categories inside the set.
                       </p>
+                      <div className="space-y-2 max-w-xs">
+                        <Label className="text-[11px] font-semibold text-muted-foreground">Set Name</Label>
+                        <Input
+                          value={setItem.set_name}
+                          onChange={(e) => updateCategorySet(setItem.id, { set_name: e.target.value })}
+                          placeholder="e.g. Premiere Set"
+                          className="h-8 text-sm"
+                        />
+                      </div>
                     </div>
                     <Button
                       type="button"
@@ -977,7 +1001,7 @@ export function CreateShowForm() {
                               checked={setItem.sched_ids.includes(sched.id)}
                               onChange={() => toggleSetSched(setItem.id, sched.id)}
                             />
-                            {sched.sched_date} • {formatTime(sched.sched_start_time)}–{formatTime(sched.sched_end_time)}
+                            {formatDateLabel(sched.sched_date)} • {formatTime(sched.sched_start_time)}–{formatTime(sched.sched_end_time)}
                           </label>
                         ))}
                         {scheds.length === 0 && (
