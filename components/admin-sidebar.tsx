@@ -103,6 +103,7 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
     const user = useAppSelector((state: RootState) => state.auth.user);
     const { isMobile, setOpenMobile } = useSidebar();
     const pathname = usePathname();
+    const [isMounted, setIsMounted] = React.useState(false);
 
     useEffect(() => {
         if (isMobile) {
@@ -110,13 +111,17 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
         }
     }, [pathname, isMobile, setOpenMobile]);
 
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     return (
         <Sidebar collapsible="icon" {...props}>
             <SidebarHeader>
                 <TeamSwitcher teams={data.teams} logo="/logo.png" logoMini="/logo-mini.png" currentTeam="admin" />
             </SidebarHeader>
             <SidebarContent>
-                <NavMain items={data.navMain} openAll />
+                {isMounted && <NavMain items={data.navMain} openAll />}
             </SidebarContent>
             <SidebarFooter>
                 <NavUser user={user} />

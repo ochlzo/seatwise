@@ -40,13 +40,14 @@ export function SeatmapExportActions() {
 
     // Listen for PNG export completion from Canvas
     React.useEffect(() => {
-        const handleSuccess = (e: any) => {
-            if (e.detail?.type === "png") {
+        const handleSuccess = (e: Event) => {
+            const event = e as CustomEvent<{ type?: string }>;
+            if (event.detail?.type === "png") {
                 setProgress(100); // Complete the progress bar
             }
         };
-        window.addEventListener("seatmap-export-success" as any, handleSuccess);
-        return () => window.removeEventListener("seatmap-export-success" as any, handleSuccess);
+        window.addEventListener("seatmap-export-success", handleSuccess as EventListener);
+        return () => window.removeEventListener("seatmap-export-success", handleSuccess as EventListener);
     }, [dispatch]);
 
     const startImport = (file: File) => {

@@ -2,6 +2,9 @@
 
 import React from "react";
 import { Circle, Group, Line } from "react-konva";
+import type { KonvaEventObject } from "konva/lib/Node";
+import type { Node as KonvaNode } from "konva/lib/Node";
+import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
   selectNode,
@@ -18,7 +21,7 @@ import {
 import { GuidePathNode, SeatmapNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 
 type GuidePathLayerProps = {
-  stageRef?: React.RefObject<any>;
+  stageRef?: React.RefObject<KonvaStage>;
   snapLines: {
     x: number | null;
     y: number | null;
@@ -147,7 +150,7 @@ export default function GuidePathLayer({ stageRef, snapLines, onSnap, snapSpacin
     }
   };
 
-  const handleGuideDragMove = (guide: GuidePathNode, target: any) => {
+  const handleGuideDragMove = (guide: GuidePathNode, target: KonvaNode) => {
     const last = dragStateRef.current[guide.id];
     if (!last) return;
     let dx = target.x() - last.x;
@@ -158,7 +161,8 @@ export default function GuidePathLayer({ stageRef, snapLines, onSnap, snapSpacin
     const draggedBB = getNodeBoundingBox({
       type: "helper",
       helperType: "guidePath",
-      points: shiftedPoints
+      points: shiftedPoints,
+      position: { x: 0, y: 0 },
     });
 
     let bestSnapX: number | null = null;
@@ -209,7 +213,7 @@ export default function GuidePathLayer({ stageRef, snapLines, onSnap, snapSpacin
     }
   };
 
-  const handleGuideDragEnd = (guideId: string, target: any) => {
+  const handleGuideDragEnd = (guideId: string, target: KonvaNode) => {
     if (target) target.position({ x: 0, y: 0 });
 
     const latest = Object.values(nodes).find(
@@ -409,8 +413,12 @@ export default function GuidePathLayer({ stageRef, snapLines, onSnap, snapSpacin
                   y: e.target.y(),
                 };
               }}
-              onDragMove={(e) => handleGuideDragMove(guide, e.target)}
-              onDragEnd={(e) => handleGuideDragEnd(guide.id, e.target)}
+              onDragMove={(e: KonvaEventObject<DragEvent>) =>
+                handleGuideDragMove(guide, e.target)
+              }
+              onDragEnd={(e: KonvaEventObject<DragEvent>) =>
+                handleGuideDragEnd(guide.id, e.target)
+              }
             />
             {isSelected && selectionCount === 1 && (
               <>
