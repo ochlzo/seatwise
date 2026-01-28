@@ -26,6 +26,25 @@ export function SeatmapSaveTemplateButton() {
       toast.error("Seatmap name is required.");
       return;
     }
+
+    // Check if canvas is empty
+    if (Object.keys(seatmap.nodes).length === 0) {
+      toast.error("Cannot save an empty seatmap. Please add some seats or shapes first.");
+      return;
+    }
+
+    // Check for seats without seat numbers
+    const seats = Object.values(seatmap.nodes).filter((node) => node.type === "seat");
+    const seatsWithoutNumbers = seats.filter(
+      (seat) => seat.seatNumber === undefined || seat.seatNumber === null
+    );
+    if (seatsWithoutNumbers.length > 0) {
+      toast.error(
+        `${seatsWithoutNumbers.length} seat(s) don't have seat numbers assigned. Please assign seat numbers before saving.`
+      );
+      return;
+    }
+
     setIsSaving(true);
     setProgress(0);
 
@@ -61,8 +80,20 @@ export function SeatmapSaveTemplateButton() {
       dispatch(markSeatmapSaved());
     } catch (error: unknown) {
       console.error(error);
-      const message = error instanceof Error ? error.message : "Failed to save seatmap";
-      toast.error(message);
+
+      // Check for network errors
+      const isNetworkError =
+        !navigator.onLine ||
+        (error instanceof TypeError && error.message.toLowerCase().includes("fetch")) ||
+        (error instanceof Error && error.message.toLowerCase().includes("network"));
+
+      if (isNetworkError) {
+        toast.error("Network error. Please check your connection and try again.");
+      } else {
+        const message = error instanceof Error ? error.message : "Failed to save seatmap";
+        toast.error(message);
+      }
+
       setIsSaving(false);
       setProgress(0);
       return;
