@@ -20,29 +20,22 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import { LocateFixed, Move, MousePointer2, Lock, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { type SeatmapPreviewCategory, COLOR_CODE_TO_HEX } from "./CategoryAssignPanel";
 
-type SeatmapPreviewCategory = {
-  category_id: string;
-  name: string;
-  color_code: "NO_COLOR" | "GOLD" | "PINK" | "BLUE" | "BURGUNDY" | "GREEN";
-};
 
-const COLOR_CODE_TO_HEX: Record<SeatmapPreviewCategory["color_code"], string> = {
-  NO_COLOR: "transparent",
-  GOLD: "#ffd700",
-  PINK: "#e005b9",
-  BLUE: "#111184",
-  BURGUNDY: "#800020",
-  GREEN: "#046307",
-};
 
 type SeatmapPreviewProps = {
   seatmapId?: string;
   className?: string;
   heightClassName?: string;
-  categories?: SeatmapPreviewCategory[];
   allowMarqueeSelection?: boolean;
-  allowCategoryAssign?: boolean;
+  // Controlled selection props
+  selectedSeatIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
+  // Controlled category assignment props (maps seat ID -> category ID)
+  categories?: SeatmapPreviewCategory[];
+  seatCategories?: Record<string, string>;
+  onSeatCategoriesChange?: (categories: Record<string, string>) => void;
 };
 
 const MIN_SCALE = 0.4;
@@ -52,19 +45,43 @@ export function SeatmapPreview({
   seatmapId,
   className,
   heightClassName,
-  categories: _categories,
   allowMarqueeSelection = false,
-  allowCategoryAssign = false,
+  selectedSeatIds: controlledSelectedIds,
+  onSelectionChange,
+  categories = [],
+  seatCategories: controlledSeatCategories,
+  onSeatCategoriesChange,
 }: SeatmapPreviewProps) {
-  const categories = _categories ?? [];
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = React.useState<Record<string, SeatmapNode>>({});
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [dimensions, setDimensions] = React.useState({ width: 800, height: 400 });
   const [viewport, setViewport] = React.useState({ position: { x: 0, y: 0 }, scale: 1 });
-  const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
-  const [seatCategories, setSeatCategories] = React.useState<Record<string, SeatmapPreviewCategory["color_code"]>>({});
+
+  // Support both controlled and uncontrolled selection
+  const [internalSelectedIds, setInternalSelectedIds] = React.useState<string[]>([]);
+  const selectedSeatIds = controlledSelectedIds ?? internalSelectedIds;
+  const setSelectedSeatIds = React.useCallback((ids: string[] | ((prev: string[]) => string[])) => {
+    const nextIds = typeof ids === "function" ? ids(selectedSeatIds) : ids;
+    if (onSelectionChange) {
+      onSelectionChange(nextIds);
+    } else {
+      setInternalSelectedIds(nextIds);
+    }
+  }, [onSelectionChange, selectedSeatIds]);
+
+  // Support both controlled and uncontrolled category state (maps seat ID -> category ID)
+  const [internalSeatCategories, setInternalSeatCategories] = React.useState<Record<string, string>>({});
+  const seatCategories = controlledSeatCategories ?? internalSeatCategories;
+  const setSeatCategories = React.useCallback((update: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => {
+    const nextCategories = typeof update === "function" ? update(seatCategories) : update;
+    if (onSeatCategoriesChange) {
+      onSeatCategoriesChange(nextCategories);
+    } else {
+      setInternalSeatCategories(nextCategories);
+    }
+  }, [onSeatCategoriesChange, seatCategories]);
   const [isShiftDown, setIsShiftDown] = React.useState(false);
   const [isCtrlDown, setIsCtrlDown] = React.useState(false);
   const [mode, setMode] = React.useState<"select" | "pan">("select");
@@ -371,95 +388,6 @@ export function SeatmapPreview({
             <LocateFixed className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
           </Button>
         </div>
-        {allowCategoryAssign && selectedSeatIds.length > 0 && (
-          <div className="absolute right-3 top-3 z-10 w-52 rounded-lg border border-zinc-200 bg-white/95 p-3 text-xs shadow-lg backdrop-blur">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-zinc-700">Assign Category</span>
-              <span className="text-[10px] text-zinc-400">
-                {selectedSeatIds.length} seat{selectedSeatIds.length === 1 ? "" : "s"}
-              </span>
-            </div>
-            {categories.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-4 text-center text-zinc-500">
-                <span className="text-[11px]">Add categories first</span>
-              </div>
-            ) : (
-              (() => {
-                const selectedCategoryCodes = new Set(
-                  selectedSeatIds
-                    .map((id) => seatCategories[id])
-                    .filter((code): code is SeatmapPreviewCategory["color_code"] => Boolean(code))
-                );
-                const hasSelection = selectedCategoryCodes.size > 0;
-                return (
-                  <div className="flex flex-col gap-2">
-                    {categories.map((category) => {
-                      const isAssigned = selectedCategoryCodes.has(category.color_code);
-                      return (
-                        <button
-                          key={category.category_id}
-                          type="button"
-                          className={cn(
-                            "flex items-center gap-2 rounded-md border px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50",
-                            isAssigned
-                              ? "border-primary ring-1 ring-primary/40"
-                              : "border-zinc-200",
-                            !hasSelection && "border-zinc-200"
-                          )}
-                          onClick={() => {
-                            setSeatCategories((prev) => {
-                              const next = { ...prev };
-                              selectedSeatIds.forEach((id) => {
-                                next[id] = category.color_code;
-                              });
-                              return next;
-                            });
-                          }}
-                        >
-                          <span
-                            className={cn(
-                              "h-2.5 w-2.5 rounded-full border border-zinc-300",
-                              category.color_code === "NO_COLOR" && "bg-transparent"
-                            )}
-                            style={{
-                              backgroundColor:
-                                category.color_code === "NO_COLOR"
-                                  ? "transparent"
-                                  : COLOR_CODE_TO_HEX[category.color_code],
-                              backgroundImage:
-                                category.color_code === "NO_COLOR"
-                                  ? "linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent)"
-                                  : undefined,
-                              backgroundSize:
-                                category.color_code === "NO_COLOR" ? "6px 6px" : undefined,
-                            }}
-                          />
-                          <span className="truncate">{category.name || "Untitled"}</span>
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
-                      onClick={() => {
-                        setSeatCategories((prev) => {
-                          const next = { ...prev };
-                          selectedSeatIds.forEach((id) => {
-                            delete next[id];
-                          });
-                          return next;
-                        });
-                      }}
-                    >
-                      <span className="h-2.5 w-2.5 rounded-full border border-zinc-300 bg-transparent" />
-                      <span>Clear</span>
-                    </button>
-                  </div>
-                );
-              })()
-            )}
-          </div>
-        )}
         {!seatmapId && (
           <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             Select a seatmap to preview.
@@ -515,6 +443,7 @@ export function SeatmapPreview({
                 onSelectSeat={setSelectedSeatIds}
                 isShiftDown={isShiftDown}
                 isCtrlDown={isCtrlDown}
+                categories={categories}
                 seatCategories={seatCategories}
               />
               <ShapeNodes nodes={nodes} />
@@ -533,6 +462,7 @@ function SeatNodes({
   onSelectSeat,
   isShiftDown,
   isCtrlDown,
+  categories,
   seatCategories,
 }: {
   nodes: Record<string, SeatmapNode>;
@@ -540,7 +470,8 @@ function SeatNodes({
   onSelectSeat: (ids: string[]) => void;
   isShiftDown: boolean;
   isCtrlDown: boolean;
-  seatCategories: Record<string, SeatmapPreviewCategory["color_code"]>;
+  categories: SeatmapPreviewCategory[];
+  seatCategories: Record<string, string>;
 }) {
   const seats = Object.values(nodes).filter((node): node is SeatmapSeatNode => node.type === "seat");
   const [defaultImage] = useImage("/seat-default.svg");
@@ -550,12 +481,33 @@ function SeatNodes({
   const [burgundyImage] = useImage("/vip-seat-4.svg");
   const [greenImage] = useImage("/vip-seat-5.svg");
 
+  // Calculate contrasting text color based on background luminance
+  const getContrastingTextColor = (colorCode: SeatmapPreviewCategory["color_code"]) => {
+    const hex = COLOR_CODE_TO_HEX[colorCode];
+    if (!hex || hex === "transparent") return "#4b5563"; // Default gray for no color
+
+    // Parse hex to RGB
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+
+    // Calculate relative luminance (WCAG formula)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    // Use white text for dark backgrounds, dark text for light backgrounds
+    return luminance > 0.5 ? "#1f2937" : "#ffffff";
+  };
+
   return (
     <>
       {seats.map((seat) => {
         const label = `${seat.rowLabel ?? ""}${seat.seatNumber ?? ""}`;
         const isSelected = selectedSeatIds.includes(seat.id);
-        const colorCode = seatCategories[seat.id] ?? "NO_COLOR";
+        // Look up the category by ID to get the current color_code
+        const categoryId = seatCategories[seat.id];
+        const category = categoryId ? categories.find(c => c.category_id === categoryId) : null;
+        const colorCode = category?.color_code ?? "NO_COLOR";
+        const textColor = getContrastingTextColor(colorCode);
         const image =
           colorCode === "GOLD"
             ? goldImage
@@ -634,7 +586,7 @@ function SeatNodes({
                 rotation={-(seat.rotation ?? 0)}
                 fontSize={10}
                 fontStyle="bold"
-                fill="#4b5563"
+                fill={textColor}
                 align="center"
                 verticalAlign="middle"
                 listening={false}
