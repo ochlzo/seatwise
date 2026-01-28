@@ -184,7 +184,7 @@ export function getNodeBoundingBox(node: { type: string; position: { x: number; 
         };
     }
     if (node.type === "helper" && node.helperType === "guidePath") {
-        const pts = node.points;
+        const pts = node.points ?? [];
         let minX = Infinity,
             minY = Infinity,
             maxX = -Infinity,
