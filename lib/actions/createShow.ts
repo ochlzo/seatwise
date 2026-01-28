@@ -24,6 +24,7 @@ type CreateShowPayload = {
     sched_end_time: string;
   }>;
   category_sets?: Array<{
+    set_name: string;
     apply_to_all: boolean;
     sched_ids: string[];
     categories: Array<{
@@ -34,6 +35,7 @@ type CreateShowPayload = {
   }>;
   categories?: Array<{
     category_name: string;
+    price: string;
     price: string;
     color_code: ColorCodes;
     apply_to_all: boolean;
@@ -157,6 +159,7 @@ export async function createShowAction(data: CreateShowPayload) {
         category_sets.length > 0
           ? category_sets
           : categories.map((category) => ({
+              set_name: "Default Set",
               apply_to_all: category.apply_to_all,
               sched_ids: category.sched_ids,
               categories: [
@@ -218,30 +221,47 @@ export async function createShowAction(data: CreateShowPayload) {
           allCategories.map((category) => [category.category_name, category.seat_category_id])
         );
 
-        const setRows: Array<{
-          sched_id: string;
+        const categorySetItemRows: Array<{
+          category_set_id: string;
           seat_category_id: string;
         }> = [];
 
-        normalizedCategorySets.forEach((setItem) => {
+        for (let index = 0; index < normalizedCategorySets.length; index += 1) {
+          const setItem = normalizedCategorySets[index];
+          const setName = setItem.set_name?.trim() || `Set ${index + 1}`;
+          const createdSet = await tx.categorySet.create({
+            data: {
+              set_name: setName,
+              show_id: created.show_id,
+            },
+          });
+
           const targetSchedIds = setItem.apply_to_all
             ? Array.from(schedIdMap.values())
             : setItem.sched_ids.map((id) => schedIdMap.get(id)).filter(Boolean) as string[];
 
+          if (targetSchedIds.length > 0) {
+            await tx.sched.updateMany({
+              where: { sched_id: { in: targetSchedIds } },
+              data: { category_set_id: createdSet.category_set_id },
+            });
+          }
+
           setItem.categories.forEach((category) => {
             const seat_category_id = categoryIdByName.get(category.category_name);
             if (!seat_category_id) return;
-            targetSchedIds.forEach((sched_id) => {
-              setRows.push({
-                sched_id,
-                seat_category_id,
-              });
+            categorySetItemRows.push({
+              category_set_id: createdSet.category_set_id,
+              seat_category_id,
             });
           });
-        });
+        }
 
-        if (setRows.length > 0) {
-          await tx.set.createMany({ data: setRows, skipDuplicates: true });
+        if (categorySetItemRows.length > 0) {
+          await tx.categorySetItem.createMany({
+            data: categorySetItemRows,
+            skipDuplicates: true,
+          });
         }
       }
 
