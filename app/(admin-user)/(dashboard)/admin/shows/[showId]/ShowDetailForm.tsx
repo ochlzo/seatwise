@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { format } from "date-fns";
+
 import { CalendarIcon, MapPin, Ticket, Clock, Save, Loader2, Plus, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,58 @@ const STATUS_COLORS: Record<string, string> = {
     ON_GOING: "#F59E0B",
     CANCELLED: "#EF4444",
     POSTPONED: "#A855F7",
+};
+
+const MANILA_TZ = "Asia/Manila";
+
+const toManilaDateKey = (value: Date) => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: MANILA_TZ,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(value);
+    const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+    const month = parts.find((part) => part.type === "month")?.value ?? "00";
+    const day = parts.find((part) => part.type === "day")?.value ?? "00";
+    return `${year}-${month}-${day}`;
+};
+
+const formatManilaDate = (value: Date) =>
+    new Intl.DateTimeFormat("en-US", {
+        timeZone: MANILA_TZ,
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+    }).format(value);
+
+const formatManilaDateLong = (value: Date) =>
+    new Intl.DateTimeFormat("en-US", {
+        timeZone: MANILA_TZ,
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    }).format(value);
+
+const formatManilaTime = (value: Date) =>
+    new Intl.DateTimeFormat("en-US", {
+        timeZone: MANILA_TZ,
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+    }).format(value);
+
+const toDateValue = (value: string | Date) => {
+    if (value instanceof Date) return value;
+    if (value.includes("T")) return new Date(value);
+    return new Date(`${value}T00:00:00+08:00`);
+};
+
+const toTimeValue = (value: string | Date) => {
+    if (value instanceof Date) return value;
+    if (value.includes("T")) return new Date(value);
+    return new Date(`1970-01-01T${value}:00+08:00`);
 };
 
 type ShowDetail = {
@@ -166,7 +218,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
         const newEntries: SchedDraft[] = [];
         selectedDates.forEach((date) => {
-            const dateKey = format(date, "yyyy-MM-dd");
+        const dateKey = toManilaDateKey(date);
             validRanges.forEach((range) => {
                 newEntries.push({
                     sched_date: dateKey,
@@ -350,7 +402,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                 disabled={!isEditing}
                                             >
                                                 <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                                                {formData.show_start_date ? format(formData.show_start_date, "PPP") : <span>Pick a date</span>}
+                                                {formData.show_start_date ? formatManilaDate(formData.show_start_date) : <span>Pick a date</span>}
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0" align="start">
@@ -381,7 +433,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                 disabled={!isEditing}
                                             >
                                                 <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                                                {formData.show_end_date ? format(formData.show_end_date, "PPP") : <span>Pick a date</span>}
+                                                {formData.show_end_date ? formatManilaDate(formData.show_end_date) : <span>Pick a date</span>}
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-auto p-0" align="start">
@@ -469,9 +521,9 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         <CardContent className="space-y-6">
                             {Object.entries(
                                 [...(formData.scheds || [])]
-                                    .sort((a, b) => new Date(a.sched_date).getTime() - new Date(b.sched_date).getTime())
+                                    .sort((a, b) => toDateValue(a.sched_date).getTime() - toDateValue(b.sched_date).getTime())
                                     .reduce((acc, sched) => {
-                                        const dateKey = format(new Date(sched.sched_date), "yyyy-MM-dd");
+                                        const dateKey = toManilaDateKey(toDateValue(sched.sched_date));
                                         if (!acc[dateKey]) acc[dateKey] = [];
                                         acc[dateKey].push(sched);
                                         return acc;
@@ -480,11 +532,11 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                 <div key={dateKey} className="space-y-3">
                                     <h4 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
                                         <CalendarIcon className="w-4 h-4 text-primary" />
-                                        {format(new Date(dateKey), "EEEE, MMMM do, yyyy")}
+                                        {formatManilaDateLong(new Date(`${dateKey}T00:00:00+08:00`))}
                                     </h4>
                                     <div className="grid gap-3 sm:grid-cols-2">
                                         {scheds
-                                            .sort((a, b) => new Date(a.sched_start_time).getTime() - new Date(b.sched_start_time).getTime())
+                                            .sort((a, b) => toTimeValue(a.sched_start_time).getTime() - toTimeValue(b.sched_start_time).getTime())
                                             .map((sched, idx) => (
                                                 <div
                                                     key={sched.sched_id || `new-${idx}`}
@@ -492,9 +544,9 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                                 >
                                                     <div className="space-y-1">
                                                         <div className="text-sm font-medium flex items-center gap-2">
-                                                            {format(new Date(sched.sched_start_time), "h:mm a")}
+                                                            {formatManilaTime(toTimeValue(sched.sched_start_time))}
                                                             <span className="text-muted-foreground">-</span>
-                                                            {format(new Date(sched.sched_end_time), "h:mm a")}
+                                                            {formatManilaTime(toTimeValue(sched.sched_end_time))}
                                                         </div>
                                                     </div>
                                                     {isEditing && (
@@ -539,8 +591,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                 <span className="text-xs font-semibold text-muted-foreground">Total Days</span>
                                 <span className="font-black text-xl">
                                     {new Set(formData.scheds.map(s => {
-                                        const d = new Date(s.sched_date);
-                                        return `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+                                        const d = toDateValue(s.sched_date);
+                                        return toManilaDateKey(d);
                                     })).size}
                                 </span>
                             </div>
