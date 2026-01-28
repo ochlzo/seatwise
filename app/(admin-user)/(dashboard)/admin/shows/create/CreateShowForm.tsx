@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
+import { CategoryAssignPanel, type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
 
 const STATUS_OPTIONS = [
   "DRAFT",
@@ -126,6 +127,9 @@ export function CreateShowForm() {
     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
   ]);
   const [categorySets, setCategorySets] = React.useState<CategorySetDraft[]>([]);
+  const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
+  /** Maps seat ID -> category ID (not color_code) */
+  const [seatCategoryAssignments, setSeatCategoryAssignments] = React.useState<Record<string, string>>({});
   const unassignedSchedCount = React.useMemo(() => {
     if (scheds.length === 0) return 0;
     const used = new Set<string>();
@@ -683,7 +687,7 @@ export function CreateShowForm() {
                         show_start_date: toManilaDateKey(date),
                         show_end_date:
                           formData.show_end_date &&
-                          new Date(`${formData.show_end_date}T00:00:00+08:00`) < date
+                            new Date(`${formData.show_end_date}T00:00:00+08:00`) < date
                             ? ""
                             : formData.show_end_date,
                       });
@@ -915,18 +919,53 @@ export function CreateShowForm() {
             </div>
           </div>
 
-          <SeatmapPreview
-            seatmapId={formData.seatmap_id || undefined}
-            categories={categorySets.flatMap((setItem) =>
-              setItem.categories.map((category) => ({
-                category_id: category.id,
-                name: category.category_name,
-                color_code: category.color_code,
-              }))
-            )}
-            allowMarqueeSelection
-            allowCategoryAssign
-          />
+          <div className="relative">
+            <SeatmapPreview
+              seatmapId={formData.seatmap_id || undefined}
+              allowMarqueeSelection
+              selectedSeatIds={selectedSeatIds}
+              onSelectionChange={setSelectedSeatIds}
+              categories={categorySets.flatMap((setItem) =>
+                setItem.categories.map((category) => ({
+                  category_id: category.id,
+                  name: category.category_name,
+                  color_code: category.color_code,
+                }))
+              )}
+              seatCategories={seatCategoryAssignments}
+              onSeatCategoriesChange={setSeatCategoryAssignments}
+            />
+            <CategoryAssignPanel
+              className="absolute right-3 top-14 z-10"
+              selectedSeatIds={selectedSeatIds}
+              categories={categorySets.flatMap((setItem) =>
+                setItem.categories.map((category) => ({
+                  category_id: category.id,
+                  name: category.category_name,
+                  color_code: category.color_code,
+                }))
+              )}
+              seatCategories={seatCategoryAssignments}
+              onAssign={(seatIds, categoryId) => {
+                setSeatCategoryAssignments((prev) => {
+                  const next = { ...prev };
+                  seatIds.forEach((id) => {
+                    next[id] = categoryId;
+                  });
+                  return next;
+                });
+              }}
+              onClear={(seatIds) => {
+                setSeatCategoryAssignments((prev) => {
+                  const next = { ...prev };
+                  seatIds.forEach((id) => {
+                    delete next[id];
+                  });
+                  return next;
+                });
+              }}
+            />
+          </div>
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1311,8 +1350,8 @@ export function CreateShowForm() {
             </p>
           )}
           <Button onClick={handleSave} disabled={isSaving || !isFormValid} className="gap-2">
-          <Save className="h-4 w-4" />
-          {isSaving ? "Creating..." : "Create Show"}
+            <Save className="h-4 w-4" />
+            {isSaving ? "Creating..." : "Create Show"}
           </Button>
         </div>
       </div>

@@ -36,7 +36,6 @@ export function SeatmapPreviewModal({ seatmapId, seatmapName }: SeatmapPreviewMo
                     seatmapId={seatmapId}
                     heightClassName="h-[60vh]"
                     allowMarqueeSelection={false}
-                    allowCategoryAssign={false}
                 />
             </DialogContent>
         </Dialog>
