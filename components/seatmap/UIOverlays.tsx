@@ -4,12 +4,12 @@ import React from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
   setMode,
-  setViewport,
   setDrawShape,
   updateNodes,
   toggleZoomLock,
   fitView,
 } from "@/lib/features/seatmap/seatmapSlice";
+import Image from "next/image";
 import { LocateFixed, Move, MousePointer2, Pencil, Lock, Unlock, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -44,10 +44,12 @@ export function Sidebar() {
           }}
         >
           <div className="w-12 h-12 relative flex items-center justify-center">
-            <img
+            <Image
               src="/seat-default.svg"
               alt="Seat"
-              className="w-full h-full object-contain"
+              width={48}
+              height={48}
+              className="object-contain" // Removed w-full h-full as width/height are set, but object-contain is good
             />
           </div>
           <span className="text-sm font-medium">Standard Seat</span>
@@ -145,8 +147,6 @@ export function Sidebar() {
 export function Toolbar() {
   const dispatch = useAppDispatch();
   const mode = useAppSelector((state) => state.seatmap.mode);
-  const nodes = useAppSelector((state) => state.seatmap.nodes);
-  const viewportSize = useAppSelector((state) => state.seatmap.viewportSize);
   const zoomLocked = useAppSelector((state) => state.seatmap.zoomLocked);
 
   const isMobile = useIsMobile();

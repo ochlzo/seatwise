@@ -24,7 +24,7 @@ export async function verifyAdmin() {
     }
 
     return user;
-  } catch (error) {
+  } catch {
     redirect("/login");
   }
 }

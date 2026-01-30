@@ -1,8 +1,9 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useRef, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft, Plus, Loader2, ArrowLeft } from "lucide-react";
+import Image from "next/image";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { compressImage } from "@/lib/utils/image";
 // import { uploadCustomAvatarAction } from "@/lib/actions/uploadCustomAvatar";
@@ -33,11 +34,12 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
     const [showUploader, setShowUploader] = useState(false);
 
     useEffect(() => {
-        setMounted(true);
+        const timer = setTimeout(() => setMounted(true), 0);
         // Prevent scrolling on the body when the overlay is open
         document.body.style.overflow = "hidden";
         return () => {
             document.body.style.overflow = "unset";
+            clearTimeout(timer);
         };
     }, []);
 
@@ -45,16 +47,17 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
     useEffect(() => {
         let interval: NodeJS.Timeout;
         if (isSaving) {
-            setSaveProgress(0);
+            // Defer to avoid synchronous setState in effect
+            setTimeout(() => setSaveProgress(0), 0);
             interval = setInterval(() => {
                 setSaveProgress(prev => {
                     const increment = Math.max(0.2, (95 - prev) / 20); // Slower than compression
                     return Math.min(prev + increment, 95); // Stop at 95% until server finishes
                 });
             }, 100);
-        } else if (saveProgress > 0) {
-            // Server finished
-            setSaveProgress(100);
+        } else {
+            // Server finished, if we were saving, bump to 100
+            setTimeout(() => setSaveProgress(prev => prev > 0 ? 100 : 0), 0);
         }
         return () => clearInterval(interval);
     }, [isSaving]);
@@ -198,7 +201,7 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
                                             selected === avatar && !stagedBase64 ? "border-[#3b82f6] ring-4 ring-[#3b82f6]/20 scale-105" : "border-transparent"
                                         )}
                                     >
-                                        <img src={avatar} alt={`Avatar ${index}`} className="w-full h-full object-cover" />
+                                        <Image src={avatar} alt={`Avatar ${index}`} fill className="object-cover" />
                                     </button>
                                 ))}
                             </div>

@@ -8,10 +8,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
 import { cn, formatBytes, truncateText } from "@/lib/utils";
 
 interface UploadProgressProps {

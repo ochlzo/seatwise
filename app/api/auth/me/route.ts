@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { getUserByFirebaseUid, resolveAvatarUrl } from "@/lib/db/Users";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session")?.value;
 
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
         role: (user.role as string | null) ?? "USER",
       },
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ isAuthenticated: false }, { status: 401 });
   }
 }

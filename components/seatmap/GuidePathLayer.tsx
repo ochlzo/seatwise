@@ -15,10 +15,9 @@ import {
 import {
   closestPointOnPolyline,
   getNodeBoundingBox,
-  getNodesBoundingBox,
   getSnapResults
 } from "@/lib/seatmap/geometry";
-import { GuidePathNode, SeatmapNode, SeatmapSeatNode } from "@/lib/seatmap/types";
+import { GuidePathNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 
 type GuidePathLayerProps = {
   stageRef?: React.RefObject<KonvaStage>;
@@ -39,7 +38,7 @@ type GuidePathLayerProps = {
   snapSpacing: number;
 };
 
-export default function GuidePathLayer({ stageRef, snapLines, onSnap, snapSpacing }: GuidePathLayerProps) {
+export default function GuidePathLayer({ stageRef, onSnap, snapSpacing }: GuidePathLayerProps) {
   const dispatch = useAppDispatch();
   const nodes = useAppSelector((state) => state.seatmap.nodes);
   const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);

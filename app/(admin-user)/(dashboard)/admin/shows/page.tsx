@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, Ticket, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import Image from "next/image"
 
 const STATUS_COLORS: Record<string, string> = {
     UPCOMING: "#3B82F6",
@@ -27,6 +28,7 @@ const formatTime = (date: Date) => {
     }).toLowerCase().replace(':00', '').replace(' ', '');
 };
 
+type Show = Awaited<ReturnType<typeof getShows>>[number];
 
 export default async function ShowsPage({
     searchParams
@@ -93,11 +95,11 @@ export default async function ShowsPage({
                     </Card>
                 ) : (
                     <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                        {shows.map((show: any) => (
+                        {shows.map((show: Show) => (
                             <Card key={show.show_id} className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-sidebar-border">
                                 <div className="aspect-[16/9] bg-muted relative overflow-hidden">
                                     {show.show_image_key ? (
-                                        <img
+                                        <Image
                                             src={show.show_image_key}
                                             alt={show.show_name}
                                             className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
@@ -149,7 +151,7 @@ export default async function ShowsPage({
                                             <span className="text-xs text-muted-foreground font-semibold">Schedules</span>
                                             <span className="text-sm font-semibold line-clamp-1 text-primary/90">
                                                 {show.scheds.length > 0
-                                                    ? show.scheds.map((s: any) => `${formatTime(new Date(s.sched_start_time))} - ${formatTime(new Date(s.sched_end_time))}`).join(', ')
+                                                    ? show.scheds.map((s) => `${formatTime(new Date(s.sched_start_time))} - ${formatTime(new Date(s.sched_end_time))}`).join(', ')
                                                     : "None"}
                                             </span>
                                         </div>

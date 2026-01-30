@@ -28,7 +28,7 @@ export async function verifySession() {
         }
 
         return user;
-    } catch (error) {
+    } catch {
         redirect("/login");
     }
 }

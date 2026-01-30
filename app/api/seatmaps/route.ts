@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const seatmaps = await getActiveSeatmaps();
     return NextResponse.json({ seatmaps });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error fetching seatmaps:", error);
     return NextResponse.json(
       { error: "Failed to load seatmaps" },

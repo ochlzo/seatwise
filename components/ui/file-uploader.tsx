@@ -8,9 +8,9 @@ import Dropzone, {
   type FileRejection,
 } from "react-dropzone";
 
-import { cn, formatBytes, truncateText } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
+
 import { UploadProgress } from "@/components/ui/upload-progress";
 
 interface FileUploaderProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -169,15 +169,15 @@ export function FileUploader(props: FileUploaderProps) {
       if (!files) return;
       files.forEach((file) => {
         if ("preview" in file) {
-          URL.revokeObjectURL((file as any).preview);
+          URL.revokeObjectURL((file as File & { preview: string }).preview);
         }
       });
     };
-  }, []);
+  }, [files]);
 
   // Sync with value prop to support controlled mode/resetting
   React.useEffect(() => {
-    if (valueProp !== undefined && valueProp !== files) {
+    if (valueProp !== undefined) {
       setFiles(valueProp);
     }
   }, [valueProp]);
@@ -268,7 +268,7 @@ export function FileUploader(props: FileUploaderProps) {
                 </div>
                 <div className="space-y-px">
                   <p className="text-sm md:text-base font-medium text-muted-foreground">
-                    Drag 'n 'drop files here, or click to select files
+                    Drag &apos;n &apos;drop files here, or click to select files
                   </p>
                   <p className="text-xs md:text-sm text-muted-foreground/70">
                     You can upload
@@ -380,5 +380,5 @@ function FileCard({ file, onRemove, showRemoveButton = true }: FileCardProps) {
 }
 
 function isFileWithPreview(file: File): file is File & { preview: string } {
-  return "preview" in file && typeof (file as any).preview === "string";
+  return "preview" in file && typeof (file as File & { preview: string }).preview === "string";
 }

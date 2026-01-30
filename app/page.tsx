@@ -21,8 +21,9 @@ import { createPortal } from "react-dom";
 import ScrollReveal from "@/components/ui/scroll-reveal";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { useTheme } from "next-themes";
+import Image from "next/image";
 
-// @ts-ignore - types are not correctly resolved for this extension
+// @ts-expect-error - types are not correctly resolved for this extension
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib";
 import { useRouter } from "next/navigation";
 
@@ -107,7 +108,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
           isMobile: "(max-width: 767px)",
         },
         (context) => {
-          const { isDesktop } = context.conditions as any;
+          const { isDesktop } = context.conditions as { isDesktop: boolean; isMobile: boolean };
 
           // Configuration based on screen size
           const config = isDesktop
@@ -302,7 +303,8 @@ function FixedCanvasLayer() {
   const isDark = resolvedTheme === "dark";
 
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(timer);
   }, []);
 
   if (!mounted) return null;
@@ -311,11 +313,10 @@ function FixedCanvasLayer() {
     <div className="fixed inset-0 h-screen w-full z-[-10] bg-white dark:bg-zinc-950 pointer-events-none">
       {/* Radial overlay to make the center clear while blending edges */}
       <div
-        className={`absolute inset-0 z-[1] transition-opacity duration-1000 ${
-          isMobile
-            ? "bg-[radial-gradient(circle_at_center,_transparent_0%,_#f0f7ff_50%,_white_100%)] opacity-94 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_60%,_#0a0a0a_100%)]"
-            : "bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] opacity-70 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_70%,_#0a0a0a_100%)]"
-        }`}
+        className={`absolute inset-0 z-[1] transition-opacity duration-1000 ${isMobile
+          ? "bg-[radial-gradient(circle_at_center,_transparent_0%,_#f0f7ff_50%,_white_100%)] opacity-94 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_60%,_#0a0a0a_100%)]"
+          : "bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] opacity-70 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_70%,_#0a0a0a_100%)]"
+          }`}
       />
 
       {/* Mobile-only subtle blue "mist" for top and bottom to frame text */}
@@ -405,15 +406,19 @@ export default function Home() {
               View Events Now!
             </button>
             <div className="flex flex-row items-center gap-4 md:gap-8">
-              <img
+              <Image
                 src="/bu-logo.png"
                 alt="Bicol University Logo"
-                className="h-20 md:h-32 object-contain drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+                width={128}
+                height={128}
+                className="h-20 md:h-32 w-auto object-contain drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
               />
-              <img
+              <Image
                 src="/icon.png"
                 alt="BUCAL Logo"
-                className="h-20 md:h-32 object-contain drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
+                width={128}
+                height={128}
+                className="h-20 md:h-32 w-auto object-contain drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
               />
             </div>
           </div>

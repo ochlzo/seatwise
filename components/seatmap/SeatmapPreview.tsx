@@ -177,7 +177,7 @@ export function SeatmapPreview({
     setMarqueeRect((prev) => ({ ...prev, visible: false }));
     marqueeStartRef.current = null;
     setSeatCategories({});
-  }, [nodes, dimensions]);
+  }, [nodes, dimensions, setSeatCategories, setSelectedSeatIds]);
 
   const handleWheel = (e: { evt: WheelEvent; target: { getStage: () => KonvaStage | null } }) => {
     e.evt.preventDefault();

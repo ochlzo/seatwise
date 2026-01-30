@@ -36,6 +36,7 @@ import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import type { ShowStatus } from "@prisma/client";
+import Image from "next/image";
 
 const STATUS_COLORS: Record<string, string> = {
     UPCOMING: "#3B82F6",
@@ -218,7 +219,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
         const newEntries: SchedDraft[] = [];
         selectedDates.forEach((date) => {
-        const dateKey = toManilaDateKey(date);
+            const dateKey = toManilaDateKey(date);
             validRanges.forEach((range) => {
                 newEntries.push({
                     sched_date: dateKey,
@@ -253,7 +254,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             } else {
                 toast.error(result.error || "Failed to update show");
             }
-        } catch (error) {
+        } catch {
             toast.error("An unexpected error occurred");
         } finally {
             setIsSaving(false);
@@ -265,7 +266,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             {/* 1. Banner Section */}
             <div className="relative aspect-[21/9] md:aspect-[3/1] bg-muted overflow-hidden rounded-xl border border-sidebar-border shadow-2xl">
                 {show.show_image_key ? (
-                    <img
+                    <Image
                         src={show.show_image_key}
                         alt={formData.show_name}
                         className="w-full h-full object-cover"

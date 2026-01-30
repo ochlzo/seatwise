@@ -7,11 +7,10 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-    DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldCheck, Sparkles, X } from "lucide-react";
+import { ShieldCheck, Sparkles } from "lucide-react";
 
 export function WelcomeAdminDialog() {
     const [isOpen, setIsOpen] = React.useState(false);

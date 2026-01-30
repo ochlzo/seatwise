@@ -51,7 +51,7 @@ export function ComingSoonClient() {
                 </h1>
 
                 <p className="text-muted-foreground text-lg mb-8 max-w-sm mx-auto font-medium">
-                    We're currently building this feature to give you the best experience. Stay tuned!
+                    We&apos;re currently building this feature to give you the best experience. Stay tuned!
                 </p>
 
                 <div className="flex flex-col items-center gap-4">
