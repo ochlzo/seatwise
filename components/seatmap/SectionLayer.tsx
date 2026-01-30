@@ -4,7 +4,6 @@ import React from "react";
 import { Rect, Circle, RegularPolygon, Line, Group, Transformer, Text } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Node as KonvaNode } from "konva/lib/Node";
-import type { Group as KonvaGroup } from "konva/lib/Group";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
@@ -97,14 +96,14 @@ const ShapeItem = React.memo(({
     }) => void;
     snapSpacing: number;
 }) => {
-    const shapeRef = React.useRef<KonvaGroup | KonvaNode | null>(null);
+    const shapeNodeRef = React.useRef<KonvaNode | null>(null);
     const transformerRef = React.useRef<KonvaTransformer | null>(null);
     const rafRef = React.useRef<number | null>(null);
     const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
 
     React.useEffect(() => {
-        if (isSelected && transformerRef.current && shapeRef.current) {
-            transformerRef.current.nodes([shapeRef.current]);
+        if (isSelected && transformerRef.current && shapeNodeRef.current) {
+            transformerRef.current.nodes([shapeNodeRef.current]);
             transformerRef.current.getLayer()?.batchDraw();
         }
     }, [isSelected]);
@@ -117,17 +116,17 @@ const ShapeItem = React.memo(({
     };
 
     const applyTransform = (evt?: Event, history?: boolean) => {
-        if (!shapeRef.current) return;
-        let rotation = shapeRef.current.rotation();
+        if (!shapeNodeRef.current) return;
+        let rotation = shapeNodeRef.current.rotation();
         const shiftKey = (evt && "shiftKey" in evt ? (evt as MouseEvent).shiftKey : false) || isShiftDown;
         if (shiftKey) {
             rotation = Math.round(rotation / ROTATION_SNAP) * ROTATION_SNAP;
-            shapeRef.current.rotation(rotation);
+            shapeNodeRef.current.rotation(rotation);
         }
-        const scaleX = shapeRef.current.scaleX();
-        const scaleY = shape.shape === "text" ? scaleX : shapeRef.current.scaleY();
+        const scaleX = shapeNodeRef.current.scaleX();
+        const scaleY = shape.shape === "text" ? scaleX : shapeNodeRef.current.scaleY();
         if (shape.shape === "text") {
-            shapeRef.current.scaleY(scaleY);
+            shapeNodeRef.current.scaleY(scaleY);
         }
         rotation = ((rotation % 360) + 360) % 360;
         onChange(shape.id, { rotation, scaleX, scaleY }, history);
@@ -297,7 +296,9 @@ const ShapeItem = React.memo(({
             return (
                 <>
                     <Group
-                        ref={shapeRef as any}
+                        ref={(node) => {
+                            shapeNodeRef.current = node;
+                        }}
                         {...commonProps}
                         offsetX={width / 2}
                         offsetY={height / 2}
@@ -351,7 +352,17 @@ const ShapeItem = React.memo(({
         case "rect":
             return (
                 <>
-                    <Rect ref={shapeRef as any} {...commonProps} width={shape.width || 50} height={shape.height || 50} offsetX={(shape.width || 50) / 2} offsetY={(shape.height || 50) / 2} cornerRadius={4} />
+                    <Rect
+                        ref={(node) => {
+                            shapeNodeRef.current = node;
+                        }}
+                        {...commonProps}
+                        width={shape.width || 50}
+                        height={shape.height || 50}
+                        offsetX={(shape.width || 50) / 2}
+                        offsetY={(shape.height || 50) / 2}
+                        cornerRadius={4}
+                    />
                     {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
@@ -377,7 +388,13 @@ const ShapeItem = React.memo(({
         case "circle":
             return (
                 <>
-                    <Circle ref={shapeRef as any} {...commonProps} radius={shape.radius || 30} />
+                    <Circle
+                        ref={(node) => {
+                            shapeNodeRef.current = node;
+                        }}
+                        {...commonProps}
+                        radius={shape.radius || 30}
+                    />
                     {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
@@ -403,7 +420,14 @@ const ShapeItem = React.memo(({
         case "polygon":
             return (
                 <>
-                    <RegularPolygon ref={shapeRef as any} {...commonProps} sides={shape.sides || 6} radius={shape.radius || 30} />
+                    <RegularPolygon
+                        ref={(node) => {
+                            shapeNodeRef.current = node;
+                        }}
+                        {...commonProps}
+                        sides={shape.sides || 6}
+                        radius={shape.radius || 30}
+                    />
                     {isSelected && selectionCount === 1 && (
                         <Transformer
                             ref={transformerRef}
@@ -492,7 +516,9 @@ const ShapeItem = React.memo(({
             return (
                 <>
                     <Line
-                        ref={shapeRef as any}
+                        ref={(node) => {
+                            shapeNodeRef.current = node;
+                        }}
                         {...commonProps}
                         x={shape.position.x + centerX}
                         y={shape.position.y + centerY}
@@ -579,7 +605,14 @@ const ShapeItem = React.memo(({
 
             return (
                 <>
-                    <Group ref={shapeRef as any} {...commonProps} offsetX={w / 2} offsetY={h / 2}>
+                    <Group
+                        ref={(node) => {
+                            shapeNodeRef.current = node;
+                        }}
+                        {...commonProps}
+                        offsetX={w / 2}
+                        offsetY={h / 2}
+                    >
                         {/* Bounding box / Background */}
                         <Rect width={w} height={h} stroke={commonProps.stroke} strokeWidth={commonProps.strokeWidth} fill={shape.fill} cornerRadius={2} />
 
@@ -626,6 +659,8 @@ const ShapeItem = React.memo(({
         prev.isShiftDown === next.isShiftDown
     );
 });
+
+ShapeItem.displayName = "ShapeItem";
 
 export default function SectionLayer({
     onNodeDragStart,
