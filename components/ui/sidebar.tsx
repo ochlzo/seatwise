@@ -600,6 +600,8 @@ function SidebarMenuBadge({
   )
 }
 
+const widths = ["58%", "72%", "64%", "80%", "69%"] as const
+
 function SidebarMenuSkeleton({
   className,
   showIcon = false,
@@ -608,11 +610,10 @@ function SidebarMenuSkeleton({
   showIcon?: boolean
 }) {
   // Deterministic widths to keep rendering pure.
-  const widths = ["58%", "72%", "64%", "80%", "69%"] as const
   const width = React.useMemo(() => {
     const base =
-      typeof (props as any)["data-slot"] === "string"
-        ? (props as any)["data-slot"]
+      typeof (props as { "data-slot"?: string })["data-slot"] === "string"
+        ? (props as { "data-slot"?: string })["data-slot"]
         : "sidebar-menu-skeleton"
     const suffix = typeof className === "string" ? className : ""
     const key = `${base}:${suffix}`

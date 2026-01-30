@@ -7,7 +7,6 @@ import {
   Layer,
   Rect,
   Text,
-  Group,
   Circle,
   RegularPolygon,
   Line,
@@ -23,9 +22,7 @@ import {
   setViewport,
   addSeat,
   addShape,
-  selectNode,
   deselectAll,
-  updateNode,
   updateNodes,
   rotateSelected,
   scaleSelected,
@@ -48,13 +45,13 @@ import type { SeatmapNode, SeatmapShapeNode } from "@/lib/seatmap/types";
 
 export default function SeatmapCanvas() {
   const dispatch = useAppDispatch();
-  const { viewport, mode, drawShape, selectedIds, nodes, showGrid, zoomLocked, showGuidePaths, snapSpacing } = useAppSelector(
+  const { viewport, mode, drawShape, selectedIds, nodes, showGrid, zoomLocked, snapSpacing } = useAppSelector(
     (state) => state.seatmap,
   );
   const stageRef = useRef<KonvaStage | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const transformerRef = useRef<KonvaTransformer | null>(null);
-  const [isDraggingNode, setIsDraggingNode] = React.useState(false);
+
   const [isRightPanning, setIsRightPanning] = React.useState(false);
   const [isShiftDown, setIsShiftDown] = React.useState(false);
   const [isCtrlDown, setIsCtrlDown] = React.useState(false);
@@ -236,7 +233,7 @@ export default function SeatmapCanvas() {
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("seatmap-export-png", handleExportPng as EventListener);
     };
-  }, []);
+  }, [dispatch, nodes]);
 
   useEffect(() => {
     dispatch(setViewportSize(dimensions));
@@ -268,7 +265,7 @@ export default function SeatmapCanvas() {
 
     transformer.nodes(selectedNodes as KonvaNode[]);
     transformer.getLayer()?.batchDraw();
-  }, [selectedIds]);
+  }, [selectedIds, nodes]);
 
   const commitGroupTransform = (history: boolean) => {
     const transformer = transformerRef.current;
@@ -725,7 +722,7 @@ export default function SeatmapCanvas() {
     });
   };
 
-  const handleMouseMove = (e: KonvaEventObject<MouseEvent>) => {
+  const handleMouseMove = () => {
     const stage = stageRef.current;
     if (!stage) return;
     const pos = getRelativePointerPosition(stage);
@@ -1080,9 +1077,8 @@ export default function SeatmapCanvas() {
 
           <SectionLayer
             stageRef={stageRef as React.RefObject<KonvaStage>}
-            onNodeDragStart={() => setIsDraggingNode(true)}
+            onNodeDragStart={() => { }}
             onNodeDragEnd={() => {
-              setIsDraggingNode(false);
               setSnapLines({ x: null, y: null });
             }}
             onSnap={setSnapLines}
@@ -1093,9 +1089,8 @@ export default function SeatmapCanvas() {
 
           <SeatLayer
             stageRef={stageRef as React.RefObject<KonvaStage>}
-            onNodeDragStart={() => setIsDraggingNode(true)}
+            onNodeDragStart={() => { }}
             onNodeDragEnd={() => {
-              setIsDraggingNode(false);
               setSnapLines({ x: null, y: null });
             }}
             onSnap={setSnapLines}

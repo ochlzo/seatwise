@@ -213,7 +213,7 @@ export default function ProfilePage() {
           setFieldErrors(prev => ({ ...prev, username: errorMessage }));
         }
       }
-    } catch (err) {
+    } catch {
       // For unexpected errors, show on username field
       setFieldErrors(prev => ({ ...prev, username: "An unexpected error occurred." }));
     } finally {

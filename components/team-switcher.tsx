@@ -4,6 +4,7 @@ import * as React from "react"
 
 import { ChevronsUpDown } from "lucide-react"
 import { useRouter } from "next/navigation"
+import Image from "next/image";
 
 import { cn } from "@/lib/utils"
 
@@ -12,7 +13,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -33,7 +33,7 @@ export function TeamSwitcher({
 }: {
   teams: {
     name: string
-    logo: any
+    logo: React.ComponentType<{ className?: string }>
     plan: string
   }[]
   logo?: string
@@ -76,16 +76,18 @@ export function TeamSwitcher({
           state === "collapsed" && "justify-center"
         )}
       >
-        <img
-          src={state === "collapsed" ? logoMini : logo}
-          alt="Seatwise"
-          className={cn(
-            state === "collapsed"
-              ? "size-9 object-contain"
-              : "h-11 w-auto max-w-full object-contain",
-            isMobile && "mx-auto"
-          )}
-        />
+        <div className={cn(
+          "relative",
+          state === "collapsed" ? "size-9" : "h-11 w-full",
+          isMobile && "mx-auto"
+        )}>
+          <Image
+            src={state === "collapsed" ? logoMini : logo}
+            alt="Seatwise"
+            fill
+            className="object-contain"
+          />
+        </div>
       </div>
       {isAdmin && state !== "collapsed" && <ChevronsUpDown className="ml-auto size-4 shrink-0" />}
     </SidebarMenuButton>
@@ -108,7 +110,7 @@ export function TeamSwitcher({
               <DropdownMenuLabel className="text-muted-foreground text-xs">
                 User Mode
               </DropdownMenuLabel>
-              {teams.map((team, index) => {
+              {teams.map((team) => {
                 const Logo = team.logo
                 return (
                   <DropdownMenuItem

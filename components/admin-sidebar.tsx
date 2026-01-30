@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import {
-    BookOpen,
     Settings2,
     Theater,
     Armchair,
@@ -11,7 +10,7 @@ import {
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
+
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import {
@@ -112,7 +111,8 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
     }, [pathname, isMobile, setOpenMobile]);
 
     useEffect(() => {
-        setIsMounted(true);
+        const timer = setTimeout(() => setIsMounted(true), 0);
+        return () => clearTimeout(timer);
     }, []);
 
     return (

@@ -2,6 +2,7 @@
 
 import { useAppSelector } from "@/lib/hooks";
 import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 
 export default function LoadingScreen() {
   const isLoading = useAppSelector((state) => state.loading.isLoading);
@@ -16,7 +17,7 @@ export default function LoadingScreen() {
           transition={{ duration: 0.3 }}
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-white"
         >
-          <img
+          <Image
             src="/seatwise-loading-screen.gif"
             alt="Loading..."
             className="max-h-full max-w-full"

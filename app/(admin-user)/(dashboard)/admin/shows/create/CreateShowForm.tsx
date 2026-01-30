@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/select";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+// import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const STATUS_OPTIONS = [
   "DRAFT",
@@ -340,7 +340,7 @@ export function CreateShowForm() {
       missing.push("Category name/price");
     }
     return missing;
-  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets]);
+  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets, unassignedSchedCount]);
 
   const isFormValid =
     missingFields.length === 0 &&

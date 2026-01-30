@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Loader2, Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -148,11 +149,12 @@ export function LoginForm({
         await resetPassword(email);
         setResetEmailSent(true);
         setValidationError(null);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Reset password failed:", error);
-        if (error.code === "auth/user-not-found") {
+        const code = (error as { code?: string })?.code || "";
+        if (code === "auth/user-not-found") {
           setValidationError("No user found with that email address.");
-        } else if (error.code === "auth/invalid-email") {
+        } else if (code === "auth/invalid-email") {
           setValidationError("Invalid email address.");
         } else {
           setValidationError(
@@ -192,8 +194,8 @@ export function LoginForm({
         if (auth.currentUser && isPasswordRequired) {
           try {
             await updatePassword(auth.currentUser, password);
-          } catch (error: any) {
-            if (error?.code === "auth/requires-recent-login") {
+          } catch (error: unknown) {
+            if ((error as { code?: string })?.code === "auth/requires-recent-login") {
               const provider = new GoogleAuthProvider();
               await reauthenticateWithPopup(auth.currentUser, provider);
               await updatePassword(auth.currentUser, password);
@@ -225,7 +227,7 @@ export function LoginForm({
         const serverUser = data.user;
 
         user = {
-          uid: serverUser?.uid || auth.currentUser?.uid!,
+          uid: serverUser?.uid || auth.currentUser?.uid || "",
           email: (serverUser?.email || auth.currentUser?.email) ?? null,
           displayName:
             (serverUser?.displayName || auth.currentUser?.displayName) ?? null,
@@ -255,7 +257,22 @@ export function LoginForm({
         user = await signInWithEmail(email, password);
       }
 
-      if (!user.username) {
+      const currentUid = user.uid || (auth.currentUser ? auth.currentUser.uid : null);
+      if (!currentUid) throw new Error("User UID not found");
+
+      const safeUser = {
+        uid: currentUid,
+        email: user.email,
+        displayName: user.displayName,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        photoURL: user.photoURL,
+        role: user.role,
+        username: user.username,
+        hasPassword: user.hasPassword
+      };
+
+      if (!safeUser.username) {
         setIsGoogleSetup(true);
         setSetupStep(1); // Start at step 1
         setIsPasswordRequired(false);
@@ -276,24 +293,24 @@ export function LoginForm({
       } else {
         dispatch(setUser(user));
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Login/Setup failed:", error);
 
-      const errorMessage = error.message || "";
+      const errorMessage = (error as Error).message || "";
       if (errorMessage.includes("Username is already taken")) {
         setUsernameTaken(true);
       } else if (
-        error?.code === "auth/invalid-credential" ||
-        error?.code === "auth/user-not-found" ||
-        error?.code === "auth/wrong-password"
+        (error as { code?: string })?.code === "auth/invalid-credential" ||
+        (error as { code?: string })?.code === "auth/user-not-found" ||
+        (error as { code?: string })?.code === "auth/wrong-password"
       ) {
         setValidationError("Invalid email or password.");
-      } else if (error?.code === "auth/email-already-in-use") {
+      } else if ((error as { code?: string })?.code === "auth/email-already-in-use") {
         setValidationError("Email is already in use.");
-      } else if (error?.code === "auth/requires-recent-login") {
+      } else if ((error as { code?: string })?.code === "auth/requires-recent-login") {
         setValidationError("Please login again to set a password.");
       } else {
-        setValidationError(error.message || "An error occurred.");
+        setValidationError((error as Error).message || "An error occurred.");
       }
       onLoginError?.();
     } finally {
@@ -341,11 +358,12 @@ export function LoginForm({
 
   const ImageSection = (
     <div className="bg-muted relative hidden md:block">
-      <img
+      <Image
         src={imageSrc || "/placeholder.svg"}
         alt=""
-        aria-hidden="true"
-        className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.2] dark:grayscale"
+        fill
+        className="absolute inset-0 object-cover dark:brightness-[0.2] dark:grayscale"
+        priority
       />
     </div>
   );
@@ -470,9 +488,11 @@ export function LoginForm({
                     ) : (
                       <div className="flex flex-col items-center text-center space-y-4">
                         <div className="rounded-full bg-green-100 p-3">
-                          <img
+                          <Image
                             src="/check.png"
                             alt="Success"
+                            width={40}
+                            height={40}
                             className="w-10 h-10"
                           />
                         </div>
