@@ -4,27 +4,33 @@ import React from "react";
 import {
   Image as KonvaImage,
   Group,
-  Rect,
+  // Rect,
   Transformer,
   Text,
 } from "react-konva";
 import useImage from "use-image";
+import type { KonvaEventObject } from "konva/lib/Node";
+import type { Node as KonvaNode } from "konva/lib/Node";
+import type { Group as KonvaGroup } from "konva/lib/Group";
+import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
+import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
 import {
   selectNode,
   toggleSelectNode,
   updateNode,
   updateNodesPositions,
-  updateNodes,
+  // updateNodes,
 } from "@/lib/features/seatmap/seatmapSlice";
 import {
-  closestPointOnPolyline,
+  // closestPointOnPolyline,
   getNodeBoundingBox,
   getNodesBoundingBox,
   getSnapResults,
 } from "@/lib/seatmap/geometry";
-import {
+import type {
   GuidePathNode,
+  SeatCategory,
   SeatmapNode,
   SeatmapSeatNode,
 } from "@/lib/seatmap/types";
@@ -41,6 +47,39 @@ const COLOR_TO_SVG: Record<string, string> = {
   "#046307": "/vip-seat-5.svg",
 };
 
+type SeatItemProps = {
+  seat: SeatmapSeatNode;
+  isSelected: boolean;
+  onSelect: (
+    id: string,
+    evt?: KonvaEventObject<MouseEvent | TouchEvent>,
+  ) => void;
+  onChange: (
+    id: string,
+    changes: Partial<SeatmapSeatNode>,
+    history?: boolean,
+  ) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  isShiftDown: boolean;
+  onMultiDragStart?: (id: string, pos: { x: number; y: number }) => boolean;
+  onMultiDragMove?: (id: string, pos: { x: number; y: number }) => boolean;
+  onMultiDragEnd?: (id: string, pos: { x: number; y: number }) => boolean;
+  showGuidePaths: boolean;
+  guidePaths: GuidePathNode[];
+  onSnap: (lines: {
+    x: number | null;
+    y: number | null;
+    isSpacingX?: boolean;
+    isSpacingY?: boolean;
+    spacingValue?: number;
+  }) => void;
+  nodes: Record<string, SeatmapNode>;
+  selectionCount: number;
+  snapSpacing: number;
+  categories: SeatCategory[];
+};
+
 const SeatItem = React.memo(
   ({
     seat,
@@ -53,18 +92,18 @@ const SeatItem = React.memo(
     onMultiDragStart,
     onMultiDragMove,
     onMultiDragEnd,
-    showGuidePaths,
-    guidePaths,
+    // showGuidePaths,
+    // guidePaths,
     onSnap,
     nodes,
     selectionCount,
     snapSpacing,
     categories,
-  }: any) => {
+  }: SeatItemProps) => {
     let imageUrl = "/seat-default.svg";
 
     if (seat.categoryId) {
-      const category = categories.find((c: any) => c.id === seat.categoryId);
+      const category = categories.find((c) => c.id === seat.categoryId);
       if (category && COLOR_TO_SVG[category.color]) {
         imageUrl = COLOR_TO_SVG[category.color];
       }
@@ -73,7 +112,7 @@ const SeatItem = React.memo(
     const label = `${seat.rowLabel ?? ""}${seat.seatNumber ?? ""}`;
     const getLabelColor = () => {
       if (!seat.categoryId) return "#4b5563"; // gray-600
-      const category = categories.find((c: any) => c.id === seat.categoryId);
+      const category = categories.find((c) => c.id === seat.categoryId);
       if (!category) return "#4b5563";
       if (category.color === "#ffd700") return "#000000"; // Gold gets black
       if (category.color === "transparent") return "#4b5563"; // Use default for Regular
@@ -81,8 +120,8 @@ const SeatItem = React.memo(
     };
 
     const [image] = useImage(imageUrl);
-    const groupRef = React.useRef<any>(null);
-    const transformerRef = React.useRef<any>(null);
+    const groupRef = React.useRef<KonvaGroup | null>(null);
+    const transformerRef = React.useRef<KonvaTransformer | null>(null);
     const rafRef = React.useRef<number | null>(null);
     const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
 
@@ -109,7 +148,9 @@ const SeatItem = React.memo(
     const applyTransform = (evt?: Event, history?: boolean) => {
       if (!groupRef.current) return;
       let rotation = groupRef.current.rotation();
-      const shiftKey = (evt as any)?.shiftKey || isShiftDown;
+      const shiftKey =
+        (evt && "shiftKey" in evt ? (evt as MouseEvent).shiftKey : false) ||
+        isShiftDown;
       if (shiftKey) {
         rotation = Math.round(rotation / ROTATION_SNAP) * ROTATION_SNAP;
         groupRef.current.rotation(rotation);
@@ -131,7 +172,7 @@ const SeatItem = React.memo(
           height={32}
           offsetX={16}
           offsetY={16}
-          rotation={seat.rotation}
+          rotation={seat.rotation ?? 0}
           scaleX={seat.scaleX}
           scaleY={seat.scaleY}
           draggable={isSelected}
@@ -289,7 +330,7 @@ const SeatItem = React.memo(
               height={32}
               offsetX={16}
               offsetY={16}
-              rotation={-seat.rotation}
+                        rotation={-(seat.rotation ?? 0)}
               fontSize={10}
               fontStyle="bold"
               fill={getLabelColor()}
@@ -335,6 +376,8 @@ const SeatItem = React.memo(
   },
 );
 
+SeatItem.displayName = "SeatItem";
+
 export default function SeatLayer({
   onNodeDragStart,
   onNodeDragEnd,
@@ -344,7 +387,7 @@ export default function SeatLayer({
 }: {
   onNodeDragStart?: () => void;
   onNodeDragEnd?: () => void;
-  stageRef?: React.RefObject<any>;
+  stageRef?: React.RefObject<KonvaStage>;
   onSnap: (lines: {
     x: number | null;
     y: number | null;
@@ -395,21 +438,21 @@ export default function SeatLayer({
       node.type === "helper" && node.helperType === "guidePath",
   );
 
-  const multiDragKonvaNodesRef = React.useRef<Record<string, any>>({});
+  const multiDragKonvaNodesRef = React.useRef<Record<string, KonvaNode>>({});
 
-  const beginMultiDrag = (id: string) => {
+  const beginMultiDrag = (id: string, pos: { x: number; y: number }) => {
     if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
     const startPositions: Record<string, { x: number; y: number }> = {};
-    const konvaNodes: Record<string, any> = {};
+    const konvaNodes: Record<string, KonvaNode> = {};
     const stage = stageRef?.current;
 
     selectedIds.forEach((selectedId) => {
       const node = nodes[selectedId];
       if (!node || node.type !== "seat") return;
-      startPositions[selectedId] = {
-        x: node.position.x,
-        y: node.position.y,
-      };
+      startPositions[selectedId] =
+        selectedId === id
+          ? { x: pos.x, y: pos.y }
+          : { x: node.position.x, y: node.position.y };
       if (stage) {
         const konvaNode = stage.findOne(`#${selectedId}`);
         if (konvaNode) {
@@ -548,7 +591,10 @@ export default function SeatLayer({
           key={seat.id}
           seat={seat}
           isSelected={selectedIds.includes(seat.id)}
-          onSelect={(id: string, evt?: any) => {
+          onSelect={(
+            id: string,
+            evt?: KonvaEventObject<MouseEvent | TouchEvent>,
+          ) => {
             const additive =
               evt?.evt?.shiftKey ||
               evt?.evt?.ctrlKey ||
@@ -560,13 +606,17 @@ export default function SeatLayer({
             }
             dispatch(selectNode(id));
           }}
-          onChange={(id: string, changes: any, history?: boolean) =>
-            dispatch(updateNode({ id, changes, history }))
-          }
+          onChange={(
+            id: string,
+            changes: Partial<SeatmapSeatNode>,
+            history?: boolean,
+          ) => dispatch(updateNode({ id, changes, history }))}
           onDragStart={onNodeDragStart}
           onDragEnd={onNodeDragEnd}
           isShiftDown={isShiftDown}
-          onMultiDragStart={(id: string) => beginMultiDrag(id)}
+        onMultiDragStart={(id: string, pos: { x: number; y: number }) =>
+          beginMultiDrag(id, pos)
+        }
           onMultiDragMove={(id: string, pos: { x: number; y: number }) =>
             updateMultiDrag(id, pos)
           }
