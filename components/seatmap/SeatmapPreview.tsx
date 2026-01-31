@@ -80,6 +80,7 @@ export function SeatmapPreview({
   const [internalSeatCategories, setInternalSeatCategories] = React.useState<Record<string, string>>({});
   const seatCategories = controlledSeatCategories ?? internalSeatCategories;
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const setSeatCategories = React.useCallback((update: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => {
     if (onSeatCategoriesChange) {
       const nextCategories = typeof update === "function" ? update(seatCategories) : update;

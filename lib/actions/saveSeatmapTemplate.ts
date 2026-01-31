@@ -73,6 +73,50 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
 
     const { seatmap_name, seatmap_json, seatmap_id } = payload;
 
+    // Check if updating an existing seatmap that has active seat assignments
+    if (seatmap_id) {
+      const conflictCheck = await prisma.seatAssignment.findFirst({
+        where: {
+          seat: {
+            seatmap_id: seatmap_id,
+          },
+          sched: {
+            show: {
+              show_status: {
+                in: ["OPEN", "ON_GOING", "UPCOMING"],
+              },
+            },
+          },
+        },
+        include: {
+          sched: {
+            include: {
+              show: {
+                select: {
+                  show_id: true,
+                  show_name: true,
+                  show_status: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (conflictCheck) {
+        // Seatmap is in use by active shows - return conflict error
+        return {
+          success: false,
+          error: "SEATMAP_IN_USE",
+          conflictDetails: {
+            showName: conflictCheck.sched.show.show_name,
+            showStatus: conflictCheck.sched.show.show_status,
+            message: `This seatmap is currently being used by "${conflictCheck.sched.show.show_name}" (${conflictCheck.sched.show.show_status}). You cannot modify it while it has active seat assignments.`,
+          },
+        };
+      }
+    }
+
     // 1. Pre-calculate seat data outside the transaction
     const seatNodes = extractSeatNodes(seatmap_json);
     const seatDataForCreate = seatNodes.map((seat) => ({

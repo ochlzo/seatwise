@@ -16,7 +16,7 @@ type CreateShowPayload = {
   show_end_date: string | Date;
   show_image_key?: string;
   image_base64?: string;
-  seatmap_id: string;
+  seatmap_id?: string; // Optional for DRAFT shows
   scheds?: Array<{
     client_id: string;
     sched_date: string;
@@ -191,13 +191,14 @@ export async function createShowAction(data: CreateShowPayload) {
       if (allClientSchedIds.length > 0 && clientSchedToSetName.size !== allClientSchedIds.length) {
         const unassigned = allClientSchedIds.filter((id) => !clientSchedToSetName.has(id));
         if (unassigned.length > 0) {
-          // We only error if we strictly require all schedules to be assigned.
-          // For now, let's keep the error to be safe as per original logic.
           throw new Error(
             `Some schedules have no category set assigned (IDs: ${unassigned.join(", ")})`
           );
         }
       }
+    } else if (scheds.length > 0 && !seatmap_id) {
+      // Allow DRAFT shows to have schedules without seatmap/category sets
+      // No validation needed here
     }
 
     // --- 2. Image Upload ---
@@ -232,7 +233,7 @@ export async function createShowAction(data: CreateShowPayload) {
             show_start_date: toDateOnly(show_start_date),
             show_end_date: toDateOnly(show_end_date),
             show_image_key: finalImageUrl,
-            seatmap_id,
+            seatmap_id: seatmap_id || undefined, // Allow undefined for DRAFT shows
           },
         });
 
@@ -251,6 +252,11 @@ export async function createShowAction(data: CreateShowPayload) {
         }
 
         if (normalizedCategorySets.length > 0) {
+          // Category sets require a seatmap
+          if (!seatmap_id) {
+            throw new Error("Cannot create category sets without a seatmap");
+          }
+
           const allDbSchedIds = Array.from(schedIdMap.values());
 
           // Create/Reuse Categories
