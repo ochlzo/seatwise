@@ -15,13 +15,18 @@ export default function LoadingScreen() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-white"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-white dark:bg-background"
         >
-          <Image
-            src="/seatwise-loading-screen.gif"
-            alt="Loading..."
-            className="max-h-full max-w-full"
-          />
+          <div className="relative w-full h-full max-w-2xl max-h-2xl">
+            <Image
+              src="/seatwise-loading-screen.gif"
+              alt="Loading..."
+              fill
+              className="object-contain"
+              priority
+              unoptimized
+            />
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
