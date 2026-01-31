@@ -62,26 +62,33 @@ export function SeatmapPreview({
   // Support both controlled and uncontrolled selection
   const [internalSelectedIds, setInternalSelectedIds] = React.useState<string[]>([]);
   const selectedSeatIds = controlledSelectedIds ?? internalSelectedIds;
+
   const setSelectedSeatIds = React.useCallback((ids: string[] | ((prev: string[]) => string[])) => {
-    const nextIds = typeof ids === "function" ? ids(selectedSeatIds) : ids;
     if (onSelectionChange) {
+      // For controlled mode, we need the current value if it's a functional update
+      // Since we can't easily get it without adding a dependency, we'll just handle the direct value case
+      // and assume functional updates are mostly used in uncontrolled mode or the parent handles it.
+      // Alternatively, we could use a ref, but let's keep it simple for now.
+      const nextIds = typeof ids === "function" ? ids(selectedSeatIds) : ids;
       onSelectionChange(nextIds);
     } else {
-      setInternalSelectedIds(nextIds);
+      setInternalSelectedIds(ids);
     }
   }, [onSelectionChange, selectedSeatIds]);
 
   // Support both controlled and uncontrolled category state (maps seat ID -> category ID)
   const [internalSeatCategories, setInternalSeatCategories] = React.useState<Record<string, string>>({});
   const seatCategories = controlledSeatCategories ?? internalSeatCategories;
+
   const setSeatCategories = React.useCallback((update: Record<string, string> | ((prev: Record<string, string>) => Record<string, string>)) => {
-    const nextCategories = typeof update === "function" ? update(seatCategories) : update;
     if (onSeatCategoriesChange) {
+      const nextCategories = typeof update === "function" ? update(seatCategories) : update;
       onSeatCategoriesChange(nextCategories);
     } else {
-      setInternalSeatCategories(nextCategories);
+      setInternalSeatCategories(update);
     }
   }, [onSeatCategoriesChange, seatCategories]);
+
   const [isShiftDown, setIsShiftDown] = React.useState(false);
   const [isCtrlDown, setIsCtrlDown] = React.useState(false);
   const [mode, setMode] = React.useState<"select" | "pan">("select");
@@ -171,13 +178,14 @@ export function SeatmapPreview({
     };
   }, []);
 
+  // Reset viewport and selection/categories when nodes or dimensions change
   React.useEffect(() => {
     setViewport(calculateFitViewport(nodes, dimensions));
-    setSelectedSeatIds([]);
+    setInternalSelectedIds([]);
+    setInternalSeatCategories({});
     setMarqueeRect((prev) => ({ ...prev, visible: false }));
     marqueeStartRef.current = null;
-    setSeatCategories({});
-  }, [nodes, dimensions, setSeatCategories, setSelectedSeatIds]);
+  }, [nodes, dimensions]);
 
   const handleWheel = (e: { evt: WheelEvent; target: { getStage: () => KonvaStage | null } }) => {
     e.evt.preventDefault();
