@@ -5,8 +5,10 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Save, FileCode, FileImage, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { loadSeatmap, fitView, markSeatmapDirty } from "@/lib/features/seatmap/seatmapSlice";
+import { loadSeatmap, fitView, markSeatmapDirty, markSeatmapSaved } from "@/lib/features/seatmap/seatmapSlice";
 import { UploadProgress } from "@/components/ui/upload-progress";
+import { saveSeatmapTemplateAction } from "@/lib/actions/saveSeatmapTemplate";
+import { useSearchParams } from "next/navigation";
 import {
     Dialog,
     DialogContent,
@@ -43,6 +45,74 @@ export function SeatmapFileMenu() {
 
     const [isOverwriteDialogOpen, setIsOverwriteDialogOpen] = React.useState(false);
     const [pendingFile, setPendingFile] = React.useState<File | null>(null);
+
+    const searchParams = useSearchParams();
+    const seatmapId = searchParams.get("seatmapId") ?? undefined;
+
+    const handleSaveToTemplates = async () => {
+        const name = seatmap.title?.trim();
+        if (!name) {
+            toast.error("Seatmap name is required.");
+            return;
+        }
+
+        // Check if canvas is empty
+        if (Object.keys(seatmap.nodes).length === 0) {
+            toast.error("Cannot save an empty seatmap. Please add some seats or shapes first.");
+            return;
+        }
+
+        // Check for seats without seat numbers
+        const seats = Object.values(seatmap.nodes).filter((node) => node.type === "seat");
+        const seatsWithoutNumbers = seats.filter(
+            (seat) => seat.seatNumber === undefined || seat.seatNumber === null
+        );
+        if (seatsWithoutNumbers.length > 0) {
+            toast.error(
+                `${seatsWithoutNumbers.length} seat(s) don't have seat numbers assigned. Please assign seat numbers before saving.`
+            );
+            return;
+        }
+
+        setActionType("save");
+        setIsProgressOpen(true);
+        setProgress(0);
+
+        const exportData = {
+            title: seatmap.title,
+            nodes: seatmap.nodes,
+            viewport: calculateFitViewport(seatmap.nodes, seatmap.viewportSize),
+            snapSpacing: seatmap.snapSpacing,
+            exportedAt: new Date().toISOString(),
+        };
+
+        const jsonString = JSON.stringify(exportData);
+        const fileSize = new Blob([jsonString]).size;
+        setImportFiles([{ name: `${name}.json`, size: fileSize }]);
+
+        setProgress(15);
+
+        try {
+            const result = await saveSeatmapTemplateAction({
+                seatmap_name: name,
+                seatmap_json: exportData,
+                seatmap_id: seatmapId,
+            });
+
+            if (!result.success) {
+                throw new Error(result.error || "Failed to save seatmap");
+            }
+
+            setProgress(100);
+            toast.success(seatmapId ? "Seatmap updated." : "Seatmap saved to templates.");
+            dispatch(markSeatmapSaved());
+        } catch (error: unknown) {
+            console.error(error);
+            setIsProgressOpen(false);
+            const message = error instanceof Error ? error.message : "Failed to save seatmap";
+            toast.error(message);
+        }
+    };
 
     // Listen for PNG export completion from Canvas
     React.useEffect(() => {
@@ -211,12 +281,6 @@ export function SeatmapFileMenu() {
                 }
             }, 50);
         }
-    };
-
-    const handleSaveToTemplates = () => {
-        // This will be handled by the SeatmapSaveTemplateButton component
-        // Trigger a custom event that the button can listen to
-        window.dispatchEvent(new CustomEvent("seatmap-save-template-trigger"));
     };
 
     const isMobile = useIsMobile();

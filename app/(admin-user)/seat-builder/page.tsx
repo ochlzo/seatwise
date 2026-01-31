@@ -9,7 +9,6 @@ import { SeatMapSidebar } from "@/components/seatmap/seatmap-sidebar";
 import { SeatmapPageHeader } from "@/components/seatmap/seatmap-page-header";
 import { SeatmapTitle } from "@/components/seatmap/SeatmapTitle";
 import { SeatmapFileMenu } from "@/components/seatmap/SeatmapFileMenu";
-import { SeatmapSaveTemplateButton } from "@/components/seatmap/SeatmapSaveTemplateButton";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import LoadingPage from "@/app/LoadingPage";
@@ -158,10 +157,6 @@ export default function Page() {
                         <div className="flex items-center gap-2">
                             <SeatmapTitle />
                             <SeatmapFileMenu />
-                            {/* Hidden component that handles save logic via event listener */}
-                            <div className="hidden">
-                                <SeatmapSaveTemplateButton />
-                            </div>
                         </div>
                     }
                 />
