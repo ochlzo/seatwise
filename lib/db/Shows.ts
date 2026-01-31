@@ -44,6 +44,15 @@ export async function getShowById(showId: string) {
       scheds: {
         orderBy: { sched_start_time: "asc" },
       },
+      categorySets: {
+        include: {
+          items: {
+            include: {
+              seatCategory: true,
+            },
+          },
+        },
+      },
     },
   });
 }
