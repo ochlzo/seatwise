@@ -40,9 +40,9 @@ model Show {
   show_end_date    DateTime    @db.Date
   show_image_key   String?
 
-  // REQUIRED: show has exactly 1 seatmap
-  seatmap_id       String
-  seatmap          Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
+  // OPTIONAL: show can have a seatmap (required for UPCOMING/OPEN shows)
+  seatmap_id       String?
+  seatmap          Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
 
   scheds           Sched[]
   categorySets     CategorySet[]

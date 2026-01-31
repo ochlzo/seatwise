@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { loadSeatmap, fitView, markSeatmapDirty, markSeatmapSaved } from "@/lib/features/seatmap/seatmapSlice";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import { saveSeatmapTemplateAction } from "@/lib/actions/saveSeatmapTemplate";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
     Dialog,
     DialogContent,
@@ -46,10 +46,18 @@ export function SeatmapFileMenu() {
     const [isOverwriteDialogOpen, setIsOverwriteDialogOpen] = React.useState(false);
     const [pendingFile, setPendingFile] = React.useState<File | null>(null);
 
+    const [isConflictDialogOpen, setIsConflictDialogOpen] = React.useState(false);
+    const [conflictDetails, setConflictDetails] = React.useState<{
+        showName: string;
+        showStatus: string;
+        message: string;
+    } | null>(null);
+
     const searchParams = useSearchParams();
+    const router = useRouter();
     const seatmapId = searchParams.get("seatmapId") ?? undefined;
 
-    const handleSaveToTemplates = async () => {
+    const handleSaveToTemplates = async (forceDuplicate = false) => {
         const name = seatmap.title?.trim();
         if (!name) {
             toast.error("Seatmap name is required.");
@@ -78,8 +86,9 @@ export function SeatmapFileMenu() {
         setIsProgressOpen(true);
         setProgress(0);
 
+        const finalName = forceDuplicate ? `${name} - Copy` : name;
         const exportData = {
-            title: seatmap.title,
+            title: finalName,
             nodes: seatmap.nodes,
             viewport: calculateFitViewport(seatmap.nodes, seatmap.viewportSize),
             snapSpacing: seatmap.snapSpacing,
@@ -88,23 +97,38 @@ export function SeatmapFileMenu() {
 
         const jsonString = JSON.stringify(exportData);
         const fileSize = new Blob([jsonString]).size;
-        setImportFiles([{ name: `${name}.json`, size: fileSize }]);
+        setImportFiles([{ name: `${finalName}.json`, size: fileSize }]);
 
         setProgress(15);
 
         try {
             const result = await saveSeatmapTemplateAction({
-                seatmap_name: name,
+                seatmap_name: finalName,
                 seatmap_json: exportData,
-                seatmap_id: seatmapId,
+                seatmap_id: forceDuplicate ? undefined : seatmapId, // Don't pass ID if duplicating
             });
 
             if (!result.success) {
+                // Check if it's a conflict error
+                if (result.error === "SEATMAP_IN_USE" && result.conflictDetails) {
+                    setIsProgressOpen(false);
+                    setConflictDetails(result.conflictDetails);
+                    setIsConflictDialogOpen(true);
+                    return;
+                }
                 throw new Error(result.error || "Failed to save seatmap");
             }
 
             setProgress(100);
-            toast.success(seatmapId ? "Seatmap updated." : "Seatmap saved to templates.");
+            if (forceDuplicate) {
+                toast.success(`Seatmap duplicated as "${finalName}".`);
+                // Update URL to the new seatmap ID
+                if (result.seatmapId) {
+                    router.replace(`/seat-builder?seatmapId=${result.seatmapId}`);
+                }
+            } else {
+                toast.success(seatmapId ? "Seatmap updated." : "Seatmap saved to templates.");
+            }
             dispatch(markSeatmapSaved());
         } catch (error: unknown) {
             console.error(error);
@@ -112,6 +136,12 @@ export function SeatmapFileMenu() {
             const message = error instanceof Error ? error.message : "Failed to save seatmap";
             toast.error(message);
         }
+    };
+
+    const handleDuplicateConfirm = () => {
+        setIsConflictDialogOpen(false);
+        setConflictDetails(null);
+        handleSaveToTemplates(true);
     };
 
     // Listen for PNG export completion from Canvas
@@ -321,6 +351,46 @@ export function SeatmapFileMenu() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Conflict Dialog - Seatmap in Use */}
+            <Dialog open={isConflictDialogOpen} onOpenChange={setIsConflictDialogOpen}>
+                <DialogContent className={isMobile ? "w-[95vw] rounded-2xl" : ""}>
+                    <DialogHeader>
+                        <div className="flex items-center gap-3">
+                            <div className="rounded-full bg-red-100 p-2 text-red-600">
+                                <AlertTriangle className="h-5 w-5" />
+                            </div>
+                            <DialogTitle>Seatmap Currently In Use</DialogTitle>
+                        </div>
+                        <DialogDescription className="pt-2">
+                            {conflictDetails?.message}
+                            <br /><br />
+                            <strong>Would you like to save your changes as a new template instead?</strong>
+                            <br />
+                            Your seatmap will be duplicated with &quot; - Copy&quot; appended to the name.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="mt-4 gap-2 flex-col sm:flex-row">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setIsConflictDialogOpen(false);
+                                setConflictDetails(null);
+                            }}
+                            className="w-full sm:w-auto"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="default"
+                            onClick={handleDuplicateConfirm}
+                            className="w-full sm:w-auto"
+                        >
+                            Duplicate as New Template
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
             <UploadProgress
                 isOpen={isProgressOpen}
                 totalProgress={progress}
@@ -395,7 +465,7 @@ export function SeatmapFileMenu() {
                         <DropdownMenuSeparator />
 
                         <DropdownMenuItem
-                            onClick={handleSaveToTemplates}
+                            onClick={() => handleSaveToTemplates()}
                             className="gap-2 cursor-pointer"
                         >
                             <Save className="w-4 h-4 text-amber-500" />
