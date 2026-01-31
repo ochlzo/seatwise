@@ -102,6 +102,15 @@ export function SeatmapSaveTemplateButton() {
     setIsSaving(false);
   };
 
+  // Listen for save template trigger from File menu
+  React.useEffect(() => {
+    const handleTrigger = () => {
+      handleSave();
+    };
+    window.addEventListener("seatmap-save-template-trigger", handleTrigger);
+    return () => window.removeEventListener("seatmap-save-template-trigger", handleTrigger);
+  }, [seatmap, seatmapId, dispatch]);
+
   return (
     <>
       <UploadProgress

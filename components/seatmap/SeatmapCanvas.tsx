@@ -18,6 +18,7 @@ import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { toast } from "sonner";
 import {
   setViewport,
   addSeat,
@@ -172,57 +173,86 @@ export default function SeatmapCanvas() {
       // Use a small timeout to ensure transformer is hidden before capture
       setTimeout(() => {
         const bounds = calculateNodesBounds(nodes);
-        const padding = 20;
-
-        // If no nodes, just export the current stage view (fallback)
-        const exportOptions: {
-          pixelRatio: number;
-          mimeType: string;
-          x?: number;
-          y?: number;
-          width?: number;
-          height?: number;
-        } = {
-          pixelRatio: 3,
-          mimeType: "image/png",
-        };
-
-        if (bounds) {
-          exportOptions.x = bounds.x - padding;
-          exportOptions.y = bounds.y - padding;
-          exportOptions.width = bounds.width + padding * 2;
-          exportOptions.height = bounds.height + padding * 2;
+        if (!bounds) {
+          toast.error("No content to export.");
+          return;
         }
 
-        // Add white background
-        const background = new Konva.Rect({
-          x: (exportOptions.x ?? -10000) - 100,
-          y: (exportOptions.y ?? -10000) - 100,
-          width: (exportOptions.width ?? 20000) + 200,
-          height: (exportOptions.height ?? 20000) + 200,
-          fill: "white",
-          listening: false,
-        });
-
         const layer = stage.getLayers()[0];
-        layer.add(background);
-        background.moveToBottom();
+        if (!layer) return;
 
-        const dataURL = stage.toDataURL(exportOptions);
+        // Save current stage state to restore later
+        const oldSize = { width: stage.width(), height: stage.height() };
+        const oldPos = { x: stage.x(), y: stage.y() };
+        const oldScale = stage.scaleX();
 
-        // Cleanup background
-        background.destroy();
+        const padding = 60;
+        const totalW = bounds.width + padding * 2;
+        const totalH = bounds.height + padding * 2;
 
-        const link = document.createElement("a");
-        link.download = fileName || "seatmap.png";
-        link.href = dataURL;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        try {
+          // Add white background that covers the export area
+          const background = new Konva.Rect({
+            x: bounds.x - padding,
+            y: bounds.y - padding,
+            width: totalW,
+            height: totalH,
+            fill: "white",
+            listening: false,
+          });
 
-        // Dispatch success toast via a second event or just rely on the component
-        window.dispatchEvent(new CustomEvent("seatmap-export-success", { detail: { type: "png" } }));
-      }, 50);
+          layer.add(background);
+          background.moveToBottom();
+
+          // Resizing the stage buffer is the most reliable way to avoid viewport clipping
+          stage.width(totalW);
+          stage.height(totalH);
+          stage.scale({ x: 1, y: 1 });
+          stage.position({
+            x: -(bounds.x - padding),
+            y: -(bounds.y - padding)
+          });
+
+          // Draw before capture
+          stage.draw();
+
+          // Capture the entire stage since we've resized it to match the bounds
+          const dataURL = stage.toDataURL({
+            pixelRatio: 2,
+            mimeType: "image/png",
+          });
+
+          // Cleanup background
+          background.destroy();
+
+          // Restore stage state
+          stage.width(oldSize.width);
+          stage.height(oldSize.height);
+          stage.position(oldPos);
+          stage.scale({ x: oldScale, y: oldScale });
+          stage.draw();
+
+          const link = document.createElement("a");
+          link.download = fileName || "seatmap.png";
+          link.href = dataURL;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          // Dispatch success
+          window.dispatchEvent(new CustomEvent("seatmap-export-success", { detail: { type: "png" } }));
+        } catch (error) {
+          console.error("Export failed:", error);
+          toast.error("Failed to generate PNG.");
+
+          // Restore stage state on error if needed
+          stage.width(oldSize.width);
+          stage.height(oldSize.height);
+          stage.position(oldPos);
+          stage.scale({ x: oldScale, y: oldScale });
+          stage.draw();
+        }
+      }, 150);
     };
 
     window.addEventListener("seatmap-export-png", handleExportPng as EventListener);
