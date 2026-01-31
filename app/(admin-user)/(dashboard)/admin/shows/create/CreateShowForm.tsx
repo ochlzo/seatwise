@@ -127,6 +127,7 @@ export function CreateShowForm() {
   ]);
   const [categorySets, setCategorySets] = React.useState<CategorySetDraft[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
+  const [seatmapData, setSeatmapData] = React.useState<any>(null); // Store seatmap JSON
   /** Active category set ID for tabs */
   const [activeSetId, setActiveSetId] = React.useState<string | null>(null);
   const unassignedSchedCount = React.useMemo(() => {
@@ -202,6 +203,35 @@ export function CreateShowForm() {
       isMounted = false;
     };
   }, []);
+
+  // Fetch seatmap data when seatmap is selected
+  React.useEffect(() => {
+    if (!formData.seatmap_id) {
+      setSeatmapData(null);
+      return;
+    }
+
+    let isMounted = true;
+    const loadSeatmapData = async () => {
+      try {
+        const response = await fetch(`/api/seatmaps/${formData.seatmap_id}`);
+        if (!response.ok) throw new Error("Failed to load seatmap");
+        const data = await response.json();
+        if (isMounted) {
+          setSeatmapData(data.seatmap_json);
+        }
+      } catch (error: unknown) {
+        console.error("Error loading seatmap data:", error);
+        if (isMounted) {
+          setSeatmapData(null);
+        }
+      }
+    };
+    loadSeatmapData();
+    return () => {
+      isMounted = false;
+    };
+  }, [formData.seatmap_id]);
 
   const showStartDate = React.useMemo(
     () =>
@@ -301,6 +331,36 @@ export function CreateShowForm() {
     if (!setItem.filter_date) return available;
     return available.filter((sched) => sched.sched_date === setItem.filter_date);
   }, [getAvailableScheds]);
+
+  // Count total seats in seatmap
+  const totalSeatsCount = React.useMemo(() => {
+    if (!seatmapData || !seatmapData.nodes) return 0;
+    return Object.values(seatmapData.nodes).filter(
+      (node: any) => node.type === "seat"
+    ).length;
+  }, [seatmapData]);
+
+  // Validate that EACH category set has ALL seats assigned
+  const incompleteCategorySets = React.useMemo(() => {
+    if (!totalSeatsCount || categorySets.length === 0) return [];
+
+    return categorySets
+      .map((setItem, index) => {
+        const assignedInThisSet = setItem.seatAssignments
+          ? Object.keys(setItem.seatAssignments).length
+          : 0;
+
+        if (assignedInThisSet < totalSeatsCount) {
+          return {
+            setName: setItem.set_name || `Set ${index + 1}`,
+            missing: totalSeatsCount - assignedInThisSet,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean) as Array<{ setName: string; missing: number }>;
+  }, [categorySets, totalSeatsCount]);
+
   const missingFields = React.useMemo(() => {
     const missing: string[] = [];
     const requiresSeatmap = formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
@@ -338,6 +398,13 @@ export function CreateShowForm() {
       if (hasInvalidCategory) {
         missing.push("Category name/price");
       }
+
+      // Check if EACH category set has ALL seats assigned
+      if (incompleteCategorySets.length > 0) {
+        incompleteCategorySets.forEach((incomplete) => {
+          missing.push(`${incomplete.setName}: ${incomplete.missing} seats unassigned`);
+        });
+      }
     }
     // For DRAFT shows: schedules are optional, no seatmap/category validation required
 
@@ -346,7 +413,7 @@ export function CreateShowForm() {
     }
 
     return missing;
-  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets, unassignedSchedCount]);
+  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets, unassignedSchedCount, totalSeatsCount, incompleteCategorySets]);
 
   const isFormValid = React.useMemo(() => {
     const requiresSeatmap = formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
