@@ -124,7 +124,7 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
                 {isMounted && <NavMain items={data.navMain} openAll />}
             </SidebarContent>
             <SidebarFooter>
-                <NavUser user={user} />
+                {isMounted && <NavUser user={user} />}
             </SidebarFooter>
             <SidebarRail />
         </Sidebar >

@@ -20,6 +20,19 @@ export default async function ShowIdPage({
     // Serialize the show data to convert Decimal types to strings
     const serializedShow = {
         ...show,
+        scheds: show.scheds?.map((sched) => ({
+            ...sched,
+            seatAssignments: sched.seatAssignments?.map((assignment) => ({
+                ...assignment,
+                set: {
+                    ...assignment.set,
+                    seatCategory: {
+                        ...assignment.set.seatCategory,
+                        price: assignment.set.seatCategory.price.toString(),
+                    },
+                },
+            })),
+        })),
         categorySets: show.categorySets?.map((categorySet) => ({
             ...categorySet,
             items: categorySet.items.map((item) => ({

@@ -1,13 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
-export async function getShows(params?: { status?: string; sort?: string; seatmapId?: string }) {
+export async function getShows(params?: { status?: string; sort?: string; seatmapId?: string; query?: string }) {
   const where: Prisma.ShowWhereInput = {};
   if (params?.status && params.status !== "ALL") {
     where.show_status = params.status as never;
   }
   if (params?.seatmapId) {
     where.seatmap_id = params.seatmapId;
+  }
+  if (params?.query) {
+    const query = params.query.trim();
+    if (query) {
+      where.show_name = { contains: query, mode: "insensitive" };
+    }
   }
 
   let orderBy: Prisma.ShowOrderByWithRelationInput = { createdAt: "desc" };
@@ -42,6 +48,17 @@ export async function getShowById(showId: string) {
     where: { show_id: showId },
     include: {
       scheds: {
+        include: {
+          seatAssignments: {
+            include: {
+              set: {
+                include: {
+                  seatCategory: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { sched_start_time: "asc" },
       },
       categorySets: {
