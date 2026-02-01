@@ -230,9 +230,14 @@ export default function ShowsPage() {
                                             <div className="flex flex-col max-w-full">
                                                 <span className="text-xs text-muted-foreground font-semibold">Schedules</span>
                                                 <span className="text-sm font-semibold line-clamp-1 text-primary/90">
-                                                    {show.scheds.length > 0
-                                                        ? show.scheds.map((s) => `${formatTime(new Date(s.sched_start_time))} - ${formatTime(new Date(s.sched_end_time))}`).join(', ')
-                                                        : "None"}
+                                                    {(() => {
+                                                        const uniqueTimes = Array.from(new Set(
+                                                            show.scheds.map(s =>
+                                                                `${formatTime(new Date(s.sched_start_time))} - ${formatTime(new Date(s.sched_end_time))}`
+                                                            )
+                                                        ));
+                                                        return uniqueTimes.length > 0 ? uniqueTimes.join(', ') : "None";
+                                                    })()}
                                                 </span>
                                             </div>
                                         </div>

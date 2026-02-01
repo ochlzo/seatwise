@@ -46,6 +46,7 @@ const toTime = (value: string | Date) => {
 };
 
 type UpdateShowSched = {
+    client_id: string;
     sched_date: string | Date;
     sched_start_time: string | Date;
     sched_end_time: string | Date;
@@ -148,7 +149,7 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                         },
                     });
                     // Use index as temp ID
-                    schedIdMap.set(`${toManilaDateKey(toDateOnly(sched.sched_date))}_${sched.sched_start_time}`, createdSched.sched_id);
+                    schedIdMap.set(sched.client_id, createdSched.sched_id);
                 }
             }
 
@@ -216,15 +217,7 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                     const targetSchedIds = setItem.apply_to_all
                         ? allDbSchedIds
                         : setItem.sched_ids
-                            .map((tempId) => {
-                                // Find matching sched by reconstructing temp ID
-                                for (const [key, dbId] of schedIdMap.entries()) {
-                                    if (tempId.includes(key) || key.includes(tempId)) {
-                                        return dbId;
-                                    }
-                                }
-                                return null;
-                            })
+                            .map((clientId) => schedIdMap.get(clientId))
                             .filter(Boolean) as string[];
 
                     if (targetSchedIds.length > 0) {
@@ -281,14 +274,7 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                     const targetSchedIds = setItem.apply_to_all
                         ? allDbSchedIds
                         : setItem.sched_ids
-                            .map((tempId) => {
-                                for (const [key, dbId] of schedIdMap.entries()) {
-                                    if (tempId.includes(key) || key.includes(tempId)) {
-                                        return dbId;
-                                    }
-                                }
-                                return null;
-                            })
+                            .map((id) => schedIdMap.get(id))
                             .filter(Boolean) as string[];
 
                     for (const [seatId, catName] of Object.entries(setItem.seat_assignments)) {

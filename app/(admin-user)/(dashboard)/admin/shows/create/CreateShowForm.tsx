@@ -372,11 +372,13 @@ export function CreateShowForm() {
     if (!formData.show_start_date) missing.push("Start date");
     if (!formData.show_end_date) missing.push("End date");
 
-    // Only require seatmap for UPCOMING/OPEN shows
-    if (requiresSeatmap) {
-      if (!formData.seatmap_id) missing.push("Seatmap");
+    // Validation for Seatmap/Categories/Schedules
+    if (!formData.seatmap_id) {
+      if (requiresSeatmap) missing.push("Seatmap");
+    } else {
+      // If a seatmap is selected, validate its associated data regardless of status
       if (scheds.length === 0) {
-        missing.push("Schedules");
+        if (requiresSeatmap) missing.push("Schedules");
       } else if (showStartDate && showEndDate && scheduleCoverage.missingDates.length > 0) {
         missing.push("Schedules (missing dates)");
       } else if (categorySets.length > 0 && scheds.length > 0 && unassignedSchedCount > 0) {
@@ -421,14 +423,13 @@ export function CreateShowForm() {
     // Basic validation: no missing fields
     if (missingFields.length > 0) return false;
 
-    // For UPCOMING/OPEN: all schedules must be assigned to category sets
-    if (requiresSeatmap && scheds.length > 0 && unassignedSchedCount > 0) {
+    // For non-draft shows or when a seatmap is partially filled, ensure schedules are assigned
+    if (formData.seatmap_id && scheds.length > 0 && unassignedSchedCount > 0) {
       return false;
     }
 
-    // For DRAFT: schedules can exist without category assignments
     return true;
-  }, [missingFields.length, formData.show_status, scheds.length, unassignedSchedCount]);
+  }, [missingFields.length, formData.seatmap_id, scheds.length, unassignedSchedCount]);
 
   const getDatesInRange = React.useCallback(() => {
     if (!showStartDate || !showEndDate) return [];
@@ -990,226 +991,410 @@ export function CreateShowForm() {
         </CardContent>
       </Card>
 
-      {/* Only show seatmap section for UPCOMING/OPEN shows */}
-      {(formData.show_status === "UPCOMING" || formData.show_status === "OPEN") && (
-        <>
-          <div className="h-px bg-border/60 md:hidden" />
+      <div className="h-px bg-border/60 md:hidden" />
 
-          <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
-            <CardHeader>
-              <CardTitle className="text-lg md:text-xl font-semibold">
+      <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
+        <CardHeader>
+          <CardTitle className="text-lg md:text-xl font-semibold">
+            Seatmap
+          </CardTitle>
+          <CardDescription>Select a seatmap template and preview the layout.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
                 Seatmap
-              </CardTitle>
-              <CardDescription>Select a seatmap template and preview the layout.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
-                    Seatmap
-                  </Label>
-                  <Combobox
-                    value={formData.seatmap_id}
-                    onValueChange={(value) => {
-                      const nextValue = value ?? "";
-                      setFormData({ ...formData, seatmap_id: nextValue });
-                      const match = seatmaps.find((seatmap) => seatmap.seatmap_id === nextValue);
-                      if (match) {
-                        setSeatmapQuery(match.seatmap_name);
-                      }
-                    }}
-                  >
-                    <ComboboxInput
-                      id="seatmap"
-                      placeholder={isLoadingSeatmaps ? "Loading seatmaps..." : "Select a seatmap"}
-                      disabled={isLoadingSeatmaps}
-                      required
-                      value={seatmapQuery}
-                      onChange={(event) => setSeatmapQuery(event.target.value)}
-                    />
-                    <ComboboxContent>
-                      <ComboboxList>
-                        {isLoadingSeatmaps ? (
-                          <ComboboxItem value="loading" disabled>
-                            Loading seatmaps...
-                          </ComboboxItem>
-                        ) : (
-                          filteredSeatmaps.map((seatmap) => (
-                            <ComboboxItem key={seatmap.seatmap_id} value={seatmap.seatmap_id}>
-                              {seatmap.seatmap_name}
-                            </ComboboxItem>
-                          ))
-                        )}
-                        {!isLoadingSeatmaps && seatmaps.length === 0 && (
-                          <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>
-                        )}
-                      </ComboboxList>
-                    </ComboboxContent>
-                  </Combobox>
-                </div>
+              </Label>
+              <Combobox
+                value={formData.seatmap_id}
+                onValueChange={(value) => {
+                  const nextValue = value ?? "";
+                  setFormData({ ...formData, seatmap_id: nextValue });
+                  const match = seatmaps.find((seatmap) => seatmap.seatmap_id === nextValue);
+                  if (match) {
+                    setSeatmapQuery(match.seatmap_name);
+                  }
+                }}
+              >
+                <ComboboxInput
+                  id="seatmap"
+                  placeholder={isLoadingSeatmaps ? "Loading seatmaps..." : "Select a seatmap"}
+                  disabled={isLoadingSeatmaps}
+                  required
+                  value={seatmapQuery}
+                  onChange={(event) => setSeatmapQuery(event.target.value)}
+                />
+                <ComboboxContent>
+                  <ComboboxList>
+                    {isLoadingSeatmaps ? (
+                      <ComboboxItem value="loading" disabled>
+                        Loading seatmaps...
+                      </ComboboxItem>
+                    ) : (
+                      filteredSeatmaps.map((seatmap) => (
+                        <ComboboxItem key={seatmap.seatmap_id} value={seatmap.seatmap_id}>
+                          {seatmap.seatmap_name}
+                        </ComboboxItem>
+                      ))
+                    )}
+                    {!isLoadingSeatmaps && seatmaps.length === 0 && (
+                      <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+            </div>
+          </div>
+
+          {/* Tabbed Seatmap Preview - one tab per category set */}
+
+          {categorySets.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                Add a category set below to start assigning seats.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 w-full">
+              {/* Tab Navigation */}
+              <div className="flex w-fit max-w-full justify-start overflow-x-auto rounded-lg bg-muted p-1">
+                {categorySets.map((setItem, index) => {
+                  const isActive = (activeSetId ?? categorySets[0]?.id) === setItem.id;
+                  return (
+                    <button
+                      key={setItem.id}
+                      type="button"
+                      onClick={() => {
+                        setActiveSetId(setItem.id);
+                        setSelectedSeatIds([]); // Clear selection when switching tabs
+                      }}
+                      className={cn(
+                        "inline-flex min-w-[100px] items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-background",
+                        isActive
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
+                      )}
+                    >
+                      {setItem.set_name || `Set ${index + 1}`}
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Tabbed Seatmap Preview - one tab per category set */}
+              {/* Active Content */}
+              {(() => {
+                const activeSet = categorySets.find(
+                  (s) => s.id === (activeSetId ?? categorySets[0]?.id)
+                );
 
-              {categorySets.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-8 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Add a category set below to start assigning seats.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3 w-full">
-                  {/* Tab Navigation */}
-                  <div className="flex w-fit max-w-full justify-start overflow-x-auto rounded-lg bg-muted p-1">
-                    {categorySets.map((setItem, index) => {
-                      const isActive = (activeSetId ?? categorySets[0]?.id) === setItem.id;
-                      return (
-                        <button
-                          key={setItem.id}
-                          type="button"
-                          onClick={() => {
-                            setActiveSetId(setItem.id);
-                            setSelectedSeatIds([]); // Clear selection when switching tabs
-                          }}
-                          className={cn(
-                            "inline-flex min-w-[100px] items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-background",
-                            isActive
-                              ? "bg-background text-foreground shadow-sm"
-                              : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
-                          )}
-                        >
-                          {setItem.set_name || `Set ${index + 1}`}
-                        </button>
-                      );
-                    })}
+                if (!activeSet) return null;
+
+                const setCategories = activeSet.categories.map((category) => ({
+                  category_id: category.id,
+                  name: category.category_name,
+                  color_code: category.color_code,
+                }));
+
+                const currentAssignments = activeSet.seatAssignments || {};
+
+                return (
+                  <div className="relative mt-1">
+                    <SeatmapPreview
+                      // Key removed to persist view state and prevent unnecessary re-fetching
+                      seatmapId={formData.seatmap_id || undefined}
+                      allowMarqueeSelection
+                      selectedSeatIds={selectedSeatIds}
+                      onSelectionChange={setSelectedSeatIds}
+                      categories={setCategories}
+                      seatCategories={currentAssignments}
+                      onSeatCategoriesChange={(newAssignments) =>
+                        updateSetSeatAssignments(activeSet.id, newAssignments)
+                      }
+                    />
+                    <CategoryAssignPanel
+                      className="absolute right-3 top-14 z-10"
+                      selectedSeatIds={selectedSeatIds}
+                      categories={setCategories}
+                      seatCategories={currentAssignments}
+                      onAssign={(seatIds, categoryId) => {
+                        updateSetSeatAssignments(activeSet.id, (prev) => {
+                          const next = { ...prev };
+                          seatIds.forEach((id) => {
+                            next[id] = categoryId;
+                          });
+                          return next;
+                        });
+                      }}
+                      onClear={(seatIds) => {
+                        updateSetSeatAssignments(activeSet.id, (prev) => {
+                          const next = { ...prev };
+                          seatIds.forEach((id) => {
+                            delete next[id];
+                          });
+                          return next;
+                        });
+                      }}
+                    />
                   </div>
+                );
+              })()}
+            </div>
+          )}
 
-                  {/* Active Content */}
-                  {(() => {
-                    const activeSet = categorySets.find(
-                      (s) => s.id === (activeSetId ?? categorySets[0]?.id)
-                    );
 
-                    if (!activeSet) return null;
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Category Sets</p>
+                <p className="text-xs text-muted-foreground">
+                  Group pricing categories and assign each set to schedules.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addCategorySet}
+                className="gap-1.5"
+                disabled={
+                  !hasSeatmapSelected ||
+                  scheds.length === 0 ||
+                  scheduleCoverage.missingDates.length > 0 ||
+                  (scheds.length > 0 && unassignedSchedCount === 0)
+                }
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Category Set
+              </Button>
+            </div>
+            {hasSeatmapSelected && scheds.length > 0 && scheduleCoverage.missingDates.length > 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                Add schedules for every date in the show range before creating category sets.
+              </p>
+            )}
 
-                    const setCategories = activeSet.categories.map((category) => ({
-                      category_id: category.id,
-                      name: category.category_name,
-                      color_code: category.color_code,
-                    }));
+            {!hasSeatmapSelected && (
+              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
+                Select a seatmap before adding category sets.
+              </div>
+            )}
+            {hasSeatmapSelected && scheds.length === 0 && (
+              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-4 text-xs text-muted-foreground">
+                Add schedules before creating category sets.
+              </div>
+            )}
 
-                    const currentAssignments = activeSet.seatAssignments || {};
+            {hasSeatmapSelected && categorySets.length === 0 && (
+              <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
+                No category sets yet. Add one to start pricing.
+              </div>
+            )}
 
-                    return (
-                      <div className="relative mt-1">
-                        <SeatmapPreview
-                          // Key removed to persist view state and prevent unnecessary re-fetching
-                          seatmapId={formData.seatmap_id || undefined}
-                          allowMarqueeSelection
-                          selectedSeatIds={selectedSeatIds}
-                          onSelectionChange={setSelectedSeatIds}
-                          categories={setCategories}
-                          seatCategories={currentAssignments}
-                          onSeatCategoriesChange={(newAssignments) =>
-                            updateSetSeatAssignments(activeSet.id, newAssignments)
-                          }
-                        />
-                        <CategoryAssignPanel
-                          className="absolute right-3 top-14 z-10"
-                          selectedSeatIds={selectedSeatIds}
-                          categories={setCategories}
-                          seatCategories={currentAssignments}
-                          onAssign={(seatIds, categoryId) => {
-                            updateSetSeatAssignments(activeSet.id, (prev) => {
-                              const next = { ...prev };
-                              seatIds.forEach((id) => {
-                                next[id] = categoryId;
-                              });
-                              return next;
-                            });
-                          }}
-                          onClear={(seatIds) => {
-                            updateSetSeatAssignments(activeSet.id, (prev) => {
-                              const next = { ...prev };
-                              seatIds.forEach((id) => {
-                                delete next[id];
-                              });
-                              return next;
-                            });
-                          }}
+            <div className="space-y-4">
+              {categorySets.map((setItem, index) => (
+                <div key={setItem.id} className="rounded-lg border border-sidebar-border/60 p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-1 w-full">
+                      <p className="text-sm font-semibold">Category Set {index + 1}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Assign schedules, then add categories inside the set.
+                      </p>
+                      <div className="space-y-2 max-w-xs">
+                        <Label className="text-[11px] font-semibold text-muted-foreground">Set Name</Label>
+                        <Input
+                          value={setItem.set_name}
+                          onChange={(e) => updateCategorySet(setItem.id, { set_name: e.target.value })}
+                          placeholder="e.g. Premiere Set"
+                          className="h-8 text-sm"
                         />
                       </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold">Category Sets</p>
-                    <p className="text-xs text-muted-foreground">
-                      Group pricing categories and assign each set to schedules.
-                    </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive hover:bg-destructive/10"
+                      onClick={() => removeCategorySet(setItem.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={addCategorySet}
-                    className="gap-1.5"
-                    disabled={
-                      !hasSeatmapSelected ||
-                      scheds.length === 0 ||
-                      scheduleCoverage.missingDates.length > 0 ||
-                      (scheds.length > 0 && unassignedSchedCount === 0)
-                    }
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Category Set
-                  </Button>
-                </div>
-                {hasSeatmapSelected && scheds.length > 0 && scheduleCoverage.missingDates.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Add schedules for every date in the show range before creating category sets.
-                  </p>
-                )}
 
-                {!hasSeatmapSelected && (
-                  <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
-                    Select a seatmap before adding category sets.
-                  </div>
-                )}
-                {hasSeatmapSelected && scheds.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-4 text-xs text-muted-foreground">
-                    Add schedules before creating category sets.
-                  </div>
-                )}
-
-                {hasSeatmapSelected && categorySets.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
-                    No category sets yet. Add one to start pricing.
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  {categorySets.map((setItem, index) => (
-                    <div key={setItem.id} className="rounded-lg border border-sidebar-border/60 p-4 space-y-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="space-y-1 w-full">
-                          <p className="text-sm font-semibold">Category Set {index + 1}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Assign schedules, then add categories inside the set.
-                          </p>
-                          <div className="space-y-2 max-w-xs">
-                            <Label className="text-[11px] font-semibold text-muted-foreground">Set Name</Label>
-                            <Input
-                              value={setItem.set_name}
-                              onChange={(e) => updateCategorySet(setItem.id, { set_name: e.target.value })}
-                              placeholder="e.g. Premiere Set"
-                              className="h-8 text-sm"
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Label className="text-[11px] font-semibold text-muted-foreground">
+                        Applies to schedules
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={setItem.filter_date || "all"}
+                          onValueChange={(value) =>
+                            updateCategorySet(setItem.id, {
+                              filter_date: value === "all" ? "" : value,
+                            })
+                          }
+                          disabled={scheds.length === 0 || setItem.apply_to_all}
+                        >
+                          <SelectTrigger className="h-7 w-[160px] text-[11px]">
+                            <SelectValue placeholder="Filter date" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All dates</SelectItem>
+                            {Array.from(
+                              new Map(
+                                scheds.map((sched) => [sched.sched_date, sched])
+                              ).keys()
+                            ).map((dateValue) => (
+                              <SelectItem key={dateValue} value={dateValue}>
+                                {formatDateLabel(dateValue)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {setItem.filter_date && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-[11px]"
+                            onClick={() => updateCategorySet(setItem.id, { filter_date: "" })}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={setItem.apply_to_all}
+                        onChange={(e) =>
+                          updateCategorySet(setItem.id, {
+                            apply_to_all: e.target.checked,
+                            sched_ids: e.target.checked ? [] : setItem.sched_ids,
+                          })
+                        }
+                        disabled={scheds.length === 0}
+                      />
+                      Apply to all schedules
+                    </label>
+                    {!setItem.apply_to_all && (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {getFilteredScheds(setItem).map((sched) => (
+                          <label key={sched.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 accent-primary"
+                              checked={setItem.sched_ids.includes(sched.id)}
+                              onChange={() => toggleSetSched(setItem.id, sched.id)}
                             />
+                            {formatDateLabel(sched.sched_date)} • {formatTime(sched.sched_start_time)}–{formatTime(sched.sched_end_time)}
+                          </label>
+                        ))}
+                        {scheds.length === 0 && (
+                          <p className="text-xs text-muted-foreground">Add schedules first to target specific dates.</p>
+                        )}
+                        {scheds.length > 0 && getAvailableScheds(setItem.id).length === 0 && (
+                          <p className="text-xs text-muted-foreground">All schedules already assigned.</p>
+                        )}
+                        {scheds.length > 0 && getAvailableScheds(setItem.id).length > 0 && getFilteredScheds(setItem).length === 0 && (
+                          <p className="text-xs text-muted-foreground">No schedules match the selected date.</p>
+                        )}
+                      </div>
+                    )}
+                    {setItem.apply_to_all && scheds.length === 0 && (
+                      <p className="text-xs text-muted-foreground">Add schedules to apply categories.</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-muted-foreground">Categories in this set</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => addCategoryToSet(setItem.id)}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Category
+                      </Button>
+                    </div>
+
+                    {setItem.categories.length === 0 && (
+                      <div className="rounded-lg border border-dashed border-sidebar-border px-3 py-4 text-xs text-muted-foreground">
+                        Add at least one category to define pricing.
+                      </div>
+                    )}
+
+                    {setItem.categories.map((category) => (
+                      <div key={category.id} className="flex items-start gap-3">
+                        <div className="grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.8fr] w-full">
+                          <div className="space-y-2">
+                            <Label className="text-[11px] font-semibold text-muted-foreground">Category Name</Label>
+                            <Input
+                              value={category.category_name}
+                              onChange={(e) =>
+                                updateCategoryInSet(setItem.id, category.id, { category_name: e.target.value })
+                              }
+                              placeholder="e.g. VIP"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[11px] font-semibold text-muted-foreground">Price</Label>
+                            <Input
+                              value={category.price}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                if (next !== "" && !/^\d{0,4}(\.\d{0,2})?$/.test(next)) return;
+                                updateCategoryInSet(setItem.id, category.id, { price: next });
+                              }}
+                              onBlur={() => {
+                                const raw = String(category.price ?? "").trim();
+                                const normalizedValue = raw === "" ? 0 : Number(raw);
+                                if (Number.isNaN(normalizedValue)) {
+                                  updateCategoryInSet(setItem.id, category.id, { price: "0.00" });
+                                  return;
+                                }
+                                const clamped = Math.min(Math.max(normalizedValue, 0), 9999.99);
+                                updateCategoryInSet(setItem.id, category.id, { price: clamped.toFixed(2) });
+                              }}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[11px] font-semibold text-muted-foreground">Color</Label>
+                            <Select
+                              value={category.color_code}
+                              onValueChange={(value) =>
+                                updateCategoryInSet(setItem.id, category.id, {
+                                  color_code: value as CategoryDraft["color_code"],
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-9 w-full">
+                                <SelectValue placeholder="Select color" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {COLOR_OPTIONS.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    <span className="flex items-center gap-2">
+                                      {option.swatch ? (
+                                        <span
+                                          className="h-2.5 w-2.5 rounded-full border border-border"
+                                          style={{ backgroundColor: option.swatch }}
+                                        />
+                                      ) : (
+                                        <span className="h-2.5 w-2.5 rounded-full border border-border bg-transparent" />
+                                      )}
+                                      {option.label}
+                                    </span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                         <Button
@@ -1217,208 +1402,19 @@ export function CreateShowForm() {
                           variant="ghost"
                           size="icon"
                           className="h-9 w-9 text-destructive hover:bg-destructive/10"
-                          onClick={() => removeCategorySet(setItem.id)}
+                          onClick={() => removeCategoryFromSet(setItem.id, category.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <Label className="text-[11px] font-semibold text-muted-foreground">
-                            Applies to schedules
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <Select
-                              value={setItem.filter_date || "all"}
-                              onValueChange={(value) =>
-                                updateCategorySet(setItem.id, {
-                                  filter_date: value === "all" ? "" : value,
-                                })
-                              }
-                              disabled={scheds.length === 0 || setItem.apply_to_all}
-                            >
-                              <SelectTrigger className="h-7 w-[160px] text-[11px]">
-                                <SelectValue placeholder="Filter date" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">All dates</SelectItem>
-                                {Array.from(
-                                  new Map(
-                                    scheds.map((sched) => [sched.sched_date, sched])
-                                  ).keys()
-                                ).map((dateValue) => (
-                                  <SelectItem key={dateValue} value={dateValue}>
-                                    {formatDateLabel(dateValue)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {setItem.filter_date && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-[11px]"
-                                onClick={() => updateCategorySet(setItem.id, { filter_date: "" })}
-                              >
-                                Clear
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 accent-primary"
-                            checked={setItem.apply_to_all}
-                            onChange={(e) =>
-                              updateCategorySet(setItem.id, {
-                                apply_to_all: e.target.checked,
-                                sched_ids: e.target.checked ? [] : setItem.sched_ids,
-                              })
-                            }
-                            disabled={scheds.length === 0}
-                          />
-                          Apply to all schedules
-                        </label>
-                        {!setItem.apply_to_all && (
-                          <div className="grid gap-2 md:grid-cols-2">
-                            {getFilteredScheds(setItem).map((sched) => (
-                              <label key={sched.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 accent-primary"
-                                  checked={setItem.sched_ids.includes(sched.id)}
-                                  onChange={() => toggleSetSched(setItem.id, sched.id)}
-                                />
-                                {formatDateLabel(sched.sched_date)} • {formatTime(sched.sched_start_time)}–{formatTime(sched.sched_end_time)}
-                              </label>
-                            ))}
-                            {scheds.length === 0 && (
-                              <p className="text-xs text-muted-foreground">Add schedules first to target specific dates.</p>
-                            )}
-                            {scheds.length > 0 && getAvailableScheds(setItem.id).length === 0 && (
-                              <p className="text-xs text-muted-foreground">All schedules already assigned.</p>
-                            )}
-                            {scheds.length > 0 && getAvailableScheds(setItem.id).length > 0 && getFilteredScheds(setItem).length === 0 && (
-                              <p className="text-xs text-muted-foreground">No schedules match the selected date.</p>
-                            )}
-                          </div>
-                        )}
-                        {setItem.apply_to_all && scheds.length === 0 && (
-                          <p className="text-xs text-muted-foreground">Add schedules to apply categories.</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs font-semibold text-muted-foreground">Categories in this set</p>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gap-1.5"
-                            onClick={() => addCategoryToSet(setItem.id)}
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            Add Category
-                          </Button>
-                        </div>
-
-                        {setItem.categories.length === 0 && (
-                          <div className="rounded-lg border border-dashed border-sidebar-border px-3 py-4 text-xs text-muted-foreground">
-                            Add at least one category to define pricing.
-                          </div>
-                        )}
-
-                        {setItem.categories.map((category) => (
-                          <div key={category.id} className="flex items-start gap-3">
-                            <div className="grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.8fr] w-full">
-                              <div className="space-y-2">
-                                <Label className="text-[11px] font-semibold text-muted-foreground">Category Name</Label>
-                                <Input
-                                  value={category.category_name}
-                                  onChange={(e) =>
-                                    updateCategoryInSet(setItem.id, category.id, { category_name: e.target.value })
-                                  }
-                                  placeholder="e.g. VIP"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-[11px] font-semibold text-muted-foreground">Price</Label>
-                                <Input
-                                  value={category.price}
-                                  onChange={(e) => {
-                                    const next = e.target.value;
-                                    if (next !== "" && !/^\d{0,4}(\.\d{0,2})?$/.test(next)) return;
-                                    updateCategoryInSet(setItem.id, category.id, { price: next });
-                                  }}
-                                  onBlur={() => {
-                                    const raw = String(category.price ?? "").trim();
-                                    const normalizedValue = raw === "" ? 0 : Number(raw);
-                                    if (Number.isNaN(normalizedValue)) {
-                                      updateCategoryInSet(setItem.id, category.id, { price: "0.00" });
-                                      return;
-                                    }
-                                    const clamped = Math.min(Math.max(normalizedValue, 0), 9999.99);
-                                    updateCategoryInSet(setItem.id, category.id, { price: clamped.toFixed(2) });
-                                  }}
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-[11px] font-semibold text-muted-foreground">Color</Label>
-                                <Select
-                                  value={category.color_code}
-                                  onValueChange={(value) =>
-                                    updateCategoryInSet(setItem.id, category.id, {
-                                      color_code: value as CategoryDraft["color_code"],
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger className="h-9 w-full">
-                                    <SelectValue placeholder="Select color" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {COLOR_OPTIONS.map((option) => (
-                                      <SelectItem key={option.value} value={option.value}>
-                                        <span className="flex items-center gap-2">
-                                          {option.swatch ? (
-                                            <span
-                                              className="h-2.5 w-2.5 rounded-full border border-border"
-                                              style={{ backgroundColor: option.swatch }}
-                                            />
-                                          ) : (
-                                            <span className="h-2.5 w-2.5 rounded-full border border-border bg-transparent" />
-                                          )}
-                                          {option.label}
-                                        </span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-destructive hover:bg-destructive/10"
-                              onClick={() => removeCategoryFromSet(setItem.id, category.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
