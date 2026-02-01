@@ -13,6 +13,9 @@ import {
   Plus,
   Trash2,
   AlertCircle,
+  CalendarDays,
+  Play,
+  Armchair,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { cn } from "@/lib/utils";
@@ -339,9 +342,10 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
   }, [formData.seatmap_id]);
 
   // Initialize category sets from show data
-  React.useEffect(() => {
+  const resetCategorySets = React.useCallback(() => {
     if (!show.categorySets || show.categorySets.length === 0) {
       setCategorySets([]);
+      setActiveSetId(null);
       return;
     }
 
@@ -349,7 +353,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     const drafts: CategorySetDraft[] = show.categorySets.map((dbSet) => {
       // Find schedules that use this category set
       const schedsWithThisSet = show.scheds.filter(
-        (sched) => sched.category_set_id === dbSet.category_set_id
+        (sched) => sched.category_set_id === dbSet.category_set_id,
       );
 
       // Build seat assignments map from the schedules
@@ -383,8 +387,14 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     setCategorySets(drafts);
     if (drafts.length > 0) {
       setActiveSetId(drafts[0].id);
+    } else {
+      setActiveSetId(null);
     }
-  }, [show.categorySets, show.scheds]);
+  }, [show]);
+
+  React.useEffect(() => {
+    resetCategorySets();
+  }, [resetCategorySets]);
 
   const addTimeRange = () => {
     setTimeRanges((prev) => [
@@ -483,11 +493,24 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     setCategorySets((prev) =>
       prev.map((setItem) => {
         if (setItem.id !== setId) return setItem;
+
+        // Filter out the category
+        const nextCategories = setItem.categories.filter(
+          (category) => category.id !== categoryId,
+        );
+
+        // Filter out seat assignments that were pointing to this category
+        const nextAssignments = { ...setItem.seatAssignments };
+        Object.entries(nextAssignments).forEach(([seatId, catId]) => {
+          if (catId === categoryId) {
+            delete nextAssignments[seatId];
+          }
+        });
+
         return {
           ...setItem,
-          categories: setItem.categories.filter(
-            (category) => category.id !== categoryId,
-          ),
+          categories: nextCategories,
+          seatAssignments: nextAssignments,
         };
       }),
     );
@@ -599,8 +622,11 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
   const missingFields = React.useMemo(() => {
     const missing: string[] = [];
     const requiresSeatmap =
-      formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
+      formData.show_status === "UPCOMING" ||
+      formData.show_status === "OPEN" ||
+      formData.show_status === "ON_GOING";
 
+    // 1. Basic Fields
     if (!formData.show_name.trim()) missing.push("Show Name");
     if (!formData.show_description.trim()) missing.push("Description");
     if (!formData.venue.trim()) missing.push("Venue");
@@ -608,14 +634,18 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     if (!formData.show_start_date) missing.push("Start Date");
     if (!formData.show_end_date) missing.push("End Date");
 
+    // 2. Schedule Validation (Mandatory for ALL productions)
+    if (formData.scheds.length === 0) {
+      missing.push("Schedules");
+    } else if (scheduleCoverage.missingDates.length > 0) {
+      missing.push("Schedules (missing dates)");
+    }
+
+    // 3. Seatmap & Assignments Validation
     if (!formData.seatmap_id) {
       if (requiresSeatmap) missing.push("Seatmap");
     } else {
-      if (formData.scheds.length === 0) {
-        if (requiresSeatmap) missing.push("Schedules");
-      } else if (scheduleCoverage.missingDates.length > 0) {
-        missing.push("Schedules (missing dates)");
-      } else if (
+      if (
         categorySets.length > 0 &&
         formData.scheds.length > 0 &&
         unassignedSchedCount > 0
@@ -624,6 +654,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       }
 
       const hasInvalidCategory = categorySets.some((setItem) =>
+        setItem.categories.length === 0 || // Flag empty sets
         setItem.categories.some((category) => {
           const nameValid = category.category_name.trim().length > 0;
           const priceValue = String(category.price ?? "").trim();
@@ -635,7 +666,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
           return !nameValid || !priceValid;
         }),
       );
-      if (hasInvalidCategory) missing.push("Category name/price");
+      if (hasInvalidCategory) missing.push("Category name/price/empty set");
 
       if (incompleteCategorySets.length > 0) {
         incompleteCategorySets.forEach((incomplete) => {
@@ -656,8 +687,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     return missing;
   }, [
     formData,
-    isDateRangeValid,
-    scheduleCoverage.missingDates.length,
+    scheduleCoverage,
     categorySets,
     unassignedSchedCount,
     totalSeatsCount,
@@ -674,7 +704,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       return false;
     return true;
   }, [
-    missingFields.length,
+    missingFields,
     formData.seatmap_id,
     formData.scheds.length,
     unassignedSchedCount,
@@ -1791,37 +1821,85 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         </div>
 
         <div className="space-y-6">
-          <Card className="border-sidebar-border shadow-md bg-primary/5 border-primary/10 overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-5">
-              <Clock className="w-24 h-24" />
-            </div>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">Summary</CardTitle>
+          <Card className="border-sidebar-border shadow-lg bg-card overflow-hidden relative">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Ticket className="w-4 h-4 text-primary" />
+                Production Summary
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center py-2 border-b border-sidebar-border/50">
-                <span className="text-xs font-semibold text-muted-foreground">
-                  Total Days
-                </span>
-                <span className="font-black text-xl">
-                  {
-                    new Set(
-                      formData.scheds.map((s) => {
-                        const d = toDateValue(s.sched_date);
-                        return toManilaDateKey(d);
-                      }),
-                    ).size
-                  }
-                </span>
+            <CardContent className="space-y-6">
+              <div className="grid gap-4">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-sidebar-border/50 group hover:bg-muted transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                      <CalendarDays className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-semibold text-muted-foreground">
+                      Total Days
+                    </span>
+                  </div>
+                  <span className="font-black text-xl tracking-tighter">
+                    {
+                      new Set(
+                        formData.scheds.map((s) => {
+                          const d = toDateValue(s.sched_date);
+                          return toManilaDateKey(d);
+                        }),
+                      ).size
+                    }
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-sidebar-border/50 group hover:bg-muted transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                      <Play className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-semibold text-muted-foreground">
+                      Total Performances
+                    </span>
+                  </div>
+                  <span className="font-black text-xl tracking-tighter">
+                    {formData.scheds.length}
+                  </span>
+                </div>
+
+                {formData.seatmap_id && (
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50 border border-sidebar-border/50 group hover:bg-muted transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10 text-primary group-hover:scale-110 transition-transform">
+                        <Armchair className="w-4 h-4" />
+                      </div>
+                      <span className="text-sm font-semibold text-muted-foreground">
+                        Total Capacity
+                      </span>
+                    </div>
+                    <span className="font-black text-xl tracking-tighter">
+                      {totalSeatsCount}
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-sidebar-border/50">
-                <span className="text-xs font-semibold text-muted-foreground">
-                  Total Shows
-                </span>
-                <span className="font-black text-xl">
-                  {formData.scheds.length}
-                </span>
-              </div>
+
+              {categorySets.length > 0 && (
+                <div className="pt-4 border-t border-sidebar-border">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                    Pricing Tiers
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {categorySets.map((set) => (
+                      <Badge
+                        key={set.id}
+                        variant="outline"
+                        className="bg-background/50 font-medium py-1"
+                      >
+                        {set.set_name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1870,7 +1948,9 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                       client_id: s.sched_id || uuidv4(),
                     })),
                   });
+                  resetCategorySets();
                   setSelectedDates([]);
+                  setSelectedSeatIds([]);
                   setTimeRanges([
                     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
                   ]);
