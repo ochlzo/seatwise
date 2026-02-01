@@ -3,6 +3,7 @@ import { adminAuth } from "@/lib/firebaseAdmin";
 import { cookies } from "next/headers";
 import { getUserByFirebaseUid, upsertUser, isNewUser, updateUserAvatar, resolveAvatarUrl } from "@/lib/db/Users";
 import { uploadGoogleAvatar } from "@/lib/actions/uploadGoogleAvatar";
+import { assignRandomAvatarAction } from "@/lib/actions/authActions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -112,28 +113,22 @@ export async function POST(req: NextRequest) {
       (p) => p.providerId === "password"
     );
 
-    // If new Google user, upload their profile picture to Cloudinary
-    if (newlyCreated && decoded.picture) {
-      const avatarUrl = await uploadGoogleAvatar(uid, decoded.picture);
-      if (avatarUrl) {
-        await updateUserAvatar(uid, avatarUrl);
-        // Refresh the user object to get the new avatar_key
-        const refreshedUser = await getUserByFirebaseUid(uid);
-        if (refreshedUser) {
-          return NextResponse.json({
-            user: {
-              uid: refreshedUser.firebase_uid,
-              email: refreshedUser.email,
-              displayName: `${refreshedUser.first_name || ""} ${refreshedUser.last_name || ""}`.trim(),
-              firstName: refreshedUser.first_name,
-              lastName: refreshedUser.last_name,
-              username: refreshedUser.username,
-              photoURL: resolveAvatarUrl(refreshedUser.avatarKey, refreshedUser.username, refreshedUser.email),
-              role: refreshedUser.role,
-              hasPassword,
-              isNewUser: true,
-            },
-          });
+    // AVATAR ASSIGNMENT LOGIC
+    if (!user.avatarKey) {
+      if (newlyCreated && decoded.picture) {
+        // Priority 1: Google Profile Picture for new users
+        const avatarUrl = await uploadGoogleAvatar(uid, decoded.picture);
+        if (avatarUrl) {
+          user.avatarKey = avatarUrl;
+          await updateUserAvatar(uid, avatarUrl);
+        }
+      }
+
+      // Priority 2: Random assignment if still null (not Google, or Google upload failed)
+      if (!user.avatarKey) {
+        const result = await assignRandomAvatarAction(uid);
+        if (result.success && result.url) {
+          user.avatarKey = result.url;
         }
       }
     }

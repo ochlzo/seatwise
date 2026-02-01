@@ -9,41 +9,60 @@ import { auth } from "@/lib/firebaseClient";
 import { User } from "@/lib/features/auth/authSlice";
 import { useRouter } from "next/navigation";
 
+export const getAuthErrorMessage = (error: unknown): string => {
+  const code = (error as { code?: string })?.code;
+
+  switch (code) {
+    // Login Errors
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "Invalid email or password. Please check your credentials and try again.";
+    case "auth/user-disabled":
+      return "This account has been disabled. Please contact support.";
+    case "auth/too-many-requests":
+      return "Too many unsuccessful attempts. Your account has been temporarily locked. Please try again later.";
+
+    // Signup Errors
+    case "auth/email-already-in-use":
+      return "This email is already registered. If you forgot your password, try resetting it.";
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/weak-password":
+      return "Password is too weak. Please use at least 6 characters with a mix of letters and numbers.";
+    case "auth/operation-not-allowed":
+      return "Email/password accounts are not enabled. Please contact the administrator.";
+
+    // General / Security Errors
+    case "auth/network-request-failed":
+      return "Network error. Please check your internet connection.";
+    case "auth/requires-recent-login":
+      return "For security reasons, please log in again before making this change.";
+    case "auth/internal-error":
+      return "An internal authentication error occurred. Please try again later.";
+
+    default:
+      if (error instanceof Error && error.message.trim() !== "" && !error.message.includes("Firebase:")) {
+        return error.message;
+      }
+      return "An unexpected error occurred. Please try again.";
+  }
+};
+
+const readApiError = async (response: Response): Promise<string> => {
+  try {
+    const data = (await response.json()) as { error?: unknown };
+    if (typeof data?.error === "string" && data.error.trim() !== "") {
+      return data.error;
+    }
+    return "Request failed";
+  } catch {
+    return "Request failed";
+  }
+};
+
 export function useEmailPass() {
   const router = useRouter();
-
-  const getAuthErrorMessage = (error: unknown): string => {
-    const maybeFirebaseError = error as Partial<FirebaseError> | null;
-    const code = maybeFirebaseError?.code;
-
-    switch (code) {
-      case "auth/user-not-found":
-      case "auth/wrong-password":
-      case "auth/invalid-credential":
-        return "Invalid email or password";
-      case "auth/invalid-email":
-        return "Invalid email address";
-      case "auth/too-many-requests":
-        return "Too many attempts. Try again later.";
-      default:
-        if (error instanceof Error && error.message.trim() !== "") {
-          return error.message;
-        }
-        return "Unable to sign in. Please try again.";
-    }
-  };
-
-  const readApiError = async (response: Response): Promise<string> => {
-    try {
-      const data = (await response.json()) as { error?: unknown };
-      if (typeof data?.error === "string" && data.error.trim() !== "") {
-        return data.error;
-      }
-      return "Request failed";
-    } catch {
-      return "Request failed";
-    }
-  };
 
   const signUpWithEmail = async (
     email: string,
