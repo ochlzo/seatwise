@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { differenceInCalendarMonths } from "date-fns";
 
 import {
   CalendarIcon,
@@ -11,6 +12,7 @@ import {
   Loader2,
   Plus,
   Trash2,
+  AlertCircle,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { cn } from "@/lib/utils";
@@ -524,6 +526,160 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     );
   };
 
+  const isDateRangeValid = React.useMemo(() => {
+    return (
+      formData.show_start_date &&
+      formData.show_end_date &&
+      formData.show_start_date.getTime() <= formData.show_end_date.getTime()
+    );
+  }, [formData.show_start_date, formData.show_end_date]);
+
+  const scheduleCoverage = React.useMemo(() => {
+    if (!formData.show_start_date || !formData.show_end_date) {
+      return {
+        hasSchedules: formData.scheds.length > 0,
+        missingDates: [] as string[],
+      };
+    }
+    const scheduleDates = new Set(
+      formData.scheds.map((sched) =>
+        toManilaDateKey(toDateValue(sched.sched_date)),
+      ),
+    );
+    const missingDates: string[] = [];
+    const cursor = new Date(formData.show_start_date);
+    while (cursor <= formData.show_end_date) {
+      const dateKey = toManilaDateKey(cursor);
+      if (!scheduleDates.has(dateKey)) {
+        missingDates.push(dateKey);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return { hasSchedules: formData.scheds.length > 0, missingDates };
+  }, [formData.scheds, formData.show_start_date, formData.show_end_date]);
+
+  const unassignedSchedCount = React.useMemo(() => {
+    if (formData.scheds.length === 0) return 0;
+    const used = new Set<string>();
+    categorySets.forEach((setItem) => {
+      if (setItem.apply_to_all) {
+        formData.scheds.forEach((sched) => used.add(sched.client_id));
+        return;
+      }
+      setItem.sched_ids.forEach((id) => used.add(id));
+    });
+    return formData.scheds.filter((sched) => !used.has(sched.client_id)).length;
+  }, [categorySets, formData.scheds]);
+
+  const totalSeatsCount = React.useMemo(() => {
+    if (!seatmapData || !seatmapData.nodes) return 0;
+    return Object.values(seatmapData.nodes).filter(
+      (node: any) => node.type === "seat",
+    ).length;
+  }, [seatmapData]);
+
+  const incompleteCategorySets = React.useMemo(() => {
+    if (!totalSeatsCount || categorySets.length === 0) return [];
+    return categorySets
+      .map((setItem, index) => {
+        const assignedInThisSet = setItem.seatAssignments
+          ? Object.keys(setItem.seatAssignments).length
+          : 0;
+        if (assignedInThisSet < totalSeatsCount) {
+          return {
+            setName: setItem.set_name || `Set ${index + 1}`,
+            missing: totalSeatsCount - assignedInThisSet,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean) as Array<{ setName: string; missing: number }>;
+  }, [categorySets, totalSeatsCount]);
+
+  const missingFields = React.useMemo(() => {
+    const missing: string[] = [];
+    const requiresSeatmap =
+      formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
+
+    if (!formData.show_name.trim()) missing.push("Show Name");
+    if (!formData.show_description.trim()) missing.push("Description");
+    if (!formData.venue.trim()) missing.push("Venue");
+    if (!formData.address.trim()) missing.push("Address");
+    if (!formData.show_start_date) missing.push("Start Date");
+    if (!formData.show_end_date) missing.push("End Date");
+
+    if (!formData.seatmap_id) {
+      if (requiresSeatmap) missing.push("Seatmap");
+    } else {
+      if (formData.scheds.length === 0) {
+        if (requiresSeatmap) missing.push("Schedules");
+      } else if (scheduleCoverage.missingDates.length > 0) {
+        missing.push("Schedules (missing dates)");
+      } else if (
+        categorySets.length > 0 &&
+        formData.scheds.length > 0 &&
+        unassignedSchedCount > 0
+      ) {
+        missing.push("Assigned Scheds");
+      }
+
+      const hasInvalidCategory = categorySets.some((setItem) =>
+        setItem.categories.some((category) => {
+          const nameValid = category.category_name.trim().length > 0;
+          const priceValue = String(category.price ?? "").trim();
+          const priceValid =
+            priceValue !== "" &&
+            /^\d{1,4}(\.\d{1,2})?$/.test(priceValue) &&
+            !Number.isNaN(Number(priceValue)) &&
+            Number(priceValue) >= 0;
+          return !nameValid || !priceValid;
+        }),
+      );
+      if (hasInvalidCategory) missing.push("Category name/price");
+
+      if (incompleteCategorySets.length > 0) {
+        incompleteCategorySets.forEach((incomplete) => {
+          missing.push(
+            `${incomplete.setName}: ${incomplete.missing} seats unassigned`,
+          );
+        });
+      }
+    }
+
+    if (
+      formData.show_start_date &&
+      formData.show_end_date &&
+      !isDateRangeValid
+    ) {
+      missing.push("Date range (start must be before end)");
+    }
+    return missing;
+  }, [
+    formData,
+    isDateRangeValid,
+    scheduleCoverage.missingDates.length,
+    categorySets,
+    unassignedSchedCount,
+    totalSeatsCount,
+    incompleteCategorySets,
+  ]);
+
+  const isFormValid = React.useMemo(() => {
+    if (missingFields.length > 0) return false;
+    if (
+      formData.seatmap_id &&
+      formData.scheds.length > 0 &&
+      unassignedSchedCount > 0
+    )
+      return false;
+    return true;
+  }, [
+    missingFields.length,
+    formData.seatmap_id,
+    formData.scheds.length,
+    unassignedSchedCount,
+  ]);
+
   const handleAddSchedules = () => {
     if (!selectedDates.length) {
       toast.error("Select at least one date.");
@@ -561,6 +717,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
   };
 
   const handleSave = async () => {
+    if (!isFormValid) return;
     setIsSaving(true);
     try {
       const result = await updateShowAction(show.show_id, {
@@ -1670,9 +1827,22 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
           {isEditing ? (
             <div className="grid gap-3">
+              {!isFormValid && !isSaving && (
+                <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive animate-in fade-in slide-in-from-top-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider">
+                      Required Details Missing
+                    </p>
+                    <p className="text-xs font-medium leading-relaxed">
+                      {missingFields.join(", ")}
+                    </p>
+                  </div>
+                </div>
+              )}
               <Button
                 onClick={handleSave}
-                disabled={isSaving}
+                disabled={isSaving || !isFormValid}
                 className="w-full h-12 font-black uppercase tracking-widest text-base shadow-xl shadow-primary/20"
               >
                 {isSaving ? (
