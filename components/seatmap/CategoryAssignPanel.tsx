@@ -23,8 +23,8 @@ type CategoryAssignPanelProps = {
     categories: SeatmapPreviewCategory[];
     /** Maps seat ID -> category ID (not color_code) */
     seatCategories: Record<string, string>;
-    onAssign: (seatIds: string[], categoryId: string) => void;
-    onClear: (seatIds: string[]) => void;
+    onAssign?: (seatIds: string[], categoryId: string) => void;
+    onClear?: (seatIds: string[]) => void;
     className?: string;
 };
 
@@ -45,6 +45,7 @@ export function CategoryAssignPanel({
             .filter((catId): catId is string => Boolean(catId))
     );
     const hasSelection = selectedCategoryIds.size > 0;
+    const isReadOnly = !onAssign || !onClear;
 
     return (
         <div
@@ -54,14 +55,16 @@ export function CategoryAssignPanel({
             )}
         >
             <div className="flex items-center justify-between mb-2">
-                <span className="font-semibold text-zinc-700">Assign Category</span>
+                <span className="font-semibold text-zinc-700">
+                    {isReadOnly ? "Category Info" : "Assign Category"}
+                </span>
                 <span className="text-[10px] text-zinc-400">
                     {selectedSeatIds.length} seat{selectedSeatIds.length === 1 ? "" : "s"}
                 </span>
             </div>
             {categories.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-4 text-center text-zinc-500">
-                    <span className="text-[11px]">Add categories first</span>
+                    <span className="text-[11px]">No categories defined</span>
                 </div>
             ) : (
                 <div className="flex flex-col gap-2">
@@ -71,14 +74,17 @@ export function CategoryAssignPanel({
                             <button
                                 key={category.category_id}
                                 type="button"
+                                disabled={isReadOnly}
                                 className={cn(
-                                    "flex items-center gap-2 rounded-md border px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50",
+                                    "flex items-center gap-2 rounded-md border px-2 py-1.5 text-[11px] font-medium text-zinc-700",
                                     isAssigned
                                         ? "border-primary ring-1 ring-primary/40"
                                         : "border-zinc-200",
-                                    !hasSelection && "border-zinc-200"
+                                    !hasSelection && "border-zinc-200",
+                                    !isReadOnly && "hover:bg-zinc-50",
+                                    isReadOnly && "cursor-default"
                                 )}
-                                onClick={() => onAssign(selectedSeatIds, category.category_id)}
+                                onClick={() => onAssign?.(selectedSeatIds, category.category_id)}
                             >
                                 <span
                                     className={cn(
@@ -102,14 +108,16 @@ export function CategoryAssignPanel({
                             </button>
                         );
                     })}
-                    <button
-                        type="button"
-                        className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
-                        onClick={() => onClear(selectedSeatIds)}
-                    >
-                        <span className="h-2.5 w-2.5 rounded-full border border-zinc-300 bg-transparent" />
-                        <span>Clear</span>
-                    </button>
+                    {!isReadOnly && (
+                        <button
+                            type="button"
+                            className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
+                            onClick={() => onClear?.(selectedSeatIds)}
+                        >
+                            <span className="h-2.5 w-2.5 rounded-full border border-zinc-300 bg-transparent" />
+                            <span>Clear</span>
+                        </button>
+                    )}
                 </div>
             )}
         </div>
