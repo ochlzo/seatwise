@@ -5,6 +5,8 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import cloudinary from "@/lib/cloudinary";
+import { getDefaultAvatarsFromCloudinary } from "@/lib/avatars/defaultAvatars";
+import { updateUserAvatar } from "@/lib/db/Users";
 
 /**
  * Server Action to completely abort the signup process.
@@ -71,5 +73,32 @@ export async function abortSignUpAction() {
     } catch (error) {
         console.error("Critical error during abortSignUp:", error);
         return { success: false, error: "A critical error occurred during account deletion." };
+    }
+}
+
+/**
+ * Server Action to assign a random default avatar from Cloudinary to a user.
+ * @param uid The Firebase UID of the user.
+ */
+export async function assignRandomAvatarAction(uid: string) {
+    try {
+        const avatars = await getDefaultAvatarsFromCloudinary();
+        if (!avatars || avatars.length === 0) {
+            console.warn("No default avatars found in Cloudinary to assign to user:", uid);
+            return { success: false, error: "No default avatars available" };
+        }
+
+        // Pick a random avatar from the list
+        const randomIndex = Math.floor(Math.random() * avatars.length);
+        const randomAvatarUrl = avatars[randomIndex];
+
+        // Update the user's avatar_key in the database
+        await updateUserAvatar(uid, randomAvatarUrl);
+
+        console.log(`✅ Assigned random avatar to user ${uid}:`, randomAvatarUrl);
+        return { success: true, url: randomAvatarUrl };
+    } catch (error) {
+        console.error("Error assigning random avatar:", error);
+        return { success: false, error: "Failed to assign random avatar" };
     }
 }

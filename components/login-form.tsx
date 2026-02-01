@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { useAppDispatch } from "@/lib/hooks";
 import { setUser } from "@/lib/features/auth/authSlice";
 import { useGoogleLogin } from "@/hooks/useGoogleLogin";
-import { useEmailPass } from "@/hooks/useEmail&Pass";
+import { useEmailPass, getAuthErrorMessage } from "@/hooks/useEmail&Pass";
 import {
   GoogleAuthProvider,
   reauthenticateWithPopup,
@@ -134,6 +134,7 @@ export function LoginForm({
       }
     } catch (error) {
       console.error("Google login failed:", error);
+      setValidationError(getAuthErrorMessage(error));
       onLoginError?.();
     } finally {
       setIsSubmitting(false);
@@ -151,16 +152,7 @@ export function LoginForm({
         setValidationError(null);
       } catch (error: unknown) {
         console.error("Reset password failed:", error);
-        const code = (error as { code?: string })?.code || "";
-        if (code === "auth/user-not-found") {
-          setValidationError("No user found with that email address.");
-        } else if (code === "auth/invalid-email") {
-          setValidationError("Invalid email address.");
-        } else {
-          setValidationError(
-            "Failed to send reset email. Please try again later."
-          );
-        }
+        setValidationError(getAuthErrorMessage(error));
       } finally {
         setIsSubmitting(false);
       }
@@ -299,18 +291,8 @@ export function LoginForm({
       const errorMessage = (error as Error).message || "";
       if (errorMessage.includes("Username is already taken")) {
         setUsernameTaken(true);
-      } else if (
-        (error as { code?: string })?.code === "auth/invalid-credential" ||
-        (error as { code?: string })?.code === "auth/user-not-found" ||
-        (error as { code?: string })?.code === "auth/wrong-password"
-      ) {
-        setValidationError("Invalid email or password.");
-      } else if ((error as { code?: string })?.code === "auth/email-already-in-use") {
-        setValidationError("Email is already in use.");
-      } else if ((error as { code?: string })?.code === "auth/requires-recent-login") {
-        setValidationError("Please login again to set a password.");
       } else {
-        setValidationError((error as Error).message || "An error occurred.");
+        setValidationError(getAuthErrorMessage(error));
       }
       onLoginError?.();
     } finally {
