@@ -78,13 +78,13 @@ const COLOR_OPTIONS: Array<{
   label: string;
   swatch: string | null;
 }> = [
-  { value: "NO_COLOR", label: "No Color", swatch: null },
-  { value: "GOLD", label: "Gold", swatch: "#ffd700" },
-  { value: "PINK", label: "Pink", swatch: "#e005b9" },
-  { value: "BLUE", label: "Blue", swatch: "#111184" },
-  { value: "BURGUNDY", label: "Burgundy", swatch: "#800020" },
-  { value: "GREEN", label: "Green", swatch: "#046307" },
-];
+    { value: "NO_COLOR", label: "No Color", swatch: null },
+    { value: "GOLD", label: "Gold", swatch: "#ffd700" },
+    { value: "PINK", label: "Pink", swatch: "#e005b9" },
+    { value: "BLUE", label: "Blue", swatch: "#111184" },
+    { value: "BURGUNDY", label: "Burgundy", swatch: "#800020" },
+    { value: "GREEN", label: "Green", swatch: "#046307" },
+  ];
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -187,12 +187,12 @@ type ShowDetail = {
           category_name: string;
           price: string; // Serialized from Decimal
           color_code:
-            | "NO_COLOR"
-            | "GOLD"
-            | "PINK"
-            | "BLUE"
-            | "BURGUNDY"
-            | "GREEN";
+          | "NO_COLOR"
+          | "GOLD"
+          | "PINK"
+          | "BLUE"
+          | "BURGUNDY"
+          | "GREEN";
         };
       };
     }>;
@@ -206,12 +206,12 @@ type ShowDetail = {
         category_name: string;
         price: string; // Serialized from Decimal
         color_code:
-          | "NO_COLOR"
-          | "GOLD"
-          | "PINK"
-          | "BLUE"
-          | "BURGUNDY"
-          | "GREEN";
+        | "NO_COLOR"
+        | "GOLD"
+        | "PINK"
+        | "BLUE"
+        | "BURGUNDY"
+        | "GREEN";
       };
     }>;
   }>;
@@ -227,7 +227,7 @@ type SeatmapOption = {
   updatedAt: string;
 };
 
-type SchedDraft = ShowDetail["scheds"][number];
+type SchedDraft = ShowDetail["scheds"][number] & { client_id: string };
 
 export function ShowDetailForm({ show }: ShowDetailFormProps) {
   const router = useRouter();
@@ -268,7 +268,10 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     show_start_date: new Date(show.show_start_date),
     show_end_date: new Date(show.show_end_date),
     seatmap_id: show.seatmap_id || "",
-    scheds: show.scheds || [],
+    scheds: (show.scheds || []).map((s) => ({
+      ...s,
+      client_id: s.sched_id || uuidv4(),
+    })),
   });
 
   React.useEffect(() => {
@@ -362,8 +365,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       return {
         id: dbSet.category_set_id,
         set_name: dbSet.set_name,
-        apply_to_all: false, // Will be determined by checking if all schedules use this set
         sched_ids: schedsWithThisSet.map((s) => s.sched_id || ""),
+        apply_to_all: true, // Default to true if loaded from DB to be safe, or logic to check if all schedules are covered
         filter_date: "",
         categories: dbSet.items.map((item) => ({
           id: item.seatCategory.seat_category_id,
@@ -538,6 +541,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       const dateKey = toManilaDateKey(date);
       validRanges.forEach((range) => {
         newEntries.push({
+          client_id: uuidv4(),
           sched_date: dateKey,
           sched_start_time: range.start,
           sched_end_time: range.end,
@@ -560,7 +564,20 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     setIsSaving(true);
     try {
       const result = await updateShowAction(show.show_id, {
-        ...formData,
+        show_name: formData.show_name,
+        show_description: formData.show_description,
+        venue: formData.venue,
+        address: formData.address,
+        show_status: formData.show_status,
+        show_start_date: formData.show_start_date,
+        show_end_date: formData.show_end_date,
+        seatmap_id: formData.seatmap_id || null,
+        scheds: formData.scheds.map((s) => ({
+          client_id: s.client_id,
+          sched_date: s.sched_date,
+          sched_start_time: s.sched_start_time,
+          sched_end_time: s.sched_end_time,
+        })),
         category_sets: categorySets.map((setItem, index) => {
           // Map seatAssignments (seatId -> categoryId) to (seatId -> categoryName)
           const assignmentsByName: Record<string, string> = {};
@@ -604,6 +621,24 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const getFilteredScheds = (setItem: CategorySetDraft) => {
+    if (setItem.filter_date) {
+      return formData.scheds.filter(
+        (s) => toManilaDateKey(toDateValue(s.sched_date)) === setItem.filter_date,
+      );
+    }
+    return formData.scheds;
+  };
+
+  const getAvailableScheds = (currentSetId: string) => {
+    return formData.scheds.filter((s) => {
+      const assignedToOther = categorySets.some(
+        (set) => set.id !== currentSetId && set.sched_ids.includes(s.client_id),
+      );
+      return !assignedToOther;
+    });
   };
 
   return (
@@ -988,14 +1023,14 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                               category.color_code === "NO_COLOR"
                                                 ? "transparent"
                                                 : category.color_code === "GOLD"
-                                                ? "#ffd700"
-                                                : category.color_code === "PINK"
-                                                ? "#e005b9"
-                                                : category.color_code === "BLUE"
-                                                ? "#111184"
-                                                : category.color_code === "BURGUNDY"
-                                                ? "#800020"
-                                                : "#046307",
+                                                  ? "#ffd700"
+                                                  : category.color_code === "PINK"
+                                                    ? "#e005b9"
+                                                    : category.color_code === "BLUE"
+                                                      ? "#111184"
+                                                      : category.color_code === "BURGUNDY"
+                                                        ? "#800020"
+                                                        : "#046307",
                                           }}
                                         />
                                         <span className="font-medium">{category.category_name}</span>
@@ -1125,79 +1160,79 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                       </p>
                     </div>
                   ) : (
-                  <div className="flex flex-col gap-3 w-full">
-                    {/* Tab Navigation */}
-                    <div className="flex w-fit max-w-full justify-start overflow-x-auto rounded-lg bg-muted p-1">
-                      {categorySets.map((setItem, index) => {
-                        const isActive =
-                          (activeSetId ?? categorySets[0]?.id) === setItem.id;
-                        return (
-                          <button
-                            key={setItem.id}
-                            type="button"
-                            onClick={() => {
-                              setActiveSetId(setItem.id);
-                              setSelectedSeatIds([]);
-                            }}
-                            className={cn(
-                              "inline-flex min-w-[100px] items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-background",
-                              isActive
-                                ? "bg-background text-foreground shadow-sm"
-                                : "text-muted-foreground hover:bg-background/50 hover:text-foreground",
-                            )}
-                          >
-                            {setItem.set_name || `Set ${index + 1}`}
-                          </button>
+                    <div className="flex flex-col gap-3 w-full">
+                      {/* Tab Navigation */}
+                      <div className="flex w-fit max-w-full justify-start overflow-x-auto rounded-lg bg-muted p-1">
+                        {categorySets.map((setItem, index) => {
+                          const isActive =
+                            (activeSetId ?? categorySets[0]?.id) === setItem.id;
+                          return (
+                            <button
+                              key={setItem.id}
+                              type="button"
+                              onClick={() => {
+                                setActiveSetId(setItem.id);
+                                setSelectedSeatIds([]);
+                              }}
+                              className={cn(
+                                "inline-flex min-w-[100px] items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 ring-offset-background",
+                                isActive
+                                  ? "bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:bg-background/50 hover:text-foreground",
+                              )}
+                            >
+                              {setItem.set_name || `Set ${index + 1}`}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Active Content */}
+                      {(() => {
+                        const activeSet = categorySets.find(
+                          (s) => s.id === (activeSetId ?? categorySets[0]?.id),
                         );
-                      })}
-                    </div>
 
-                    {/* Active Content */}
-                    {(() => {
-                      const activeSet = categorySets.find(
-                        (s) => s.id === (activeSetId ?? categorySets[0]?.id),
-                      );
+                        if (!activeSet) return null;
 
-                      if (!activeSet) return null;
+                        const setCategories = activeSet.categories.map(
+                          (category) => ({
+                            category_id: category.id,
+                            name: category.category_name,
+                            color_code: category.color_code,
+                          }),
+                        );
 
-                      const setCategories = activeSet.categories.map(
-                        (category) => ({
-                          category_id: category.id,
-                          name: category.category_name,
-                          color_code: category.color_code,
-                        }),
-                      );
+                        const currentAssignments =
+                          activeSet.seatAssignments || {};
 
-                      const currentAssignments =
-                        activeSet.seatAssignments || {};
-
-                      return (
-                        <div className="relative mt-1">
-                          <SeatmapPreview
-                            seatmapId={formData.seatmap_id || undefined}
-                            allowMarqueeSelection={isEditing}
-                            selectedSeatIds={selectedSeatIds}
-                            onSelectionChange={setSelectedSeatIds}
-                            categories={setCategories}
-                            seatCategories={currentAssignments}
-                            onSeatCategoriesChange={
-                              isEditing
-                                ? (newAssignments) =>
+                        return (
+                          <div className="relative mt-1">
+                            <SeatmapPreview
+                              seatmapId={formData.seatmap_id || undefined}
+                              allowMarqueeSelection={isEditing}
+                              selectedSeatIds={selectedSeatIds}
+                              onSelectionChange={setSelectedSeatIds}
+                              categories={setCategories}
+                              seatCategories={currentAssignments}
+                              onSeatCategoriesChange={
+                                isEditing
+                                  ? (newAssignments) =>
                                     updateSetSeatAssignments(
                                       activeSet.id,
                                       newAssignments,
                                     )
-                                : undefined
-                            }
-                          />
-                          <CategoryAssignPanel
-                            className="absolute right-3 top-14 z-10"
-                            selectedSeatIds={selectedSeatIds}
-                            categories={setCategories}
-                            seatCategories={currentAssignments}
-                            onAssign={
-                              isEditing
-                                ? (seatIds, categoryId) => {
+                                  : undefined
+                              }
+                            />
+                            <CategoryAssignPanel
+                              className="absolute right-3 top-14 z-10"
+                              selectedSeatIds={selectedSeatIds}
+                              categories={setCategories}
+                              seatCategories={currentAssignments}
+                              onAssign={
+                                isEditing
+                                  ? (seatIds, categoryId) => {
                                     updateSetSeatAssignments(
                                       activeSet.id,
                                       (prev) => {
@@ -1209,11 +1244,11 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                       },
                                     );
                                   }
-                                : undefined
-                            }
-                            onClear={
-                              isEditing
-                                ? (seatIds) => {
+                                  : undefined
+                              }
+                              onClear={
+                                isEditing
+                                  ? (seatIds) => {
                                     updateSetSeatAssignments(
                                       activeSet.id,
                                       (prev) => {
@@ -1225,240 +1260,373 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                       },
                                     );
                                   }
-                                : undefined
-                            }
-                          />
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* Category Sets Management - Only show when editing and seatmap exists */}
-                {isEditing && formData.seatmap_id && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold">Category Sets</p>
-                        <p className="text-xs text-muted-foreground">
-                          Define pricing tiers and assign them to schedules.
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={addCategorySet}
-                        className="gap-1.5"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Add Category Set
-                      </Button>
-                    </div>
-
-                    {categorySets.length === 0 && (
-                      <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
-                        No category sets yet. Add one to start pricing.
-                      </div>
-                    )}
-
-                    <div className="space-y-4">
-                      {categorySets.map((setItem, index) => (
-                        <div
-                          key={setItem.id}
-                          className="rounded-lg border border-sidebar-border/60 p-4 space-y-4"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="space-y-1 w-full">
-                              <p className="text-sm font-semibold">
-                                Category Set {index + 1}
-                              </p>
-                              <div className="space-y-2 max-w-xs">
-                                <Label className="text-[11px] font-semibold text-muted-foreground">
-                                  Set Name
-                                </Label>
-                                <Input
-                                  value={setItem.set_name}
-                                  onChange={(e) =>
-                                    updateCategorySet(setItem.id, {
-                                      set_name: e.target.value,
-                                    })
-                                  }
-                                  placeholder="e.g. Premiere Set"
-                                  className="h-8 text-sm"
-                                />
-                              </div>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-destructive hover:bg-destructive/10"
-                              onClick={() => removeCategorySet(setItem.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                                  : undefined
+                              }
+                            />
                           </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
-                          {/* Categories in this set */}
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs font-semibold text-muted-foreground">
-                                Categories in this set
-                              </p>
+                  {/* Category Sets Management - Only show when editing and seatmap exists */}
+                  {isEditing && formData.seatmap_id && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Category Sets</p>
+                          <p className="text-xs text-muted-foreground">
+                            Define pricing tiers and assign them to schedules.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={addCategorySet}
+                          className="gap-1.5"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add Category Set
+                        </Button>
+                      </div>
+
+                      {categorySets.length === 0 && (
+                        <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
+                          No category sets yet. Add one to start pricing.
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        {categorySets.map((setItem, index) => (
+                          <div
+                            key={setItem.id}
+                            className="rounded-lg border border-sidebar-border/60 p-4 space-y-4"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="space-y-1 w-full">
+                                <p className="text-sm font-semibold">
+                                  Category Set {index + 1}
+                                </p>
+                                <div className="space-y-2 max-w-xs">
+                                  <Label className="text-[11px] font-semibold text-muted-foreground">
+                                    Set Name
+                                  </Label>
+                                  <Input
+                                    value={setItem.set_name}
+                                    onChange={(e) =>
+                                      updateCategorySet(setItem.id, {
+                                        set_name: e.target.value,
+                                      })
+                                    }
+                                    placeholder="e.g. Premiere Set"
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                              </div>
                               <Button
                                 type="button"
-                                variant="outline"
-                                size="sm"
-                                className="gap-1.5"
-                                onClick={() => addCategoryToSet(setItem.id)}
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 text-destructive hover:bg-destructive/10"
+                                onClick={() => removeCategorySet(setItem.id)}
                               >
-                                <Plus className="h-3.5 w-3.5" />
-                                Add Category
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
 
-                            {setItem.categories.length === 0 && (
-                              <div className="rounded-lg border border-dashed border-sidebar-border px-3 py-4 text-xs text-muted-foreground">
-                                Add at least one category to define pricing.
-                              </div>
-                            )}
-
-                            {setItem.categories.map((category) => (
-                              <div
-                                key={category.id}
-                                className="flex items-start gap-3"
-                              >
-                                <div className="grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.8fr] w-full">
-                                  <div className="space-y-2">
-                                    <Label className="text-[11px] font-semibold text-muted-foreground">
-                                      Category Name
-                                    </Label>
-                                    <Input
-                                      value={category.category_name}
-                                      onChange={(e) =>
-                                        updateCategoryInSet(
-                                          setItem.id,
-                                          category.id,
-                                          { category_name: e.target.value },
-                                        )
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <Label className="text-[11px] font-semibold text-muted-foreground">
+                                  Applies to schedules
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                  <Select
+                                    value={setItem.filter_date || "all"}
+                                    onValueChange={(value) =>
+                                      updateCategorySet(setItem.id, {
+                                        filter_date: value === "all" ? "" : value,
+                                      })
+                                    }
+                                    disabled={formData.scheds.length === 0 || setItem.apply_to_all}
+                                  >
+                                    <SelectTrigger className="h-7 w-[160px] text-[11px]">
+                                      <SelectValue placeholder="Filter date" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="all">All dates</SelectItem>
+                                      {Array.from(
+                                        new Map(
+                                          formData.scheds.map((sched) => [
+                                            toManilaDateKey(
+                                              toDateValue(sched.sched_date),
+                                            ),
+                                            sched,
+                                          ]),
+                                        ).keys(),
+                                      ).map((dateValue) => (
+                                        <SelectItem
+                                          key={dateValue}
+                                          value={dateValue}
+                                        >
+                                          {formatManilaDateLong(
+                                            toDateValue(dateValue),
+                                          )}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  {setItem.filter_date && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-[11px]"
+                                      onClick={() =>
+                                        updateCategorySet(setItem.id, {
+                                          filter_date: "",
+                                        })
                                       }
-                                      placeholder="e.g. VIP"
-                                    />
-                                  </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-[11px] font-semibold text-muted-foreground">
-                                      Price
-                                    </Label>
-                                    <Input
-                                      value={category.price}
-                                      onChange={(e) => {
-                                        const next = e.target.value;
-                                        if (
-                                          next !== "" &&
-                                          !/^\d{0,4}(\.\d{0,2})?$/.test(next)
-                                        )
-                                          return;
-                                        updateCategoryInSet(
-                                          setItem.id,
-                                          category.id,
-                                          { price: next },
-                                        );
-                                      }}
-                                      onBlur={() => {
-                                        const raw = String(
-                                          category.price ?? "",
-                                        ).trim();
-                                        const normalizedValue =
-                                          raw === "" ? 0 : Number(raw);
-                                        if (Number.isNaN(normalizedValue)) {
+                                    >
+                                      Clear
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 accent-primary"
+                                  checked={setItem.apply_to_all}
+                                  onChange={(e) =>
+                                    updateCategorySet(setItem.id, {
+                                      apply_to_all: e.target.checked,
+                                      sched_ids: e.target.checked
+                                        ? []
+                                        : setItem.sched_ids,
+                                    })
+                                  }
+                                  disabled={formData.scheds.length === 0}
+                                />
+                                Apply to all schedules
+                              </label>
+                              {!setItem.apply_to_all && (
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  {getFilteredScheds(setItem).map((sched) => (
+                                    <label
+                                      key={sched.client_id}
+                                      className="flex items-center gap-2 text-xs text-muted-foreground"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="h-4 w-4 accent-primary"
+                                        checked={setItem.sched_ids.includes(
+                                          sched.client_id,
+                                        )}
+                                        onChange={() =>
+                                          toggleSetSched(
+                                            setItem.id,
+                                            sched.client_id,
+                                          )
+                                        }
+                                      />
+                                      {formatManilaDate(
+                                        toDateValue(sched.sched_date),
+                                      )}
+                                      &nbsp;•&nbsp;
+                                      {formatManilaTime(
+                                        toTimeValue(sched.sched_start_time),
+                                      )}
+                                      –
+                                      {formatManilaTime(
+                                        toTimeValue(sched.sched_end_time),
+                                      )}
+                                    </label>
+                                  ))}
+                                  {formData.scheds.length === 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Add schedules first to target specific
+                                      dates.
+                                    </p>
+                                  )}
+                                  {formData.scheds.length > 0 &&
+                                    getAvailableScheds(setItem.id).length ===
+                                    0 && (
+                                      <p className="text-xs text-muted-foreground">
+                                        All schedules already assigned.
+                                      </p>
+                                    )}
+                                  {formData.scheds.length > 0 &&
+                                    getAvailableScheds(setItem.id).length >
+                                    0 &&
+                                    getFilteredScheds(setItem).length === 0 && (
+                                      <p className="text-xs text-muted-foreground">
+                                        No schedules match the selected date.
+                                      </p>
+                                    )}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Categories in this set */}
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold text-muted-foreground">
+                                  Categories in this set
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1.5"
+                                  onClick={() => addCategoryToSet(setItem.id)}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Add Category
+                                </Button>
+                              </div>
+
+                              {setItem.categories.length === 0 && (
+                                <div className="rounded-lg border border-dashed border-sidebar-border px-3 py-4 text-xs text-muted-foreground">
+                                  Add at least one category to define pricing.
+                                </div>
+                              )}
+
+                              {setItem.categories.map((category) => (
+                                <div
+                                  key={category.id}
+                                  className="flex items-start gap-3"
+                                >
+                                  <div className="grid gap-3 md:grid-cols-[1.2fr_0.6fr_0.8fr] w-full">
+                                    <div className="space-y-2">
+                                      <Label className="text-[11px] font-semibold text-muted-foreground">
+                                        Category Name
+                                      </Label>
+                                      <Input
+                                        value={category.category_name}
+                                        onChange={(e) =>
                                           updateCategoryInSet(
                                             setItem.id,
                                             category.id,
-                                            { price: "0.00" },
-                                          );
-                                          return;
+                                            { category_name: e.target.value },
+                                          )
                                         }
-                                        const clamped = Math.min(
-                                          Math.max(normalizedValue, 0),
-                                          9999.99,
-                                        );
-                                        updateCategoryInSet(
-                                          setItem.id,
-                                          category.id,
-                                          { price: clamped.toFixed(2) },
-                                        );
-                                      }}
-                                    />
+                                        placeholder="e.g. VIP"
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label className="text-[11px] font-semibold text-muted-foreground">
+                                        Price
+                                      </Label>
+                                      <Input
+                                        value={category.price}
+                                        onChange={(e) => {
+                                          const next = e.target.value;
+                                          if (
+                                            next !== "" &&
+                                            !/^\d{0,4}(\.\d{0,2})?$/.test(next)
+                                          )
+                                            return;
+                                          updateCategoryInSet(
+                                            setItem.id,
+                                            category.id,
+                                            { price: next },
+                                          );
+                                        }}
+                                        onBlur={() => {
+                                          const raw = String(
+                                            category.price ?? "",
+                                          ).trim();
+                                          const normalizedValue =
+                                            raw === "" ? 0 : Number(raw);
+                                          if (Number.isNaN(normalizedValue)) {
+                                            updateCategoryInSet(
+                                              setItem.id,
+                                              category.id,
+                                              { price: "0.00" },
+                                            );
+                                            return;
+                                          }
+                                          const clamped = Math.min(
+                                            Math.max(normalizedValue, 0),
+                                            9999.99,
+                                          );
+                                          updateCategoryInSet(
+                                            setItem.id,
+                                            category.id,
+                                            { price: clamped.toFixed(2) },
+                                          );
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <Label className="text-[11px] font-semibold text-muted-foreground">
+                                        Color
+                                      </Label>
+                                      <Select
+                                        value={category.color_code}
+                                        onValueChange={(value) =>
+                                          updateCategoryInSet(
+                                            setItem.id,
+                                            category.id,
+                                            {
+                                              color_code:
+                                                value as CategoryDraft["color_code"],
+                                            },
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="h-9 w-full">
+                                          <SelectValue placeholder="Select color" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {COLOR_OPTIONS.map((option) => (
+                                            <SelectItem
+                                              key={option.value}
+                                              value={option.value}
+                                            >
+                                              <span className="flex items-center gap-2">
+                                                {option.swatch ? (
+                                                  <span
+                                                    className="h-2.5 w-2.5 rounded-full border border-border"
+                                                    style={{
+                                                      backgroundColor:
+                                                        option.swatch,
+                                                    }}
+                                                  />
+                                                ) : (
+                                                  <span className="h-2.5 w-2.5 rounded-full border border-border bg-transparent" />
+                                                )}
+                                                {option.label}
+                                              </span>
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
                                   </div>
-                                  <div className="space-y-2">
-                                    <Label className="text-[11px] font-semibold text-muted-foreground">
-                                      Color
-                                    </Label>
-                                    <Select
-                                      value={category.color_code}
-                                      onValueChange={(value) =>
-                                        updateCategoryInSet(
-                                          setItem.id,
-                                          category.id,
-                                          {
-                                            color_code:
-                                              value as CategoryDraft["color_code"],
-                                          },
-                                        )
-                                      }
-                                    >
-                                      <SelectTrigger className="h-9 w-full">
-                                        <SelectValue placeholder="Select color" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {COLOR_OPTIONS.map((option) => (
-                                          <SelectItem
-                                            key={option.value}
-                                            value={option.value}
-                                          >
-                                            <span className="flex items-center gap-2">
-                                              {option.swatch ? (
-                                                <span
-                                                  className="h-2.5 w-2.5 rounded-full border border-border"
-                                                  style={{
-                                                    backgroundColor:
-                                                      option.swatch,
-                                                  }}
-                                                />
-                                              ) : (
-                                                <span className="h-2.5 w-2.5 rounded-full border border-border bg-transparent" />
-                                              )}
-                                              {option.label}
-                                            </span>
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 text-destructive hover:bg-destructive/10"
+                                    onClick={() =>
+                                      removeCategoryFromSet(
+                                        setItem.id,
+                                        category.id,
+                                      )
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-9 w-9 text-destructive hover:bg-destructive/10"
-                                  onClick={() =>
-                                    removeCategoryFromSet(
-                                      setItem.id,
-                                      category.id,
-                                    )
-                                  }
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
                 </>
               )}
             </CardContent>
@@ -1527,7 +1695,10 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                     show_start_date: new Date(show.show_start_date),
                     show_end_date: new Date(show.show_end_date),
                     seatmap_id: show.seatmap_id || "",
-                    scheds: show.scheds || [],
+                    scheds: (show.scheds || []).map((s) => ({
+                      ...s,
+                      client_id: s.sched_id || uuidv4(),
+                    })),
                   });
                   setSelectedDates([]);
                   setTimeRanges([
