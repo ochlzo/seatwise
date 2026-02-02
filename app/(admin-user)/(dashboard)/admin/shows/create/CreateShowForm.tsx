@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/select";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
+import type { SeatmapState } from "@/lib/seatmap/types";
 // import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const STATUS_OPTIONS = [
@@ -127,7 +128,7 @@ export function CreateShowForm() {
   ]);
   const [categorySets, setCategorySets] = React.useState<CategorySetDraft[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
-  const [seatmapData, setSeatmapData] = React.useState<any>(null); // Store seatmap JSON
+  const [seatmapData, setSeatmapData] = React.useState<SeatmapState | null>(null); // Store seatmap JSON
   /** Active category set ID for tabs */
   const [activeSetId, setActiveSetId] = React.useState<string | null>(null);
   const unassignedSchedCount = React.useMemo(() => {
@@ -336,7 +337,7 @@ export function CreateShowForm() {
   const totalSeatsCount = React.useMemo(() => {
     if (!seatmapData || !seatmapData.nodes) return 0;
     return Object.values(seatmapData.nodes).filter(
-      (node: any) => node.type === "seat"
+      (node) => node.type === "seat"
     ).length;
   }, [seatmapData]);
 
@@ -415,11 +416,9 @@ export function CreateShowForm() {
     }
 
     return missing;
-  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets, unassignedSchedCount, totalSeatsCount, incompleteCategorySets]);
+  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets, unassignedSchedCount, incompleteCategorySets]);
 
   const isFormValid = React.useMemo(() => {
-    const requiresSeatmap = formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
-
     // Basic validation: no missing fields
     if (missingFields.length > 0) return false;
 
@@ -634,8 +633,6 @@ export function CreateShowForm() {
   };
 
   const handleSave = async () => {
-    const requiresSeatmap = formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
-
     if (
       !formData.show_name ||
       !formData.show_description ||
@@ -643,9 +640,10 @@ export function CreateShowForm() {
       !formData.address ||
       !formData.show_start_date ||
       !formData.show_end_date ||
-      (requiresSeatmap && !formData.seatmap_id)
+      !formData.seatmap_id ||
+      categorySets.length === 0
     ) {
-      toast.error("Please fill out all required fields.");
+      toast.error("Please fill out all required fields (including Seatmap and Category Sets).");
       return;
     }
 
