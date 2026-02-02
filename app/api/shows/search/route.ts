@@ -29,10 +29,18 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get("q") || undefined;
     const status = searchParams.get("status") || undefined;
+    const statusGroup =
+      searchParams.get("statusGroup") === "active" ? "active" : undefined;
     const sort = searchParams.get("sort") || undefined;
     const seatmapId = searchParams.get("seatmapId") || undefined;
 
-    const shows = await getShows({ query, status, sort, seatmapId });
+    const shows = await getShows({
+      query,
+      status,
+      statusGroup,
+      sort,
+      seatmapId,
+    });
 
     return NextResponse.json({ shows });
   } catch (error) {

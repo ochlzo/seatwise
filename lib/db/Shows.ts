@@ -1,10 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 
-export async function getShows(params?: { status?: string; sort?: string; seatmapId?: string; query?: string }) {
+export async function getShows(params?: {
+  status?: string;
+  statusGroup?: "active";
+  sort?: string;
+  seatmapId?: string;
+  query?: string;
+}) {
   const where: Prisma.ShowWhereInput = {};
   if (params?.status && params.status !== "ALL") {
     where.show_status = params.status as never;
+  } else if (params?.statusGroup === "active") {
+    where.show_status = { in: ["UPCOMING", "OPEN"] };
   }
   if (params?.seatmapId) {
     where.seatmap_id = params.seatmapId;
