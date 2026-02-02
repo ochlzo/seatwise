@@ -4,7 +4,6 @@ import {
   updateProfile,
   sendPasswordResetEmail,
 } from "firebase/auth";
-import type { FirebaseError } from "firebase/app";
 import { auth } from "@/lib/firebaseClient";
 import { User } from "@/lib/features/auth/authSlice";
 import { useRouter } from "next/navigation";
@@ -42,7 +41,11 @@ export const getAuthErrorMessage = (error: unknown): string => {
       return "An internal authentication error occurred. Please try again later.";
 
     default:
-      if (error instanceof Error && error.message.trim() !== "" && !error.message.includes("Firebase:")) {
+      if (
+        error instanceof Error &&
+        error.message.trim() !== "" &&
+        !error.message.includes("Firebase:")
+      ) {
         return error.message;
       }
       return "An unexpected error occurred. Please try again.";
@@ -69,7 +72,7 @@ export function useEmailPass() {
     pass: string,
     username: string,
     firstName: string,
-    lastName: string
+    lastName: string,
   ): Promise<User> => {
     try {
       const result = await createUserWithEmailAndPassword(auth, email, pass);
@@ -124,7 +127,7 @@ export function useEmailPass() {
 
   const signInWithEmail = async (
     email: string,
-    pass: string
+    pass: string,
   ): Promise<User> => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, pass);

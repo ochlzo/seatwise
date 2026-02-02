@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { differenceInCalendarMonths } from "date-fns";
 
 import {
   CalendarIcon,
@@ -83,13 +82,13 @@ const COLOR_OPTIONS: Array<{
   label: string;
   swatch: string | null;
 }> = [
-    { value: "NO_COLOR", label: "No Color", swatch: null },
-    { value: "GOLD", label: "Gold", swatch: "#ffd700" },
-    { value: "PINK", label: "Pink", swatch: "#e005b9" },
-    { value: "BLUE", label: "Blue", swatch: "#111184" },
-    { value: "BURGUNDY", label: "Burgundy", swatch: "#800020" },
-    { value: "GREEN", label: "Green", swatch: "#046307" },
-  ];
+  { value: "NO_COLOR", label: "No Color", swatch: null },
+  { value: "GOLD", label: "Gold", swatch: "#ffd700" },
+  { value: "PINK", label: "Pink", swatch: "#e005b9" },
+  { value: "BLUE", label: "Blue", swatch: "#111184" },
+  { value: "BURGUNDY", label: "Burgundy", swatch: "#800020" },
+  { value: "GREEN", label: "Green", swatch: "#046307" },
+];
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -129,6 +128,14 @@ const formatManilaTime = (value: Date) =>
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+  }).format(value);
+
+const formatManilaTimeKey = (value: Date) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: MANILA_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
   }).format(value);
 
 const toDateValue = (value: string | Date) => {
@@ -192,12 +199,12 @@ type ShowDetail = {
           category_name: string;
           price: string; // Serialized from Decimal
           color_code:
-          | "NO_COLOR"
-          | "GOLD"
-          | "PINK"
-          | "BLUE"
-          | "BURGUNDY"
-          | "GREEN";
+            | "NO_COLOR"
+            | "GOLD"
+            | "PINK"
+            | "BLUE"
+            | "BURGUNDY"
+            | "GREEN";
         };
       };
     }>;
@@ -211,12 +218,12 @@ type ShowDetail = {
         category_name: string;
         price: string; // Serialized from Decimal
         color_code:
-        | "NO_COLOR"
-        | "GOLD"
-        | "PINK"
-        | "BLUE"
-        | "BURGUNDY"
-        | "GREEN";
+          | "NO_COLOR"
+          | "GOLD"
+          | "PINK"
+          | "BLUE"
+          | "BURGUNDY"
+          | "GREEN";
       };
     }>;
   }>;
@@ -232,7 +239,15 @@ type SeatmapOption = {
   updatedAt: string;
 };
 
-type SchedDraft = ShowDetail["scheds"][number] & { client_id: string };
+type SchedDraft = Omit<
+  ShowDetail["scheds"][number],
+  "sched_date" | "sched_start_time" | "sched_end_time"
+> & {
+  client_id: string;
+  sched_date: string;
+  sched_start_time: string;
+  sched_end_time: string;
+};
 
 export function ShowDetailForm({ show }: ShowDetailFormProps) {
   const router = useRouter();
@@ -264,20 +279,91 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     );
   }, [seatmapQuery, seatmaps]);
 
-  const [formData, setFormData] = React.useState({
+  const [formData, setFormData] = React.useState<{
+    show_name: string;
+    show_description: string;
+    venue: string;
+    address: string;
+    show_status: ShowStatus;
+    show_start_date: string;
+    show_end_date: string;
+    seatmap_id: string;
+    scheds: SchedDraft[];
+  }>({
     show_name: show.show_name,
     show_description: show.show_description,
     venue: show.venue,
     address: show.address,
     show_status: show.show_status,
-    show_start_date: new Date(show.show_start_date),
-    show_end_date: new Date(show.show_end_date),
+    show_start_date: toManilaDateKey(new Date(show.show_start_date)),
+    show_end_date: toManilaDateKey(new Date(show.show_end_date)),
     seatmap_id: show.seatmap_id || "",
     scheds: (show.scheds || []).map((s) => ({
       ...s,
+      sched_date: toManilaDateKey(new Date(s.sched_date)),
+      sched_start_time:
+        typeof s.sched_start_time === "string" &&
+        s.sched_start_time.includes("T")
+          ? formatManilaTimeKey(new Date(s.sched_start_time))
+          : typeof s.sched_start_time === "string"
+            ? s.sched_start_time
+            : formatManilaTimeKey(new Date(s.sched_start_time)),
+      sched_end_time:
+        typeof s.sched_end_time === "string" && s.sched_end_time.includes("T")
+          ? formatManilaTimeKey(new Date(s.sched_end_time))
+          : typeof s.sched_end_time === "string"
+            ? s.sched_end_time
+            : formatManilaTimeKey(new Date(s.sched_end_time)),
       client_id: s.sched_id || uuidv4(),
     })),
   });
+
+  React.useEffect(() => {
+    setFormData({
+      show_name: show.show_name,
+      show_description: show.show_description,
+      venue: show.venue,
+      address: show.address,
+      show_status: show.show_status,
+      show_start_date: toManilaDateKey(new Date(show.show_start_date)),
+      show_end_date: toManilaDateKey(new Date(show.show_end_date)),
+      seatmap_id: show.seatmap_id || "",
+      scheds: (show.scheds || []).map((s) => ({
+        ...s,
+        sched_date: toManilaDateKey(new Date(s.sched_date)),
+        sched_start_time:
+          typeof s.sched_start_time === "string" &&
+          s.sched_start_time.includes("T")
+            ? formatManilaTimeKey(new Date(s.sched_start_time))
+            : typeof s.sched_start_time === "string"
+              ? s.sched_start_time
+              : formatManilaTimeKey(new Date(s.sched_start_time)),
+        sched_end_time:
+          typeof s.sched_end_time === "string" && s.sched_end_time.includes("T")
+            ? formatManilaTimeKey(new Date(s.sched_end_time))
+            : typeof s.sched_end_time === "string"
+              ? s.sched_end_time
+              : formatManilaTimeKey(new Date(s.sched_end_time)),
+        client_id: s.sched_id || uuidv4(),
+      })),
+    });
+  }, [show]);
+
+  const showStartDate = React.useMemo(
+    () =>
+      formData.show_start_date
+        ? new Date(`${formData.show_start_date}T00:00:00+08:00`)
+        : null,
+    [formData.show_start_date],
+  );
+
+  const showEndDate = React.useMemo(
+    () =>
+      formData.show_end_date
+        ? new Date(`${formData.show_end_date}T00:00:00+08:00`)
+        : null,
+    [formData.show_end_date],
+  );
 
   React.useEffect(() => {
     let isMounted = true;
@@ -361,7 +447,10 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
       // Use the first schedule's seat assignments as the reference
       // (since apply_to_all sets should have the same assignments across all schedules)
-      if (schedsWithThisSet.length > 0 && schedsWithThisSet[0].seatAssignments) {
+      if (
+        schedsWithThisSet.length > 0 &&
+        schedsWithThisSet[0].seatAssignments
+      ) {
         schedsWithThisSet[0].seatAssignments.forEach((assignment) => {
           // Map seat_id -> seat_category_id
           seatAssignments[assignment.seat_id] = assignment.set.seat_category_id;
@@ -372,7 +461,9 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         id: dbSet.category_set_id,
         set_name: dbSet.set_name,
         sched_ids: schedsWithThisSet.map((s) => s.sched_id || ""),
-        apply_to_all: true, // Default to true if loaded from DB to be safe, or logic to check if all schedules are covered
+        apply_to_all:
+          schedsWithThisSet.length === show.scheds.length &&
+          show.scheds.length > 0,
         filter_date: "",
         categories: dbSet.items.map((item) => ({
           id: item.seatCategory.seat_category_id,
@@ -551,14 +642,14 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
   const isDateRangeValid = React.useMemo(() => {
     return (
-      formData.show_start_date &&
-      formData.show_end_date &&
-      formData.show_start_date.getTime() <= formData.show_end_date.getTime()
+      showStartDate &&
+      showEndDate &&
+      showStartDate.getTime() <= showEndDate.getTime()
     );
-  }, [formData.show_start_date, formData.show_end_date]);
+  }, [showStartDate, showEndDate]);
 
   const scheduleCoverage = React.useMemo(() => {
-    if (!formData.show_start_date || !formData.show_end_date) {
+    if (!showStartDate || !showEndDate) {
       return {
         hasSchedules: formData.scheds.length > 0,
         missingDates: [] as string[],
@@ -570,8 +661,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       ),
     );
     const missingDates: string[] = [];
-    const cursor = new Date(formData.show_start_date);
-    while (cursor <= formData.show_end_date) {
+    const cursor = new Date(showStartDate);
+    while (showEndDate && cursor <= showEndDate) {
       const dateKey = toManilaDateKey(cursor);
       if (!scheduleDates.has(dateKey)) {
         missingDates.push(dateKey);
@@ -579,7 +670,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       cursor.setDate(cursor.getDate() + 1);
     }
     return { hasSchedules: formData.scheds.length > 0, missingDates };
-  }, [formData.scheds, formData.show_start_date, formData.show_end_date]);
+  }, [formData.scheds, showStartDate, showEndDate]);
 
   const unassignedSchedCount = React.useMemo(() => {
     if (formData.scheds.length === 0) return 0;
@@ -597,7 +688,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
   const totalSeatsCount = React.useMemo(() => {
     if (!seatmapData || !seatmapData.nodes) return 0;
     return Object.values(seatmapData.nodes).filter(
-      (node: any) => node.type === "seat",
+      (node) => node.type === "seat",
     ).length;
   }, [seatmapData]);
 
@@ -621,11 +712,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
   const missingFields = React.useMemo(() => {
     const missing: string[] = [];
-    const requiresSeatmap =
-      formData.show_status === "UPCOMING" ||
-      formData.show_status === "OPEN" ||
-      formData.show_status === "ON_GOING";
-
     // 1. Basic Fields
     if (!formData.show_name.trim()) missing.push("Show Name");
     if (!formData.show_description.trim()) missing.push("Description");
@@ -634,17 +720,22 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     if (!formData.show_start_date) missing.push("Start Date");
     if (!formData.show_end_date) missing.push("End Date");
 
-    // 2. Schedule Validation (Mandatory for ALL productions)
+    // 2. Schedule Validation
     if (formData.scheds.length === 0) {
       missing.push("Schedules");
     } else if (scheduleCoverage.missingDates.length > 0) {
       missing.push("Schedules (missing dates)");
     }
 
-    // 3. Seatmap & Assignments Validation
+    // 3. Seatmap & Assignments Validation (Mandatory for ALL productions)
     if (!formData.seatmap_id) {
-      if (requiresSeatmap) missing.push("Seatmap");
-    } else {
+      missing.push("Seatmap");
+    }
+    if (categorySets.length === 0) {
+      missing.push("Category Sets");
+    }
+
+    if (formData.seatmap_id) {
       if (
         categorySets.length > 0 &&
         formData.scheds.length > 0 &&
@@ -653,18 +744,19 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         missing.push("Assigned Scheds");
       }
 
-      const hasInvalidCategory = categorySets.some((setItem) =>
-        setItem.categories.length === 0 || // Flag empty sets
-        setItem.categories.some((category) => {
-          const nameValid = category.category_name.trim().length > 0;
-          const priceValue = String(category.price ?? "").trim();
-          const priceValid =
-            priceValue !== "" &&
-            /^\d{1,4}(\.\d{1,2})?$/.test(priceValue) &&
-            !Number.isNaN(Number(priceValue)) &&
-            Number(priceValue) >= 0;
-          return !nameValid || !priceValid;
-        }),
+      const hasInvalidCategory = categorySets.some(
+        (setItem) =>
+          setItem.categories.length === 0 || // Flag empty sets
+          setItem.categories.some((category) => {
+            const nameValid = category.category_name.trim().length > 0;
+            const priceValue = String(category.price ?? "").trim();
+            const priceValid =
+              priceValue !== "" &&
+              /^\d{1,4}(\.\d{1,2})?$/.test(priceValue) &&
+              !Number.isNaN(Number(priceValue)) &&
+              Number(priceValue) >= 0;
+            return !nameValid || !priceValid;
+          }),
       );
       if (hasInvalidCategory) missing.push("Category name/price/empty set");
 
@@ -690,8 +782,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     scheduleCoverage,
     categorySets,
     unassignedSchedCount,
-    totalSeatsCount,
     incompleteCategorySets,
+    isDateRangeValid,
   ]);
 
   const isFormValid = React.useMemo(() => {
@@ -737,7 +829,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
 
     setFormData((prev) => ({
       ...prev,
-      scheds: [...prev.scheds, ...newEntries],
+      scheds: [...prev.scheds, ...newEntries] as SchedDraft[],
     }));
 
     setSelectedDates([]);
@@ -813,7 +905,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
   const getFilteredScheds = (setItem: CategorySetDraft) => {
     if (setItem.filter_date) {
       return formData.scheds.filter(
-        (s) => toManilaDateKey(toDateValue(s.sched_date)) === setItem.filter_date,
+        (s) =>
+          toManilaDateKey(toDateValue(s.sched_date)) === setItem.filter_date,
       );
     }
     return formData.scheds;
@@ -1017,12 +1110,12 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                           variant={"outline"}
                           className={cn(
                             "w-full justify-start text-left font-medium bg-muted/30",
-                            !formData.show_start_date && "text-muted-foreground",
+                            !showStartDate && "text-muted-foreground",
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                          {formData.show_start_date ? (
-                            formatManilaDate(formData.show_start_date)
+                          {showStartDate ? (
+                            formatManilaDate(showStartDate)
                           ) : (
                             <span>Pick a date</span>
                           )}
@@ -1031,10 +1124,13 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={formData.show_start_date}
+                          selected={showStartDate ?? undefined}
                           onSelect={(date) => {
                             if (date) {
-                              setFormData({ ...formData, show_start_date: date });
+                              setFormData({
+                                ...formData,
+                                show_start_date: toManilaDateKey(date),
+                              });
                             }
                           }}
                           initialFocus
@@ -1046,13 +1142,13 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                       variant={"outline"}
                       className={cn(
                         "w-full justify-start text-left font-medium bg-muted/30 cursor-default",
-                        !formData.show_start_date && "text-muted-foreground",
+                        !showStartDate && "text-muted-foreground",
                       )}
                       onClick={(e) => e.preventDefault()}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                      {formData.show_start_date ? (
-                        formatManilaDate(formData.show_start_date)
+                      {showStartDate ? (
+                        formatManilaDate(showStartDate)
                       ) : (
                         <span>Pick a date</span>
                       )}
@@ -1070,12 +1166,12 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                           variant={"outline"}
                           className={cn(
                             "w-full justify-start text-left font-medium bg-muted/30",
-                            !formData.show_end_date && "text-muted-foreground",
+                            !showEndDate && "text-muted-foreground",
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                          {formData.show_end_date ? (
-                            formatManilaDate(formData.show_end_date)
+                          {showEndDate ? (
+                            formatManilaDate(showEndDate)
                           ) : (
                             <span>Pick a date</span>
                           )}
@@ -1084,14 +1180,19 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={formData.show_end_date}
+                          selected={showEndDate ?? undefined}
                           onSelect={(date) => {
                             if (date) {
-                              setFormData({ ...formData, show_end_date: date });
+                              setFormData({
+                                ...formData,
+                                show_end_date: toManilaDateKey(date),
+                              });
                             }
                           }}
                           initialFocus
-                          disabled={(date) => date < formData.show_start_date}
+                          disabled={(date) =>
+                            !!showStartDate && date < showStartDate
+                          }
                         />
                       </PopoverContent>
                     </Popover>
@@ -1100,13 +1201,13 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                       variant={"outline"}
                       className={cn(
                         "w-full justify-start text-left font-medium bg-muted/30 cursor-default",
-                        !formData.show_end_date && "text-muted-foreground",
+                        !showEndDate && "text-muted-foreground",
                       )}
                       onClick={(e) => e.preventDefault()}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                      {formData.show_end_date ? (
-                        formatManilaDate(formData.show_end_date)
+                      {showEndDate ? (
+                        formatManilaDate(showEndDate)
                       ) : (
                         <span>Pick a date</span>
                       )}
@@ -1175,12 +1276,14 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                       .map((sched, idx) => {
                         // Find the category set for this schedule
                         const categorySet = categorySets.find(
-                          (set) => set.sched_ids.includes(sched.sched_id || "")
+                          (set) =>
+                            set.apply_to_all ||
+                            set.sched_ids.includes(sched.client_id),
                         );
 
                         return (
                           <div
-                            key={sched.sched_id || `new-${idx}`}
+                            key={sched.client_id || `new-${idx}`}
                             className="flex items-center justify-between p-3 rounded-lg border border-sidebar-border/60 bg-muted/20"
                           >
                             <div className="space-y-1.5 flex-1">
@@ -1193,38 +1296,53 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                   toTimeValue(sched.sched_end_time),
                                 )}
                               </div>
-                              {!isEditing && categorySet && (
+                              {categorySet && (
                                 <div className="space-y-1.5 pt-1">
                                   <div className="text-[11px] font-medium text-muted-foreground">
                                     {categorySet.set_name}
                                   </div>
                                   <div className="flex flex-wrap gap-1.5">
-                                    {categorySet.categories.map((category) => (
-                                      <div
-                                        key={category.id}
-                                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-sidebar-border/60 bg-background text-[10px]"
-                                      >
-                                        <span
-                                          className="h-2 w-2 rounded-full border border-zinc-300"
-                                          style={{
-                                            backgroundColor:
-                                              category.color_code === "NO_COLOR"
-                                                ? "transparent"
-                                                : category.color_code === "GOLD"
-                                                  ? "#ffd700"
-                                                  : category.color_code === "PINK"
-                                                    ? "#e005b9"
-                                                    : category.color_code === "BLUE"
-                                                      ? "#111184"
-                                                      : category.color_code === "BURGUNDY"
-                                                        ? "#800020"
-                                                        : "#046307",
-                                          }}
-                                        />
-                                        <span className="font-medium">{category.category_name}</span>
-                                        <span className="text-muted-foreground">₱{category.price}</span>
-                                      </div>
-                                    ))}
+                                    {categorySet.categories
+                                      .filter((category) =>
+                                        Object.values(
+                                          categorySet.seatAssignments || {},
+                                        ).includes(category.id),
+                                      )
+                                      .map((category) => (
+                                        <div
+                                          key={category.id}
+                                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-sidebar-border/60 bg-background text-[10px]"
+                                        >
+                                          <span
+                                            className="h-2 w-2 rounded-full border border-zinc-300"
+                                            style={{
+                                              backgroundColor:
+                                                category.color_code ===
+                                                "NO_COLOR"
+                                                  ? "transparent"
+                                                  : category.color_code ===
+                                                      "GOLD"
+                                                    ? "#ffd700"
+                                                    : category.color_code ===
+                                                        "PINK"
+                                                      ? "#e005b9"
+                                                      : category.color_code ===
+                                                          "BLUE"
+                                                        ? "#111184"
+                                                        : category.color_code ===
+                                                            "BURGUNDY"
+                                                          ? "#800020"
+                                                          : "#046307",
+                                            }}
+                                          />
+                                          <span className="font-medium">
+                                            {category.category_name}
+                                          </span>
+                                          <span className="text-muted-foreground">
+                                            ₱{category.price}
+                                          </span>
+                                        </div>
+                                      ))}
                                   </div>
                                 </div>
                               )}
@@ -1333,7 +1451,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
               {!formData.seatmap_id ? (
                 <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-8 text-center">
                   <p className="text-sm text-muted-foreground">
-                    No seatmap selected. {isEditing && "Choose a seatmap template to get started."}
+                    No seatmap selected.{" "}
+                    {isEditing && "Choose a seatmap template to get started."}
                   </p>
                 </div>
               ) : (
@@ -1406,10 +1525,10 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                               onSeatCategoriesChange={
                                 isEditing
                                   ? (newAssignments) =>
-                                    updateSetSeatAssignments(
-                                      activeSet.id,
-                                      newAssignments,
-                                    )
+                                      updateSetSeatAssignments(
+                                        activeSet.id,
+                                        newAssignments,
+                                      )
                                   : undefined
                               }
                             />
@@ -1421,33 +1540,33 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                               onAssign={
                                 isEditing
                                   ? (seatIds, categoryId) => {
-                                    updateSetSeatAssignments(
-                                      activeSet.id,
-                                      (prev) => {
-                                        const next = { ...prev };
-                                        seatIds.forEach((id) => {
-                                          next[id] = categoryId;
-                                        });
-                                        return next;
-                                      },
-                                    );
-                                  }
+                                      updateSetSeatAssignments(
+                                        activeSet.id,
+                                        (prev) => {
+                                          const next = { ...prev };
+                                          seatIds.forEach((id) => {
+                                            next[id] = categoryId;
+                                          });
+                                          return next;
+                                        },
+                                      );
+                                    }
                                   : undefined
                               }
                               onClear={
                                 isEditing
                                   ? (seatIds) => {
-                                    updateSetSeatAssignments(
-                                      activeSet.id,
-                                      (prev) => {
-                                        const next = { ...prev };
-                                        seatIds.forEach((id) => {
-                                          delete next[id];
-                                        });
-                                        return next;
-                                      },
-                                    );
-                                  }
+                                      updateSetSeatAssignments(
+                                        activeSet.id,
+                                        (prev) => {
+                                          const next = { ...prev };
+                                          seatIds.forEach((id) => {
+                                            delete next[id];
+                                          });
+                                          return next;
+                                        },
+                                      );
+                                    }
                                   : undefined
                               }
                             />
@@ -1533,16 +1652,22 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                     value={setItem.filter_date || "all"}
                                     onValueChange={(value) =>
                                       updateCategorySet(setItem.id, {
-                                        filter_date: value === "all" ? "" : value,
+                                        filter_date:
+                                          value === "all" ? "" : value,
                                       })
                                     }
-                                    disabled={formData.scheds.length === 0 || setItem.apply_to_all}
+                                    disabled={
+                                      formData.scheds.length === 0 ||
+                                      setItem.apply_to_all
+                                    }
                                   >
                                     <SelectTrigger className="h-7 w-[160px] text-[11px]">
                                       <SelectValue placeholder="Filter date" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="all">All dates</SelectItem>
+                                      <SelectItem value="all">
+                                        All dates
+                                      </SelectItem>
                                       {Array.from(
                                         new Map(
                                           formData.scheds.map((sched) => [
@@ -1639,14 +1764,13 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                   )}
                                   {formData.scheds.length > 0 &&
                                     getAvailableScheds(setItem.id).length ===
-                                    0 && (
+                                      0 && (
                                       <p className="text-xs text-muted-foreground">
                                         All schedules already assigned.
                                       </p>
                                     )}
                                   {formData.scheds.length > 0 &&
-                                    getAvailableScheds(setItem.id).length >
-                                    0 &&
+                                    getAvailableScheds(setItem.id).length > 0 &&
                                     getFilteredScheds(setItem).length === 0 && (
                                       <p className="text-xs text-muted-foreground">
                                         No schedules match the selected date.
@@ -1941,11 +2065,30 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                     venue: show.venue,
                     address: show.address,
                     show_status: show.show_status,
-                    show_start_date: new Date(show.show_start_date),
-                    show_end_date: new Date(show.show_end_date),
+                    show_start_date: toManilaDateKey(
+                      new Date(show.show_start_date),
+                    ),
+                    show_end_date: toManilaDateKey(
+                      new Date(show.show_end_date),
+                    ),
                     seatmap_id: show.seatmap_id || "",
                     scheds: (show.scheds || []).map((s) => ({
                       ...s,
+                      sched_date: toManilaDateKey(new Date(s.sched_date)),
+                      sched_start_time:
+                        typeof s.sched_start_time === "string" &&
+                        s.sched_start_time.includes("T")
+                          ? formatManilaTimeKey(new Date(s.sched_start_time))
+                          : typeof s.sched_start_time === "string"
+                            ? s.sched_start_time
+                            : formatManilaTimeKey(new Date(s.sched_start_time)),
+                      sched_end_time:
+                        typeof s.sched_end_time === "string" &&
+                        s.sched_end_time.includes("T")
+                          ? formatManilaTimeKey(new Date(s.sched_end_time))
+                          : typeof s.sched_end_time === "string"
+                            ? s.sched_end_time
+                            : formatManilaTimeKey(new Date(s.sched_end_time)),
                       client_id: s.sched_id || uuidv4(),
                     })),
                   });

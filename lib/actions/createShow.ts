@@ -67,11 +67,14 @@ const toManilaTimeKey = (value: Date) =>
   }).format(value);
 
 const toDateOnly = (value: string | Date) => {
-  if (typeof value === "string") {
-    return new Date(`${value}T00:00:00+08:00`);
-  }
-  const dateKey = toManilaDateKey(value);
-  return new Date(`${dateKey}T00:00:00+08:00`);
+  const dateKey =
+    typeof value === "string"
+      ? value.includes("T")
+        ? toManilaDateKey(new Date(value))
+        : value
+      : toManilaDateKey(value);
+  // Store as UTC midnight to avoid timezone shifts on DATE columns.
+  return new Date(`${dateKey}T00:00:00.000Z`);
 };
 
 const toTime = (timeValue: string | Date) => {
