@@ -11,6 +11,9 @@ export default async function Page() {
         enableLinks={false}
         showHeader={false}
         statusGroup="active"
+        visibility="user"
+        headerTitle="What’s On Deck"
+        headerSubtitle="Upcoming and open shows that are ready for your seat."
       />
     </>
   );

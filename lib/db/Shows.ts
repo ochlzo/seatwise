@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 export async function getShows(params?: {
   status?: string;
   statusGroup?: "active";
+  visibility?: "user" | "admin";
   sort?: string;
   seatmapId?: string;
   query?: string;
@@ -13,6 +14,19 @@ export async function getShows(params?: {
     where.show_status = params.status as never;
   } else if (params?.statusGroup === "active") {
     where.show_status = { in: ["UPCOMING", "OPEN"] };
+  }
+  if (params?.visibility === "user") {
+    const hiddenStatuses = ["DRAFT", "CANCELLED", "POSTPONED"];
+    if (where.show_status) {
+      const statusValue =
+        typeof where.show_status === "string"
+          ? where.show_status
+          : undefined;
+      if (statusValue && hiddenStatuses.includes(statusValue)) {
+        return [];
+      }
+    }
+    where.show_status = { notIn: hiddenStatuses };
   }
   if (params?.seatmapId) {
     where.seatmap_id = params.seatmapId;
