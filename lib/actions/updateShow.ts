@@ -127,6 +127,62 @@ export async function updateShowAction(
       category_sets = [],
     } = data;
 
+    if (!show_name?.trim()) {
+      throw new Error("Show name is required.");
+    }
+    if (!show_description?.trim()) {
+      throw new Error("Show description is required.");
+    }
+    if (!venue?.trim()) {
+      throw new Error("Venue is required.");
+    }
+    if (!address?.trim()) {
+      throw new Error("Address is required.");
+    }
+    if (!show_status) {
+      throw new Error("Show status is required.");
+    }
+    if (!show_start_date) {
+      throw new Error("Show start date is required.");
+    }
+    if (!show_end_date) {
+      throw new Error("Show end date is required.");
+    }
+
+    if (category_sets.length > 0) {
+      const allClientSchedIds = scheds.map((s) => s.client_id);
+      const allClientSchedSet = new Set(allClientSchedIds);
+      let applyToAllCount = 0;
+      for (const setItem of category_sets) {
+        if (setItem.apply_to_all) applyToAllCount += 1;
+      }
+      if (applyToAllCount > 1) {
+        throw new Error(`Only one category set can have apply_to_all=true.`);
+      }
+      if (applyToAllCount === 1 && category_sets.length > 1) {
+        throw new Error(
+          `If a category set has apply_to_all=true, it must be the only category set.`,
+        );
+      }
+      if (allClientSchedIds.length > 0 && category_sets.length > 1) {
+        const coversAll = category_sets.some((setItem) => {
+          if (setItem.apply_to_all) return true;
+          if (setItem.sched_ids.length === 0) return false;
+          const covered = new Set(setItem.sched_ids);
+          if (covered.size !== allClientSchedSet.size) return false;
+          for (const id of allClientSchedSet) {
+            if (!covered.has(id)) return false;
+          }
+          return true;
+        });
+        if (coversAll) {
+          throw new Error(
+            `If a category set covers all schedules, it must be the only category set.`,
+          );
+        }
+      }
+    }
+
     // Transaction to update show, schedules, and category sets
     await prisma.$transaction(
       async (tx) => {

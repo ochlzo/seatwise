@@ -511,7 +511,7 @@ export function CreateShowForm() {
       {
         id: newSetId,
         set_name: `Set ${prev.length + 1}`,
-        apply_to_all: true,
+        apply_to_all: prev.length === 0,
         sched_ids: [],
         filter_date: "",
         categories: [],
@@ -1563,10 +1563,19 @@ export function CreateShowForm() {
               Missing: {missingFields.join(", ")}
             </p>
           )}
-          <Button onClick={handleSave} disabled={isSaving || !isFormValid} className="gap-2">
-            <Save className="h-4 w-4" />
-            {isSaving ? "Creating..." : "Create Show"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => router.push("/admin/shows")}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={isSaving || !isFormValid} className="gap-2">
+              <Save className="h-4 w-4" />
+              {isSaving ? "Creating..." : "Create Show"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
