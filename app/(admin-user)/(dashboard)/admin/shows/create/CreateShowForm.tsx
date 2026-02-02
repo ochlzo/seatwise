@@ -1293,7 +1293,10 @@ export function CreateShowForm() {
                             sched_ids: next ? remaining : [],
                           });
                         }}
-                        disabled={scheds.length === 0}
+                        disabled={
+                          scheds.length === 0 ||
+                          getAvailableScheds(setItem.id).length === 0
+                        }
                       />
                       Apply to all schedules
                     </label>
@@ -1314,7 +1317,7 @@ export function CreateShowForm() {
                         <p className="text-xs text-muted-foreground">Add schedules first to target specific dates.</p>
                       )}
                       {scheds.length > 0 && getAvailableScheds(setItem.id).length === 0 && (
-                        <p className="text-xs text-muted-foreground">All schedules already assigned.</p>
+                        <p className="text-xs text-destructive">All schedules already assigned.</p>
                       )}
                       {scheds.length > 0 && getAvailableScheds(setItem.id).length > 0 && getFilteredScheds(setItem).length === 0 && (
                         <p className="text-xs text-muted-foreground">No schedules match the selected date.</p>
@@ -1334,6 +1337,7 @@ export function CreateShowForm() {
                         size="sm"
                         className="gap-1.5"
                         onClick={() => addCategoryToSet(setItem.id)}
+                        disabled={getAvailableScheds(setItem.id).length === 0}
                       >
                         <Plus className="h-3.5 w-3.5" />
                         Add Category
