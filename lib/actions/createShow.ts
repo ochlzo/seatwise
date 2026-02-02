@@ -124,6 +124,27 @@ export async function createShowAction(data: CreateShowPayload) {
     } = data;
 
     // --- 1. Pre-Transaction Validation & Normalization ---
+    if (!show_name?.trim()) {
+      throw new Error("Show name is required.");
+    }
+    if (!show_description?.trim()) {
+      throw new Error("Show description is required.");
+    }
+    if (!venue?.trim()) {
+      throw new Error("Venue is required.");
+    }
+    if (!address?.trim()) {
+      throw new Error("Address is required.");
+    }
+    if (!show_status) {
+      throw new Error("Show status is required.");
+    }
+    if (!show_start_date) {
+      throw new Error("Show start date is required.");
+    }
+    if (!show_end_date) {
+      throw new Error("Show end date is required.");
+    }
 
     // Normalize category sets (merging legacy 'categories' prop if needed)
     const normalizedCategorySets =

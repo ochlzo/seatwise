@@ -528,7 +528,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       {
         id: newSetId,
         set_name: `Set ${prev.length + 1}`,
-        apply_to_all: true,
+        apply_to_all: prev.length === 0,
         sched_ids: [],
         filter_date: "",
         categories: [],
