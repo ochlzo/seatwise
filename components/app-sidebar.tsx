@@ -1,22 +1,17 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
-  BookOpen,
-  Bot,
-  Frame,
-  Map,
-  PieChart,
-  Settings2,
-  SquareTerminal,
   UserRound,
   ShieldUser,
-} from "lucide-react"
+  House,
+  CreditCard,
+  Armchair,
+} from "lucide-react";
 
-import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
-import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
+import { NavMain } from "@/components/nav-main";
+import { NavUser } from "@/components/nav-user";
+import { TeamSwitcher } from "@/components/team-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -24,11 +19,11 @@ import {
   SidebarHeader,
   SidebarRail,
   useSidebar,
-} from "@/components/ui/sidebar"
-import { useAppSelector } from "@/lib/hooks"
-import { RootState } from "@/lib/store"
-import { usePathname } from "next/navigation"
-import { useEffect } from "react"
+} from "@/components/ui/sidebar";
+import { useAppSelector } from "@/lib/hooks";
+import { RootState } from "@/lib/store";
+import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 
 // This is sample data.
 const data = {
@@ -46,109 +41,53 @@ const data = {
   ],
   navMain: [
     {
-      title: "Playground",
+      title: "Home",
       url: "#",
-      icon: SquareTerminal,
+      icon: House,
       isActive: true,
       items: [
         {
-          title: "History",
+          title: "Upcoming Events",
           url: "#",
         },
         {
-          title: "Starred",
+          title: "All Events",
           url: "#",
         },
         {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Genesis",
+          title: "Events Attended",
           url: "#",
         },
         {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
+          title: "Calendar",
           url: "#",
         },
       ],
     },
     {
-      title: "Documentation",
+      title: "Payments",
       url: "#",
-      icon: BookOpen,
+      icon: CreditCard,
       items: [
         {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
+          title: "Payment History",
           url: "#",
         },
       ],
     },
     {
-      title: "Settings",
+      title: "BUCAL Seats",
       url: "#",
-      icon: Settings2,
+      icon: Armchair,
       items: [
         {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
+          title: "Seat Layouts",
           url: "#",
         },
       ],
     },
   ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
-  ],
-}
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const user = useAppSelector((state: RootState) => state.auth.user);
@@ -164,16 +103,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} logo="/logo.png" logoMini="/logo-mini.png" currentTeam="user" />
+        <TeamSwitcher
+          teams={data.teams}
+          logo="/logo.png"
+          logoMini="/logo-mini.png"
+          currentTeam="user"
+        />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} openAll />
-        <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }

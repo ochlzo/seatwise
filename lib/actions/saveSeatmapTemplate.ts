@@ -73,20 +73,20 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
 
     const { seatmap_name, seatmap_json, seatmap_id } = payload;
 
-    // Check if updating an existing seatmap that has active seat assignments
-    if (seatmap_id) {
-      const conflictCheck = await prisma.seatAssignment.findFirst({
+    // 1. Pre-calculate seat data outside the transaction
+    const seatNodes = extractSeatNodes(seatmap_json);
+    const seatDataForCreate = seatNodes.map((seat) => ({
+      seat_id: seat.id,
+      seat_number: buildSeatNumber(seat),
+      // seatmap_id will be assigned inside the transaction if creating new
+    }));
+
+    // Check if updating an existing seatmap that has seat assignments for related seats
+    if (seatmap_id && seatDataForCreate.length > 0) {
+      const seatIds = seatDataForCreate.map((seat) => seat.seat_id);
+      const assignments = await prisma.seatAssignment.findMany({
         where: {
-          seat: {
-            seatmap_id: seatmap_id,
-          },
-          sched: {
-            show: {
-              show_status: {
-                in: ["OPEN", "ON_GOING", "UPCOMING"],
-              },
-            },
-          },
+          seat_id: { in: seatIds },
         },
         include: {
           sched: {
@@ -103,27 +103,32 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
         },
       });
 
-      if (conflictCheck) {
-        // Seatmap is in use by active shows - return conflict error
+      if (assignments.length > 0) {
+        const showMap = new Map<
+          string,
+          { show_id: string; show_name: string; show_status: string }
+        >();
+        assignments.forEach((assignment) => {
+          const show = assignment.sched.show;
+          if (show && !showMap.has(show.show_id)) {
+            showMap.set(show.show_id, {
+              show_id: show.show_id,
+              show_name: show.show_name,
+              show_status: show.show_status,
+            });
+          }
+        });
+        const relatedShows = Array.from(showMap.values());
         return {
           success: false,
           error: "SEATMAP_IN_USE",
           conflictDetails: {
-            showName: conflictCheck.sched.show.show_name,
-            showStatus: conflictCheck.sched.show.show_status,
-            message: `This seatmap is currently being used by "${conflictCheck.sched.show.show_name}" (${conflictCheck.sched.show.show_status}). You cannot modify it while it has active seat assignments.`,
+            shows: relatedShows,
+            message: `This seatmap is currently being used by ${relatedShows.length} show(s). You cannot modify it while it has seat assignments.`,
           },
         };
       }
     }
-
-    // 1. Pre-calculate seat data outside the transaction
-    const seatNodes = extractSeatNodes(seatmap_json);
-    const seatDataForCreate = seatNodes.map((seat) => ({
-      seat_id: seat.id,
-      seat_number: buildSeatNumber(seat),
-      // seatmap_id will be assigned inside the transaction if creating new
-    }));
 
     const created = await prisma.$transaction(
       async (tx) => {
