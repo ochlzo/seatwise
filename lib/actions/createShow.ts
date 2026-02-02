@@ -181,43 +181,11 @@ export async function createShowAction(data: CreateShowPayload) {
       // Validate schedule coverage and overlaps using client_ids
       // Note: 'scheds' input contains client_ids. 'category_sets' refers to these client_ids.
       const allClientSchedIds = scheds.map((s) => s.client_id);
-      const allClientSchedSet = new Set(allClientSchedIds);
-      let applyToAllCount = 0;
-      for (const s of normalizedCategorySets) {
-        if (s.apply_to_all) applyToAllCount += 1;
-      }
-      if (applyToAllCount > 1) {
-        throw new Error(`Only one category set can have apply_to_all=true.`);
-      }
-      if (applyToAllCount === 1 && normalizedCategorySets.length > 1) {
-        throw new Error(
-          `If a category set has apply_to_all=true, it must be the only category set.`
-        );
-      }
-      if (allClientSchedIds.length > 0 && normalizedCategorySets.length > 1) {
-        const coversAll = normalizedCategorySets.some((setItem) => {
-          if (setItem.apply_to_all) return true;
-          if (setItem.sched_ids.length === 0) return false;
-          const covered = new Set(setItem.sched_ids);
-          if (covered.size !== allClientSchedSet.size) return false;
-          for (const id of allClientSchedSet) {
-            if (!covered.has(id)) return false;
-          }
-          return true;
-        });
-        if (coversAll) {
-          throw new Error(
-            `If a category set covers all schedules, it must be the only category set.`
-          );
-        }
-      }
 
       const clientSchedToSetName = new Map<string, string>();
       normalizedCategorySets.forEach((setItem, i) => {
         const setName = normalizedNames[i];
-        const targetIds = setItem.apply_to_all
-          ? allClientSchedIds
-          : setItem.sched_ids; // These are client_ids from inputs
+        const targetIds = setItem.sched_ids; // These are client_ids from inputs
 
         for (const clientId of targetIds) {
           const existing = clientSchedToSetName.get(clientId);
@@ -379,11 +347,9 @@ export async function createShowAction(data: CreateShowPayload) {
             });
 
             // Map client_ids to db_sched_ids
-            const targetSchedIds = setItem.apply_to_all
-              ? allDbSchedIds
-              : setItem.sched_ids
-                .map((id) => schedIdMap.get(id))
-                .filter(Boolean) as string[];
+            const targetSchedIds = setItem.sched_ids
+              .map((id) => schedIdMap.get(id))
+              .filter(Boolean) as string[];
 
             if (targetSchedIds.length > 0) {
               await tx.sched.updateMany({
@@ -438,11 +404,9 @@ export async function createShowAction(data: CreateShowPayload) {
           for (const setItem of normalizedCategorySets) {
             if (!setItem.seat_assignments) continue;
 
-            const targetSchedIds = setItem.apply_to_all
-              ? allDbSchedIds
-              : setItem.sched_ids
-                .map((id) => schedIdMap.get(id))
-                .filter(Boolean) as string[];
+            const targetSchedIds = setItem.sched_ids
+              .map((id) => schedIdMap.get(id))
+              .filter(Boolean) as string[];
 
             for (const [seatId, catName] of Object.entries(setItem.seat_assignments)) {
               const key = `${catName.trim().toLowerCase()}|${Number(setItem.categories.find(c => c.category_name === catName)?.price || 0).toString()}|${setItem.categories.find(c => c.category_name === catName)?.color_code}`;

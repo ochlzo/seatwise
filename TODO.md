@@ -20,4 +20,4 @@ Also check in CreateShowForm.tsx component if there are similar issues. ✅
 
 10. Admin access page
 
-11.
+11. Add a flag on edit in seatmappreview on create and update for easy identification all seats assigned.

@@ -506,18 +506,25 @@ export function CreateShowForm() {
 
   const addCategorySet = () => {
     const newSetId = `set-${uuidv4()}`;
-    setCategorySets((prev) => [
-      ...prev,
-      {
-        id: newSetId,
-        set_name: `Set ${prev.length + 1}`,
-        apply_to_all: prev.length === 0,
-        sched_ids: [],
-        filter_date: "",
-        categories: [],
-        seatAssignments: {},
-      },
-    ]);
+    setCategorySets((prev) => {
+      const nextPrev = prev.map((setItem) =>
+        setItem.apply_to_all
+          ? { ...setItem, apply_to_all: false, sched_ids: [] }
+          : setItem,
+      );
+      return [
+        ...nextPrev,
+        {
+          id: newSetId,
+          set_name: `Set ${prev.length + 1}`,
+          apply_to_all: prev.length === 0,
+          sched_ids: [],
+          filter_date: "",
+          categories: [],
+          seatAssignments: {},
+        },
+      ];
+    });
     setActiveSetId(newSetId);
   };
 
