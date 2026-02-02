@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, ShowStatus } from "@prisma/client";
 
 export async function getShows(params?: {
   status?: string;
@@ -16,7 +16,7 @@ export async function getShows(params?: {
     where.show_status = { in: ["UPCOMING", "OPEN"] };
   }
   if (params?.visibility === "user") {
-    const hiddenStatuses = ["DRAFT", "CANCELLED", "POSTPONED"];
+    const hiddenStatuses: ShowStatus[] = ["DRAFT", "CANCELLED", "POSTPONED"];
     if (where.show_status) {
       const statusValue =
         typeof where.show_status === "string"
