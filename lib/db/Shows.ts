@@ -25,8 +25,9 @@ export async function getShows(params?: {
       if (statusValue && hiddenStatuses.includes(statusValue)) {
         return [];
       }
+    } else {
+      where.show_status = { notIn: hiddenStatuses };
     }
-    where.show_status = { notIn: hiddenStatuses };
   }
   if (params?.seatmapId) {
     where.seatmap_id = params.seatmapId;

@@ -58,6 +58,7 @@ type ShowsClientProps = {
     headerTitle?: string;
     headerSubtitle?: string;
     visibility?: "user" | "admin";
+    statusFilterValues?: string[];
 };
 
 export default function ShowsPage({
@@ -70,6 +71,7 @@ export default function ShowsPage({
     headerTitle,
     headerSubtitle,
     visibility = "admin",
+    statusFilterValues,
 }: ShowsClientProps) {
     const searchParams = useSearchParams();
     const [shows, setShows] = React.useState<Show[]>([]);
@@ -177,7 +179,10 @@ export default function ShowsPage({
                         )}
                         {showFilters && (
                             <div className="w-full md:w-auto">
-                                <ShowFilters hideStatusFilter={statusGroup === "active"} />
+                                <ShowFilters
+                                    hideStatusFilter={false}
+                                    allowedStatusValues={statusFilterValues}
+                                />
                             </div>
                         )}
                     </div>

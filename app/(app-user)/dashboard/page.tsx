@@ -12,6 +12,7 @@ export default async function Page() {
         showHeader={false}
         statusGroup="active"
         visibility="user"
+        statusFilterValues={["ALL", "UPCOMING", "OPEN"]}
         headerTitle="What’s On Deck"
         headerSubtitle="Upcoming and open shows that are ready for your seat."
       />
