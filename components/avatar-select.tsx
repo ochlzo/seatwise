@@ -197,7 +197,7 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
                                             setStagedBase64(null);
                                         }}
                                         className={cn(
-                                            "aspect-square rounded-full overflow-hidden border-2 transition-all hover:scale-110 active:scale-95",
+                                            "relative aspect-square rounded-full overflow-hidden border-2 transition-all hover:scale-110 active:scale-95",
                                             selected === avatar && !stagedBase64 ? "border-[#3b82f6] ring-4 ring-[#3b82f6]/20 scale-105" : "border-transparent"
                                         )}
                                     >

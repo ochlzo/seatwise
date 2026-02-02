@@ -1415,20 +1415,38 @@ export function CreateShowForm() {
       </Card>
 
       <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-3 sm:p-6">
+        <DialogContent
+          className={cn(
+            "sm:max-w-2xl p-3 sm:p-6",
+            numberOfMonths >= 2 && "md:max-h-[90vh] md:overflow-y-auto",
+          )}
+        >
           <DialogHeader>
             <DialogTitle className="text-sm sm:text-lg">Add schedules</DialogTitle>
             <DialogDescription className="text-[11px] sm:text-sm">
               Select dates within the show range, then add one or more time ranges.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 md:gap-6 md:grid-cols-[1.1fr_1fr]">
-            <div className="rounded-lg border border-sidebar-border/60 p-3 flex justify-center md:block">
+          <div
+            className={cn(
+              "grid gap-3 md:gap-6",
+              numberOfMonths >= 2 ? "md:grid-cols-1" : "md:grid-cols-[1.1fr_1fr]",
+            )}
+          >
+            <div
+              className={cn(
+                "rounded-lg border border-sidebar-border/60 p-3 flex justify-center",
+                numberOfMonths >= 2 ? "md:justify-center" : "md:block",
+              )}
+            >
               <Calendar
                 mode="multiple"
                 selected={selectedDates}
                 onSelect={(dates) => setSelectedDates(dates ?? [])}
                 numberOfMonths={numberOfMonths}
+                month={showStartDate ?? undefined}
+                defaultMonth={showStartDate ?? undefined}
+                disableNavigation
                 disabled={(date) => {
                   if (!showStartDate || !showEndDate) return true;
                   return date < showStartDate || date > showEndDate;

@@ -17,6 +17,7 @@ import {
   Armchair,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { differenceInCalendarMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -364,6 +365,19 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
         : null,
     [formData.show_end_date],
   );
+  const numberOfMonths =
+    showStartDate &&
+    showEndDate &&
+    differenceInCalendarMonths(showEndDate, showStartDate) >= 1
+      ? 2
+      : 1;
+
+  React.useEffect(() => {
+    if (!showStartDate || !showEndDate) return;
+    setSelectedDates((prev) =>
+      prev.filter((date) => date >= showStartDate && date <= showEndDate),
+    );
+  }, [showStartDate, showEndDate]);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -2126,24 +2140,41 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       </div>
 
       <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent
+          className={cn(
+            "sm:max-w-2xl p-4 sm:p-6",
+            numberOfMonths >= 2 && "md:max-h-[90vh] md:overflow-y-auto",
+          )}
+        >
           <DialogHeader>
             <DialogTitle>Add Schedules</DialogTitle>
             <DialogDescription>
               Select dates and times to add new performances.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-6 md:grid-cols-[1.1fr_1fr]">
-            <div className="rounded-lg border p-3 flex justify-center md:block">
+          <div
+            className={cn(
+              "grid gap-6",
+              numberOfMonths >= 2 ? "md:grid-cols-1" : "md:grid-cols-[1.1fr_1fr]",
+            )}
+          >
+            <div
+              className={cn(
+                "rounded-lg border p-3 flex justify-center",
+                numberOfMonths >= 2 ? "md:justify-center" : "md:block",
+              )}
+            >
               <Calendar
                 mode="multiple"
                 selected={selectedDates}
                 onSelect={(dates) => setSelectedDates(dates ?? [])}
-                numberOfMonths={1}
+                numberOfMonths={numberOfMonths}
+                month={showStartDate ?? undefined}
+                defaultMonth={showStartDate ?? undefined}
+                disableNavigation
                 disabled={(date) => {
-                  const start = new Date(formData.show_start_date);
-                  const end = new Date(formData.show_end_date);
-                  return date < start || date > end;
+                  if (!showStartDate || !showEndDate) return false;
+                  return date < showStartDate || date > showEndDate;
                 }}
                 className="[--cell-size:--spacing(7)] text-xs"
               />
