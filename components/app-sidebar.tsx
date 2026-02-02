@@ -48,11 +48,11 @@ const data = {
       items: [
         {
           title: "Upcoming Events",
-          url: "#",
+          url: "/dashboard",
         },
         {
           title: "All Events",
-          url: "#",
+          url: "/all-events",
         },
         {
           title: "Events Attended",

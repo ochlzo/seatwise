@@ -48,7 +48,21 @@ type Show = {
     }>;
 };
 
-export default function ShowsPage() {
+type ShowsClientProps = {
+    mode?: "admin" | "user";
+    basePath?: string;
+    enableLinks?: boolean;
+    showHeader?: boolean;
+    showFilters?: boolean;
+};
+
+export default function ShowsPage({
+    mode = "admin",
+    basePath = "/admin/shows",
+    enableLinks = true,
+    showHeader = true,
+    showFilters = true,
+}: ShowsClientProps) {
     const searchParams = useSearchParams();
     const [shows, setShows] = React.useState<Show[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -103,17 +117,24 @@ export default function ShowsPage() {
 
     const hasFilters = searchParams.get("status") || searchParams.get("sort") || searchParams.get("seatmapId") || searchQuery.trim();
 
+    const isAdmin = mode === "admin";
+    const createPath = `${basePath}/create`;
+
     return (
         <>
-            <PageHeader
-                title="Shows"
-                rightSlot={
-                    <>
-                        <ThemeSwithcer />
-                        <AdminShield />
-                    </>
-                }
-            />
+            {showHeader && (
+                <PageHeader
+                    title="Shows"
+                    rightSlot={
+                        isAdmin ? (
+                            <>
+                                <ThemeSwithcer />
+                                <AdminShield />
+                            </>
+                        ) : undefined
+                    }
+                />
+            )}
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-8 pt-0">
                 {/* Header Section */}
                 <div className="flex flex-col gap-4">
@@ -134,15 +155,19 @@ export default function ShowsPage() {
                                 className="border-input h-9 w-full rounded-md border bg-transparent pl-9 pr-3 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
                             />
                         </div>
-                        <Button asChild className="w-full md:w-auto font-semibold shadow-md shadow-primary/10">
-                            <Link href="/admin/shows/create">
-                                <Plus className="mr-2 h-4 w-4" />
-                                New Show
-                            </Link>
-                        </Button>
-                        <div className="w-full md:w-auto">
-                            <ShowFilters />
-                        </div>
+                        {isAdmin && (
+                            <Button asChild className="w-full md:w-auto font-semibold shadow-md shadow-primary/10">
+                                <Link href={createPath}>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    New Show
+                                </Link>
+                            </Button>
+                        )}
+                        {showFilters && (
+                            <div className="w-full md:w-auto">
+                                <ShowFilters />
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -166,21 +191,93 @@ export default function ShowsPage() {
                         </CardDescription>
                         {hasFilters && (
                             <Button variant="outline" asChild size="sm">
-                                <Link href="/admin/shows">Clear Filters</Link>
+                                <Link href={basePath}>Clear Filters</Link>
                             </Button>
                         )}
                     </Card>
                 ) : (
                     <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                         {shows.map((show: Show) => (
-                            <Link key={show.show_id} href={`/admin/shows/${show.show_id}`}>
-                                <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-sidebar-border cursor-pointer h-full">
+                            enableLinks ? (
+                                <Link key={show.show_id} href={`${basePath}/${show.show_id}`}>
+                                    <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-sidebar-border cursor-pointer h-full">
+                                        <div className="aspect-[16/9] bg-muted relative overflow-hidden">
+                                            {show.show_image_key ? (
+                                                <Image
+                                                    src={show.show_image_key}
+                                                    alt={show.show_name}
+                                                    className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                                                    width={400}
+                                                    height={225}
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
+                                                    <Ticket className="w-12 h-12 text-primary/20" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <CardHeader className="pb-2">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <CardTitle className="text-lg md:text-xl font-semibold line-clamp-1 truncate">
+                                                    {show.show_name}
+                                                </CardTitle>
+                                                <Badge
+                                                    variant="outline"
+                                                    style={{
+                                                        backgroundColor: STATUS_COLORS[show.show_status as string] || "#6B7280",
+                                                        color: "white",
+                                                        borderColor: "transparent"
+                                                    }}
+                                                    className="shadow-sm font-semibold px-3 py-1 text-xs shrink-0"
+                                                >
+                                                    {show.show_status.replace('_', ' ')}
+                                                </Badge>
+                                            </div>
+                                            <CardDescription className="flex items-center gap-1.5 font-medium text-primary/80">
+                                                <MapPin className="w-3.5 h-3.5" />
+                                                <span className="line-clamp-1">{show.venue}</span>
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                    <Calendar className="w-4 h-4" />
+                                                    <span className="font-medium">
+                                                        {new Date(show.show_start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                        {new Date(show.show_start_date).getTime() !== new Date(show.show_end_date).getTime() ?
+                                                            ` - ${new Date(show.show_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` :
+                                                            `, ${new Date(show.show_start_date).getFullYear()}`
+                                                        }
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-4 border-t border-sidebar-border">
+                                                <div className="flex flex-col max-w-full">
+                                                    <span className="text-xs text-muted-foreground font-semibold">Schedules</span>
+                                                    <span className="text-sm font-semibold line-clamp-1 text-primary/90">
+                                                        {(() => {
+                                                            const uniqueTimes = Array.from(new Set(
+                                                                show.scheds.map(s =>
+                                                                    `${formatTime(new Date(s.sched_start_time))} - ${formatTime(new Date(s.sched_end_time))}`
+                                                                )
+                                                            ));
+                                                            return uniqueTimes.length > 0 ? uniqueTimes.join(', ') : "None";
+                                                        })()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </Link>
+                            ) : (
+                                <Card key={show.show_id} className="overflow-hidden border-sidebar-border h-full">
                                     <div className="aspect-[16/9] bg-muted relative overflow-hidden">
                                         {show.show_image_key ? (
                                             <Image
                                                 src={show.show_image_key}
                                                 alt={show.show_name}
-                                                className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-500"
+                                                className="object-cover w-full h-full"
                                                 width={400}
                                                 height={225}
                                             />
@@ -243,7 +340,7 @@ export default function ShowsPage() {
                                         </div>
                                     </CardContent>
                                 </Card>
-                            </Link>
+                            )
                         ))}
                     </div>
                 )}
