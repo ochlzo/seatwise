@@ -125,7 +125,7 @@ model SeatCategory {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
-  @@unique([seatmap_id, category_name])
+  @@unique([seatmap_id, category_name, price, color_code])
   @@index([seatmap_id])
 }
 

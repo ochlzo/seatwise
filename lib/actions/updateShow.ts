@@ -161,23 +161,37 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                 const flatCategories = category_sets.flatMap((setItem) => setItem.categories);
                 const uniqueCategoryMap = new Map<string, typeof flatCategories[number]>();
                 flatCategories.forEach((category) => {
-                    if (!uniqueCategoryMap.has(category.category_name)) {
-                        uniqueCategoryMap.set(category.category_name, category);
+                    // Use name, price, and color to identify a unique category
+                    const key = `${category.category_name.trim().toLowerCase()}|${Number(category.price).toString()}|${category.color_code}`;
+                    if (!uniqueCategoryMap.has(key)) {
+                        uniqueCategoryMap.set(key, category);
                     }
                 });
                 const uniqueCategories = Array.from(uniqueCategoryMap.values());
-                const uniqueNames = uniqueCategories.map((c) => c.category_name);
 
-                // Find existing
+                // Find existing categories that match name, price, AND color
                 const existingCategories = await tx.seatCategory.findMany({
-                    where: { seatmap_id, category_name: { in: uniqueNames } },
+                    where: {
+                        seatmap_id,
+                        OR: uniqueCategories.map((c) => ({
+                            category_name: c.category_name,
+                            price: c.price,
+                            color_code: c.color_code,
+                        })),
+                    },
                 });
-                const existingMap = new Map(
-                    existingCategories.map((c) => [c.category_name, c.seat_category_id])
-                );
+
+                const existingMap = new Map<string, string>();
+                existingCategories.forEach((c) => {
+                    const key = `${c.category_name.trim().toLowerCase()}|${Number(c.price).toString()}|${c.color_code}`;
+                    existingMap.set(key, c.seat_category_id);
+                });
 
                 // Create missing
-                const missing = uniqueCategories.filter((c) => !existingMap.has(c.category_name));
+                const missing = uniqueCategories.filter((c) => {
+                    const key = `${c.category_name.trim().toLowerCase()}|${Number(c.price).toString()}|${c.color_code}`;
+                    return !existingMap.has(key);
+                });
                 if (missing.length > 0) {
                     await tx.seatCategory.createMany({
                         data: missing.map((c) => ({
@@ -190,13 +204,22 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                     });
                 }
 
-                // Re-fetch all to get IDs
+                // Re-fetch all to get IDs for the ones we need
                 const allCategories = await tx.seatCategory.findMany({
-                    where: { seatmap_id, category_name: { in: uniqueNames } },
+                    where: {
+                        seatmap_id,
+                        OR: uniqueCategories.map((c) => ({
+                            category_name: c.category_name,
+                            price: c.price,
+                            color_code: c.color_code,
+                        })),
+                    },
                 });
-                const categoryIdByName = new Map(
-                    allCategories.map((c) => [c.category_name, c.seat_category_id])
-                );
+                const categoryIdLookup = new Map<string, string>();
+                allCategories.forEach((c) => {
+                    const key = `${c.category_name.trim().toLowerCase()}|${Number(c.price).toString()}|${c.color_code}`;
+                    categoryIdLookup.set(key, c.seat_category_id);
+                });
 
                 const categorySetItemRows: Array<{ category_set_id: string; seat_category_id: string }> = [];
                 const setRows: Array<{ sched_id: string; seat_category_id: string }> = [];
@@ -228,7 +251,8 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                     }
 
                     setItem.categories.forEach((category) => {
-                        const seat_category_id = categoryIdByName.get(category.category_name);
+                        const key = `${category.category_name.trim().toLowerCase()}|${Number(category.price).toString()}|${category.color_code}`;
+                        const seat_category_id = categoryIdLookup.get(key);
                         if (!seat_category_id) return;
 
                         categorySetItemRows.push({
@@ -278,7 +302,8 @@ export async function updateShowAction(showId: string, data: UpdateShowPayload) 
                             .filter(Boolean) as string[];
 
                     for (const [seatId, catName] of Object.entries(setItem.seat_assignments)) {
-                        const seat_category_id = categoryIdByName.get(catName);
+                        const key = `${catName.trim().toLowerCase()}|${Number(setItem.categories.find(c => c.category_name === catName)?.price || 0).toString()}|${setItem.categories.find(c => c.category_name === catName)?.color_code}`;
+                        const seat_category_id = categoryIdLookup.get(key);
                         if (!seat_category_id) continue;
 
                         for (const schedId of targetSchedIds) {
