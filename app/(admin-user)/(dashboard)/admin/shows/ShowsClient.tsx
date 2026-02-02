@@ -55,6 +55,9 @@ type ShowsClientProps = {
     showHeader?: boolean;
     showFilters?: boolean;
     statusGroup?: "active";
+    headerTitle?: string;
+    headerSubtitle?: string;
+    visibility?: "user" | "admin";
 };
 
 export default function ShowsPage({
@@ -64,6 +67,9 @@ export default function ShowsPage({
     showHeader = true,
     showFilters = true,
     statusGroup,
+    headerTitle,
+    headerSubtitle,
+    visibility = "admin",
 }: ShowsClientProps) {
     const searchParams = useSearchParams();
     const [shows, setShows] = React.useState<Show[]>([]);
@@ -88,6 +94,7 @@ export default function ShowsPage({
                 if (sort) params.set("sort", sort);
                 if (seatmapId) params.set("seatmapId", seatmapId);
                 if (statusGroup) params.set("statusGroup", statusGroup);
+                if (visibility === "user") params.set("visibility", "user");
 
                 const response = await fetch(`/api/shows/search?${params.toString()}`);
 
@@ -116,7 +123,7 @@ export default function ShowsPage({
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [searchQuery, searchParams]);
+    }, [searchQuery, searchParams, statusGroup]);
 
     const hasFilters = searchParams.get("status") || searchParams.get("sort") || searchParams.get("seatmapId") || searchQuery.trim();
 
@@ -142,9 +149,11 @@ export default function ShowsPage({
                 {/* Header Section */}
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1">
-                        <h2 className="text-lg md:text-xl font-semibold">Show Management</h2>
+                        <h2 className="text-lg md:text-xl font-semibold">
+                            {headerTitle ?? "Show Management"}
+                        </h2>
                         <p className="text-muted-foreground text-sm">
-                            View and manage all events, venue details, and performance schedules.
+                            {headerSubtitle ?? "View and manage all events, venue details, and performance schedules."}
                         </p>
                     </div>
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
@@ -168,7 +177,7 @@ export default function ShowsPage({
                         )}
                         {showFilters && (
                             <div className="w-full md:w-auto">
-                                <ShowFilters />
+                                <ShowFilters hideStatusFilter={statusGroup === "active"} />
                             </div>
                         )}
                     </div>

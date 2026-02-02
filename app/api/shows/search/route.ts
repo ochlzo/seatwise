@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") || undefined;
     const statusGroup =
       searchParams.get("statusGroup") === "active" ? "active" : undefined;
+    const visibility =
+      searchParams.get("visibility") === "user" ? "user" : "admin";
     const sort = searchParams.get("sort") || undefined;
     const seatmapId = searchParams.get("seatmapId") || undefined;
 
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest) {
       query,
       status,
       statusGroup,
+      visibility,
       sort,
       seatmapId,
     });

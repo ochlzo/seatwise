@@ -29,7 +29,7 @@ const sorts = [
     { label: "Oldest First", value: "oldest" },
 ];
 
-export function ShowFilters() {
+export function ShowFilters({ hideStatusFilter = false }: { hideStatusFilter?: boolean }) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -49,32 +49,34 @@ export function ShowFilters() {
     return (
         <div className="flex w-full items-center gap-2 md:w-auto">
             {/* Status Filter */}
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 w-1/2 gap-2 border-sidebar-border bg-background shadow-sm hover:bg-sidebar-accent transition-colors md:w-auto">
-                        <Filter className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-semibold text-xs">
-                            {statuses.find(s => s.value === currentStatus)?.label || "Filter"}
-                        </span>
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48 p-1">
-                    <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold px-2 py-1.5">
-                        Filter by Status
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {statuses.map((status) => (
-                        <DropdownMenuItem
-                            key={status.value}
-                            onClick={() => updateQuery("status", status.value)}
-                            className="flex items-center justify-between cursor-pointer text-sm py-2 rounded-md transition-colors"
-                        >
-                            {status.label}
-                            {currentStatus === status.value && <Check className="h-4 w-4 text-primary" />}
-                        </DropdownMenuItem>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
+            {!hideStatusFilter && (
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-9 w-1/2 gap-2 border-sidebar-border bg-background shadow-sm hover:bg-sidebar-accent transition-colors md:w-auto">
+                            <Filter className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-semibold text-xs">
+                                {statuses.find(s => s.value === currentStatus)?.label || "Filter"}
+                            </span>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 p-1">
+                        <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold px-2 py-1.5">
+                            Filter by Status
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {statuses.map((status) => (
+                            <DropdownMenuItem
+                                key={status.value}
+                                onClick={() => updateQuery("status", status.value)}
+                                className="flex items-center justify-between cursor-pointer text-sm py-2 rounded-md transition-colors"
+                            >
+                                {status.label}
+                                {currentStatus === status.value && <Check className="h-4 w-4 text-primary" />}
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            )}
 
             {/* Sort Dropdown */}
             <DropdownMenu>
