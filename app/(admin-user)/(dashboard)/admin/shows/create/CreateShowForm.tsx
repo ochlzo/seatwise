@@ -1290,7 +1290,7 @@ export function CreateShowForm() {
                           );
                           updateCategorySet(setItem.id, {
                             apply_to_all: next,
-                            sched_ids: next ? remaining : setItem.sched_ids,
+                            sched_ids: next ? remaining : [],
                           });
                         }}
                         disabled={scheds.length === 0}
