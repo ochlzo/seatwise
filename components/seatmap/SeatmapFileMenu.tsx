@@ -48,8 +48,7 @@ export function SeatmapFileMenu() {
 
     const [isConflictDialogOpen, setIsConflictDialogOpen] = React.useState(false);
     const [conflictDetails, setConflictDetails] = React.useState<{
-        showName: string;
-        showStatus: string;
+        shows: { show_id: string; show_name: string; show_status: string }[];
         message: string;
     } | null>(null);
 
@@ -364,6 +363,15 @@ export function SeatmapFileMenu() {
                         </div>
                         <DialogDescription className="pt-2">
                             {conflictDetails?.message}
+                            {conflictDetails?.shows?.length ? (
+                                <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                                    {conflictDetails.shows.map((show) => (
+                                        <div key={show.show_id}>
+                                            {show.show_name} ({show.show_status})
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
                             <br /><br />
                             <strong>Would you like to save your changes as a new template instead?</strong>
                             <br />
