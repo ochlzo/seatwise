@@ -838,6 +838,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             alt={formData.show_name}
             className="w-full h-full object-cover"
             style={{ objectPosition: "50% 35%" }}
+            fill
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-primary/5 to-primary/10">
