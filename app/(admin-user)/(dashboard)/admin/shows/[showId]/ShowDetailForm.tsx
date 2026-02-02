@@ -1826,7 +1826,9 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                   size="sm"
                                   className="gap-1.5"
                                   onClick={() => addCategoryToSet(setItem.id)}
-                                  disabled={getAvailableScheds(setItem.id).length === 0}
+                                  disabled={
+                                    getAvailableScheds(setItem.id).length === 0
+                                  }
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                   Add Category
@@ -2041,25 +2043,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                   </div>
                 )}
               </div>
-
-              {categorySets.length > 0 && (
-                <div className="pt-4 border-t border-sidebar-border">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
-                    Pricing Tiers
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {categorySets.map((set) => (
-                      <Badge
-                        key={set.id}
-                        variant="outline"
-                        className="bg-background/50 font-medium py-1"
-                      >
-                        {set.set_name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -2176,7 +2159,9 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
           <div
             className={cn(
               "grid gap-6",
-              numberOfMonths >= 2 ? "md:grid-cols-1" : "md:grid-cols-[1.1fr_1fr]",
+              numberOfMonths >= 2
+                ? "md:grid-cols-1"
+                : "md:grid-cols-[1.1fr_1fr]",
             )}
           >
             <div
