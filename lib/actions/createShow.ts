@@ -160,6 +160,7 @@ export async function createShowAction(data: CreateShowPayload) {
       // Validate schedule coverage and overlaps using client_ids
       // Note: 'scheds' input contains client_ids. 'category_sets' refers to these client_ids.
       const allClientSchedIds = scheds.map((s) => s.client_id);
+      const allClientSchedSet = new Set(allClientSchedIds);
       let applyToAllCount = 0;
       for (const s of normalizedCategorySets) {
         if (s.apply_to_all) applyToAllCount += 1;
@@ -171,6 +172,23 @@ export async function createShowAction(data: CreateShowPayload) {
         throw new Error(
           `If a category set has apply_to_all=true, it must be the only category set.`
         );
+      }
+      if (allClientSchedIds.length > 0 && normalizedCategorySets.length > 1) {
+        const coversAll = normalizedCategorySets.some((setItem) => {
+          if (setItem.apply_to_all) return true;
+          if (setItem.sched_ids.length === 0) return false;
+          const covered = new Set(setItem.sched_ids);
+          if (covered.size !== allClientSchedSet.size) return false;
+          for (const id of allClientSchedSet) {
+            if (!covered.has(id)) return false;
+          }
+          return true;
+        });
+        if (coversAll) {
+          throw new Error(
+            `If a category set covers all schedules, it must be the only category set.`
+          );
+        }
       }
 
       const clientSchedToSetName = new Map<string, string>();

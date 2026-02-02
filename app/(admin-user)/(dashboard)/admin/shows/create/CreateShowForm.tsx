@@ -136,7 +136,7 @@ export function CreateShowForm() {
     const used = new Set<string>();
     categorySets.forEach((setItem) => {
       if (setItem.apply_to_all) {
-        scheds.forEach((sched) => used.add(sched.id));
+        setItem.sched_ids.forEach((id) => used.add(id));
         return;
       }
       setItem.sched_ids.forEach((id) => used.add(id));
@@ -320,7 +320,7 @@ export function CreateShowForm() {
     categorySets.forEach((setItem) => {
       if (setItem.id === setId) return;
       if (setItem.apply_to_all) {
-        scheds.forEach((sched) => used.add(sched.id));
+        setItem.sched_ids.forEach((id) => used.add(id));
         return;
       }
       setItem.sched_ids.forEach((id) => used.add(id));
@@ -332,6 +332,20 @@ export function CreateShowForm() {
     if (!setItem.filter_date) return available;
     return available.filter((sched) => sched.sched_date === setItem.filter_date);
   }, [getAvailableScheds]);
+  const allSchedsCovered = React.useMemo(() => {
+    if (scheds.length === 0) return false;
+    const allIds = new Set(scheds.map((sched) => sched.id));
+    return categorySets.some((setItem) => {
+      if (setItem.apply_to_all) return true;
+      if (setItem.sched_ids.length === 0) return false;
+      const covered = new Set(setItem.sched_ids);
+      if (covered.size !== allIds.size) return false;
+      for (const id of allIds) {
+        if (!covered.has(id)) return false;
+      }
+      return true;
+    });
+  }, [categorySets, scheds]);
 
   // Count total seats in seatmap
   const totalSeatsCount = React.useMemo(() => {
@@ -1159,7 +1173,8 @@ export function CreateShowForm() {
                   !hasSeatmapSelected ||
                   scheds.length === 0 ||
                   scheduleCoverage.missingDates.length > 0 ||
-                  (scheds.length > 0 && unassignedSchedCount === 0)
+                  (scheds.length > 0 && unassignedSchedCount === 0) ||
+                  allSchedsCovered
                 }
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -1268,40 +1283,43 @@ export function CreateShowForm() {
                         type="checkbox"
                         className="h-4 w-4 accent-primary"
                         checked={setItem.apply_to_all}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          const remaining = getAvailableScheds(setItem.id).map(
+                            (sched) => sched.id,
+                          );
                           updateCategorySet(setItem.id, {
-                            apply_to_all: e.target.checked,
-                            sched_ids: e.target.checked ? [] : setItem.sched_ids,
-                          })
-                        }
+                            apply_to_all: next,
+                            sched_ids: next ? remaining : setItem.sched_ids,
+                          });
+                        }}
                         disabled={scheds.length === 0}
                       />
                       Apply to all schedules
                     </label>
-                    {!setItem.apply_to_all && (
-                      <div className="grid gap-2 md:grid-cols-2">
-                        {getFilteredScheds(setItem).map((sched) => (
-                          <label key={sched.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 accent-primary"
-                              checked={setItem.sched_ids.includes(sched.id)}
-                              onChange={() => toggleSetSched(setItem.id, sched.id)}
-                            />
-                            {formatDateLabel(sched.sched_date)} • {formatTime(sched.sched_start_time)}–{formatTime(sched.sched_end_time)}
-                          </label>
-                        ))}
-                        {scheds.length === 0 && (
-                          <p className="text-xs text-muted-foreground">Add schedules first to target specific dates.</p>
-                        )}
-                        {scheds.length > 0 && getAvailableScheds(setItem.id).length === 0 && (
-                          <p className="text-xs text-muted-foreground">All schedules already assigned.</p>
-                        )}
-                        {scheds.length > 0 && getAvailableScheds(setItem.id).length > 0 && getFilteredScheds(setItem).length === 0 && (
-                          <p className="text-xs text-muted-foreground">No schedules match the selected date.</p>
-                        )}
-                      </div>
-                    )}
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {getFilteredScheds(setItem).map((sched) => (
+                        <label key={sched.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-primary"
+                            checked={setItem.apply_to_all || setItem.sched_ids.includes(sched.id)}
+                            onChange={() => toggleSetSched(setItem.id, sched.id)}
+                            disabled={setItem.apply_to_all}
+                          />
+                          {formatDateLabel(sched.sched_date)} - {formatTime(sched.sched_start_time)}-{formatTime(sched.sched_end_time)}
+                        </label>
+                      ))}
+                      {scheds.length === 0 && (
+                        <p className="text-xs text-muted-foreground">Add schedules first to target specific dates.</p>
+                      )}
+                      {scheds.length > 0 && getAvailableScheds(setItem.id).length === 0 && (
+                        <p className="text-xs text-muted-foreground">All schedules already assigned.</p>
+                      )}
+                      {scheds.length > 0 && getAvailableScheds(setItem.id).length > 0 && getFilteredScheds(setItem).length === 0 && (
+                        <p className="text-xs text-muted-foreground">No schedules match the selected date.</p>
+                      )}
+                    </div>
                     {setItem.apply_to_all && scheds.length === 0 && (
                       <p className="text-xs text-muted-foreground">Add schedules to apply categories.</p>
                     )}
