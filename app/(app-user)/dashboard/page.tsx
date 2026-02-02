@@ -10,6 +10,7 @@ export default async function Page() {
         basePath="/dashboard"
         enableLinks={false}
         showHeader={false}
+        statusGroup="active"
       />
     </>
   );

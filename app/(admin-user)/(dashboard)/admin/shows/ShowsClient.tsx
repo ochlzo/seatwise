@@ -54,6 +54,7 @@ type ShowsClientProps = {
     enableLinks?: boolean;
     showHeader?: boolean;
     showFilters?: boolean;
+    statusGroup?: "active";
 };
 
 export default function ShowsPage({
@@ -62,6 +63,7 @@ export default function ShowsPage({
     enableLinks = true,
     showHeader = true,
     showFilters = true,
+    statusGroup,
 }: ShowsClientProps) {
     const searchParams = useSearchParams();
     const [shows, setShows] = React.useState<Show[]>([]);
@@ -85,6 +87,7 @@ export default function ShowsPage({
                 if (status) params.set("status", status);
                 if (sort) params.set("sort", sort);
                 if (seatmapId) params.set("seatmapId", seatmapId);
+                if (statusGroup) params.set("statusGroup", statusGroup);
 
                 const response = await fetch(`/api/shows/search?${params.toString()}`);
 
