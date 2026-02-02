@@ -686,14 +686,25 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     return { hasSchedules: formData.scheds.length > 0, missingDates };
   }, [formData.scheds, showStartDate, showEndDate]);
 
+  const allSchedsCovered = React.useMemo(() => {
+    if (formData.scheds.length === 0) return false;
+    const allIds = new Set(formData.scheds.map((sched) => sched.client_id));
+    return categorySets.some((setItem) => {
+      if (setItem.apply_to_all) return true;
+      if (setItem.sched_ids.length === 0) return false;
+      const covered = new Set(setItem.sched_ids);
+      if (covered.size !== allIds.size) return false;
+      for (const id of allIds) {
+        if (!covered.has(id)) return false;
+      }
+      return true;
+    });
+  }, [categorySets, formData.scheds]);
+
   const unassignedSchedCount = React.useMemo(() => {
     if (formData.scheds.length === 0) return 0;
     const used = new Set<string>();
     categorySets.forEach((setItem) => {
-      if (setItem.apply_to_all) {
-        formData.scheds.forEach((sched) => used.add(sched.client_id));
-        return;
-      }
       setItem.sched_ids.forEach((id) => used.add(id));
     });
     return formData.scheds.filter((sched) => !used.has(sched.client_id)).length;
@@ -916,16 +927,6 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
     }
   };
 
-  const getFilteredScheds = (setItem: CategorySetDraft) => {
-    if (setItem.filter_date) {
-      return formData.scheds.filter(
-        (s) =>
-          toManilaDateKey(toDateValue(s.sched_date)) === setItem.filter_date,
-      );
-    }
-    return formData.scheds;
-  };
-
   const getAvailableScheds = (currentSetId: string) => {
     return formData.scheds.filter((s) => {
       const assignedToOther = categorySets.some(
@@ -933,6 +934,17 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
       );
       return !assignedToOther;
     });
+  };
+
+  const getFilteredScheds = (setItem: CategorySetDraft) => {
+    const available = getAvailableScheds(setItem.id);
+    if (setItem.filter_date) {
+      return available.filter(
+        (s) =>
+          toManilaDateKey(toDateValue(s.sched_date)) === setItem.filter_date,
+      );
+    }
+    return available;
   };
 
   return (
@@ -1606,6 +1618,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                           size="sm"
                           onClick={addCategorySet}
                           className="gap-1.5"
+                          disabled={allSchedsCovered}
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Add Category Set
@@ -1725,73 +1738,80 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                   type="checkbox"
                                   className="h-4 w-4 accent-primary"
                                   checked={setItem.apply_to_all}
-                                  onChange={(e) =>
+                                  onChange={(e) => {
+                                    const next = e.target.checked;
+                                    const remaining = getAvailableScheds(
+                                      setItem.id,
+                                    ).map((sched) => sched.client_id);
                                     updateCategorySet(setItem.id, {
-                                      apply_to_all: e.target.checked,
-                                      sched_ids: e.target.checked
-                                        ? []
-                                        : setItem.sched_ids,
-                                    })
+                                      apply_to_all: next,
+                                      sched_ids: next ? remaining : [],
+                                    });
+                                  }}
+                                  disabled={
+                                    formData.scheds.length === 0 ||
+                                    getAvailableScheds(setItem.id).length === 0
                                   }
-                                  disabled={formData.scheds.length === 0}
                                 />
                                 Apply to all schedules
                               </label>
-                              {!setItem.apply_to_all && (
-                                <div className="grid gap-2 md:grid-cols-2">
-                                  {getFilteredScheds(setItem).map((sched) => (
-                                    <label
-                                      key={sched.client_id}
-                                      className="flex items-center gap-2 text-xs text-muted-foreground"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        className="h-4 w-4 accent-primary"
-                                        checked={setItem.sched_ids.includes(
+                              <div className="grid gap-2 md:grid-cols-2">
+                                {getFilteredScheds(setItem).map((sched) => (
+                                  <label
+                                    key={sched.client_id}
+                                    className="flex items-center gap-2 text-xs text-muted-foreground"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 accent-primary"
+                                      checked={
+                                        setItem.apply_to_all ||
+                                        setItem.sched_ids.includes(
                                           sched.client_id,
-                                        )}
-                                        onChange={() =>
-                                          toggleSetSched(
-                                            setItem.id,
-                                            sched.client_id,
-                                          )
-                                        }
-                                      />
-                                      {formatManilaDate(
-                                        toDateValue(sched.sched_date),
-                                      )}
-                                      &nbsp;•&nbsp;
-                                      {formatManilaTime(
-                                        toTimeValue(sched.sched_start_time),
-                                      )}
-                                      –
-                                      {formatManilaTime(
-                                        toTimeValue(sched.sched_end_time),
-                                      )}
-                                    </label>
-                                  ))}
-                                  {formData.scheds.length === 0 && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Add schedules first to target specific
-                                      dates.
+                                        )
+                                      }
+                                      onChange={() =>
+                                        toggleSetSched(
+                                          setItem.id,
+                                          sched.client_id,
+                                        )
+                                      }
+                                      disabled={setItem.apply_to_all}
+                                    />
+                                    {formatManilaDate(
+                                      toDateValue(sched.sched_date),
+                                    )}{" "}
+                                    -{" "}
+                                    {formatManilaTime(
+                                      toTimeValue(sched.sched_start_time),
+                                    )}{" "}
+                                    to{" "}
+                                    {formatManilaTime(
+                                      toTimeValue(sched.sched_end_time),
+                                    )}
+                                  </label>
+                                ))}
+                                {formData.scheds.length === 0 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Add schedules first to target specific
+                                    dates.
+                                  </p>
+                                )}
+                                {formData.scheds.length > 0 &&
+                                  getAvailableScheds(setItem.id).length ===
+                                    0 && (
+                                    <p className="text-xs text-destructive">
+                                      All schedules already assigned.
                                     </p>
                                   )}
-                                  {formData.scheds.length > 0 &&
-                                    getAvailableScheds(setItem.id).length ===
-                                      0 && (
-                                      <p className="text-xs text-muted-foreground">
-                                        All schedules already assigned.
-                                      </p>
-                                    )}
-                                  {formData.scheds.length > 0 &&
-                                    getAvailableScheds(setItem.id).length > 0 &&
-                                    getFilteredScheds(setItem).length === 0 && (
-                                      <p className="text-xs text-muted-foreground">
-                                        No schedules match the selected date.
-                                      </p>
-                                    )}
-                                </div>
-                              )}
+                                {formData.scheds.length > 0 &&
+                                  getAvailableScheds(setItem.id).length > 0 &&
+                                  getFilteredScheds(setItem).length === 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                      No schedules match the selected date.
+                                    </p>
+                                  )}
+                              </div>
                             </div>
 
                             {/* Categories in this set */}
@@ -1806,6 +1826,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                   size="sm"
                                   className="gap-1.5"
                                   onClick={() => addCategoryToSet(setItem.id)}
+                                  disabled={getAvailableScheds(setItem.id).length === 0}
                                 >
                                   <Plus className="h-3.5 w-3.5" />
                                   Add Category
