@@ -38,6 +38,11 @@ export function ShowFilters({
 }) {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const [isMounted, setIsMounted] = React.useState(false);
+
+    React.useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     const currentStatus = searchParams.get("status") || "ALL";
     const currentSort = searchParams.get("sort") || "newest";
@@ -55,6 +60,23 @@ export function ShowFilters({
     const availableStatuses = allowedStatusValues
         ? statuses.filter((status) => allowedStatusValues.includes(status.value))
         : statuses;
+
+    if (!isMounted) {
+        return (
+            <div className="flex w-full items-center gap-2 md:w-auto">
+                {!hideStatusFilter && (
+                    <Button variant="outline" size="sm" className="h-9 w-1/2 md:w-auto" disabled>
+                        <Filter className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-semibold text-xs">Filter</span>
+                    </Button>
+                )}
+                <Button variant="outline" size="sm" className="h-9 w-1/2 md:w-auto" disabled>
+                    <SortAsc className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold text-xs">Sort</span>
+                </Button>
+            </div>
+        );
+    }
 
     return (
         <div className="flex w-full items-center gap-2 md:w-auto">
