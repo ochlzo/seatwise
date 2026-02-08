@@ -349,3 +349,68 @@ test("single-day group includes complete schedule for that day", () => {
     ["set-b", "set-a"],
   );
 });
+
+test("hides multi-day range when all dates are already represented by single-day groups", () => {
+  const grouped = groupSchedulesByCommonalities([
+    // Feb 16
+    {
+      sched_date: "2026-02-16",
+      sched_start_time: "09:00",
+      sched_end_time: "11:00",
+      category_set_id: "set-1",
+      set_name: "Set 1",
+    },
+    {
+      sched_date: "2026-02-16",
+      sched_start_time: "13:00",
+      sched_end_time: "15:00",
+      category_set_id: "set-1",
+      set_name: "Set 1",
+    },
+    // Feb 17
+    {
+      sched_date: "2026-02-17",
+      sched_start_time: "09:00",
+      sched_end_time: "11:00",
+      category_set_id: "set-1",
+      set_name: "Set 1",
+    },
+    {
+      sched_date: "2026-02-17",
+      sched_start_time: "13:00",
+      sched_end_time: "15:00",
+      category_set_id: "set-2",
+      set_name: "Set 2",
+    },
+    // Feb 18
+    {
+      sched_date: "2026-02-18",
+      sched_start_time: "16:00",
+      sched_end_time: "18:00",
+      category_set_id: "set-2",
+      set_name: "Set 2",
+    },
+    {
+      sched_date: "2026-02-18",
+      sched_start_time: "19:00",
+      sched_end_time: "21:00",
+      category_set_id: "set-2",
+      set_name: "Set 2",
+    },
+  ]);
+
+  const hasFeb16to17Range = grouped.some(
+    (group) => group.start_date === "2026-02-16" && group.end_date === "2026-02-17",
+  );
+
+  assert.equal(hasFeb16to17Range, false);
+  assert.ok(
+    grouped.some((group) => group.start_date === "2026-02-16" && group.end_date === "2026-02-16"),
+  );
+  assert.ok(
+    grouped.some((group) => group.start_date === "2026-02-17" && group.end_date === "2026-02-17"),
+  );
+  assert.ok(
+    grouped.some((group) => group.start_date === "2026-02-18" && group.end_date === "2026-02-18"),
+  );
+});
