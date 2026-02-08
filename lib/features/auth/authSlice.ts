@@ -10,6 +10,7 @@ export interface User {
   role: "USER" | "ADMIN" | null;
   username: string | null;
   hasPassword?: boolean;
+  isNewUser?: boolean;
 }
 
 interface AuthState {

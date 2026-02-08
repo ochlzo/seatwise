@@ -73,6 +73,7 @@ export function useEmailPass() {
     username: string,
     firstName: string,
     lastName: string,
+    redirectTo?: string,
   ): Promise<User> => {
     try {
       const result = await createUserWithEmailAndPassword(auth, email, pass);
@@ -103,11 +104,8 @@ export function useEmailPass() {
       const serverUser = data.user;
 
       // Redirect based on role (though usually new users are USER)
-      if (serverUser?.role === "ADMIN") {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
-      }
+      const fallback = serverUser?.role === "ADMIN" ? "/admin" : "/dashboard";
+      router.push(redirectTo || fallback);
 
       return {
         uid: serverUser?.uid || firebaseUser.uid,
@@ -119,6 +117,7 @@ export function useEmailPass() {
         role: serverUser?.role || "USER",
         username: serverUser?.username || username,
         hasPassword: true,
+        isNewUser: serverUser?.isNewUser ?? true,
       };
     } catch (error) {
       throw new Error(getAuthErrorMessage(error));
@@ -128,6 +127,7 @@ export function useEmailPass() {
   const signInWithEmail = async (
     email: string,
     pass: string,
+    redirectTo?: string,
   ): Promise<User> => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, pass);
@@ -148,11 +148,8 @@ export function useEmailPass() {
       const serverUser = data.user;
 
       if (serverUser?.username) {
-        if (serverUser.role === "ADMIN") {
-          router.push("/admin");
-        } else {
-          router.push("/dashboard");
-        }
+        const fallback = serverUser.role === "ADMIN" ? "/admin" : "/dashboard";
+        router.push(redirectTo || fallback);
       }
 
       return {
@@ -165,6 +162,7 @@ export function useEmailPass() {
         role: serverUser?.role || "USER",
         username: serverUser?.username || null,
         hasPassword: serverUser?.hasPassword ?? true,
+        isNewUser: serverUser?.isNewUser ?? false,
       };
     } catch (error) {
       throw new Error(getAuthErrorMessage(error));
