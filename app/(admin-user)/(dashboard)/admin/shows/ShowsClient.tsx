@@ -62,6 +62,7 @@ type Show = {
 type ShowsClientProps = {
   mode?: "admin" | "user";
   basePath?: string;
+  detailBasePath?: string;
   enableLinks?: boolean;
   showHeader?: boolean;
   showFilters?: boolean;
@@ -75,6 +76,7 @@ type ShowsClientProps = {
 export default function ShowsPage({
   mode = "admin",
   basePath = "/admin/shows",
+  detailBasePath,
   enableLinks = true,
   showHeader = true,
   showFilters = true,
@@ -146,6 +148,7 @@ export default function ShowsPage({
 
   const isAdmin = mode === "admin";
   const createPath = `${basePath}/create`;
+  const detailPathBase = detailBasePath ?? basePath;
 
   return (
     <>
@@ -255,7 +258,10 @@ export default function ShowsPage({
           <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             {shows.map((show: Show) =>
               enableLinks ? (
-                <Link key={show.show_id} href={`${basePath}/${show.show_id}`}>
+                <Link
+                  key={show.show_id}
+                  href={`${detailPathBase}/${show.show_id}`}
+                >
                   <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-sidebar-border cursor-pointer h-full">
                     <div className="aspect-[16/9] bg-muted relative overflow-hidden">
                       {show.show_image_key ? (

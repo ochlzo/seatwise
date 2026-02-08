@@ -5,17 +5,17 @@ import { ThemeSwithcer } from "@/components/theme-swithcer";
 export default async function Page() {
   return (
     <>
-      <PageHeader title="Dashboard" rightSlot={<ThemeSwithcer />} />
+      <PageHeader title="All Events" rightSlot={<ThemeSwithcer />} />
       <ShowsClient
         mode="user"
-        basePath="/dashboard"
-        enableLinks={false}
+        basePath="/all-events"
+        detailBasePath=""
+        enableLinks
         showHeader={false}
-        statusGroup="active"
         visibility="user"
-        statusFilterValues={["ALL", "UPCOMING", "OPEN"]}
-        headerTitle="What’s On Deck"
-        headerSubtitle="Upcoming and open shows that are ready for your seat."
+        statusFilterValues={["ALL", "UPCOMING", "OPEN", "ON_GOING", "CLOSED"]}
+        headerTitle="Everything On Stage"
+        headerSubtitle="Past, present, and upcoming—browse the full lineup."
       />
     </>
   );
