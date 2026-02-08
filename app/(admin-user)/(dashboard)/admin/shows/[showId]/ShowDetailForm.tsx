@@ -67,6 +67,8 @@ import Image from "next/image";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
 import type { SeatmapState } from "@/lib/seatmap/types";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { groupSchedulesByCommonalities } from "@/lib/db/showScheduleGrouping";
 
 const STATUS_COLORS: Record<string, string> = {
   UPCOMING: "#3B82F6",
@@ -132,6 +134,14 @@ const formatManilaTime = (value: Date) =>
   }).format(value);
 
 const formatManilaTimeKey = (value: Date) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: MANILA_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
+
+const toManilaTimeKey = (value: Date) =>
   new Intl.DateTimeFormat("en-GB", {
     timeZone: MANILA_TZ,
     hour: "2-digit",
@@ -1266,141 +1276,270 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
               )}
             </CardHeader>
             <CardContent className="space-y-6">
-              {Object.entries(
-                [...(formData.scheds || [])]
-                  .sort(
-                    (a, b) =>
-                      toDateValue(a.sched_date).getTime() -
-                      toDateValue(b.sched_date).getTime(),
-                  )
-                  .reduce(
-                    (acc, sched) => {
-                      const dateKey = toManilaDateKey(
-                        toDateValue(sched.sched_date),
-                      );
-                      if (!acc[dateKey]) acc[dateKey] = [];
-                      acc[dateKey].push(sched);
-                      return acc;
-                    },
-                    {} as Record<string, typeof formData.scheds>,
-                  ),
-              ).map(([dateKey, scheds]) => (
-                <div key={dateKey} className="space-y-3">
-                  <h4 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
-                    <CalendarIcon className="w-4 h-4 text-primary" />
-                    {formatManilaDateLong(
-                      new Date(`${dateKey}T00:00:00+08:00`),
-                    )}
-                  </h4>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {scheds
-                      .sort(
-                        (a, b) =>
-                          toTimeValue(a.sched_start_time).getTime() -
-                          toTimeValue(b.sched_start_time).getTime(),
-                      )
-                      .map((sched, idx) => {
-                        // Find the category set for this schedule
-                        const categorySet = categorySets.find(
-                          (set) =>
-                            set.apply_to_all ||
-                            set.sched_ids.includes(sched.client_id),
-                        );
+              {(() => {
+                if (!formData.scheds || formData.scheds.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-muted-foreground text-sm border border-dashed rounded-lg">
+                      No schedules found.
+                    </div>
+                  );
+                }
 
-                        return (
-                          <div
-                            key={sched.client_id || `new-${idx}`}
-                            className="flex items-center justify-between p-3 rounded-lg border border-sidebar-border/60 bg-muted/20"
-                          >
-                            <div className="space-y-1.5 flex-1">
-                              <div className="text-sm font-medium flex items-center gap-2">
-                                {formatManilaTime(
-                                  toTimeValue(sched.sched_start_time),
-                                )}
-                                <span className="text-muted-foreground">-</span>
-                                {formatManilaTime(
-                                  toTimeValue(sched.sched_end_time),
+                // Prepare schedules with category set info for grouping
+                const schedulesWithSets = formData.scheds.map((sched) => {
+                  const categorySet = categorySets.find(
+                    (set) =>
+                      set.apply_to_all ||
+                      set.sched_ids.includes(sched.client_id),
+                  );
+
+                  return {
+                    ...sched,
+                    category_set_id: categorySet?.id || null,
+                    set_name: categorySet?.set_name || null,
+                  };
+                });
+
+                // Group schedules using the helper function
+                const groupedSchedules = groupSchedulesByCommonalities(schedulesWithSets);
+
+                if (groupedSchedules.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-muted-foreground text-sm border border-dashed rounded-lg">
+                      No schedules found.
+                    </div>
+                  );
+                }
+
+                // Single group - no tabs needed
+                if (groupedSchedules.length === 1) {
+                  const group = groupedSchedules[0];
+                  return (
+                    <div className="space-y-3">
+                      <h4 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
+                        <CalendarIcon className="w-4 h-4 text-primary" />
+                        {group.label}
+                      </h4>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {group.items.map((item, idx) => {
+                          // Find matching schedules for this item
+                          const matchingScheds = schedulesWithSets.filter(
+                            (s) =>
+                              toManilaTimeKey(toTimeValue(s.sched_start_time)) === item.sched_start_time &&
+                              toManilaTimeKey(toTimeValue(s.sched_end_time)) === item.sched_end_time &&
+                              (s.category_set_id || null) === item.category_set_id,
+                          );
+
+                          const categorySet = categorySets.find(
+                            (set) => set.id === item.category_set_id,
+                          );
+
+                          return matchingScheds.map((sched, schedIdx) => (
+                            <div
+                              key={`${idx}-${schedIdx}-${sched.client_id}`}
+                              className="flex items-center justify-between p-3 rounded-lg border border-sidebar-border/60 bg-muted/20"
+                            >
+                              <div className="space-y-1.5 flex-1">
+                                <div className="text-sm font-medium flex items-center gap-2">
+                                  {formatManilaTime(toTimeValue(sched.sched_start_time))}
+                                  <span className="text-muted-foreground">-</span>
+                                  {formatManilaTime(toTimeValue(sched.sched_end_time))}
+                                </div>
+                                {categorySet && (
+                                  <div className="space-y-1.5 pt-1">
+                                    <div className="text-[11px] font-medium text-muted-foreground">
+                                      {categorySet.set_name}
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {categorySet.categories
+                                        .filter((category) =>
+                                          Object.values(categorySet.seatAssignments || {}).includes(category.id),
+                                        )
+                                        .map((category) => (
+                                          <div
+                                            key={category.id}
+                                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-sidebar-border/60 bg-background text-[10px]"
+                                          >
+                                            <span
+                                              className="h-2 w-2 rounded-full border border-zinc-300"
+                                              style={{
+                                                backgroundColor:
+                                                  category.color_code === "NO_COLOR"
+                                                    ? "transparent"
+                                                    : category.color_code === "GOLD"
+                                                      ? "#ffd700"
+                                                      : category.color_code === "PINK"
+                                                        ? "#e005b9"
+                                                        : category.color_code === "BLUE"
+                                                          ? "#111184"
+                                                          : category.color_code === "BURGUNDY"
+                                                            ? "#800020"
+                                                            : "#046307",
+                                              }}
+                                            />
+                                            <span className="font-medium">{category.category_name}</span>
+                                            <span className="text-muted-foreground">₱{category.price}</span>
+                                          </div>
+                                        ))}
+                                    </div>
+                                  </div>
                                 )}
                               </div>
-                              {categorySet && (
-                                <div className="space-y-1.5 pt-1">
-                                  <div className="text-[11px] font-medium text-muted-foreground">
-                                    {categorySet.set_name}
-                                  </div>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {categorySet.categories
-                                      .filter((category) =>
-                                        Object.values(
-                                          categorySet.seatAssignments || {},
-                                        ).includes(category.id),
-                                      )
-                                      .map((category) => (
-                                        <div
-                                          key={category.id}
-                                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-sidebar-border/60 bg-background text-[10px]"
-                                        >
-                                          <span
-                                            className="h-2 w-2 rounded-full border border-zinc-300"
-                                            style={{
-                                              backgroundColor:
-                                                category.color_code ===
-                                                "NO_COLOR"
-                                                  ? "transparent"
-                                                  : category.color_code ===
-                                                      "GOLD"
-                                                    ? "#ffd700"
-                                                    : category.color_code ===
-                                                        "PINK"
-                                                      ? "#e005b9"
-                                                      : category.color_code ===
-                                                          "BLUE"
-                                                        ? "#111184"
-                                                        : category.color_code ===
-                                                            "BURGUNDY"
-                                                          ? "#800020"
-                                                          : "#046307",
-                                            }}
-                                          />
-                                          <span className="font-medium">
-                                            {category.category_name}
-                                          </span>
-                                          <span className="text-muted-foreground">
-                                            ₱{category.price}
-                                          </span>
-                                        </div>
-                                      ))}
-                                  </div>
-                                </div>
+                              {isEditing && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                  onClick={() => {
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      scheds: prev.scheds.filter((s) => s !== sched),
+                                    }));
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               )}
                             </div>
-                            {isEditing && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                onClick={() => {
-                                  setFormData((prev) => ({
-                                    ...prev,
-                                    scheds: prev.scheds.filter(
-                                      (s) => s !== sched,
-                                    ),
-                                  }));
-                                }}
+                          ));
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Multiple groups - use tabs
+                return (
+                  <Tabs
+                    defaultValue={groupedSchedules[0].label}
+                    className="w-full"
+                    onValueChange={(tabLabel) => {
+                      // Sync seatmap tab when schedule tab changes
+                      const selectedGroup = groupedSchedules.find(g => g.label === tabLabel);
+                      if (selectedGroup && selectedGroup.items[0]) {
+                        // Each group has exactly 1 category set (guaranteed by use case)
+                        const categorySetId = selectedGroup.items[0].category_set_id;
+                        if (categorySetId) {
+                          setActiveSetId(categorySetId);
+                        }
+                      }
+                    }}
+                  >
+                    <TabsList variant="line" className="w-full justify-start overflow-x-auto flex-wrap h-auto">
+                      {groupedSchedules.map((group) => (
+                        <TabsTrigger key={group.label} value={group.label} className="flex items-center gap-2">
+                          <CalendarDays className="w-3.5 h-3.5" />
+                          {group.label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {groupedSchedules.map((group) => (
+                      <TabsContent key={group.label} value={group.label} className="mt-4">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {group.items.map((item, idx) => {
+                            // Find one matching schedule for delete functionality
+                            const firstMatchingSched = schedulesWithSets.find(
+                              (s) =>
+                                toManilaTimeKey(toTimeValue(s.sched_start_time)) === item.sched_start_time &&
+                                toManilaTimeKey(toTimeValue(s.sched_end_time)) === item.sched_end_time &&
+                                (s.category_set_id || null) === item.category_set_id,
+                            );
+
+                            const categorySet = categorySets.find(
+                              (set) => set.id === item.category_set_id,
+                            );
+
+                            // Convert 24-hour time string (e.g., "19:00") to 12-hour format
+                            const format12Hour = (time24: string) => {
+                              const [hours, minutes] = time24.split(':').map(Number);
+                              const period = hours >= 12 ? 'PM' : 'AM';
+                              const hours12 = hours % 12 || 12;
+                              return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+                            };
+
+                            return (
+                              <div
+                                key={`${idx}-${item.sched_start_time}-${item.category_set_id}`}
+                                className="flex items-center justify-between p-3 rounded-lg border border-sidebar-border/60 bg-muted/20"
                               >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
-              ))}
-              {(!formData.scheds || formData.scheds.length === 0) && (
-                <div className="text-center py-8 text-muted-foreground text-sm border border-dashed rounded-lg">
-                  No schedules found.
-                </div>
-              )}
+                                <div className="space-y-1.5 flex-1">
+                                  <div className="text-sm font-medium flex items-center gap-2">
+                                    {format12Hour(item.sched_start_time)}
+                                    <span className="text-muted-foreground">-</span>
+                                    {format12Hour(item.sched_end_time)}
+                                  </div>
+                                  {categorySet && (
+                                    <div className="space-y-1.5 pt-1">
+                                      <div className="text-[11px] font-medium text-muted-foreground">
+                                        {categorySet.set_name}
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {categorySet.categories
+                                          .filter((category) =>
+                                            Object.values(categorySet.seatAssignments || {}).includes(category.id),
+                                          )
+                                          .map((category) => (
+                                            <div
+                                              key={category.id}
+                                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-sidebar-border/60 bg-background text-[10px]"
+                                            >
+                                              <span
+                                                className="h-2 w-2 rounded-full border border-zinc-300"
+                                                style={{
+                                                  backgroundColor:
+                                                    category.color_code === "NO_COLOR"
+                                                      ? "transparent"
+                                                      : category.color_code === "GOLD"
+                                                        ? "#ffd700"
+                                                        : category.color_code === "PINK"
+                                                          ? "#e005b9"
+                                                          : category.color_code === "BLUE"
+                                                            ? "#111184"
+                                                            : category.color_code === "BURGUNDY"
+                                                              ? "#800020"
+                                                              : "#046307",
+                                                }}
+                                              />
+                                              <span className="font-medium">{category.category_name}</span>
+                                              <span className="text-muted-foreground">₱{category.price}</span>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                                {isEditing && firstMatchingSched && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                    onClick={() => {
+                                      // Delete all schedules matching this unique configuration
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        scheds: prev.scheds.filter(
+                                          (s) =>
+                                            !(
+                                              toManilaTimeKey(toTimeValue(s.sched_start_time)) === item.sched_start_time &&
+                                              toManilaTimeKey(toTimeValue(s.sched_end_time)) === item.sched_end_time &&
+                                              (s.category_set_id || null) === item.category_set_id
+                                            ),
+                                        ),
+                                      }));
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                );
+              })()}
             </CardContent>
           </Card>
 
