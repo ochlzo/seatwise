@@ -40,7 +40,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
   const { invalidate } = useThree();
   const { scene } = useGLTF(
     "/seatwise_final_draco.glb",
-    "https://www.gstatic.com/draco/versioned/decoders/1.5.6/"
+    "https://www.gstatic.com/draco/versioned/decoders/1.5.6/",
   );
 
   // Material optimization based on device
@@ -86,7 +86,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
         if (!geom.attributes.normal) {
           geom.computeVertexNormals();
           const normalAttr = geom.getAttribute(
-            "normal"
+            "normal",
           ) as THREE.BufferAttribute | null;
           if (normalAttr) {
             normalAttr.needsUpdate = true;
@@ -108,41 +108,44 @@ function SeatModel({ onReady }: { onReady: () => void }) {
           isMobile: "(max-width: 767px)",
         },
         (context) => {
-          const { isDesktop } = context.conditions as { isDesktop: boolean; isMobile: boolean };
+          const { isDesktop } = context.conditions as {
+            isDesktop: boolean;
+            isMobile: boolean;
+          };
 
           // Configuration based on screen size
           const config = isDesktop
             ? {
-              initialScale: { x: 3.1, y: 3.1, z: 3.1 },
-              initialPosition: { x: 3.2, y: -0.2, z: 0 },
-              initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
-              sec2: {
-                position: { x: -3.5, y: -0.3, z: 0 },
-                rotation: { y: -Math.PI * 0.6 },
-                scale: 2.7,
-              },
-              sec3: {
-                position: { x: 3.2, y: 0.3, z: 0 },
-                rotation: { x: Math.PI / 3, y: -Math.PI / 1.9 },
-                scale: 2.4,
-              },
-            }
+                initialScale: { x: 3.1, y: 3.1, z: 3.1 },
+                initialPosition: { x: 3.2, y: -0.2, z: 0 },
+                initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
+                sec2: {
+                  position: { x: -3.5, y: -0.3, z: 0 },
+                  rotation: { y: -Math.PI * 0.6 },
+                  scale: 2.7,
+                },
+                sec3: {
+                  position: { x: 3.2, y: 0.3, z: 0 },
+                  rotation: { x: Math.PI / 3, y: -Math.PI / 1.9 },
+                  scale: 2.4,
+                },
+              }
             : {
-              // Mobile specific values
-              initialScale: { x: 2.2, y: 2.2, z: 2.2 },
-              initialPosition: { x: 0, y: -1.0, z: 0 },
-              initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
-              sec2: {
-                position: { x: 0, y: 0.2, z: 0 },
-                rotation: { y: -Math.PI * 0.8 },
-                scale: 1.8,
-              },
-              sec3: {
-                position: { x: 0, y: -0.5, z: 0 },
-                rotation: { x: Math.PI / 3, y: -Math.PI / 1.1 },
-                scale: 1.6,
-              },
-            };
+                // Mobile specific values
+                initialScale: { x: 2.2, y: 2.2, z: 2.2 },
+                initialPosition: { x: 0, y: -1.0, z: 0 },
+                initialRotation: { y: -Math.PI / 3, x: 0.2, z: 0 },
+                sec2: {
+                  position: { x: 0, y: 0.2, z: 0 },
+                  rotation: { y: -Math.PI * 0.8 },
+                  scale: 1.8,
+                },
+                sec3: {
+                  position: { x: 0, y: -0.5, z: 0 },
+                  rotation: { x: Math.PI / 3, y: -Math.PI / 1.1 },
+                  scale: 1.6,
+                },
+              };
 
           // Initial state: Section 1 (Hero)
           gsap.set(meshRef.current!.scale, config.initialScale);
@@ -177,7 +180,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
                 duration: 1.1,
                 ease: "power2.inOut",
               },
-              "<"
+              "<",
             )
             .to(
               meshRef.current!.scale,
@@ -188,7 +191,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
                 duration: 1.1,
                 ease: "power2.inOut",
               },
-              "<"
+              "<",
             );
 
           // Transition to Section 3: Ready to Scale?
@@ -207,7 +210,7 @@ function SeatModel({ onReady }: { onReady: () => void }) {
                 duration: 1.3,
                 ease: "power2.inOut",
               },
-              "<"
+              "<",
             )
             .to(
               meshRef.current!.scale,
@@ -218,17 +221,17 @@ function SeatModel({ onReady }: { onReady: () => void }) {
                 duration: 1.3,
                 ease: "power2.inOut",
               },
-              "<"
+              "<",
             );
 
           invalidate();
           onReady();
-        }
+        },
       );
 
       return () => mm.revert();
     },
-    { dependencies: [scene] }
+    { dependencies: [scene] },
   );
 
   return (
@@ -313,10 +316,11 @@ function FixedCanvasLayer() {
     <div className="fixed inset-0 h-screen w-full z-[-10] bg-white dark:bg-zinc-950 pointer-events-none">
       {/* Radial overlay to make the center clear while blending edges */}
       <div
-        className={`absolute inset-0 z-[1] transition-opacity duration-1000 ${isMobile
-          ? "bg-[radial-gradient(circle_at_center,_transparent_0%,_#f0f7ff_50%,_white_100%)] opacity-94 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_60%,_#0a0a0a_100%)]"
-          : "bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] opacity-70 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_70%,_#0a0a0a_100%)]"
-          }`}
+        className={`absolute inset-0 z-[1] transition-opacity duration-1000 ${
+          isMobile
+            ? "bg-[radial-gradient(circle_at_center,_transparent_0%,_#f0f7ff_50%,_white_100%)] opacity-94 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_60%,_#0a0a0a_100%)]"
+            : "bg-[radial-gradient(circle_at_center,_transparent_0%,_white_90%)] opacity-70 dark:bg-[radial-gradient(circle_at_center,_transparent_0%,_#0b1220_70%,_#0a0a0a_100%)]"
+        }`}
       />
 
       {/* Mobile-only subtle blue "mist" for top and bottom to frame text */}
@@ -343,7 +347,7 @@ function FixedCanvasLayer() {
         </Suspense>
       </Canvas>
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -400,7 +404,7 @@ export default function Home() {
           </ScrollReveal>
           <div className="flex flex-row items-center gap-4 md:gap-8 flex-wrap">
             <button
-              // onClick={() => router.push("/login")}
+              onClick={() => router.push("/dashboard")}
               className="cursor-pointer px-6 md:px-8 py-3 md:py-4 bg-zinc-900 text-white font-bold uppercase tracking-widest hover:bg-blue-500 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-blue-500 dark:hover:text-white transition-colors duration-300"
             >
               View Events Now!
@@ -477,10 +481,16 @@ export default function Home() {
       <footer className="relative py-10 px-6 md:px-32 border-t border-zinc-100 dark:border-zinc-800 z-20 flex flex-col md:flex-row justify-between items-center text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-widest gap-4">
         <p>&copy; 2026 SEATWISE • CHOLO CANDELARIA • SEAN ARMENTA • BUCAL</p>
         <div className="flex gap-8">
-          <a href="#" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+          <a
+            href="#"
+            className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          >
             Privacy
           </a>
-          <a href="#" className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors">
+          <a
+            href="#"
+            className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          >
             Terms
           </a>
         </div>

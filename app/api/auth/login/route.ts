@@ -166,14 +166,18 @@ export async function POST(req: NextRequest) {
 
     const status = isServerConfigIssue
       ? 500
-      : message.includes("Missing email") || message.includes("Unique constraint failed")
+      : message.includes("Missing email") ||
+          message.includes("Unique constraint failed") ||
+          message.toLowerCase().includes("already taken")
         ? 400
         : 401;
 
     const errorResponse = status === 500
       ? "Server authentication is not configured correctly"
       : status === 400
-        ? message.includes("username") || message.includes("Unique constraint failed")
+        ? message.toLowerCase().includes("email")
+          ? "Email is already taken"
+          : message.toLowerCase().includes("username") || message.includes("Unique constraint failed")
           ? "Username is already taken"
           : "Missing email"
         : "Invalid token";
