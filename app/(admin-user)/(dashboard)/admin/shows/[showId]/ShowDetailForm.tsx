@@ -252,6 +252,7 @@ type ShowDetail = {
 
 interface ShowDetailFormProps {
   show: ShowDetail;
+  allowEdit?: boolean;
 }
 
 type SeatmapOption = {
@@ -270,7 +271,7 @@ type SchedDraft = Omit<
   sched_end_time: string;
 };
 
-export function ShowDetailForm({ show }: ShowDetailFormProps) {
+export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
@@ -2313,7 +2314,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
             </CardContent>
           </Card>
 
-          {isEditing ? (
+          {allowEdit && isEditing ? (
             <div className="grid gap-3">
               {!isFormValid && !isSaving && (
                 <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive animate-in fade-in slide-in-from-top-2">
@@ -2390,7 +2391,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                 Cancel
               </Button>
             </div>
-          ) : (
+          ) : allowEdit ? (
             <div className="grid gap-3">
               <Button
                 onClick={() => setIsEditing(true)}
@@ -2406,114 +2407,120 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                 Back to Shows
               </Button>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
-      <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
-        <DialogContent
-          className={cn(
-            "sm:max-w-2xl p-4 sm:p-6",
-            numberOfMonths >= 2 && "md:max-h-[90vh] md:overflow-y-auto",
-          )}
-        >
-          <DialogHeader>
-            <DialogTitle>Add Schedules</DialogTitle>
-            <DialogDescription>
-              Select dates and times to add new performances.
-            </DialogDescription>
-          </DialogHeader>
-          <div
+      {allowEdit && (
+        <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>
+          <DialogContent
             className={cn(
-              "grid gap-6",
-              numberOfMonths >= 2
-                ? "md:grid-cols-1"
-                : "md:grid-cols-[1.1fr_1fr]",
+              "sm:max-w-2xl p-4 sm:p-6",
+              numberOfMonths >= 2 && "md:max-h-[90vh] md:overflow-y-auto",
             )}
           >
+            <DialogHeader>
+              <DialogTitle>Add Schedules</DialogTitle>
+              <DialogDescription>
+                Select dates and times to add new performances.
+              </DialogDescription>
+            </DialogHeader>
             <div
               className={cn(
-                "rounded-lg border p-3 flex justify-center",
-                numberOfMonths >= 2 ? "md:justify-center" : "md:block",
+                "grid gap-6",
+                numberOfMonths >= 2
+                  ? "md:grid-cols-1"
+                  : "md:grid-cols-[1.1fr_1fr]",
               )}
             >
-              <Calendar
-                mode="multiple"
-                selected={selectedDates}
-                onSelect={(dates) => setSelectedDates(dates ?? [])}
-                numberOfMonths={numberOfMonths}
-                month={showStartDate ?? undefined}
-                defaultMonth={showStartDate ?? undefined}
-                disableNavigation
-                disabled={(date) => {
-                  if (!showStartDate || !showEndDate) return false;
-                  return date < showStartDate || date > showEndDate;
-                }}
-                className="[--cell-size:--spacing(7)] text-xs"
-              />
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Time Ranges</Label>
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {timeRanges.map((range) => (
-                    <div
-                      key={range.id}
-                      className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end"
-                    >
-                      <div className="grid gap-1">
-                        <Label className="text-[10px]">Start</Label>
-                        <Input
-                          type="time"
-                          value={range.start}
-                          onChange={(e) =>
-                            updateTimeRange(range.id, { start: e.target.value })
-                          }
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label className="text-[10px]">End</Label>
-                        <Input
-                          type="time"
-                          value={range.end}
-                          onChange={(e) =>
-                            updateTimeRange(range.id, { end: e.target.value })
-                          }
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => removeTimeRange(range.id)}
-                        disabled={timeRanges.length === 1}
+              <div
+                className={cn(
+                  "rounded-lg border p-3 flex justify-center",
+                  numberOfMonths >= 2 ? "md:justify-center" : "md:block",
+                )}
+              >
+                <Calendar
+                  mode="multiple"
+                  selected={selectedDates}
+                  onSelect={(dates) => setSelectedDates(dates ?? [])}
+                  numberOfMonths={numberOfMonths}
+                  month={showStartDate ?? undefined}
+                  defaultMonth={showStartDate ?? undefined}
+                  disableNavigation
+                  disabled={(date) => {
+                    if (!showStartDate || !showEndDate) return false;
+                    return date < showStartDate || date > showEndDate;
+                  }}
+                  className="[--cell-size:--spacing(7)] text-xs"
+                />
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Time Ranges</Label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {timeRanges.map((range) => (
+                      <div
+                        key={range.id}
+                        className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="grid gap-1">
+                          <Label className="text-[10px]">Start</Label>
+                          <Input
+                            type="time"
+                            value={range.start}
+                            onChange={(e) =>
+                              updateTimeRange(range.id, { start: e.target.value })
+                            }
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <Label className="text-[10px]">End</Label>
+                          <Input
+                            type="time"
+                            value={range.end}
+                            onChange={(e) =>
+                              updateTimeRange(range.id, { end: e.target.value })
+                            }
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => removeTimeRange(range.id)}
+                          disabled={timeRanges.length === 1}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addTimeRange}
+                    className="w-full mt-2"
+                  >
+                    <Plus className="h-4 w-4 mr-2" /> Add Time Slot
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={addTimeRange}
-                  className="w-full mt-2"
-                >
-                  <Plus className="h-4 w-4 mr-2" /> Add Time Slot
-                </Button>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddSchedules}>Add Schedules</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddSchedules}>Add Schedules</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
+}
+
+export function ShowDetailReadOnly({ show }: Pick<ShowDetailFormProps, "show">) {
+  return <ShowDetailForm show={show} allowEdit={false} />;
 }
