@@ -34,7 +34,7 @@ export async function verifyAdmin() {
   };
 
   if (!sessionCookie) {
-    redirectToLogin();
+    return redirectToLogin();
   }
 
   try {
