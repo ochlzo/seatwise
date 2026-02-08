@@ -149,6 +149,16 @@ const toManilaTimeKey = (value: Date) =>
     hour12: false,
   }).format(value);
 
+const toDateKey = (value: string | Date) => {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === "string" && value.includes("T")) {
+    return new Date(value).toISOString().slice(0, 10);
+  }
+  return value;
+};
+
 const toDateValue = (value: string | Date) => {
   if (value instanceof Date) return value;
   if (value.includes("T")) return new Date(value);
@@ -1514,16 +1524,27 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                     size="icon"
                                     className="h-8 w-8 text-destructive hover:bg-destructive/10"
                                     onClick={() => {
-                                      // Delete all schedules matching this unique configuration
+                                      const isSingleDay = group.start_date === group.end_date;
+
                                       setFormData((prev) => ({
                                         ...prev,
                                         scheds: prev.scheds.filter(
-                                          (s) =>
-                                            !(
+                                          (s) => {
+                                            const schedDate = toDateKey(s.sched_date);
+                                            const matchesTime =
                                               toManilaTimeKey(toTimeValue(s.sched_start_time)) === item.sched_start_time &&
                                               toManilaTimeKey(toTimeValue(s.sched_end_time)) === item.sched_end_time &&
-                                              (s.category_set_id || null) === item.category_set_id
-                                            ),
+                                              (s.category_set_id || null) === item.category_set_id;
+
+                                            if (isSingleDay) {
+                                              // For single-day groups, only delete schedules on that specific date
+                                              return !(matchesTime && schedDate === group.start_date);
+                                            } else {
+                                              // For multi-day ranges, delete all matching schedules in the range
+                                              const inRange = schedDate >= group.start_date && schedDate <= group.end_date;
+                                              return !(matchesTime && inRange);
+                                            }
+                                          }
                                         ),
                                       }));
                                     }}

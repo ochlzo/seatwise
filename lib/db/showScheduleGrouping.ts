@@ -76,6 +76,7 @@ export function groupSchedulesByCommonalities(
 ): GroupedScheduleRange[] {
   const signatureToDates = new Map<string, Set<string>>();
   const signatureToItem = new Map<string, GroupItem>();
+  const dateToItems = new Map<string, GroupItem[]>();
 
   schedules.forEach((schedule) => {
     const dateKey = toDateKey(schedule.sched_date);
@@ -84,19 +85,25 @@ export function groupSchedulesByCommonalities(
     const categorySetId = schedule.category_set_id ?? null;
     const setName = schedule.set_name ?? null;
     const signature = `${start}|${end}|${categorySetId ?? ""}|${setName ?? ""}`;
+    const item: GroupItem = {
+      sched_start_time: start,
+      sched_end_time: end,
+      category_set_id: categorySetId,
+      set_name: setName,
+    };
 
     if (!signatureToDates.has(signature)) {
       signatureToDates.set(signature, new Set<string>());
     }
     signatureToDates.get(signature)?.add(dateKey);
 
+    if (!dateToItems.has(dateKey)) {
+      dateToItems.set(dateKey, []);
+    }
+    dateToItems.get(dateKey)?.push(item);
+
     if (!signatureToItem.has(signature)) {
-      signatureToItem.set(signature, {
-        sched_start_time: start,
-        sched_end_time: end,
-        category_set_id: categorySetId,
-        set_name: setName,
-      });
+      signatureToItem.set(signature, item);
     }
   });
 
@@ -150,10 +157,25 @@ export function groupSchedulesByCommonalities(
     groupedByRange.get(key)?.items.push(run.item);
   });
 
+  const uniqueItems = (items: GroupItem[]) => {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      const key = `${item.sched_start_time}|${item.sched_end_time}|${item.category_set_id ?? ""}|${item.set_name ?? ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
   return Array.from(groupedByRange.values())
     .map((group) => ({
       ...group,
-      items: [...group.items].sort((a, b) => {
+      // For single-day groups, show the complete schedule for that day.
+      items: uniqueItems(
+        group.start_date === group.end_date
+          ? [...(dateToItems.get(group.start_date) ?? [])]
+          : [...group.items],
+      ).sort((a, b) => {
         const timeCompare = a.sched_start_time.localeCompare(b.sched_start_time);
         if (timeCompare !== 0) return timeCompare;
         return (a.category_set_id ?? "").localeCompare(b.category_set_id ?? "");
