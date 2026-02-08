@@ -38,16 +38,16 @@ export async function verifySession() {
   };
 
   if (!sessionCookie) {
-    redirectToLogin();
+    return redirectToLogin();
   }
 
   try {
     const decodedToken = await adminAuth.verifySessionCookie(
       sessionCookie,
-            true // Check if revoked
-        );
+      true // Check if revoked
+    );
 
-        const user = await getUserByFirebaseUid(decodedToken.uid);
+    const user = await getUserByFirebaseUid(decodedToken.uid);
 
     if (!user) {
       redirectToLogin();

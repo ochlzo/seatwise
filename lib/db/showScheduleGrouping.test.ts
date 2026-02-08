@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { groupSchedulesByCommonalities } from "./showScheduleGrouping.ts";
+import { groupSchedulesByCommonalities } from "./showScheduleGrouping";
 
 test("groups contiguous dates with identical time and set", () => {
   const grouped = groupSchedulesByCommonalities([
