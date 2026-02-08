@@ -5,6 +5,7 @@ import {
   Bell,
   ChevronsUpDown,
   LogOut,
+  ShieldCheck,
   User as UserIcon,
 } from "lucide-react";
 
@@ -51,6 +52,7 @@ export function NavUser({ user }: { user: User | null }) {
   const name = user?.displayName || user?.username || "User";
   const email = user?.email || "";
   const avatar = user?.photoURL || undefined;
+  const isAdmin = user?.role === "ADMIN";
   const initials = name
     .split(" ")
     .map((n) => n[0])
@@ -91,6 +93,12 @@ export function NavUser({ user }: { user: User | null }) {
                 <span className="truncate font-medium">{name}</span>
                 <span className="truncate text-xs">{email}</span>
               </div>
+              {isAdmin && (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 rounded-md border border-blue-100 dark:border-blue-900">
+                  <ShieldCheck className="size-3" />
+                  <span className="text-[10px] font-semibold tracking-wide uppercase">Admin</span>
+                </div>
+              )}
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
