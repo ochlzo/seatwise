@@ -304,3 +304,48 @@ test("prints grouped JSON sample output", () => {
   );
   assert.ok(Array.isArray(grouped));
 });
+
+test("single-day group includes complete schedule for that day", () => {
+  const grouped = groupSchedulesByCommonalities([
+    // Long run for Set A
+    {
+      sched_date: "2026-05-10",
+      sched_start_time: "19:00",
+      sched_end_time: "21:00",
+      category_set_id: "set-a",
+      set_name: "Set A",
+    },
+    {
+      sched_date: "2026-05-11",
+      sched_start_time: "19:00",
+      sched_end_time: "21:00",
+      category_set_id: "set-a",
+      set_name: "Set A",
+    },
+    {
+      sched_date: "2026-05-12",
+      sched_start_time: "19:00",
+      sched_end_time: "21:00",
+      category_set_id: "set-a",
+      set_name: "Set A",
+    },
+    // Unique single-day slot on May 11 creates a one-day group
+    {
+      sched_date: "2026-05-11",
+      sched_start_time: "13:00",
+      sched_end_time: "15:00",
+      category_set_id: "set-b",
+      set_name: "Set B",
+    },
+  ]);
+
+  const may11Group = grouped.find(
+    (group) => group.start_date === "2026-05-11" && group.end_date === "2026-05-11",
+  );
+
+  assert.ok(may11Group);
+  assert.deepEqual(
+    may11Group.items.map((item) => item.category_set_id),
+    ["set-b", "set-a"],
+  );
+});

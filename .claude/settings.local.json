@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python .agent/scripts/session_manager.py status:*)",
       "Bash(find:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm test:*)"
     ]
   }
 }
