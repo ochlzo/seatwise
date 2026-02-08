@@ -3,10 +3,10 @@ import { LoginForm } from "@/components/login-form";
 import { useAppDispatch } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 import LoadingPage from "../LoadingPage";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+function LoginPageContent() {
   useEffect(() => {
     window.history.pushState(null, '', window.location.href);
     window.onpopstate = function () {
@@ -38,5 +38,13 @@ export default function LoginPage() {
         />
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoadingPage />}>
+      <LoginPageContent />
+    </Suspense>
   );
 }
