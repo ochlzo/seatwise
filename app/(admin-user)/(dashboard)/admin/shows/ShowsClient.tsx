@@ -13,6 +13,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Calendar, MapPin, Ticket, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -207,8 +208,29 @@ export default function ShowsPage({
         </div>
 
         {isLoading ? (
-          <div className="flex items-center justify-center p-12">
-            <div className="text-muted-foreground">Loading shows...</div>
+          <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Card
+                key={`show-skeleton-${index}`}
+                className="overflow-hidden border-sidebar-border h-full"
+              >
+                <Skeleton className="aspect-[16/9] w-full" />
+                <CardHeader className="pb-2 space-y-3">
+                  <div className="flex justify-between items-start gap-2">
+                    <Skeleton className="h-6 w-2/3" />
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-1/2" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-4 w-3/4" />
+                  <div className="pt-4 border-t border-sidebar-border">
+                    <Skeleton className="h-3 w-20 mb-2" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         ) : shows.length === 0 ? (
           <Card className="border-dashed flex flex-col items-center justify-center p-12 text-center bg-muted/10">
