@@ -1454,28 +1454,28 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                       </h4>
                       <div className="grid gap-3 sm:grid-cols-2">
                         {group.items.map((item, idx) => {
-                          // Find matching schedules for this item
-                          const matchingScheds = schedulesWithSets.filter(
-                            (s) =>
-                              toManilaTimeKey(toTimeValue(s.sched_start_time)) === item.sched_start_time &&
-                              toManilaTimeKey(toTimeValue(s.sched_end_time)) === item.sched_end_time &&
-                              (s.category_set_id || null) === item.category_set_id,
-                          );
-
                           const categorySet = categorySets.find(
                             (set) => set.id === item.category_set_id,
                           );
 
-                          return matchingScheds.map((sched, schedIdx) => (
+                          // Convert 24-hour time string (e.g., "19:00") to 12-hour format
+                          const format12Hour = (time24: string) => {
+                            const [hours, minutes] = time24.split(':').map(Number);
+                            const period = hours >= 12 ? 'PM' : 'AM';
+                            const hours12 = hours % 12 || 12;
+                            return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+                          };
+
+                          return (
                             <div
-                              key={`${idx}-${schedIdx}-${sched.client_id}`}
+                              key={`${idx}-${item.sched_start_time}-${item.category_set_id}`}
                               className="flex items-center justify-between p-3 rounded-lg border border-sidebar-border/60 bg-muted/20"
                             >
                               <div className="space-y-1.5 flex-1">
                                 <div className="text-sm font-medium flex items-center gap-2">
-                                  {formatManilaTime(toTimeValue(sched.sched_start_time))}
+                                  {format12Hour(item.sched_start_time)}
                                   <span className="text-muted-foreground">-</span>
-                                  {formatManilaTime(toTimeValue(sched.sched_end_time))}
+                                  {format12Hour(item.sched_end_time)}
                                 </div>
                                 {categorySet && (
                                   <div className="space-y-1.5 pt-1">
@@ -1517,23 +1517,8 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                                   </div>
                                 )}
                               </div>
-                              {isEditing && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                  onClick={() => {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      scheds: prev.scheds.filter((s) => s !== sched),
-                                    }));
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
                             </div>
-                          ));
+                          );
                         })}
                       </div>
                     </div>
