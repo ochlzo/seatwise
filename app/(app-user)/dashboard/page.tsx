@@ -1,10 +1,11 @@
 import { PageHeader } from "@/components/page-header";
 import ShowsClient from "@/app/(admin-user)/(dashboard)/admin/shows/ShowsClient";
+import { ThemeSwithcer } from "@/components/theme-swithcer";
 
 export default async function Page() {
   return (
     <>
-      <PageHeader title="Dashboard" />
+      <PageHeader title="Dashboard" rightSlot={<ThemeSwithcer />} />
       <ShowsClient
         mode="user"
         basePath="/dashboard"

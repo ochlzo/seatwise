@@ -6,19 +6,19 @@ Also check in CreateShowForm.tsx component if there are similar issues. ✅
 
 3. Fix bug again on ShowDetailForm.tsx component. When making changes on the Seat Categories section, the UI is not displaying the capsule component under the scheds correctly. ✅
 
-4. Make sure URL params are secure - prevent sql injection
+4. Make sure URL params are secure - prevent sql injection ✅
 
-5. Prevent DDOS in login.
+5. Prevent DDOS in login + OTP.
 
 6. Remove seatmap status and enable/disable features in template tables
 
-7. Calendar page
+7. Calendar page (both admin and user)
 
-8. Dashboard Page
+8. Dashboard Page (admin)
 
 9. Users page (admin)
 
-10. Admin access page
+10. Admin access page (admin)
 
 11. Add a flag on edit in seatmappreview on create and update for easy identification all seats assigned.
 
