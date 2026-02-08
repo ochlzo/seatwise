@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -59,6 +59,7 @@ export function LoginForm({
   const [usernameTaken, setUsernameTaken] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
   const [isNewProfileSetup, setIsNewProfileSetup] = useState(false);
+  const usernameCheckSeqRef = useRef(0);
 
   const dispatch = useAppDispatch();
   const router = useRouter();
@@ -91,6 +92,7 @@ export function LoginForm({
   const handleUsernameChange = (val: string) => {
     const cleanVal = val.trim();
     setUsername(cleanVal);
+    setUsernameTaken(false);
     if (validationError) setValidationError(null);
   };
 
@@ -100,19 +102,25 @@ export function LoginForm({
       return;
     }
 
+    const seq = ++usernameCheckSeqRef.current;
     const timer = setTimeout(async () => {
       try {
-        const uid = auth.currentUser?.uid;
-        const result = await checkUsernameAction(username, uid);
-        setUsernameTaken(result.taken);
+        const excludeUid = isSignUp ? undefined : auth.currentUser?.uid;
+        const result = await checkUsernameAction(username, excludeUid);
+        // Ignore stale responses from older requests.
+        if (seq === usernameCheckSeqRef.current) {
+          setUsernameTaken(result.taken);
+        }
       } catch (err) {
         console.error("Uniqueness check failed:", err);
-        setUsernameTaken(false);
+        if (seq === usernameCheckSeqRef.current) {
+          setUsernameTaken(false);
+        }
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [username]);
+  }, [username, isSignUp]);
 
   useEffect(() => {
     if (email.length < 5 || !email.includes('@')) {
@@ -205,8 +213,8 @@ export function LoginForm({
 
     // Final check before submission if username is being set
     if (username.length >= 2) {
-      const uid = auth.currentUser?.uid;
-      const result = await checkUsernameAction(username, uid);
+      const excludeUid = isSignUp ? undefined : auth.currentUser?.uid;
+      const result = await checkUsernameAction(username, excludeUid);
       if (result.taken) {
         setUsernameTaken(true);
         return;
