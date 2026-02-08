@@ -1,4 +1,9 @@
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  linkWithCredential,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+} from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
 import { useRouter } from "next/navigation";
 import { User, setUser } from "@/lib/features/auth/authSlice";
@@ -8,11 +13,10 @@ export function useGoogleLogin() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const signInWithGoogle = async (): Promise<User> => {
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-
-    const firebaseUser = result.user;
+  const completeServerLogin = async (
+    firebaseUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null; getIdToken: () => Promise<string> },
+    redirectTo?: string,
+  ): Promise<User> => {
     const idToken = await firebaseUser.getIdToken();
 
     const response = await fetch("/api/auth/login", {
@@ -22,7 +26,6 @@ export function useGoogleLogin() {
     });
 
     if (!response.ok) {
-      // ... existing error handling ...
       let serverMessage = "";
       try {
         const contentType = response.headers.get("content-type") || "";
@@ -35,7 +38,7 @@ export function useGoogleLogin() {
       }
 
       throw new Error(
-        serverMessage || `Failed to authenticate with backend (HTTP ${response.status})`
+        serverMessage || `Failed to authenticate with backend (HTTP ${response.status})`,
       );
     }
 
@@ -52,18 +55,98 @@ export function useGoogleLogin() {
       role: serverUser?.role || "USER",
       username: serverUser?.username || null,
       hasPassword: serverUser?.hasPassword ?? true,
+      isNewUser: serverUser?.isNewUser ?? false,
     };
 
-    if (user.username && user.hasPassword) {
+    console.log("🔍 Google Login - User data received:", {
+      email: user.email,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      hasPassword: user.hasPassword,
+      isNewUser: user.isNewUser,
+    });
+
+    // Check if profile is complete - all required fields must be present and non-empty
+    // Password is NOT required for Google-only users
+    const hasCompleteProfile =
+      user.username &&
+      user.username.trim() !== "" &&
+      user.firstName &&
+      user.firstName.trim() !== "" &&
+      user.lastName &&
+      user.lastName.trim() !== "";
+
+    console.log("🔍 Profile completion check:", {
+      hasCompleteProfile,
+      checks: {
+        hasUsername: Boolean(user.username && user.username.trim() !== ""),
+        hasFirstName: Boolean(user.firstName && user.firstName.trim() !== ""),
+        hasLastName: Boolean(user.lastName && user.lastName.trim() !== ""),
+      },
+    });
+
+    if (hasCompleteProfile) {
+      console.log("✅ Profile is complete, redirecting to dashboard...");
       dispatch(setUser(user));
-      if (user.role === "ADMIN") {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
-      }
+      const fallback = user.role === "ADMIN" ? "/admin" : "/dashboard";
+      router.push(redirectTo || fallback);
+    } else {
+      console.log("⚠️ Profile incomplete, will show Complete Profile flow");
     }
 
     return user;
+  };
+
+  const signInWithGoogle = async (opts?: {
+    redirectTo?: string;
+    emailHint?: string;
+    passwordForLink?: string;
+  }): Promise<User> => {
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      return await completeServerLogin(result.user, opts?.redirectTo);
+    } catch (error: unknown) {
+      const code = (error as { code?: string })?.code;
+      const pendingCredential = GoogleAuthProvider.credentialFromError(
+        error as { code?: string },
+      );
+      const conflictEmail =
+        (error as { customData?: { email?: string } })?.customData?.email ||
+        opts?.emailHint;
+
+      if (
+        code === "auth/account-exists-with-different-credential" &&
+        pendingCredential &&
+        conflictEmail
+      ) {
+        if (!opts?.passwordForLink) {
+          throw new Error(
+            "This email already exists. Enter your password, then click Google again to link your account.",
+          );
+        }
+
+        const existingAccount = await signInWithEmailAndPassword(
+          auth,
+          conflictEmail,
+          opts.passwordForLink,
+        );
+
+        try {
+          await linkWithCredential(existingAccount.user, pendingCredential);
+        } catch (linkError: unknown) {
+          const linkCode = (linkError as { code?: string })?.code;
+          if (linkCode !== "auth/provider-already-linked") {
+            throw linkError;
+          }
+        }
+
+        return await completeServerLogin(existingAccount.user, opts.redirectTo);
+      }
+
+      throw error;
+    }
   };
 
   return { signInWithGoogle };

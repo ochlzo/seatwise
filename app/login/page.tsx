@@ -4,6 +4,7 @@ import { useAppDispatch } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 import LoadingPage from "../LoadingPage";
 import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   useEffect(() => {
@@ -14,6 +15,8 @@ export default function LoginPage() {
   }, []);
 
   const dispatch = useAppDispatch();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") ?? undefined;
 
   const handleLoginStart = () => {
     dispatch(setLoading(true));
@@ -31,6 +34,7 @@ export default function LoginPage() {
           imageSrc="/login_image.jpg"
           onLoginStart={handleLoginStart}
           onLoginError={handleLoginError}
+          callbackUrl={callbackUrl}
         />
       </div>
     </div>

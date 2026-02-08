@@ -22,6 +22,7 @@ import { useEmailPass, getAuthErrorMessage } from "@/hooks/useEmail&Pass";
 import {
   GoogleAuthProvider,
   reauthenticateWithPopup,
+  signOut,
   updatePassword,
 } from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
@@ -33,11 +34,13 @@ export function LoginForm({
   imageSrc,
   onLoginStart,
   onLoginError,
+  callbackUrl,
   ...props
 }: React.ComponentProps<"div"> & {
   imageSrc?: string;
   onLoginStart?: () => void;
   onLoginError?: () => void;
+  callbackUrl?: string;
 }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -55,11 +58,35 @@ export function LoginForm({
   const [setupStep, setSetupStep] = useState(1);
   const [usernameTaken, setUsernameTaken] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
+  const [isNewProfileSetup, setIsNewProfileSetup] = useState(false);
 
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { signInWithGoogle } = useGoogleLogin();
   const { signInWithEmail, signUpWithEmail, resetPassword } = useEmailPass();
+  const safeRedirect =
+    callbackUrl &&
+    callbackUrl.startsWith("/") &&
+    !callbackUrl.startsWith("//") &&
+    !callbackUrl.includes("://") &&
+    callbackUrl !== "/login"
+      ? callbackUrl
+      : undefined;
+  const needsProfileCompletion = (user: {
+    username?: string | null;
+    hasPassword?: boolean;
+    firstName?: string | null;
+    lastName?: string | null;
+  }) => {
+    const missingUsername = !user.username || user.username.trim() === "";
+    const missingName =
+      !user.firstName ||
+      user.firstName.trim() === "" ||
+      !user.lastName ||
+      user.lastName.trim() === "";
+    // Password is NOT required - users can use Google-only authentication
+    return missingUsername || missingName;
+  };
 
   const handleUsernameChange = (val: string) => {
     const cleanVal = val.trim();
@@ -110,9 +137,17 @@ export function LoginForm({
     setIsSubmitting(true);
     onLoginStart?.();
     try {
-      const user = await signInWithGoogle();
-      if (!user.username || !user.hasPassword) {
+      const user = await signInWithGoogle({
+        redirectTo: safeRedirect,
+        emailHint: email.trim() || undefined,
+        passwordForLink: password || undefined,
+      });
+
+      // signInWithGoogle handles complete profiles internally
+      // If we reach here and profile is incomplete, show Complete Profile flow
+      if (needsProfileCompletion(user)) {
         setIsGoogleSetup(true);
+        setIsNewProfileSetup(Boolean(user.isNewUser));
         setSetupStep(1); // Start at step 1
         setIsPasswordRequired(!user.hasPassword);
         if (user.email) setEmail(user.email);
@@ -130,6 +165,7 @@ export function LoginForm({
         }
         onLoginError?.();
       } else {
+        // Profile is complete, dispatch user (already handled in useGoogleLogin)
         dispatch(setUser(user));
       }
     } catch (error) {
@@ -232,21 +268,19 @@ export function LoginForm({
           hasPassword: serverUser?.hasPassword ?? true,
         };
 
-        if (user.role === "ADMIN") {
-          router.push("/admin");
-        } else {
-          router.push("/dashboard");
-        }
+        const fallback = user.role === "ADMIN" ? "/admin" : "/dashboard";
+        router.push(safeRedirect || fallback);
       } else if (isSignUp) {
         user = await signUpWithEmail(
           email,
           password,
           username,
           firstName,
-          lastName
+          lastName,
+          safeRedirect
         );
       } else {
-        user = await signInWithEmail(email, password);
+        user = await signInWithEmail(email, password, safeRedirect);
       }
 
       const currentUid = user.uid || (auth.currentUser ? auth.currentUser.uid : null);
@@ -264,10 +298,11 @@ export function LoginForm({
         hasPassword: user.hasPassword
       };
 
-      if (!safeUser.username) {
+      if (needsProfileCompletion(safeUser)) {
         setIsGoogleSetup(true);
+        setIsNewProfileSetup(Boolean(user.isNewUser));
         setSetupStep(1); // Start at step 1
-        setIsPasswordRequired(false);
+        setIsPasswordRequired(!safeUser.hasPassword);
         if (user.email) setEmail(user.email);
         if (user.displayName) {
           const nameParts = user.displayName.trim().split(/\s+/);
@@ -302,34 +337,39 @@ export function LoginForm({
 
   const handleAbort = async (e: React.MouseEvent) => {
     e.preventDefault();
-    if (
-      !window.confirm(
-        "Are you sure you want to cancel? This will abort your signup and delete your account."
-      )
-    ) {
+    const confirmMessage = isNewProfileSetup
+      ? "Are you sure you want to cancel? This will abort your signup and delete your account."
+      : "Are you sure you want to cancel profile setup?";
+
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const result = await abortSignUpAction();
-      if (result.success) {
-        // Reset everything and go back to login state
-        setIsGoogleSetup(false);
-        setSetupStep(1);
-        setEmail("");
-        setPassword("");
-        setUsername("");
-        setFirstName("");
-        setLastName("");
-        setValidationError(null);
-        // Next.js refresh or router.push('/login')
-        router.push("/login");
-        // Force a reload if necessary to clear all firebase/local state
-        window.location.reload();
+      if (isNewProfileSetup) {
+        const result = await abortSignUpAction();
+        if (!result.success) {
+          setValidationError(result.error || "Failed to abort signup.");
+          return;
+        }
       } else {
-        setValidationError(result.error || "Failed to abort signup.");
+        await signOut(auth);
+        await fetch("/api/auth/logout", { method: "POST" });
       }
+
+      // Reset everything and go back to login state
+      setIsGoogleSetup(false);
+      setIsNewProfileSetup(false);
+      setSetupStep(1);
+      setEmail("");
+      setPassword("");
+      setUsername("");
+      setFirstName("");
+      setLastName("");
+      setValidationError(null);
+      router.push("/login");
+      window.location.reload();
     } catch (err) {
       console.error("Abort failed:", err);
       setValidationError("An error occurred while canceling.");
