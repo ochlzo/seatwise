@@ -4,10 +4,21 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "firebase/auth";
+import type { FirebaseError } from "firebase/app";
 import { auth } from "@/lib/firebaseClient";
 import { useRouter } from "next/navigation";
 import { User, setUser } from "@/lib/features/auth/authSlice";
 import { useAppDispatch } from "@/lib/hooks";
+
+const isFirebaseError = (error: unknown): error is FirebaseError => {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    "message" in error &&
+    "name" in error
+  );
+};
 
 export function useGoogleLogin() {
   const router = useRouter();
@@ -108,10 +119,10 @@ export function useGoogleLogin() {
       const result = await signInWithPopup(auth, provider);
       return await completeServerLogin(result.user, opts?.redirectTo);
     } catch (error: unknown) {
-      const code = (error as { code?: string })?.code;
-      const pendingCredential = GoogleAuthProvider.credentialFromError(
-        error as { code?: string },
-      );
+      const code = isFirebaseError(error) ? error.code : undefined;
+      const pendingCredential = isFirebaseError(error)
+        ? GoogleAuthProvider.credentialFromError(error)
+        : null;
       const conflictEmail =
         (error as { customData?: { email?: string } })?.customData?.email ||
         opts?.emailHint;
