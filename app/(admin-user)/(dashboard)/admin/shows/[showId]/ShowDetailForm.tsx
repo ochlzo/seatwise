@@ -2064,7 +2064,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
               <Button
                 onClick={handleSave}
                 disabled={isSaving || !isFormValid}
-                className="w-full h-12 font-black uppercase tracking-widest text-base shadow-xl shadow-primary/20"
+                className="w-full h-12 font-black uppercase tracking-widest text-base shadow-xl bg-green-600 hover:bg-green-700 text-white"
               >
                 {isSaving ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -2074,7 +2074,7 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                 {isSaving ? "Saving changes..." : "Save Production"}
               </Button>
               <Button
-                variant="outline"
+                variant="destructive"
                 onClick={() => {
                   setIsEditing(false);
                   setFormData({
