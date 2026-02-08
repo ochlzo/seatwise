@@ -1310,25 +1310,33 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                   };
                 });
 
-                // When editing, show simple list without grouping
+                // When editing, show simple list grouped by date
                 if (isEditing) {
-                  // Sort schedules by date and time
-                  const sortedSchedules = [...schedulesWithSets].sort((a, b) => {
-                    const dateCompare = toDateKey(a.sched_date).localeCompare(toDateKey(b.sched_date));
-                    if (dateCompare !== 0) return dateCompare;
-                    return toManilaTimeKey(toTimeValue(a.sched_start_time)).localeCompare(
-                      toManilaTimeKey(toTimeValue(b.sched_start_time))
-                    );
+                  // Group schedules by date
+                  const schedulesByDate = new Map<string, typeof schedulesWithSets>();
+
+                  schedulesWithSets.forEach((sched) => {
+                    const dateKey = toDateKey(sched.sched_date);
+                    if (!schedulesByDate.has(dateKey)) {
+                      schedulesByDate.set(dateKey, []);
+                    }
+                    schedulesByDate.get(dateKey)?.push(sched);
                   });
 
+                  // Sort dates and schedules within each date
+                  const sortedDates = Array.from(schedulesByDate.keys()).sort();
+
                   return (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {sortedSchedules.map((sched) => {
-                        const categorySet = categorySets.find(
-                          (set) => set.id === sched.category_set_id,
+                    <div className="space-y-4">
+                      {sortedDates.map((dateKey) => {
+                        const schedules = schedulesByDate.get(dateKey) || [];
+                        const sortedSchedules = schedules.sort((a, b) =>
+                          toManilaTimeKey(toTimeValue(a.sched_start_time)).localeCompare(
+                            toManilaTimeKey(toTimeValue(b.sched_start_time))
+                          )
                         );
 
-                        const schedDate = toDateValue(sched.sched_date);
+                        const schedDate = toDateValue(dateKey);
                         const formattedDate = new Intl.DateTimeFormat("en-US", {
                           timeZone: MANILA_TZ,
                           month: "short",
@@ -1337,72 +1345,85 @@ export function ShowDetailForm({ show }: ShowDetailFormProps) {
                         }).format(schedDate);
 
                         return (
-                          <div
-                            key={sched.client_id}
-                            className="flex items-center justify-between p-3 rounded-lg border border-sidebar-border/60 bg-muted/20"
-                          >
-                            <div className="space-y-1.5 flex-1">
-                              <div className="text-xs font-medium text-muted-foreground">
-                                {formattedDate}
-                              </div>
-                              <div className="text-sm font-medium flex items-center gap-2">
-                                {formatManilaTime(toTimeValue(sched.sched_start_time))}
-                                <span className="text-muted-foreground">-</span>
-                                {formatManilaTime(toTimeValue(sched.sched_end_time))}
-                              </div>
-                              {categorySet && (
-                                <div className="space-y-1.5 pt-1">
-                                  <div className="text-[11px] font-medium text-muted-foreground">
-                                    {categorySet.set_name}
-                                  </div>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {categorySet.categories
-                                      .filter((category) =>
-                                        Object.values(categorySet.seatAssignments || {}).includes(category.id),
-                                      )
-                                      .map((category) => (
-                                        <div
-                                          key={category.id}
-                                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-sidebar-border/60 bg-background text-[10px]"
-                                        >
-                                          <span
-                                            className="h-2 w-2 rounded-full border border-zinc-300"
-                                            style={{
-                                              backgroundColor:
-                                                category.color_code === "NO_COLOR"
-                                                  ? "transparent"
-                                                  : category.color_code === "GOLD"
-                                                    ? "#ffd700"
-                                                    : category.color_code === "PINK"
-                                                      ? "#e005b9"
-                                                      : category.color_code === "BLUE"
-                                                        ? "#111184"
-                                                        : category.color_code === "BURGUNDY"
-                                                          ? "#800020"
-                                                          : "#046307",
-                                            }}
-                                          />
-                                          <span className="font-medium">{category.category_name}</span>
-                                          <span className="text-muted-foreground">₱{category.price}</span>
+                          <div key={dateKey} className="space-y-3">
+                            <h4 className="text-sm font-semibold border-b pb-2 flex items-center gap-2">
+                              <CalendarIcon className="w-4 h-4 text-primary" />
+                              {formattedDate}
+                            </h4>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              {sortedSchedules.map((sched) => {
+                                const categorySet = categorySets.find(
+                                  (set) => set.id === sched.category_set_id,
+                                );
+
+                                return (
+                                  <div
+                                    key={sched.client_id}
+                                    className="flex items-center justify-between p-3 rounded-lg border border-sidebar-border/60 bg-muted/20"
+                                  >
+                                    <div className="space-y-1.5 flex-1">
+                                      <div className="text-sm font-medium flex items-center gap-2">
+                                        {formatManilaTime(toTimeValue(sched.sched_start_time))}
+                                        <span className="text-muted-foreground">-</span>
+                                        {formatManilaTime(toTimeValue(sched.sched_end_time))}
+                                      </div>
+                                      {categorySet && (
+                                        <div className="space-y-1.5 pt-1">
+                                          <div className="text-[11px] font-medium text-muted-foreground">
+                                            {categorySet.set_name}
+                                          </div>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {categorySet.categories
+                                              .filter((category) =>
+                                                Object.values(categorySet.seatAssignments || {}).includes(category.id),
+                                              )
+                                              .map((category) => (
+                                                <div
+                                                  key={category.id}
+                                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-sidebar-border/60 bg-background text-[10px]"
+                                                >
+                                                  <span
+                                                    className="h-2 w-2 rounded-full border border-zinc-300"
+                                                    style={{
+                                                      backgroundColor:
+                                                        category.color_code === "NO_COLOR"
+                                                          ? "transparent"
+                                                          : category.color_code === "GOLD"
+                                                            ? "#ffd700"
+                                                            : category.color_code === "PINK"
+                                                              ? "#e005b9"
+                                                              : category.color_code === "BLUE"
+                                                                ? "#111184"
+                                                                : category.color_code === "BURGUNDY"
+                                                                  ? "#800020"
+                                                                  : "#046307",
+                                                    }}
+                                                  />
+                                                  <span className="font-medium">{category.category_name}</span>
+                                                  <span className="text-muted-foreground">₱{category.price}</span>
+                                                </div>
+                                              ))}
+                                          </div>
                                         </div>
-                                      ))}
+                                      )}
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                      onClick={() => {
+                                        setFormData((prev) => ({
+                                          ...prev,
+                                          scheds: prev.scheds.filter((s) => s !== sched),
+                                        }));
+                                      }}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
                                   </div>
-                                </div>
-                              )}
+                                );
+                              })}
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                              onClick={() => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  scheds: prev.scheds.filter((s) => s !== sched),
-                                }));
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
                           </div>
                         );
                       })}
