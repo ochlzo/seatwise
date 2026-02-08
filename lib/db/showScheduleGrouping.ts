@@ -167,7 +167,53 @@ export function groupSchedulesByCommonalities(
     });
   };
 
-  return Array.from(groupedByRange.values())
+  // Track which schedule signatures are covered by multi-day ranges for each date
+  const multiDaySchedulesByDate = new Map<string, Set<string>>();
+
+  Array.from(groupedByRange.values()).forEach((group) => {
+    if (group.start_date !== group.end_date) {
+      // This is a multi-day range
+      let currentDate = group.start_date;
+      while (currentDate <= group.end_date) {
+        if (!multiDaySchedulesByDate.has(currentDate)) {
+          multiDaySchedulesByDate.set(currentDate, new Set<string>());
+        }
+        // Track all schedule signatures in this range for this date
+        group.items.forEach((item) => {
+          const signature = `${item.sched_start_time}|${item.sched_end_time}|${item.category_set_id ?? ""}|${item.set_name ?? ""}`;
+          multiDaySchedulesByDate.get(currentDate)?.add(signature);
+        });
+        currentDate = addOneDay(currentDate);
+      }
+    }
+  });
+
+  // Filter out single-day groups where ALL schedules are covered by multi-day ranges
+  const filteredGroups = Array.from(groupedByRange.values()).filter((group) => {
+    const isSingleDay = group.start_date === group.end_date;
+    if (isSingleDay) {
+      const date = group.start_date;
+      const allSchedulesOnDate = dateToItems.get(date) ?? [];
+      const multiDaySchedules = multiDaySchedulesByDate.get(date);
+
+      if (!multiDaySchedules || multiDaySchedules.size === 0) {
+        // No multi-day ranges cover this date, keep the single-day group
+        return true;
+      }
+
+      // Check if ALL schedules on this date are covered by multi-day ranges
+      const hasUniqueSchedules = allSchedulesOnDate.some((item) => {
+        const signature = `${item.sched_start_time}|${item.sched_end_time}|${item.category_set_id ?? ""}|${item.set_name ?? ""}`;
+        return !multiDaySchedules.has(signature);
+      });
+
+      // Keep single-day group only if it has schedules NOT covered by multi-day ranges
+      return hasUniqueSchedules;
+    }
+    return true; // Keep all multi-day ranges
+  });
+
+  return filteredGroups
     .map((group) => ({
       ...group,
       // For single-day groups, show the complete schedule for that day.
