@@ -32,6 +32,15 @@ test("resolveLoginCallbackUrl uses header return for protected route when valid"
   assert.equal(callback, "/dashboard?tab=upcoming");
 });
 
+test("resolveLoginCallbackUrl preserves deep-link show detail callback", () => {
+  const callback = resolveLoginCallbackUrl({
+    headerReturnTo: "/cml5d3s030003y0xyo2qe3uyh",
+    defaultReturnTo: "/dashboard",
+  });
+
+  assert.equal(callback, "/cml5d3s030003y0xyo2qe3uyh");
+});
+
 test("resolveLoginCallbackUrl falls back to default when header return is unsafe", () => {
   const callback = resolveLoginCallbackUrl({
     headerReturnTo: "https://evil.com/phish",
