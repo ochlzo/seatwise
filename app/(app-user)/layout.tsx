@@ -13,7 +13,7 @@ export default async function AppUserLayout({
 }: {
     children: React.ReactNode
 }) {
-    await verifySession({ defaultReturnTo: "/dashboard" });
+    await verifySession();
 
     return (
         <SidebarProvider className="h-svh overflow-hidden">
