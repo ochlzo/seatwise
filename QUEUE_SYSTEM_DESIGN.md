@@ -17,16 +17,19 @@ Hybrid **Pull (Heartbeat)** + **Push (Realtime)** for scalability and responsive
 
 ## 2. Redis Data Structures
 
-All keys are scoped per page / venue / event using `{pageId}`.
+All keys are scoped per show context using `{showScopeId}`.
+
+- Use `{showScopeId} = showId` when queueing is show-level.
+- Use `{showScopeId} = showId:schedId` when each schedule needs an independent queue.
 
 | Key                                        | Type                  | Description                                                        |
 | ------------------------------------------ | --------------------- | ------------------------------------------------------------------ |
-| `seatwise:queue:{pageId}`                  | ZSET                  | Waiting line. `member = ticketId`, `score = server join timestamp` |
-| `seatwise:ticket:{pageId}:{ticketId}`      | STRING (JSON) or HASH | Enriched ticket data (userId, sid, name, avatar, joinedAt)         |
-| `seatwise:user_ticket:{pageId}`            | HASH                  | `userId → ticketId` (join idempotency / dedupe)                    |
-| `seatwise:active:{pageId}:{ticketId}`      | STRING (JSON) w/ TTL  | Active session record (userId, expiresAt, activeToken, startedAt)  |
-| `seatwise:metrics:avg_service_ms:{pageId}` | STRING (Int)          | Rolling average service time                                       |
-| `seatwise:seq:{pageId}`                    | STRING (Int)          | Monotonic broadcast sequence number                                |
+| `seatwise:queue:{showScopeId}`                  | ZSET                  | Waiting line. `member = ticketId`, `score = server join timestamp` |
+| `seatwise:ticket:{showScopeId}:{ticketId}`      | STRING (JSON) or HASH | Enriched ticket data (userId, sid, name, avatar, joinedAt)         |
+| `seatwise:user_ticket:{showScopeId}`            | HASH                  | `userId → ticketId` (join idempotency / dedupe)                    |
+| `seatwise:active:{showScopeId}:{ticketId}`      | STRING (JSON) w/ TTL  | Active session record (userId, expiresAt, activeToken, startedAt)  |
+| `seatwise:metrics:avg_service_ms:{showScopeId}` | STRING (Int)          | Rolling average service time                                       |
+| `seatwise:seq:{showScopeId}`                    | STRING (Int)          | Monotonic broadcast sequence number                                |
 
 ### Enriched Ticket Schema
 
@@ -56,7 +59,7 @@ Stored separately (not as the ZSET member).
 ### Public Channel
 
 ```
-seatwise:{pageId}:public
+seatwise:{showScopeId}:public
 ```
 
 Used for:
@@ -68,7 +71,7 @@ Used for:
 ### Private Channel (Per User)
 
 ```
-seatwise:{pageId}:private:{ticketId}
+seatwise:{showScopeId}:private:{ticketId}
 ```
 
 Used for:
@@ -93,9 +96,9 @@ Used for:
 
    - Fetch user profile once (name, avatar)
    - Generate `ticketId`
-   - Enforce idempotency via `seatwise:user_ticket:{pageId}`
-   - Store ticket blob
-   - Add `ticketId` to `seatwise:queue:{pageId}` with server timestamp
+  - Enforce idempotency via `seatwise:user_ticket:{showScopeId}`
+  - Store ticket blob
+  - Add `ticketId` to `seatwise:queue:{showScopeId}` with server timestamp
    - Fetch initial rank via `ZRANK`
 
 3. Response:
@@ -118,13 +121,13 @@ Clients poll with adaptive intervals.
 
 **Backend Logic**
 
-1. Rank: `ZRANK seatwise:queue:{pageId} ticketId`
+1. Rank: `ZRANK seatwise:queue:{showScopeId} ticketId`
 2. Neighbors (only when needed):
 
-   - `ZRANGE seatwise:queue:{pageId} start stop`
+   - `ZRANGE seatwise:queue:{showScopeId} start stop`
    - Batch fetch ticket blobs via `MGET`
 
-3. Speed: `GET seatwise:metrics:avg_service_ms:{pageId}`
+3. Speed: `GET seatwise:metrics:avg_service_ms:{showScopeId}`
 4. ETA: `rank * avgServiceMs`
 
 **Frontend UX**
@@ -144,9 +147,9 @@ This is the only instant, high-risk operation.
 
 **Redis Lua Script (Single Transaction)**
 
-1. `ZPOPMIN seatwise:queue:{pageId}`
+1. `ZPOPMIN seatwise:queue:{showScopeId}`
 2. Generate `activeToken` and `expiresAt`
-3. `SET seatwise:active:{pageId}:{ticketId} <json> EX 300`
+3. `SET seatwise:active:{showScopeId}:{ticketId} <json> EX 300`
 4. Return `{ ticketId, activeToken, expiresAt }`
 
 **After Success**
