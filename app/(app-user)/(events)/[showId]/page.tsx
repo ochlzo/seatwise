@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { ShowDetailReadOnly } from "@/app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm";
+import StopLoadingOnMount from "@/components/stop-loading-on-mount";
 
 export default async function ShowIdPage({
   params,
@@ -45,6 +46,7 @@ export default async function ShowIdPage({
 
   return (
     <>
+      <StopLoadingOnMount />
       <PageHeader
         title={show.show_name}
         className="z-20"

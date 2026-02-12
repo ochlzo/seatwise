@@ -19,11 +19,8 @@ export function ProfileAvatarContainer({ initialAvatarUrl, fallback, defaultAvat
     const user = useAppSelector((state) => state.auth.user);
     const [showSelect, setShowSelect] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState(initialAvatarUrl);
-    const [isSaving, setIsSaving] = useState(false);
 
     const handleSelect = async (newAvatarUrl: string, isCustom: boolean) => {
-        setIsSaving(true);
-
         try {
             const result = await updateAvatarAction(newAvatarUrl, isCustom);
 
@@ -44,8 +41,6 @@ export function ProfileAvatarContainer({ initialAvatarUrl, fallback, defaultAvat
         } catch (error) {
             console.error("Save error:", error);
             alert("An unexpected error occurred while saving your avatar.");
-        } finally {
-            setIsSaving(false);
         }
     };
 
@@ -74,7 +69,6 @@ export function ProfileAvatarContainer({ initialAvatarUrl, fallback, defaultAvat
                     onClose={() => setShowSelect(false)}
                     onSelect={handleSelect}
                     presetAvatars={defaultAvatars}
-                    isSaving={isSaving}
                 />
             )}
         </>

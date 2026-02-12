@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
+import { useAppDispatch } from "@/lib/hooks";
+import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 
 const STATUS_COLORS: Record<string, string> = {
   UPCOMING: "#3B82F6",
@@ -87,6 +89,7 @@ export default function ShowsPage({
   statusFilterValues,
 }: ShowsClientProps) {
   const searchParams = useSearchParams();
+  const dispatch = useAppDispatch();
   const [shows, setShows] = React.useState<Show[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -149,6 +152,10 @@ export default function ShowsPage({
   const isAdmin = mode === "admin";
   const createPath = `${basePath}/create`;
   const detailPathBase = detailBasePath ?? basePath;
+
+  const handleShowClick = React.useCallback(() => {
+    dispatch(setLoading(true));
+  }, [dispatch]);
 
   return (
     <>
@@ -261,6 +268,7 @@ export default function ShowsPage({
                 <Link
                   key={show.show_id}
                   href={`${detailPathBase}/${show.show_id}`}
+                  onClick={handleShowClick}
                 >
                   <Card className="overflow-hidden group hover:shadow-xl transition-all duration-300 border-sidebar-border cursor-pointer h-full">
                     <div className="aspect-[16/9] bg-muted relative overflow-hidden">

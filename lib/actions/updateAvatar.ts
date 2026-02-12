@@ -75,8 +75,9 @@ export async function updateAvatarAction(avatarData: string, isCustom: boolean) 
 
         let finalAvatarUrl = avatarData;
 
-        // 2. If custom, upload to Cloudinary (User Custom folder)
-        if (isCustom) {
+        // 2. Backward compatibility:
+        // If custom data URL is still passed, upload it server-side.
+        if (isCustom && avatarData.startsWith("data:")) {
             const uploadResponse = await cloudinary.uploader.upload(avatarData, {
                 folder: "seatwise/avatars/user_custom",
                 public_id: uid,
