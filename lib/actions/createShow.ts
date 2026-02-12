@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { ColorCodes, ShowStatus } from "@prisma/client";
+import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
 
 type CreateShowPayload = {
   show_name: string;
@@ -223,6 +224,8 @@ export async function createShowAction(data: CreateShowPayload) {
     }
 
     // --- 3. Database Transaction ---
+    const schedIdMap = new Map<string, string>(); // client_id -> db_sched_id
+
     const show = await prisma.$transaction(
       async (tx) => {
         const existingShow = await tx.show.findUnique({
@@ -248,7 +251,6 @@ export async function createShowAction(data: CreateShowPayload) {
         });
 
         // Create Schedules
-        const schedIdMap = new Map<string, string>(); // client_id -> db_sched_id
         for (const sched of scheds) {
           const createdSched = await tx.sched.create({
             data: {
@@ -447,9 +449,35 @@ export async function createShowAction(data: CreateShowPayload) {
       }
     );
 
+    // 🎯 QUEUE LIFECYCLE MANAGEMENT (After database transaction)
+    // Initialize queues if show is created with OPEN status
+    const queueResults = [];
+    const allSchedIds = Array.from(schedIdMap.values());
+
+    if (show_status === 'OPEN' && allSchedIds.length > 0) {
+      for (const schedId of allSchedIds) {
+        const showScopeId = `${show.show_id}:${schedId}`;
+
+        try {
+          const result = await initializeQueueChannel(showScopeId);
+          queueResults.push(result);
+        } catch (queueError) {
+          console.error(
+            `Queue initialization failed for ${showScopeId}:`,
+            queueError
+          );
+          // Continue with other schedules even if one fails
+        }
+      }
+    }
+
     revalidatePath("/admin/shows");
 
-    return { success: true, showId: show.show_id };
+    return {
+      success: true,
+      showId: show.show_id,
+      queueResults: queueResults.length > 0 ? queueResults : undefined,
+    };
   } catch (error: unknown) {
     console.error("Error in createShowAction:", error);
     const message =

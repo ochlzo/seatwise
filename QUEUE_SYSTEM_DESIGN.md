@@ -25,7 +25,7 @@ All keys are scoped per show context using `{showScopeId}`.
 | Key                                        | Type                  | Description                                                        |
 | ------------------------------------------ | --------------------- | ------------------------------------------------------------------ |
 | `seatwise:queue:{showScopeId}`                  | ZSET                  | Waiting line. `member = ticketId`, `score = server join timestamp` |
-| `seatwise:ticket:{showScopeId}:{ticketId}`      | STRING (JSON) or HASH | Enriched ticket data (userId, sid, name, avatar, joinedAt)         |
+| `seatwise:ticket:{showScopeId}:{ticketId}`      | STRING (JSON) or HASH | Enriched ticket data (userId, sid, name, joinedAt)         |
 | `seatwise:user_ticket:{showScopeId}`            | HASH                  | `userId → ticketId` (join idempotency / dedupe)                    |
 | `seatwise:active:{showScopeId}:{ticketId}`      | STRING (JSON) w/ TTL  | Active session record (userId, expiresAt, activeToken, startedAt)  |
 | `seatwise:metrics:avg_service_ms:{showScopeId}` | STRING (Int)          | Rolling average service time                                       |
@@ -41,7 +41,7 @@ Stored separately (not as the ZSET member).
   "userId": "user_uid_123",
   "sid": "session_xyz_789",
   "name": "Alice",
-  "avatar": "https://cloudinary.com/alice.jpg",
+
   "joinedAt": 1737000000000
 }
 ```
@@ -94,7 +94,7 @@ Used for:
 1. User clicks **Join**
 2. Backend:
 
-   - Fetch user profile once (name, avatar)
+   - Fetch user profile once (name)
    - Generate `ticketId`
   - Enforce idempotency via `seatwise:user_ticket:{showScopeId}`
   - Store ticket blob
@@ -109,7 +109,7 @@ Used for:
   "ticketId": "tkt_abc123",
   "rank": 5,
   "name": "Alice",
-  "avatar": "..."
+
 }
 ```
 

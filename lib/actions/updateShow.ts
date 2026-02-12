@@ -5,6 +5,8 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { ShowStatus } from "@prisma/client";
+import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
+import { closeQueueChannel, pauseQueueChannel } from "@/lib/queue/closeQueue";
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -149,7 +151,18 @@ export async function updateShowAction(
       throw new Error("Show end date is required.");
     }
 
+    // Get current show status for queue lifecycle management
+    const currentShow = await prisma.show.findUnique({
+      where: { show_id: showId },
+      select: { show_status: true },
+    });
+
+    const oldStatus = currentShow?.show_status;
+    const newStatus = show_status;
+
     // Transaction to update show, schedules, and category sets
+    const schedIdMap = new Map<string, string>(); // temp_id -> db_sched_id
+
     await prisma.$transaction(
       async (tx) => {
         // 1. Update Show details
@@ -185,7 +198,6 @@ export async function updateShowAction(
         });
 
         // 3. Create new schedules
-        const schedIdMap = new Map<string, string>(); // temp_id -> db_sched_id
         if (scheds && scheds.length > 0) {
           for (let i = 0; i < scheds.length; i++) {
             const sched = scheds[i];
@@ -394,10 +406,53 @@ export async function updateShowAction(
       },
     );
 
+    // 🎯 QUEUE LIFECYCLE MANAGEMENT (After database transaction)
+    const queueResults = [];
+    const allSchedIds = Array.from(schedIdMap.values());
+
+    for (const schedId of allSchedIds) {
+      const showScopeId = `${showId}:${schedId}`;
+
+      try {
+        // Initialize queue when status changes to OPEN
+        if (newStatus === 'OPEN' && oldStatus !== 'OPEN') {
+          const result = await initializeQueueChannel(showScopeId);
+          queueResults.push(result);
+        }
+
+        // Close queue when status changes to CLOSED or CANCELLED
+        else if (
+          (newStatus === 'CLOSED' || newStatus === 'CANCELLED') &&
+          (oldStatus === 'OPEN' || oldStatus === 'ON_GOING')
+        ) {
+          const result = await closeQueueChannel(
+            showScopeId,
+            newStatus === 'CANCELLED' ? 'cancelled' : 'closed'
+          );
+          queueResults.push(result);
+        }
+
+        // Pause queue when status changes to POSTPONED
+        else if (newStatus === 'POSTPONED' && oldStatus === 'OPEN') {
+          const result = await pauseQueueChannel(showScopeId);
+          queueResults.push(result);
+        }
+      } catch (queueError) {
+        console.error(
+          `Queue operation failed for ${showScopeId}:`,
+          queueError
+        );
+        // Continue with other schedules even if one fails
+      }
+    }
+
     revalidatePath("/admin/shows");
     revalidatePath(`/admin/shows/${showId}`);
 
-    return { success: true };
+    return {
+      success: true,
+      queueResults: queueResults.length > 0 ? queueResults : undefined,
+    };
   } catch (error: unknown) {
     console.error("Error in updateShowAction:", error);
     const message =
