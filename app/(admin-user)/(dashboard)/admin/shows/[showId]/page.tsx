@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import AdminShield from "@/components/AdminShield";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { ShowDetailForm } from "./ShowDetailForm";
+import StopLoadingOnMount from "@/components/stop-loading-on-mount";
 
 export default async function ShowIdPage({
     params,
@@ -47,6 +48,7 @@ export default async function ShowIdPage({
 
     return (
         <>
+            <StopLoadingOnMount />
             <PageHeader
                 title={show.show_name}
                 className="z-20"

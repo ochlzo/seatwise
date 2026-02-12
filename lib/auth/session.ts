@@ -3,15 +3,21 @@ import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserByFirebaseUid } from "@/lib/db/Users";
+import { resolveLoginCallbackUrl } from "@/lib/auth/redirect";
+
+type VerifySessionOptions = {
+  defaultReturnTo?: string;
+};
 
 /**
  * Verifies if the request has a valid session cookie.
  * used in server components/layouts to protect routes.
  */
-export async function verifySession() {
+export async function verifySession(options: VerifySessionOptions = {}) {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session")?.value;
   const headerStore = await headers();
+  const defaultReturnTo = options.defaultReturnTo;
 
   const getReturnTo = () => {
     const url =
@@ -29,8 +35,10 @@ export async function verifySession() {
   };
 
   const redirectToLogin = () => {
-    const returnTo = getReturnTo();
-    const safeReturn = returnTo && returnTo !== "/login" ? returnTo : null;
+    const safeReturn = resolveLoginCallbackUrl({
+      headerReturnTo: getReturnTo(),
+      defaultReturnTo,
+    });
     const target = safeReturn
       ? `/login?callbackUrl=${encodeURIComponent(safeReturn)}`
       : "/login";

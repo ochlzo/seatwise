@@ -45,6 +45,7 @@ import {
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
 import type { SeatmapState } from "@/lib/seatmap/types";
+import { uploadImageToCloudinary } from "@/lib/clients/cloudinary-upload";
 // import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const STATUS_OPTIONS = [
@@ -518,7 +519,7 @@ export function CreateShowForm() {
           id: newSetId,
           set_name: `Set ${prev.length + 1}`,
           apply_to_all: prev.length === 0,
-          sched_ids: [],
+          sched_ids: prev.length === 0 ? scheds.map((sched) => sched.id) : [],
           filter_date: "",
           categories: [],
           seatAssignments: {},
@@ -527,6 +528,41 @@ export function CreateShowForm() {
     });
     setActiveSetId(newSetId);
   };
+
+  // Keep apply-to-all sets in sync with schedule assignments.
+  // This fixes the state where a set is checked by default but has no sched_ids
+  // until the user manually toggles the checkbox.
+  React.useEffect(() => {
+    if (scheds.length === 0) return;
+
+    setCategorySets((prev) => {
+      let hasChange = false;
+
+      const next = prev.map((setItem) => {
+        if (!setItem.apply_to_all || setItem.sched_ids.length > 0) {
+          return setItem;
+        }
+
+        const usedByOtherSets = new Set<string>();
+        prev.forEach((other) => {
+          if (other.id === setItem.id) return;
+          other.sched_ids.forEach((id) => usedByOtherSets.add(id));
+        });
+
+        const remainingSchedIds = scheds
+          .map((sched) => sched.id)
+          .filter((id) => !usedByOtherSets.has(id));
+
+        hasChange = true;
+        return {
+          ...setItem,
+          sched_ids: remainingSchedIds,
+        };
+      });
+
+      return hasChange ? next : prev;
+    });
+  }, [scheds]);
 
   const updateCategorySet = (id: string, patch: Partial<CategorySetDraft>) => {
     setCategorySets((prev) => prev.map((setItem) => (setItem.id === id ? { ...setItem, ...patch } : setItem)));
@@ -672,14 +708,10 @@ export function CreateShowForm() {
       (s) => s.sched_date && s.sched_start_time && s.sched_end_time
     );
 
-    let imageBase64: string | undefined;
+    let imageUrl: string | undefined;
     if (imageFile) {
-      imageBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = () => reject(new Error("Failed to read image file"));
-        reader.readAsDataURL(imageFile);
-      });
+      const uploaded = await uploadImageToCloudinary(imageFile, "show-thumbnail");
+      imageUrl = uploaded.secureUrl;
     }
 
     setIsSaving(true);
@@ -717,7 +749,7 @@ export function CreateShowForm() {
           seat_assignments: assignmentsByName,
         };
       }),
-      image_base64: imageBase64,
+      show_image_key: imageUrl,
     });
     setIsSaving(false);
 

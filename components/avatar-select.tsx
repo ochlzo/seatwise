@@ -6,6 +6,7 @@ import { ChevronLeft, Plus, Loader2, ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { compressImage } from "@/lib/utils/image";
+import { uploadImageToCloudinary } from "@/lib/clients/cloudinary-upload";
 // import { uploadCustomAvatarAction } from "@/lib/actions/uploadCustomAvatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,19 +17,19 @@ import { UploadProgress } from "@/components/ui/upload-progress";
 
 interface AvatarSelectProps {
     onClose: () => void;
-    onSelect: (avatarUrl: string, isCustom: boolean) => void;
+    onSelect: (avatarUrl: string, isCustom: boolean) => void | Promise<void>;
     currentAvatar?: string;
     presetAvatars: string[];
-    isSaving?: boolean;
 }
 
-export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, isSaving }: AvatarSelectProps) {
+export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars }: AvatarSelectProps) {
     const [selected, setSelected] = useState(currentAvatar || presetAvatars[0] || "");
     const [stagedBase64, setStagedBase64] = useState<string | null>(null);
     const [stagedFile, setStagedFile] = useState<{ name: string; size: number } | null>(null);
     const [uploaderFiles, setUploaderFiles] = useState<File[]>([]);
     const [mounted, setMounted] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [processProgress, setProcessProgress] = useState<number>(0);
     const [saveProgress, setSaveProgress] = useState<number>(0);
     const [showUploader, setShowUploader] = useState(false);
@@ -43,10 +44,10 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
         };
     }, []);
 
-    // Effect to handle simulated save progress when isSaving changes to true
+    // Single unified submit progress (upload + save) after clicking Save.
     useEffect(() => {
         let interval: NodeJS.Timeout;
-        if (isSaving) {
+        if (isSubmitting) {
             // Defer to avoid synchronous setState in effect
             setTimeout(() => setSaveProgress(0), 0);
             interval = setInterval(() => {
@@ -60,7 +61,7 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
             setTimeout(() => setSaveProgress(prev => prev > 0 ? 100 : 0), 0);
         }
         return () => clearInterval(interval);
-    }, [isSaving]);
+    }, [isSubmitting]);
 
     const onUpload = async (files: File[]) => {
         const file = files[0];
@@ -78,8 +79,7 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
         }, 100);
 
         try {
-            // Compress the image locally
-            console.log("Processing image...");
+            // Compress and stage locally. Actual upload happens on Save.
             const compressedBase64 = await compressImage(file, 1024, 1024, 0.7);
 
             clearInterval(interval);
@@ -110,6 +110,24 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
         setShowUploader(false);
     };
 
+    const handleSave = async () => {
+        try {
+            setIsSubmitting(true);
+            if (stagedBase64) {
+                const uploaded = await uploadImageToCloudinary(stagedBase64, "avatar-custom");
+                await onSelect(uploaded.secureUrl, false);
+                return;
+            }
+
+            await onSelect(selected, false);
+        } catch (error) {
+            console.error("Avatar save failed:", error);
+            alert("Failed to save avatar. Please try again.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     if (!mounted) return null;
 
     return createPortal(
@@ -117,8 +135,8 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
             {/* 1. Processing Dialog (Managed by FileUploader internally) */}
             {/* 2. Save Dialog (Managed explicitly here) */}
             <UploadProgress
-                isOpen={!!isSaving && saveProgress > 0}
-                totalProgress={Math.floor(saveProgress)}
+                isOpen={(isProcessing && processProgress > 0) || (isSubmitting && saveProgress > 0)}
+                totalProgress={Math.floor(isProcessing ? processProgress : saveProgress)}
                 files={stagedBase64 ? (stagedFile ? [stagedFile] : [{ name: "Custom Avatar", size: 0 }]) : [{ name: "Updating profile...", size: 0 }]}
                 onDone={() => {
                     // Handled by parent closing the modal
@@ -142,7 +160,7 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
                     <div className="absolute inset-0 border-2 border-[#3b82f6] rounded-full" />
 
                     <Avatar className="h-32 w-32 md:h-40 md:w-40 border-4 border-background shadow-xl bg-white relative">
-                        {(isProcessing || isSaving) && (
+                        {(isProcessing || isSubmitting) && (
                             <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 rounded-full backdrop-blur-sm">
                                 <Loader2 className="h-10 w-10 text-white animate-spin" />
                             </div>
@@ -170,8 +188,7 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
                                 maxSize={5 * 1024 * 1024}
                                 maxFiles={1}
                                 onUpload={onUpload}
-                                progresses={isProcessing ? { [stagedFile?.name || "file"]: processProgress } : {}}
-                                disabled={isProcessing || isSaving}
+                                disabled={isProcessing || isSubmitting}
                                 showRemoveButton={false}
                                 className="h-40"
                             />
@@ -213,11 +230,11 @@ export function AvatarSelect({ onClose, onSelect, currentAvatar, presetAvatars, 
             {/* Footer / Action */}
             <div className="p-8 pb-12 shrink-0 flex justify-center">
                 <Button
-                    onClick={() => onSelect(selected, !!stagedBase64)}
-                    disabled={isProcessing || isSaving}
+                    onClick={handleSave}
+                    disabled={isProcessing || isSubmitting}
                     className="w-full max-w-xs h-14 rounded-2xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-lg font-bold shadow-lg shadow-[#3b82f6]/30 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70"
                 >
-                    {isProcessing ? "Processing..." : isSaving ? "Saving..." : "Save"}
+                    {isProcessing ? "Processing..." : isSubmitting ? "Saving..." : "Save"}
                 </Button>
             </div>
         </div>,

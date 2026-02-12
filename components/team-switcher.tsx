@@ -78,14 +78,17 @@ export function TeamSwitcher({
       >
         <div className={cn(
           "relative",
-          state === "collapsed" ? "size-9" : "h-11 w-full",
+          state === "collapsed" ? "size-10" : "h-14 w-full",
           isMobile && "mx-auto"
         )}>
           <Image
             src={state === "collapsed" ? logoMini : logo}
             alt="Seatwise"
             fill
-            className="object-contain"
+            className={cn(
+              "object-contain",
+              logo === "/logo_dark.png" && "scale-110",
+            )}
           />
         </div>
       </div>

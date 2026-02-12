@@ -11,7 +11,7 @@ export default async function AdminUserGroupLayout({
     // This includes both the dashboard and the specialized tools like seat-builder.
     // verifyAdmin() will automatically redirect to /dashboard if the user isn't an admin,
     // or /login if no valid session is found.
-    await verifyAdmin();
+    await verifyAdmin({ defaultReturnTo: "/admin" });
 
     return <>{children}</>;
 }

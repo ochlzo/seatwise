@@ -3,11 +3,17 @@ import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getUserByFirebaseUid } from "@/lib/db/Users";
+import { resolveLoginCallbackUrl } from "@/lib/auth/redirect";
 
-export async function verifyAdmin() {
+type VerifyAdminOptions = {
+  defaultReturnTo?: string;
+};
+
+export async function verifyAdmin(options: VerifyAdminOptions = {}) {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session")?.value;
   const headerStore = await headers();
+  const defaultReturnTo = options.defaultReturnTo;
 
   const getReturnTo = () => {
     const url =
@@ -25,8 +31,10 @@ export async function verifyAdmin() {
   };
 
   const redirectToLogin = () => {
-    const returnTo = getReturnTo();
-    const safeReturn = returnTo && returnTo !== "/login" ? returnTo : null;
+    const safeReturn = resolveLoginCallbackUrl({
+      headerReturnTo: getReturnTo(),
+      defaultReturnTo,
+    });
     const target = safeReturn
       ? `/login?callbackUrl=${encodeURIComponent(safeReturn)}`
       : "/login";

@@ -375,6 +375,12 @@ function LoadingHandler({ modelReady }: { modelReady: boolean }) {
 // --- Main Page Component ---
 export default function Home() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
+
+  const navigateToDashboard = () => {
+    dispatch(setLoading(true));
+    router.push("/dashboard");
+  };
 
   return (
     <main className="relative z-10 snap-y snap-mandatory bg-transparent text-zinc-900 dark:text-zinc-100 selection:bg-blue-200 dark:selection:bg-blue-800">
@@ -404,7 +410,7 @@ export default function Home() {
           </ScrollReveal>
           <div className="flex flex-row items-center gap-4 md:gap-8 flex-wrap">
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={navigateToDashboard}
               className="cursor-pointer px-6 md:px-8 py-3 md:py-4 bg-zinc-900 text-white font-bold uppercase tracking-widest hover:bg-blue-500 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-blue-500 dark:hover:text-white transition-colors duration-300"
             >
               View Events Now!
@@ -465,7 +471,7 @@ export default function Home() {
           </ScrollReveal>
           <div className="flex gap-4">
             <button
-              onClick={() => router.push("/dashboard")}
+              onClick={navigateToDashboard}
               className="cursor-pointer px-8 py-4 bg-blue-500 text-white font-bold uppercase tracking-widest hover:bg-zinc-900 dark:hover:bg-zinc-100 dark:hover:text-zinc-900 transition-colors duration-300"
             >
               Get Started

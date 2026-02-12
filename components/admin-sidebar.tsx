@@ -25,6 +25,7 @@ import { useAppSelector } from "@/lib/hooks"
 import { RootState } from "@/lib/store"
 import { usePathname } from "next/navigation"
 import { useEffect } from "react"
+import { useTheme } from "next-themes"
 
 // This is sample data.
 const data = {
@@ -102,7 +103,8 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
     const user = useAppSelector((state: RootState) => state.auth.user);
     const { isMobile, setOpenMobile } = useSidebar();
     const pathname = usePathname();
-    const [isMounted, setIsMounted] = React.useState(false);
+    const { resolvedTheme } = useTheme();
+    const logo = resolvedTheme === "dark" ? "/logo_dark.png" : "/logo_light.png";
 
     useEffect(() => {
         if (isMobile) {
@@ -110,21 +112,16 @@ export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>)
         }
     }, [pathname, isMobile, setOpenMobile]);
 
-    useEffect(() => {
-        const timer = setTimeout(() => setIsMounted(true), 0);
-        return () => clearTimeout(timer);
-    }, []);
-
     return (
         <Sidebar collapsible="icon" {...props}>
             <SidebarHeader>
-                <TeamSwitcher teams={data.teams} logo="/logo.png" logoMini="/logo-mini.png" currentTeam="admin" />
+                <TeamSwitcher teams={data.teams} logo={logo} logoMini="/logo-mini.png" currentTeam="admin" />
             </SidebarHeader>
             <SidebarContent>
-                {isMounted && <NavMain items={data.navMain} openAll />}
+                <NavMain items={data.navMain} openAll />
             </SidebarContent>
             <SidebarFooter>
-                {isMounted && <NavUser user={user} />}
+                <NavUser user={user} />
             </SidebarFooter>
             <SidebarRail />
         </Sidebar >
