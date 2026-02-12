@@ -1533,6 +1533,7 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
                 // Multiple groups - use tabs
                 return (
                   <Tabs
+                    key={groupedSchedules.map((group) => group.label).join("||")}
                     defaultValue={groupedSchedules[0].label}
                     className="w-full"
                     onValueChange={(tabLabel) => {
