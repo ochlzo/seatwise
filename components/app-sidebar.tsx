@@ -23,7 +23,6 @@ import {
 import { useAppSelector } from "@/lib/hooks";
 import { RootState } from "@/lib/store";
 import { usePathname } from "next/navigation";
-import { useTheme } from "next-themes";
 
 // This is sample data.
 const data = {
@@ -93,8 +92,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const user = useAppSelector((state: RootState) => state.auth.user);
   const { isMobile, setOpenMobile } = useSidebar();
   const pathname = usePathname();
-  const { resolvedTheme } = useTheme();
-  const logo = resolvedTheme === "dark" ? "/logo_dark.png" : "/logo_light.png";
 
   React.useEffect(() => {
     if (isMobile) {
@@ -107,7 +104,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <TeamSwitcher
           teams={data.teams}
-          logo={logo}
+          logoLight="/logo_light.png"
+          logoDark="/logo_dark.png"
           logoMini="/logo-mini.png"
           currentTeam="user"
         />
