@@ -401,6 +401,8 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
   }, [showStartDate, showEndDate]);
 
   React.useEffect(() => {
+    if (!allowEdit) return;
+
     let isMounted = true;
     const loadSeatmaps = async () => {
       try {
@@ -416,9 +418,11 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [allowEdit]);
 
   React.useEffect(() => {
+    if (!allowEdit) return;
+
     if (!formData.seatmap_id) {
       if (seatmapQuery) {
         setSeatmapQuery("");
@@ -431,7 +435,7 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
     if (match && match.seatmap_name !== seatmapQuery) {
       setSeatmapQuery(match.seatmap_name);
     }
-  }, [formData.seatmap_id, seatmapQuery, seatmaps]);
+  }, [allowEdit, formData.seatmap_id, seatmapQuery, seatmaps]);
 
   // Fetch seatmap data when seatmap is selected
   React.useEffect(() => {

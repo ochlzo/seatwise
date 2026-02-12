@@ -19,10 +19,11 @@ export async function GET(
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
     const user = await prisma.user.findUnique({
       where: { firebase_uid: decodedToken.uid },
+      select: { user_id: true },
     });
 
-    if (user?.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { seatmapId } = await params;
