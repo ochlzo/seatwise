@@ -16,18 +16,28 @@ export async function verifyAdmin(options: VerifyAdminOptions = {}) {
   const defaultReturnTo = options.defaultReturnTo;
 
   const getReturnTo = () => {
-    const url =
-      headerStore.get("x-url") ||
-      headerStore.get("x-next-url") ||
-      headerStore.get("referer");
-    if (!url) return null;
-    try {
-      const parsed = new URL(url);
-      return `${parsed.pathname}${parsed.search}`;
-    } catch {
-      if (url.startsWith("/")) return url;
-      return null;
+    const candidates = [
+      headerStore.get("x-url"),
+      headerStore.get("x-next-url"),
+      headerStore.get("next-url"),
+      headerStore.get("x-pathname"),
+      headerStore.get("x-invoke-path"),
+      headerStore.get("referer"),
+    ];
+
+    for (const value of candidates) {
+      if (!value) continue;
+      try {
+        const parsed = new URL(value);
+        return `${parsed.pathname}${parsed.search}`;
+      } catch {
+        if (value.startsWith("/")) {
+          return value;
+        }
+      }
     }
+
+    return null;
   };
 
   const redirectToLogin = () => {
