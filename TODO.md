@@ -6,6 +6,7 @@
 6. Admin access page (admin)
 7. Add a flag on edit in seatmappreview on create and update for easy identification all seats assigned.
 8. Add edit thumbnail on showdetail.tsx.
+9. The show details page does not display the seatmap name properly
 
 FOCUS:
 

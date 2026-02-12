@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { ShowDetailReadOnly } from "@/app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm";
 import StopLoadingOnMount from "@/components/stop-loading-on-mount";
+import { ReserveNowButton } from "@/components/queue/ReserveNowButton";
 
 export default async function ShowIdPage({
   params,
@@ -44,6 +45,16 @@ export default async function ShowIdPage({
     })),
   };
 
+  const isShowOpen = show.show_status === 'OPEN';
+
+  // Serialize schedules for client component (convert dates to strings)
+  const serializedSchedules = show.scheds?.map((sched) => ({
+    sched_id: sched.sched_id || '',
+    sched_date: sched.sched_date.toISOString(),
+    sched_start_time: sched.sched_start_time.toISOString(),
+    sched_end_time: sched.sched_end_time.toISOString(),
+  })) || [];
+
   return (
     <>
       <StopLoadingOnMount />
@@ -60,6 +71,16 @@ export default async function ShowIdPage({
               View production details, run dates, and performance schedules.
             </p>
           </div>
+
+          {isShowOpen && serializedSchedules.length > 0 && (
+            <div className="mb-6 flex justify-center sm:justify-start">
+              <ReserveNowButton
+                showId={show.show_id}
+                showName={show.show_name}
+                schedules={serializedSchedules}
+              />
+            </div>
+          )}
 
           <ShowDetailReadOnly show={serializedShow} />
         </div>
