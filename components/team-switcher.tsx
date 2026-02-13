@@ -70,7 +70,7 @@ export function TeamSwitcher({
       className={cn(
         "h-14",
         isAdmin &&
-          "data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
+        "data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
         !isAdmin && "cursor-pointer",
       )}
     >
@@ -107,7 +107,7 @@ export function TeamSwitcher({
                 src={logoDark}
                 alt="Seatwise"
                 fill
-                className="hidden object-contain scale-[2.2] dark:block"
+                className="hidden object-contain dark:block"
               />
             </>
           ) : (
