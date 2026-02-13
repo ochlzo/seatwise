@@ -76,26 +76,25 @@ export function ReserveNowButton({
     const handleJoinQueue = async (schedId: string) => {
         setIsJoining(true);
         try {
-            // TODO: Implement queue joining logic in Phase 2
-            // const response = await fetch('/api/queue/join', {
-            //   method: 'POST',
-            //   headers: { 'Content-Type': 'application/json' },
-            //   body: JSON.stringify({ showId, schedId }),
-            // });
-
-            // if (!response.ok) throw new Error('Failed to join queue');
-
-            // const data = await response.json();
-
-            // Temporary: Just show a toast and redirect
-            toast.success('Joining queue...', {
-                description: 'Queue system will be implemented in Phase 2',
+            const response = await fetch('/api/queue/join', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ showId, schedId }),
             });
 
-            // TODO: Redirect to queue page
-            // router.push(`/queue/${showId}/${schedId}`);
+            const data = await response.json();
 
-            setIsOpen(false);
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to join queue');
+            }
+
+            // Success! Show toast and redirect to queue page
+            toast.success('Successfully joined the queue!', {
+                description: `You're #${data.rank} in line. Estimated wait: ~${data.estimatedWaitMinutes} min`,
+            });
+
+            // Redirect to queue waiting page
+            router.push(`/queue/${showId}/${schedId}`);
         } catch (error) {
             toast.error('Failed to join queue', {
                 description: error instanceof Error ? error.message : 'Please try again',
@@ -130,8 +129,8 @@ export function ReserveNowButton({
                             <Card
                                 key={sched.sched_id}
                                 className={`cursor-pointer transition-all hover:shadow-md ${selectedSchedId === sched.sched_id
-                                        ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
-                                        : 'hover:bg-muted/50'
+                                    ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
+                                    : 'hover:bg-muted/50'
                                     }`}
                                 onClick={() => setSelectedSchedId(sched.sched_id || '')}
                             >

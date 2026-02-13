@@ -11,3 +11,12 @@
 FOCUS:
 
 1. Create Reservation Flow
+2. Create the schedule selection on clicking reserve now button.
+3. Create the page for waiting room with horizontal stepper at the top
+4. Create the page for reservation proper
+5. Create the queue line flow
+6. Create the page for seat selection proper (allow multiple seat selection)
+7. Create the modal for gcash payment
+8. Add email functionalities
+9. Data cleanup in redis and ably
+10. Testing
