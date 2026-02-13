@@ -47,13 +47,27 @@ export default async function ShowIdPage({
 
   const isShowOpen = show.show_status === 'OPEN';
 
-  // Serialize schedules for client component (convert dates to strings)
-  const serializedSchedules = show.scheds?.map((sched) => ({
-    sched_id: sched.sched_id || '',
-    sched_date: sched.sched_date.toISOString(),
-    sched_start_time: sched.sched_start_time.toISOString(),
-    sched_end_time: sched.sched_end_time.toISOString(),
-  })) || [];
+  // Serialize schedules for client component (convert dates to strings and include categories)
+  const serializedSchedules = show.scheds?.map((sched) => {
+    // Extract unique categories from seat assignments
+    const categories = sched.seatAssignments
+      ?.map((assignment) => ({
+        name: assignment.set.seatCategory.category_name,
+        price: assignment.set.seatCategory.price.toString(),
+      }))
+      // Remove duplicates by category name
+      .filter((cat, index, self) =>
+        index === self.findIndex((c) => c.name === cat.name)
+      ) || [];
+
+    return {
+      sched_id: sched.sched_id || '',
+      sched_date: sched.sched_date.toISOString(),
+      sched_start_time: sched.sched_start_time.toISOString(),
+      sched_end_time: sched.sched_end_time.toISOString(),
+      categories,
+    };
+  }) || [];
 
   return (
     <>
