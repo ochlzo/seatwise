@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Ticket, Loader2, CalendarDays } from 'lucide-react';
+import { Ticket, Loader2, CalendarDays, Clock, ChevronLeft, DollarSign } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -11,16 +11,26 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+
+type CategoryInfo = {
+    name: string;
+    price: string;
+};
 
 type Schedule = {
     sched_id: string;
     sched_date: string | Date;
     sched_start_time: string | Date;
     sched_end_time: string | Date;
+    categories?: CategoryInfo[];
 };
 
 interface ReserveNowButtonProps {
@@ -29,6 +39,8 @@ interface ReserveNowButtonProps {
     schedules: Schedule[];
 }
 
+type Step = 'date' | 'time';
+
 export function ReserveNowButton({
     showId,
     showName,
@@ -36,17 +48,61 @@ export function ReserveNowButton({
 }: ReserveNowButtonProps) {
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
+    const [step, setStep] = useState<Step>('date');
+    const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
     const [selectedSchedId, setSelectedSchedId] = useState<string | null>(null);
     const [isJoining, setIsJoining] = useState(false);
 
-    const formatDate = (date: string | Date) => {
-        const d = typeof date === 'string' ? new Date(date) : date;
+
+    // Helper to parse date string as local date (avoiding timezone issues)
+    const parseLocalDate = (dateStr: string): Date => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day);
+    };
+
+    // Helper to format date as YYYY-MM-DD in local timezone
+    const formatLocalDate = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    // Group schedules by date
+    const schedulesByDate = useMemo(() => {
+        const grouped = new Map<string, Schedule[]>();
+        schedules.forEach((sched) => {
+            const dateStr = typeof sched.sched_date === 'string'
+                ? sched.sched_date.split('T')[0]
+                : sched.sched_date.toISOString().split('T')[0];
+
+            if (!grouped.has(dateStr)) {
+                grouped.set(dateStr, []);
+            }
+            grouped.get(dateStr)!.push(sched);
+        });
+        return grouped;
+    }, [schedules]);
+
+    // Get available dates for calendar (using local date parsing)
+    const availableDates = useMemo(() => {
+        return Array.from(schedulesByDate.keys()).map(dateStr => parseLocalDate(dateStr));
+    }, [schedulesByDate]);
+
+    // Get schedules for selected date
+    const schedulesForSelectedDate = useMemo(() => {
+        if (!selectedDate) return [];
+        const dateStr = formatLocalDate(selectedDate);
+        return schedulesByDate.get(dateStr) || [];
+    }, [selectedDate, schedulesByDate]);
+
+    const formatDate = (date: Date) => {
         return new Intl.DateTimeFormat('en-US', {
-            weekday: 'short',
-            month: 'short',
+            weekday: 'long',
+            month: 'long',
             day: 'numeric',
             year: 'numeric',
-        }).format(d);
+        }).format(date);
     };
 
     const formatTime = (time: string | Date) => {
@@ -63,23 +119,53 @@ export function ReserveNowButton({
         }).format(t);
     };
 
+    const getMinPrice = (sched: Schedule) => {
+        if (!sched.categories || sched.categories.length === 0) {
+            return null;
+        }
+        const prices = sched.categories.map(c => parseFloat(c.price));
+        return Math.min(...prices);
+    };
+
     const handleReserveClick = () => {
-        if (schedules.length === 1) {
-            // If only one schedule, skip dialog and join directly
-            handleJoinQueue(schedules[0].sched_id || '');
-        } else {
-            // Show schedule selection dialog
-            setIsOpen(true);
+        setStep('date');
+        setSelectedDate(undefined);
+        setSelectedSchedId(null);
+        setIsOpen(true);
+    };
+
+    const handleDateSelect = (date: Date | undefined) => {
+        if (!date) return;
+
+        // Check if date has schedules (using local date formatting)
+        const dateStr = formatLocalDate(date);
+        if (schedulesByDate.has(dateStr)) {
+            setSelectedDate(date);
+            setStep('time');
         }
     };
 
-    const handleJoinQueue = async (schedId: string) => {
+    const handleBack = () => {
+        setStep('date');
+        setSelectedSchedId(null);
+    };
+
+    const handleCancel = () => {
+        setIsOpen(false);
+        setStep('date');
+        setSelectedDate(undefined);
+        setSelectedSchedId(null);
+    };
+
+    const handleJoinQueue = async () => {
+        if (!selectedSchedId) return;
+
         setIsJoining(true);
         try {
             const response = await fetch('/api/queue/join', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ showId, schedId }),
+                body: JSON.stringify({ showId, schedId: selectedSchedId }),
             });
 
             const data = await response.json();
@@ -94,7 +180,7 @@ export function ReserveNowButton({
             });
 
             // Redirect to queue waiting page
-            router.push(`/queue/${showId}/${schedId}`);
+            router.push(`/queue/${showId}/${selectedSchedId}`);
         } catch (error) {
             toast.error('Failed to join queue', {
                 description: error instanceof Error ? error.message : 'Please try again',
@@ -102,6 +188,12 @@ export function ReserveNowButton({
         } finally {
             setIsJoining(false);
         }
+    };
+
+    // Disable dates that don't have schedules (using local date formatting)
+    const disabledDates = (date: Date) => {
+        const dateStr = formatLocalDate(date);
+        return !schedulesByDate.has(dateStr);
     };
 
     return (
@@ -116,66 +208,134 @@ export function ReserveNowButton({
             </Button>
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
-                <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                        <DialogTitle>Select a Schedule</DialogTitle>
-                        <DialogDescription>
-                            Choose which date and time you'd like to attend {showName}
-                        </DialogDescription>
-                    </DialogHeader>
+                <DialogContent className="sm:max-w-[600px]">
+                    {step === 'date' ? (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Select a Date</DialogTitle>
+                                <DialogDescription>
+                                    Choose which date you'd like to attend {showName}
+                                </DialogDescription>
+                            </DialogHeader>
 
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto py-4">
-                        {schedules.map((sched) => (
-                            <Card
-                                key={sched.sched_id}
-                                className={`cursor-pointer transition-all hover:shadow-md ${selectedSchedId === sched.sched_id
-                                    ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
-                                    : 'hover:bg-muted/50'
-                                    }`}
-                                onClick={() => setSelectedSchedId(sched.sched_id || '')}
-                            >
-                                <CardContent className="p-4">
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="flex-1 space-y-1">
-                                            <div className="flex items-center gap-2">
-                                                <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                                                <span className="font-medium">
-                                                    {formatDate(sched.sched_date)}
-                                                </span>
-                                            </div>
-                                            <div className="text-sm text-muted-foreground pl-6">
-                                                {formatTime(sched.sched_start_time)} -{' '}
-                                                {formatTime(sched.sched_end_time)}
-                                            </div>
-                                        </div>
-                                        {selectedSchedId === sched.sched_id && (
-                                            <Badge variant="default" className="bg-blue-600">
-                                                Selected
-                                            </Badge>
-                                        )}
+                            <div className="flex justify-center py-4">
+                                <Calendar
+                                    mode="single"
+                                    selected={selectedDate}
+                                    onSelect={handleDateSelect}
+                                    disabled={disabledDates}
+                                    className="rounded-md border"
+                                    modifiers={{
+                                        available: availableDates,
+                                    }}
+                                    modifiersClassNames={{
+                                        available: 'bg-blue-100 dark:bg-blue-900 font-semibold',
+                                    }}
+                                />
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    variant="outline"
+                                    onClick={handleCancel}
+                                >
+                                    Cancel
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    ) : (
+                        <>
+                            <DialogHeader>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={handleBack}
+                                        className="h-8 w-8"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                    <div className="flex-1">
+                                        <DialogTitle>Select Time Slot</DialogTitle>
+                                        <DialogDescription>
+                                            {selectedDate && formatDate(selectedDate)}
+                                        </DialogDescription>
                                     </div>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
+                                </div>
+                            </DialogHeader>
 
-                    <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsOpen(false)}
-                            disabled={isJoining}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={() => selectedSchedId && handleJoinQueue(selectedSchedId)}
-                            disabled={!selectedSchedId || isJoining}
-                            className="gap-2"
-                        >
-                            {isJoining && <Loader2 className="h-4 w-4 animate-spin" />}
-                            {isJoining ? 'Joining...' : 'Join Queue'}
-                        </Button>
-                    </DialogFooter>
+                            <div className="space-y-3 max-h-[400px] overflow-y-auto py-4">
+                                <RadioGroup value={selectedSchedId || ''} onValueChange={setSelectedSchedId}>
+                                    {schedulesForSelectedDate.map((sched) => {
+                                        const minPrice = getMinPrice(sched);
+                                        const categoryCount = sched.categories?.length || 0;
+
+                                        return (
+                                            <Card
+                                                key={sched.sched_id}
+                                                className={`cursor-pointer transition-all hover:shadow-md ${selectedSchedId === sched.sched_id
+                                                    ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
+                                                    : 'hover:bg-muted/50'
+                                                    }`}
+                                                onClick={() => setSelectedSchedId(sched.sched_id || '')}
+                                            >
+                                                <CardContent className="p-4">
+                                                    <div className="flex items-start gap-4">
+                                                        <RadioGroupItem
+                                                            value={sched.sched_id || ''}
+                                                            id={sched.sched_id}
+                                                            className="mt-1"
+                                                        />
+                                                        <Label
+                                                            htmlFor={sched.sched_id}
+                                                            className="flex-1 cursor-pointer space-y-2"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                                                <span className="font-semibold text-base">
+                                                                    {formatTime(sched.sched_start_time)} -{' '}
+                                                                    {formatTime(sched.sched_end_time)}
+                                                                </span>
+                                                            </div>
+
+                                                            {minPrice !== null && (
+                                                                <div className="flex items-center gap-3 text-sm text-muted-foreground pl-6">
+                                                                    <div className="flex items-center gap-1">
+                                                                        <DollarSign className="h-3 w-3" />
+                                                                        <span>From ₱{minPrice.toFixed(2)}</span>
+                                                                    </div>
+                                                                    <Separator orientation="vertical" className="h-4" />
+                                                                    <span>{categoryCount} {categoryCount === 1 ? 'category' : 'categories'}</span>
+                                                                </div>
+                                                            )}
+                                                        </Label>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })}
+                                </RadioGroup>
+                            </div>
+
+                            <DialogFooter>
+                                <Button
+                                    variant="outline"
+                                    onClick={handleCancel}
+                                    disabled={isJoining}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleJoinQueue}
+                                    disabled={!selectedSchedId || isJoining}
+                                    className="gap-2"
+                                >
+                                    {isJoining && <Loader2 className="h-4 w-4 animate-spin" />}
+                                    {isJoining ? 'Joining...' : 'Confirm & Join Queue'}
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         </>

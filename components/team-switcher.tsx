@@ -77,7 +77,7 @@ export function TeamSwitcher({
       <div
         className={cn(
           "flex flex-1 items-center justify-start overflow-hidden",
-          isMobile && "justify-center",
+          isMobile === true && "justify-center",
           state === "collapsed" && "justify-center",
         )}
       >
@@ -85,7 +85,7 @@ export function TeamSwitcher({
           className={cn(
             "relative",
             state === "collapsed" ? "size-10" : "h-14 w-full",
-            isMobile && "mx-auto",
+            isMobile === true && "mx-auto",
           )}
         >
           {state === "collapsed" ? (
@@ -130,7 +130,7 @@ export function TeamSwitcher({
             <DropdownMenuContent
               className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
               align="start"
-              side={isMobile ? "bottom" : "right"}
+              side={isMobile === true ? "bottom" : "right"}
               sideOffset={4}
             >
               <DropdownMenuLabel className="text-muted-foreground text-xs">

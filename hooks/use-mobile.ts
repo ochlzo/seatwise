@@ -15,5 +15,7 @@ export function useIsMobile() {
     return () => mql.removeEventListener("change", onChange)
   }, [])
 
-  return !!isMobile
+  // Return undefined during SSR and initial render to prevent hydration mismatch
+  // This ensures server and client render the same output initially
+  return isMobile
 }
