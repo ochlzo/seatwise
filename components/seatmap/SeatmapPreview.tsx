@@ -338,129 +338,123 @@ export function SeatmapPreview({
   };
 
   return (
-    <div className={`rounded-lg border border-sidebar-border/60 bg-zinc-50/50 p-3 ${className ?? ""}`.trim()}>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-muted-foreground">Seatmap Preview</p>
-        <p className="text-[10px] text-muted-foreground">Scroll to pan, Ctrl + scroll to zoom</p>
+    <div
+      ref={containerRef}
+      className={`relative w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white ${heightClassName ?? "h-[320px]"} ${className ?? ""}`.trim()}
+    >
+      <div className={cn(
+        "absolute z-10 flex flex-col gap-2 bg-white shadow-lg border border-zinc-200 dark:border-zinc-800",
+        "left-4 top-4 p-2 rounded-lg",
+        "sm:left-4 sm:top-4 left-2 top-2 sm:p-2 p-1.5 sm:rounded-lg rounded-md",
+        "sm:gap-2 gap-1.5"
+      )}>
+        <Button
+          variant={mode === "select" ? "default" : "ghost"}
+          size="icon"
+          onClick={() => setMode("select")}
+          title="Select Mode"
+          className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+        >
+          <MousePointer2 className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant={mode === "pan" ? "default" : "ghost"}
+          size="icon"
+          onClick={() => setMode("pan")}
+          title="Pan Mode"
+          className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+        >
+          <Move className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+        </Button>
+        <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 sm:my-1 my-0.5" />
+        <Button
+          variant={zoomLocked ? "default" : "ghost"}
+          size="icon"
+          onClick={() => setZoomLocked((prev) => !prev)}
+          title={zoomLocked ? "Unlock Zoom" : "Lock Zoom"}
+          className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+        >
+          {zoomLocked ? (
+            <Lock className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+          ) : (
+            <Unlock className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+          )}
+        </Button>
+        <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 sm:my-1 my-0.5" />
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+          onClick={() => setViewport(calculateFitViewport(nodes, dimensions))}
+          title="Reset View"
+        >
+          <LocateFixed className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+        </Button>
       </div>
-      <div
-        ref={containerRef}
-        className={`relative mt-3 w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white ${heightClassName ?? "h-[320px]"}`}
-      >
-        <div className={cn(
-          "absolute z-10 flex flex-col gap-2 bg-white shadow-lg border border-zinc-200 dark:border-zinc-800",
-          "left-4 top-4 p-2 rounded-lg",
-          "sm:left-4 sm:top-4 left-2 top-2 sm:p-2 p-1.5 sm:rounded-lg rounded-md",
-          "sm:gap-2 gap-1.5"
-        )}>
-          <Button
-            variant={mode === "select" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setMode("select")}
-            title="Select Mode"
-            className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
-          >
-            <MousePointer2 className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant={mode === "pan" ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setMode("pan")}
-            title="Pan Mode"
-            className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
-          >
-            <Move className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
-          </Button>
-          <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 sm:my-1 my-0.5" />
-          <Button
-            variant={zoomLocked ? "default" : "ghost"}
-            size="icon"
-            onClick={() => setZoomLocked((prev) => !prev)}
-            title={zoomLocked ? "Unlock Zoom" : "Lock Zoom"}
-            className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
-          >
-            {zoomLocked ? (
-              <Lock className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
-            ) : (
-              <Unlock className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
-            )}
-          </Button>
-          <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 sm:my-1 my-0.5" />
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
-            onClick={() => setViewport(calculateFitViewport(nodes, dimensions))}
-            title="Reset View"
-          >
-            <LocateFixed className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
-          </Button>
+      {!seatmapId && (
+        <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+          Select a seatmap to preview.
         </div>
-        {!seatmapId && (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            Select a seatmap to preview.
-          </div>
-        )}
-        {seatmapId && isLoading && (
-          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-            Loading seatmap...
-          </div>
-        )}
-        {seatmapId && !isLoading && error && (
-          <div className="flex h-full items-center justify-center text-xs text-red-600">
-            {error}
-          </div>
-        )}
-        {seatmapId && !isLoading && !error && (
-          <Stage
-            width={dimensions.width}
-            height={dimensions.height}
-            draggable={mode === "pan"}
-            onDragEnd={handleDragEnd}
-            onWheel={handleWheel}
-            onMouseDown={handleStageMouseDown}
-            onMouseMove={handleStageMouseMove}
-            onMouseUp={handleStageMouseUp}
-            onClick={handleStageClick}
-            onTap={handleStageClick}
-            x={viewport.position.x}
-            y={viewport.position.y}
-            scaleX={viewport.scale}
-            scaleY={viewport.scale}
-            ref={(node) => {
-              stageRef.current = node;
-            }}
-          >
-            <Layer>
-              {marqueeRect.visible && (
-                <Rect
-                  x={marqueeRect.x}
-                  y={marqueeRect.y}
-                  width={marqueeRect.width}
-                  height={marqueeRect.height}
-                  stroke="#3b82f6"
-                  strokeWidth={1}
-                  dash={[4, 4]}
-                  fill="rgba(59, 130, 246, 0.12)"
-                  listening={false}
-                />
-              )}
-              <SeatNodes
-                nodes={nodes}
-                selectedSeatIds={selectedSeatIds}
-                onSelectSeat={setSelectedSeatIds}
-                isShiftDown={isShiftDown}
-                isCtrlDown={isCtrlDown}
-                categories={categories}
-                seatCategories={seatCategories}
+      )}
+      {seatmapId && isLoading && (
+        <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+          Loading seatmap...
+        </div>
+      )}
+      {seatmapId && !isLoading && error && (
+        <div className="flex h-full items-center justify-center text-xs text-red-600">
+          {error}
+        </div>
+      )}
+      {seatmapId && !isLoading && !error && (
+        <Stage
+          width={dimensions.width}
+          height={dimensions.height}
+          draggable={mode === "pan"}
+          onDragEnd={handleDragEnd}
+          onWheel={handleWheel}
+          onMouseDown={handleStageMouseDown}
+          onMouseMove={handleStageMouseMove}
+          onMouseUp={handleStageMouseUp}
+          onClick={handleStageClick}
+          onTap={handleStageClick}
+          x={viewport.position.x}
+          y={viewport.position.y}
+          scaleX={viewport.scale}
+          scaleY={viewport.scale}
+          ref={(node) => {
+            stageRef.current = node;
+          }}
+        >
+          <Layer>
+            {marqueeRect.visible && (
+              <Rect
+                x={marqueeRect.x}
+                y={marqueeRect.y}
+                width={marqueeRect.width}
+                height={marqueeRect.height}
+                stroke="#3b82f6"
+                strokeWidth={1}
+                dash={[4, 4]}
+                fill="rgba(59, 130, 246, 0.12)"
+                listening={false}
               />
-              <ShapeNodes nodes={nodes} />
-              <GuidePathNodes nodes={nodes} />
-            </Layer>
-          </Stage>
-        )}
-      </div>
+            )}
+            <SeatNodes
+              nodes={nodes}
+              selectedSeatIds={selectedSeatIds}
+              onSelectSeat={setSelectedSeatIds}
+              isShiftDown={isShiftDown}
+              isCtrlDown={isCtrlDown}
+              categories={categories}
+              seatCategories={seatCategories}
+            />
+            <ShapeNodes nodes={nodes} />
+            <GuidePathNodes nodes={nodes} />
+          </Layer>
+        </Stage>
+      )}
     </div>
   );
 }
