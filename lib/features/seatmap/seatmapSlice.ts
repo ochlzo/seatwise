@@ -221,7 +221,7 @@ const seatmapSlice = createSlice({
                 height?: number;
                 radius?: number;
                 points?: number[];
-                fill?: string;
+                fill?: string | null;
                 stroke?: string;
                 strokeWidth?: number;
                 text?: string;
@@ -291,7 +291,7 @@ const seatmapSlice = createSlice({
                 width: width ?? defaultWidth,
                 height: height ?? defaultHeight,
                 radius: radius ?? defaultRadius,
-                fill: fill ?? (shape === "line" ? undefined : "#cbd5e1"),
+                fill: fill === null ? undefined : (fill ?? (shape === "line" ? undefined : "#cbd5e1")),
                 stroke: stroke ?? "#64748b",
                 strokeWidth: strokeWidth ?? 2,
                 dash,

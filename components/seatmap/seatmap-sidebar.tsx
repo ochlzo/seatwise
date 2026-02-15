@@ -15,7 +15,6 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
   addSeatGrid,
   setDrawShape,
-  setMode,
   setShowGuidePaths,
   setSnapSpacing,
 } from "@/lib/features/seatmap/seatmapSlice";
@@ -29,7 +28,9 @@ export function SeatMapSidebar({
 }: React.ComponentProps<typeof Sidebar>) {
   const dispatch = useAppDispatch();
   const drawShape = useAppSelector((state) => state.seatmap.drawShape);
-  const showGuidePaths = useAppSelector((state) => state.seatmap.showGuidePaths);
+  const showGuidePaths = useAppSelector(
+    (state) => state.seatmap.showGuidePaths,
+  );
   const snapSpacing = useAppSelector((state) => state.seatmap.snapSpacing);
   const viewport = useAppSelector((state) => state.seatmap.viewport);
   const viewportSize = useAppSelector((state) => state.seatmap.viewportSize);
@@ -37,6 +38,37 @@ export function SeatMapSidebar({
   const [gridCols, setGridCols] = React.useState(3);
   const { isMobile, setOpenMobile } = useSidebar();
   const pathname = usePathname();
+  const setIconDragImage = React.useCallback(
+    (event: React.DragEvent<HTMLElement>) => {
+      const icon = event.currentTarget.querySelector(
+        "[data-drag-icon]",
+      ) as HTMLElement | null;
+      if (!icon) return;
+
+      const dragPreview = icon.cloneNode(true) as HTMLElement;
+      dragPreview.style.position = "fixed";
+      dragPreview.style.top = "-9999px";
+      dragPreview.style.left = "-9999px";
+      dragPreview.style.pointerEvents = "none";
+      dragPreview.style.margin = "0";
+      dragPreview.style.transform = "none";
+
+      document.body.appendChild(dragPreview);
+      const rect = dragPreview.getBoundingClientRect();
+      event.dataTransfer.setDragImage(
+        dragPreview,
+        rect.width / 2,
+        rect.height / 2,
+      );
+
+      requestAnimationFrame(() => {
+        if (dragPreview.parentNode) {
+          dragPreview.parentNode.removeChild(dragPreview);
+        }
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     if (isMobile) {
@@ -72,18 +104,29 @@ export function SeatMapSidebar({
           className="p-3 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
           draggable
           onDragStart={(e) => {
+            setIconDragImage(e);
             e.dataTransfer.setData("type", "seat");
             e.dataTransfer.setData("seatType", "standard");
             e.dataTransfer.effectAllowed = "copy";
           }}
         >
-          <div className="w-10 h-10 relative flex items-center justify-center">
+          <div
+            data-drag-icon
+            className="w-10 h-10 relative flex items-center justify-center"
+          >
             <Image
               src="/seat-default.svg"
               alt="Seat"
               width={40}
               height={40}
-              className="w-full h-full object-contain"
+              className="h-full w-full object-contain dark:hidden"
+            />
+            <Image
+              src="/seat-default-darkmode.svg"
+              alt="Seat"
+              width={40}
+              height={40}
+              className="hidden h-full w-full object-contain dark:block"
             />
           </div>
           <span className="text-xs font-medium">Standard Seat</span>
@@ -113,8 +156,12 @@ export function SeatMapSidebar({
             className="ml-auto rounded border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-900"
             onClick={() => {
               const center = {
-                x: (viewportSize.width / 2 - viewport.position.x) / viewport.scale,
-                y: (viewportSize.height / 2 - viewport.position.y) / viewport.scale,
+                x:
+                  (viewportSize.width / 2 - viewport.position.x) /
+                  viewport.scale,
+                y:
+                  (viewportSize.height / 2 - viewport.position.y) /
+                  viewport.scale,
               };
               dispatch(
                 addSeatGrid({
@@ -137,12 +184,14 @@ export function SeatMapSidebar({
             min={0}
             className="w-full rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs dark:border-zinc-800"
             value={snapSpacing}
-            onChange={(e) => dispatch(setSnapSpacing(Math.max(0, Number(e.target.value))))}
+            onChange={(e) =>
+              dispatch(setSnapSpacing(Math.max(0, Number(e.target.value))))
+            }
             placeholder="Spacing (px)"
           />
         </div>
 
-        <div className="text-xs text-zinc-500 mb-2 mt-4">Shapes (click and draw)</div>
+        <div className="text-xs text-zinc-500 mb-2 mt-4">Shapes</div>
         <div className="grid grid-cols-2 gap-2">
           {(
             [
@@ -202,13 +251,23 @@ export function SeatMapSidebar({
           ).map((item, i) => (
             <div
               key={i}
-              className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${drawShape.shape === item.shape &&
+              className={`p-2 border rounded flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
+                drawShape.shape === item.shape &&
                 (drawShape.sides ?? 0) === (item.sides ?? 0)
-                ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
-                : "border-zinc-200 dark:border-zinc-800"
-                }`}
+                  ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+                  : "border-zinc-200 dark:border-zinc-800"
+              }`}
+              draggable
+              onDragStart={(e) => {
+                setIconDragImage(e);
+                e.dataTransfer.setData("type", "shape");
+                e.dataTransfer.setData("shape", item.shape);
+                if (item.sides !== undefined) {
+                  e.dataTransfer.setData("sides", String(item.sides));
+                }
+                e.dataTransfer.effectAllowed = "copy";
+              }}
               onClick={() => {
-                dispatch(setMode("draw"));
                 dispatch(
                   setDrawShape({
                     shape: item.shape,
@@ -217,7 +276,12 @@ export function SeatMapSidebar({
                 );
               }}
             >
-              {item.icon}
+              <div
+                data-drag-icon
+                className="flex h-8 w-8 items-center justify-center"
+              >
+                {item.icon}
+              </div>
               <span className="text-[10px]">{item.label}</span>
             </div>
           ))}
@@ -225,16 +289,26 @@ export function SeatMapSidebar({
 
         <div className="text-xs text-zinc-500 mb-2 mt-4">Guide Path</div>
         <div
-          className={`p-2 border rounded flex flex-col items-center gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900 ${drawShape.shape === "guidePath"
-            ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
-            : "border-zinc-200 dark:border-zinc-800"
-            }`}
+          className={`p-2 border rounded flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 ${
+            drawShape.shape === "guidePath"
+              ? "border-blue-500 bg-blue-50 dark:bg-blue-950/20"
+              : "border-zinc-200 dark:border-zinc-800"
+          }`}
+          draggable
+          onDragStart={(e) => {
+            setIconDragImage(e);
+            e.dataTransfer.setData("type", "shape");
+            e.dataTransfer.setData("shape", "guidePath");
+            e.dataTransfer.effectAllowed = "copy";
+          }}
           onClick={() => {
-            dispatch(setMode("draw"));
             dispatch(setDrawShape({ shape: "guidePath" }));
           }}
         >
-          <div className="w-8 h-2 border-b-2 border-dashed border-zinc-500" />
+          <div
+            data-drag-icon
+            className="w-8 h-2 border-b-2 border-dashed border-zinc-500"
+          />
           <span className="text-[10px]">Guide Path</span>
         </div>
 
@@ -247,7 +321,7 @@ export function SeatMapSidebar({
           />
           Show guide paths
         </label>
-      </SidebarContent >
+      </SidebarContent>
       <SidebarFooter className="px-3 py-3">
         <div className="text-xs text-zinc-500 space-y-1">
           <p>Controls:</p>
@@ -272,6 +346,6 @@ export function SeatMapSidebar({
         </div>
       </SidebarFooter>
       <SidebarRail />
-    </Sidebar >
+    </Sidebar>
   );
 }

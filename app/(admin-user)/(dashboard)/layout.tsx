@@ -1,4 +1,4 @@
-import { AdminSidebar } from "@/components/admin-sidebar"
+import { AdminSidebarClient } from "@/components/admin-sidebar-client"
 import {
     SidebarInset,
     SidebarProvider,
@@ -16,7 +16,7 @@ export default async function AdminDashboardLayout({
     return (
         <SidebarProvider className="h-svh overflow-hidden" suppressHydrationWarning>
             <LoadingPage />
-            <AdminSidebar />
+            <AdminSidebarClient />
             <SidebarInset className="overflow-y-auto">
                 {children}
             </SidebarInset>

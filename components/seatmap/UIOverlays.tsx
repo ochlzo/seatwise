@@ -23,6 +23,35 @@ import {
 } from "@/components/ui/sheet";
 import type { SeatmapNode, SeatmapShapeNode, SeatmapSeatNode } from "@/lib/seatmap/types";
 
+const DEFAULT_TEXT_FONT_SIZE = 18;
+const DEFAULT_TEXT_FONT_FAMILY = "Inter";
+const DEFAULT_TEXT_PADDING = 8;
+
+const measureTextBox = (value: string, fontSize: number, fontFamily: string, padding: number) => {
+  if (typeof document === "undefined") {
+    return {
+      width: Math.max(40, value.length * fontSize * 0.6 + padding * 2),
+      height: fontSize + padding * 2,
+    };
+  }
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    return {
+      width: Math.max(40, value.length * fontSize * 0.6 + padding * 2),
+      height: fontSize + padding * 2,
+    };
+  }
+
+  ctx.font = `${fontSize}px ${fontFamily}`;
+  const metrics = ctx.measureText(value);
+  return {
+    width: Math.max(40, metrics.width + padding * 2),
+    height: fontSize + padding * 2,
+  };
+};
+
 export function Sidebar() {
   const dispatch = useAppDispatch();
   const drawShape = useAppSelector((state) => state.seatmap.drawShape);
@@ -113,7 +142,6 @@ export function Sidebar() {
                 : "border-zinc-200 dark:border-zinc-800"
                 }`}
               onClick={() => {
-                dispatch(setMode("draw"));
                 dispatch(
                   setDrawShape({
                     shape: item.shape as SeatmapShapeNode["shape"],
@@ -319,8 +347,17 @@ export function SelectionPanel() {
   const updateBulkText = (text: string) => {
     const changes: Record<string, Partial<SeatmapNode>> = {};
     selectedIds.forEach((id) => {
-      if (nodes[id] && nodes[id].type === "shape" && (nodes[id] as SeatmapShapeNode).shape === "text") {
-        changes[id] = { text };
+      const node = nodes[id];
+      if (node && node.type === "shape" && node.shape === "text") {
+        const fontSize = node.fontSize ?? DEFAULT_TEXT_FONT_SIZE;
+        const fontFamily = node.fontFamily ?? DEFAULT_TEXT_FONT_FAMILY;
+        const padding = node.padding ?? DEFAULT_TEXT_PADDING;
+        const measured = measureTextBox(text, fontSize, fontFamily, padding);
+        changes[id] = {
+          text,
+          width: measured.width,
+          height: measured.height,
+        };
       }
     });
     if (Object.keys(changes).length) dispatch(updateNodes({ changes }));
@@ -501,7 +538,7 @@ export function SelectionPanel() {
               <div className="grid grid-cols-6 gap-2">
                 <button
                   type="button"
-                  className="h-7 w-7 rounded border text-[10px] uppercase border-zinc-300 flex items-center justify-center"
+                  className="flex h-7 w-7 items-center justify-center rounded border border-zinc-300 text-[10px] uppercase dark:border-zinc-700 dark:text-zinc-300"
                   onClick={() => applyBulkColor("stroke", null)}
                 >
                   T
@@ -510,7 +547,7 @@ export function SelectionPanel() {
                   <button
                     key={`stroke-${color}`}
                     type="button"
-                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as SeatmapShapeNode).stroke === color ? "border-blue-500 ring-2 ring-blue-200" : "border-zinc-200"}`}
+                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as SeatmapShapeNode).stroke === color ? "border-blue-500 ring-2 ring-blue-200 dark:ring-blue-900/60" : "border-zinc-200 dark:border-zinc-700"}`}
                     style={{ backgroundColor: color }}
                     onClick={() => applyBulkColor("stroke", color)}
                   />
@@ -522,7 +559,7 @@ export function SelectionPanel() {
               <div className="grid grid-cols-6 gap-2">
                 <button
                   type="button"
-                  className="h-7 w-7 rounded border text-[10px] uppercase border-zinc-300 flex items-center justify-center"
+                  className="flex h-7 w-7 items-center justify-center rounded border border-zinc-300 text-[10px] uppercase dark:border-zinc-700 dark:text-zinc-300"
                   onClick={() => applyBulkColor("fill", null)}
                 >
                   T
@@ -531,7 +568,7 @@ export function SelectionPanel() {
                   <button
                     key={`fill-${color}`}
                     type="button"
-                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as SeatmapShapeNode).fill === color ? "border-blue-500 ring-2 ring-blue-200" : "border-zinc-200"}`}
+                    className={`h-7 w-7 rounded border transition-transform hover:scale-110 ${selectedIds.length === 1 && (nodes[selectedIds[0]] as SeatmapShapeNode).fill === color ? "border-blue-500 ring-2 ring-blue-200 dark:ring-blue-900/60" : "border-zinc-200 dark:border-zinc-700"}`}
                     style={{ backgroundColor: color }}
                     onClick={() => applyBulkColor("fill", color)}
                   />
@@ -553,7 +590,7 @@ export function SelectionPanel() {
               <Settings2 className="h-6 w-6 text-white" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="h-[70vh] rounded-t-3xl border-t border-zinc-200 px-6">
+          <SheetContent side="bottom" className="h-[70vh] rounded-t-3xl border-t border-zinc-200 px-6 dark:border-zinc-800">
             <SheetHeader className="pb-4">
               <SheetTitle>Section Settings</SheetTitle>
             </SheetHeader>
