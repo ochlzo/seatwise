@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { joinQueue } from '@/lib/queue/joinQueue';
+import { promoteNextInQueue } from '@/lib/queue/queueLifecycle';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
@@ -95,6 +96,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const promotion = await promoteNextInQueue({ showScopeId });
+        const promotedNow =
+            promotion.promoted && promotion.activeSession?.ticketId === result.ticket?.ticketId;
+
         // 7. Return success with ticket data
         return NextResponse.json({
             success: true,
@@ -102,6 +107,9 @@ export async function POST(request: NextRequest) {
             rank: result.rank,
             estimatedWaitMinutes: result.estimatedWaitMinutes,
             showName: schedule.show.show_name,
+            status: promotedNow ? 'active' : 'waiting',
+            activeToken: promotedNow ? promotion.activeSession?.activeToken : undefined,
+            expiresAt: promotedNow ? promotion.activeSession?.expiresAt : undefined,
         });
     } catch (error) {
         console.error('Error in /api/queue/join:', error);

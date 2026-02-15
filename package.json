@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types lib/db/showScheduleGrouping.test.ts"
+    "test": "node --experimental-strip-types lib/db/showScheduleGrouping.test.ts",
+    "queue:cleanup": "node --experimental-strip-types scripts/cleanup-queue.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
