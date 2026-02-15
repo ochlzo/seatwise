@@ -83,36 +83,36 @@ export function PageHeader({
         className
       )}
     >
-      <div className="flex items-center gap-2 px-4">
+      <div className="flex items-center gap-2 px-3 sm:px-4">
         <SidebarTrigger className="-ml-1" />
         <Separator
           orientation="vertical"
-          className="mr-2 data-[orientation=vertical]:h-4"
+          className="mr-1 sm:mr-2 data-[orientation=vertical]:h-3 sm:data-[orientation=vertical]:h-4"
         />
         <Breadcrumb className="hidden md:block">
-          <BreadcrumbList>
+          <BreadcrumbList className="text-xs sm:text-sm">
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1;
               return (
                 <React.Fragment key={crumb.href}>
                   <BreadcrumbItem>
                     {isLast ? (
-                      <BreadcrumbPage>{title || crumb.label}</BreadcrumbPage>
+                      <BreadcrumbPage className="text-xs sm:text-sm font-medium">{title || crumb.label}</BreadcrumbPage>
                     ) : (
-                      <BreadcrumbLink href={crumb.href}>
+                      <BreadcrumbLink href={crumb.href} className="text-xs sm:text-sm">
                         {crumb.label}
                       </BreadcrumbLink>
                     )}
                   </BreadcrumbItem>
-                  {!isLast && <BreadcrumbSeparator />}
+                  {!isLast && <BreadcrumbSeparator className="text-xs sm:text-sm" />}
                 </React.Fragment>
               );
             })}
           </BreadcrumbList>
         </Breadcrumb>
-        <span className="text-sm font-medium md:hidden">{title}</span>
+        <span className="text-xs sm:text-sm font-medium md:hidden">{title}</span>
       </div>
-      {rightSlot && <div className="ml-auto px-4 flex items-center gap-3">{rightSlot}</div>}
+      {rightSlot && <div className="ml-auto px-3 sm:px-4 flex items-center gap-2 sm:gap-3">{rightSlot}</div>}
     </StickyHeader>
   );
 }
