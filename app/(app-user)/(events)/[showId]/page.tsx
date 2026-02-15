@@ -2,7 +2,7 @@ import { getShowById } from "@/lib/db/Shows";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
-import { ShowDetailReadOnly } from "@/app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm";
+import { ShowDetailPublic } from "@/components/show/ShowDetailPublic";
 import StopLoadingOnMount from "@/components/stop-loading-on-mount";
 import { ReserveNowButton } from "@/components/queue/ReserveNowButton";
 
@@ -79,14 +79,7 @@ export default async function ShowIdPage({
       />
       <div className="relative flex flex-1 flex-col bg-background">
         <div className="relative z-10 flex flex-1 flex-col p-4 md:p-8 pt-0 max-w-7xl mx-auto w-full">
-          <div className="mb-6">
-            <h2 className="text-lg md:text-xl font-semibold">Show Details</h2>
-            <p className="text-muted-foreground text-sm">
-              View production details, run dates, and performance schedules.
-            </p>
-          </div>
-
-          <ShowDetailReadOnly
+          <ShowDetailPublic
             show={serializedShow}
             reserveButton={
               isShowOpen && serializedSchedules.length > 0 ? (
