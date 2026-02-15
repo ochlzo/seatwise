@@ -258,7 +258,7 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
 
             {/* Reserve Button (Mobile) */}
             {reserveButton && (
-                <div className="lg:hidden w-full px-4 -mt-2">
+                <div className="lg:hidden w-full -mt-2 [&>*]:w-full">
                     {reserveButton}
                 </div>
             )}
@@ -605,7 +605,7 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
 
                     {/* Reserve Button (Desktop) */}
                     {reserveButton && (
-                        <div className="hidden lg:block w-full">
+                        <div className="hidden lg:block w-full [&>*]:w-full">
                             {reserveButton}
                         </div>
                     )}
