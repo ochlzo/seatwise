@@ -26,6 +26,7 @@ import {
   addShape,
   deselectAll,
   updateNodes,
+  updateNodesPositions,
   rotateSelected,
   scaleSelected,
   setViewportSize,
@@ -90,6 +91,7 @@ export default function SeatmapCanvas() {
   } | null>(null);
   const MIN_SCALE = 0.4;
   const MAX_SCALE = 3;
+  const KEYBOARD_NUDGE_STEP = 10;
   const ROTATION_SNAP = 15;
   const ROTATION_SNAPS = React.useMemo(() => {
     const snaps: number[] = [];
@@ -492,6 +494,42 @@ export default function SeatmapCanvas() {
         return;
       }
 
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        if (!selectedIds.length) return;
+        e.preventDefault();
+
+        const positions: Record<string, { x: number; y: number }> = {};
+        selectedIds.forEach((id) => {
+          const node = nodes[id];
+          if (!node || !("position" in node)) return;
+          positions[id] = { x: node.position.x, y: node.position.y };
+        });
+
+        if (!Object.keys(positions).length) return;
+
+        const step = KEYBOARD_NUDGE_STEP;
+        if (e.key === "ArrowUp") {
+          Object.keys(positions).forEach((id) => {
+            positions[id].y -= step;
+          });
+        } else if (e.key === "ArrowDown") {
+          Object.keys(positions).forEach((id) => {
+            positions[id].y += step;
+          });
+        } else if (e.key === "ArrowLeft") {
+          Object.keys(positions).forEach((id) => {
+            positions[id].x -= step;
+          });
+        } else if (e.key === "ArrowRight") {
+          Object.keys(positions).forEach((id) => {
+            positions[id].x += step;
+          });
+        }
+
+        dispatch(updateNodesPositions({ positions, history: true }));
+        return;
+      }
+
       if (["[", "]", "-", "="].includes(e.key)) {
         const rotateStep = e.shiftKey ? 15 : 5;
         switch (e.key) {
@@ -513,7 +551,7 @@ export default function SeatmapCanvas() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [dispatch, dimensions, viewport]);
+  }, [dispatch, dimensions, viewport, selectedIds, nodes]);
 
   const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
