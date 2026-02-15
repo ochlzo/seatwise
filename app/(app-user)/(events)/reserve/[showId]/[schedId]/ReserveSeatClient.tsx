@@ -9,6 +9,7 @@ import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { COLOR_CODE_TO_HEX, type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
+import { toast } from "@/components/ui/sonner";
 
 type StoredActiveSession = {
   ticketId: string;
@@ -41,6 +42,7 @@ type ReserveSeatClientProps = {
   seatmapId?: string | null;
   seatmapCategories: ReserveSeatCategory[];
   seatCategoryAssignments: Record<string, string>;
+  seatNumbersById: Record<string, string>;
 };
 
 const EXPIRED_WINDOW_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
@@ -110,10 +112,13 @@ export function ReserveSeatClient({
   seatmapId,
   seatmapCategories,
   seatCategoryAssignments,
+  seatNumbersById,
 }: ReserveSeatClientProps) {
   const router = useRouter();
   const showScopeId = `${showId}:${schedId}`;
   const hasHandledExpiryRef = React.useRef(false);
+  const hasShownOneMinuteToastRef = React.useRef(false);
+  const hasShownTwentySecondToastRef = React.useRef(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isCompleting, setIsCompleting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -123,6 +128,7 @@ export function ReserveSeatClient({
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
   const [isAddSeatMode, setIsAddSeatMode] = React.useState(false);
   const [selectionMessage, setSelectionMessage] = React.useState<string | null>(null);
+  const [isRejoining, setIsRejoining] = React.useState(false);
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -132,6 +138,8 @@ export function ReserveSeatClient({
 
   React.useEffect(() => {
     hasHandledExpiryRef.current = false;
+    hasShownOneMinuteToastRef.current = false;
+    hasShownTwentySecondToastRef.current = false;
   }, [showScopeId]);
 
   const notifyExpiry = React.useCallback(
@@ -217,6 +225,25 @@ export function ReserveSeatClient({
   }, [expiresAt, now, notifyExpiry, showScopeId]);
 
   React.useEffect(() => {
+    if (!expiresAt || isLoading || !!error) return;
+
+    const remainingMs = expiresAt - now;
+    if (remainingMs <= 0) return;
+
+    if (remainingMs <= 20_000 && !hasShownTwentySecondToastRef.current) {
+      hasShownTwentySecondToastRef.current = true;
+      hasShownOneMinuteToastRef.current = true;
+      toast("Hurry! 20 seconds left!");
+      return;
+    }
+
+    if (remainingMs <= 60_000 && !hasShownOneMinuteToastRef.current) {
+      hasShownOneMinuteToastRef.current = true;
+      toast("1 minute left");
+    }
+  }, [error, expiresAt, isLoading, now]);
+
+  React.useEffect(() => {
     setSelectedSeatIds([]);
     setIsAddSeatMode(false);
     setSelectionMessage(null);
@@ -224,6 +251,40 @@ export function ReserveSeatClient({
 
   const goToQueue = () => {
     router.push(`/queue/${showId}/${schedId}`);
+  };
+
+  const handleRejoinQueue = async () => {
+    setIsRejoining(true);
+    try {
+      const response = await fetch("/api/queue/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          schedId,
+        }),
+      });
+
+      const data = (await response.json()) as { success: boolean; error?: string };
+      if (!response.ok || !data.success) {
+        const normalizedError = data.error?.toLowerCase() ?? "";
+        if (normalizedError.includes("already in the queue")) {
+          router.push(`/queue/${showId}/${schedId}`);
+          return;
+        }
+        throw new Error(data.error || "Failed to rejoin queue");
+      }
+
+      router.push(`/queue/${showId}/${schedId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to rejoin queue");
+    } finally {
+      setIsRejoining(false);
+    }
+  };
+
+  const handleDeclineRejoin = () => {
+    router.push(`/${showId}`);
   };
 
   const handleDoneReserving = async () => {
@@ -302,7 +363,7 @@ export function ReserveSeatClient({
       return;
     }
 
-    setSelectionMessage("Add mode enabled. Tap one more seat on the map.");
+    setSelectionMessage(null);
     setIsAddSeatMode(true);
   }, [selectedSeatIds.length]);
 
@@ -371,7 +432,14 @@ export function ReserveSeatClient({
                 </CardTitle>
               </div>
               {!isLoading && !error && expiresAt && (
-                <Badge variant="outline" className="w-fit text-sm">
+                <Badge
+                  variant="outline"
+                  className={
+                    remaining <= 20_000
+                      ? "w-fit border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300 text-sm"
+                      : "w-fit border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300 text-sm"
+                  }
+                >
                   <Clock3 className="mr-1 h-3.5 w-3.5" />
                   {formatDuration(remaining)} left
                 </Badge>
@@ -394,12 +462,24 @@ export function ReserveSeatClient({
                   <div className="flex items-center gap-2 text-sm text-red-600">
                     <AlertTriangle className={isExpiredWindowError ? "h-6 w-6" : "h-4 w-4"} />
                     <span className={isExpiredWindowError ? "text-base font-medium sm:text-lg" : ""}>
-                      {error}
+                      {isExpiredWindowError ? "Uh oh! Your time ran out. Rejoin the queue?" : error}
                     </span>
                   </div>
-                  <Button variant="outline" onClick={goToQueue}>
-                    {isExpiredWindowError ? "Rejoin queue" : "Back to queue"}
-                  </Button>
+                  {isExpiredWindowError ? (
+                    <div className="flex w-full max-w-xs items-center justify-center gap-3">
+                      <Button onClick={handleRejoinQueue} disabled={isRejoining} className="flex-1">
+                        {isRejoining && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Yes
+                      </Button>
+                      <Button variant="outline" onClick={handleDeclineRejoin} disabled={isRejoining} className="flex-1">
+                        No
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="outline" onClick={goToQueue}>
+                      Back to queue
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -470,13 +550,13 @@ export function ReserveSeatClient({
                     <Button
                       type="button"
                       size="sm"
-                      variant={isAddSeatMode ? "default" : "outline"}
+                      variant="outline"
                       onClick={handleArmAddSeat}
-                      disabled={selectedSeatIds.length >= MAX_SELECTED_SEATS}
-                      className="w-full"
+                      disabled={isAddSeatMode || selectedSeatIds.length >= MAX_SELECTED_SEATS}
+                      className="w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Plus className="mr-1.5 h-4 w-4" />
-                      Add Seat
+                      {isAddSeatMode ? "Select a seat" : "Add Seat"}
                     </Button>
                     <Separator />
                     {selectedBreakdown.length === 0 ? (
@@ -507,7 +587,7 @@ export function ReserveSeatClient({
                         <Separator />
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Selected seat IDs</span>
+                            <span className="text-muted-foreground">Selected seats</span>
                             <Button
                               type="button"
                               variant="ghost"
@@ -524,12 +604,12 @@ export function ReserveSeatClient({
                                 key={seatId}
                                 className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px]"
                               >
-                                <span className="max-w-[120px] truncate">{seatId}</span>
+                                <span className="max-w-[120px] truncate">{seatNumbersById[seatId] ?? seatId}</span>
                                 <button
                                   type="button"
                                   className="rounded-sm p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
                                   onClick={() => handleRemoveSeat(seatId)}
-                                  aria-label={`Remove seat ${seatId}`}
+                                  aria-label={`Remove seat ${seatNumbersById[seatId] ?? seatId}`}
                                 >
                                   <X className="h-3 w-3" />
                                 </button>
@@ -548,24 +628,15 @@ export function ReserveSeatClient({
                   </CardContent>
                 </Card>
 
-                <Card className="border-sidebar-border/70">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Session Controls</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="rounded-md border border-green-200 bg-green-50 p-3 text-xs text-green-700 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
-                      Active window: {formatDuration(remaining)}
-                    </div>
-
-                    <Button variant="outline" onClick={goToQueue} className="w-full">
-                      Back to queue
-                    </Button>
-                    <Button onClick={handleDoneReserving} disabled={isCompleting} className="w-full">
-                      {isCompleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {isCompleting ? "Completing..." : "Done reserving (simulate)"}
-                    </Button>
-                  </CardContent>
-                </Card>
+                <div className="space-y-3">
+                  <Button variant="outline" onClick={goToQueue} className="w-full">
+                    Back to queue
+                  </Button>
+                  <Button onClick={handleDoneReserving} disabled={isCompleting} className="w-full">
+                    {isCompleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isCompleting ? "Completing..." : "Done reserving (simulate)"}
+                  </Button>
+                </div>
               </div>
             </div>
           )}

@@ -93,7 +93,10 @@ const cleanupQueueTicketArtifacts = async ({
 
   await redis.del(activeKey, ticketKey);
   if (resolvedUserId) {
-    await redis.hdel(userTicketKey, resolvedUserId);
+    const currentlyMappedTicketId = (await redis.hget(userTicketKey, resolvedUserId)) as string | null;
+    if (currentlyMappedTicketId === ticketId) {
+      await redis.hdel(userTicketKey, resolvedUserId);
+    }
   }
 };
 
