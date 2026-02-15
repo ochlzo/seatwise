@@ -41,6 +41,8 @@ type PageHeaderProps = {
 
 export function PageHeader({
   title,
+  parentLabel,
+  parentHref,
   rightSlot,
   className,
 }: PageHeaderProps) {
@@ -54,17 +56,23 @@ export function PageHeader({
     crumbs.push({ label: "Home", href: "/" });
 
     // Simplified app-user queue/reserve breadcrumbs:
-    // Home > Dashboard > Queue
-    // Home > Dashboard > Reserve Seat
+    // Home > Dashboard > Show Name > Queue
+    // Home > Dashboard > Show Name > Reserve Seats
     if (segments[0] === "queue" && segments.length >= 3) {
       crumbs.push({ label: "Dashboard", href: "/dashboard" });
+      if (parentLabel) {
+        crumbs.push({ label: parentLabel, href: parentHref ?? `/${segments[1]}` });
+      }
       crumbs.push({ label: "Queue", href: "/queue" });
       return crumbs;
     }
 
     if (segments[0] === "reserve" && segments.length >= 3) {
       crumbs.push({ label: "Dashboard", href: "/dashboard" });
-      crumbs.push({ label: "Reserve Seat", href: "/reserve" });
+      if (parentLabel) {
+        crumbs.push({ label: parentLabel, href: parentHref ?? `/${segments[1]}` });
+      }
+      crumbs.push({ label: "Reserve Seats", href: "/reserve" });
       return crumbs;
     }
 
