@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Ticket, Loader2, Clock, ChevronLeft } from 'lucide-react';
+import { Ticket, Loader2, ChevronLeft } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -281,10 +281,10 @@ export function ReserveNowButton({
                                                     selectedSchedId === sched.sched_id
                                                         ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
                                                         : 'hover:bg-muted/50'
-                                                }`}
+                                                } py-3 gap-3`}
                                                 onClick={() => setSelectedSchedId(sched.sched_id || '')}
                                             >
-                                                <CardContent className="p-4">
+                                                <CardContent className="px-4 py-2">
                                                     <div className="flex items-start gap-4">
                                                         <RadioGroupItem
                                                             value={sched.sched_id || ''}
@@ -293,31 +293,32 @@ export function ReserveNowButton({
                                                         />
                                                         <Label
                                                             htmlFor={sched.sched_id}
-                                                            className="flex-1 cursor-pointer space-y-2"
+                                                            className="flex-1 cursor-pointer"
                                                         >
-                                                            <div className="flex items-center gap-2">
-                                                                <Clock className="h-4 w-4 text-muted-foreground" />
-                                                                <span className="text-sm font-semibold sm:text-base">
-                                                                    {formatTime(sched.sched_start_time)} -{' '}
-                                                                    {formatTime(sched.sched_end_time)}
-                                                                </span>
-                                                            </div>
-
-                                                            {categories.length > 0 && (
-                                                                <div className="flex flex-wrap gap-1.5 pl-6">
-                                                                    {categories.map((category) => (
-                                                                        <div
-                                                                            key={`${sched.sched_id}-${category.name}`}
-                                                                            className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/60 bg-background px-2 py-0.5 text-[9px] sm:text-[10px]"
-                                                                        >
-                                                                            <span className="font-medium">{category.name}</span>
-                                                                            <span className="text-muted-foreground">
-                                                                                PHP {Number.parseFloat(category.price).toFixed(2)}
-                                                                            </span>
-                                                                        </div>
-                                                                    ))}
+                                                            <div className="flex flex-col gap-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-sm font-semibold sm:text-base">
+                                                                        {formatTime(sched.sched_start_time)} -{' '}
+                                                                        {formatTime(sched.sched_end_time)}
+                                                                    </span>
                                                                 </div>
-                                                            )}
+
+                                                                {categories.length > 0 && (
+                                                                    <div className="flex flex-wrap gap-1.5 pl-6">
+                                                                        {categories.map((category) => (
+                                                                            <div
+                                                                                key={`${sched.sched_id}-${category.name}`}
+                                                                                className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/60 bg-background px-2 py-0.5 text-[9px] sm:text-[10px]"
+                                                                            >
+                                                                                <span className="font-medium">{category.name}</span>
+                                                                                <span className="text-muted-foreground">
+                                                                                    PHP {Number.parseFloat(category.price).toFixed(2)}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </Label>
                                                     </div>
                                                 </CardContent>
