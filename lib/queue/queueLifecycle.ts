@@ -39,7 +39,7 @@ const parseJson = <T>(value: unknown): T | null => {
 
 const hasValidActiveSession = async (showScopeId: string): Promise<boolean> => {
   const activePattern = `seatwise:active:${showScopeId}:*`;
-  const activeKeys = await redis.keys<string[]>(activePattern);
+  const activeKeys = (await redis.keys(activePattern)) as string[];
   if (!Array.isArray(activeKeys) || activeKeys.length === 0) {
     return false;
   }
@@ -48,7 +48,7 @@ const hasValidActiveSession = async (showScopeId: string): Promise<boolean> => {
   let hasActive = false;
 
   for (const activeKey of activeKeys) {
-    const raw = await redis.get<string>(activeKey);
+    const raw = await redis.get(activeKey);
     const active = parseJson<ActiveSession>(raw);
 
     if (!active || active.expiresAt <= now) {
@@ -112,7 +112,7 @@ export async function promoteNextInQueue({
 
   try {
     const pausedKey = `seatwise:paused:${showScopeId}`;
-    const paused = await redis.get<number | string>(pausedKey);
+    const paused = (await redis.get(pausedKey)) as number | string | null;
     if (paused) {
       return { promoted: false };
     }
@@ -125,14 +125,14 @@ export async function promoteNextInQueue({
     const queueKey = `seatwise:queue:${showScopeId}`;
 
     for (let attempts = 0; attempts < 10; attempts += 1) {
-      const head = await redis.zrange<string[]>(queueKey, 0, 0);
+      const head = (await redis.zrange(queueKey, 0, 0)) as string[];
       const ticketId = Array.isArray(head) ? head[0] : null;
       if (!ticketId) {
         return { promoted: false };
       }
 
       const ticketKey = `seatwise:ticket:${showScopeId}:${ticketId}`;
-      const ticketRaw = await redis.get<string>(ticketKey);
+      const ticketRaw = await redis.get(ticketKey);
       const ticket = parseJson<TicketData>(ticketRaw);
 
       if (!ticket || !ticket.userId) {
@@ -184,7 +184,7 @@ export async function completeActiveSessionAndPromoteNext({
   await redis.del(ticketKey);
 
   const avgServiceMsKey = `seatwise:metrics:avg_service_ms:${showScopeId}`;
-  const rawAvg = await redis.get<number | string>(avgServiceMsKey);
+  const rawAvg = (await redis.get(avgServiceMsKey)) as number | string | null;
   const currentAvg =
     typeof rawAvg === "number"
       ? rawAvg

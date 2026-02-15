@@ -44,7 +44,7 @@ export async function getQueueStatus({
   userId,
 }: GetQueueStatusParams): Promise<QueueHeartbeatResult> {
   const pausedKey = `seatwise:paused:${showScopeId}`;
-  const isPaused = await redis.get<number | string>(pausedKey);
+  const isPaused = (await redis.get(pausedKey)) as number | string | null;
   if (isPaused) {
     return {
       success: true,
@@ -55,7 +55,7 @@ export async function getQueueStatus({
   }
 
   const userTicketKey = `seatwise:user_ticket:${showScopeId}`;
-  const ticketId = await redis.hget<string>(userTicketKey, userId);
+  const ticketId = (await redis.hget(userTicketKey, userId)) as string | null;
 
   if (!ticketId) {
     return {
@@ -67,11 +67,11 @@ export async function getQueueStatus({
   }
 
   const ticketKey = `seatwise:ticket:${showScopeId}:${ticketId}`;
-  const ticketJson = await redis.get<string>(ticketKey);
+  const ticketJson = await redis.get(ticketKey);
   const ticket = parseJson<TicketData>(ticketJson);
 
   const activeKey = `seatwise:active:${showScopeId}:${ticketId}`;
-  const activeJson = await redis.get<string>(activeKey);
+  const activeJson = await redis.get(activeKey);
   const activeSession = parseJson<ActiveSession>(activeJson);
 
   if (
@@ -110,7 +110,7 @@ export async function getQueueStatus({
   }
 
   const avgServiceMsKey = `seatwise:metrics:avg_service_ms:${showScopeId}`;
-  const avgServiceMsRaw = await redis.get<number | string>(avgServiceMsKey);
+  const avgServiceMsRaw = (await redis.get(avgServiceMsKey)) as number | string | null;
   const avgServiceMs =
     typeof avgServiceMsRaw === "number"
       ? avgServiceMsRaw

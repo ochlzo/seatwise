@@ -36,7 +36,7 @@ export async function validateActiveSession({
   activeToken,
 }: ValidateActiveSessionParams): Promise<ValidateActiveSessionResult> {
   const activeKey = `seatwise:active:${showScopeId}:${ticketId}`;
-  const activeJson = await redis.get<string>(activeKey);
+  const activeJson = await redis.get(activeKey);
   const session = parseActiveSession(activeJson);
 
   if (!session) {
