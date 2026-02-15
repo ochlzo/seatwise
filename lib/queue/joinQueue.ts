@@ -16,6 +16,21 @@ interface JoinQueueResult {
     error?: string;
 }
 
+const parseJson = <T>(value: unknown): T | null => {
+    if (value == null) return null;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value) as T;
+        } catch {
+            return null;
+        }
+    }
+    if (typeof value === 'object') {
+        return value as T;
+    }
+    return null;
+};
+
 /**
  * Add a user to the queue for a specific show schedule
  */
@@ -28,12 +43,33 @@ export async function joinQueue({
         // 1. Check if user is already in queue
         const userTicketKey = `seatwise:user_ticket:${showScopeId}`;
         const existingTicketId = await redis.hget(userTicketKey, userId);
+        const queueKey = `seatwise:queue:${showScopeId}`;
 
         if (existingTicketId) {
-            return {
-                success: false,
-                error: 'You are already in the queue for this show',
-            };
+            const existingTicketKey = `seatwise:ticket:${showScopeId}:${existingTicketId}`;
+            const existingActiveKey = `seatwise:active:${showScopeId}:${existingTicketId}`;
+            const [existingRank, existingTicketRaw, existingActiveRaw] = await Promise.all([
+                redis.zrank(queueKey, existingTicketId),
+                redis.get(existingTicketKey),
+                redis.get(existingActiveKey),
+            ]);
+
+            const existingActive = parseJson<{ expiresAt?: number }>(existingActiveRaw);
+            const hasValidActive =
+                !!existingActive?.expiresAt && existingActive.expiresAt > Date.now();
+            const hasQueueEntry = existingRank !== null;
+            const hasTicketData = !!parseJson<TicketData>(existingTicketRaw);
+
+            if (hasValidActive || hasQueueEntry || hasTicketData) {
+                return {
+                    success: false,
+                    error: 'You are already in the queue for this show',
+                };
+            }
+
+            // Stale mapping: clear orphan references and allow a fresh join
+            await redis.hdel(userTicketKey, userId);
+            await redis.del(existingTicketKey, existingActiveKey);
         }
 
         // 2. Generate unique ticket ID
@@ -50,7 +86,6 @@ export async function joinQueue({
         };
 
         // 4. Add to queue (sorted set by timestamp)
-        const queueKey = `seatwise:queue:${showScopeId}`;
         await redis.zadd(queueKey, { score: timestamp, member: ticketId });
 
         // 5. Store ticket details
@@ -67,8 +102,13 @@ export async function joinQueue({
 
         // 8. Calculate estimated wait time
         const avgServiceMsKey = `seatwise:metrics:avg_service_ms:${showScopeId}`;
-        const avgServiceMs = await redis.get<string>(avgServiceMsKey);
-        const avgServiceTime = avgServiceMs ? parseInt(avgServiceMs) : 60000; // Default 60s
+        const avgServiceMs = await redis.get<string | number>(avgServiceMsKey);
+        const avgServiceTime =
+            typeof avgServiceMs === 'number'
+                ? avgServiceMs
+                : avgServiceMs
+                    ? parseInt(avgServiceMs, 10)
+                    : 60000; // Default 60s
 
         const estimatedWaitMs = actualRank * avgServiceTime;
         const estimatedWaitMinutes = Math.ceil(estimatedWaitMs / 60000);

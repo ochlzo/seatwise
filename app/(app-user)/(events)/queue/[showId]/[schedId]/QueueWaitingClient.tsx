@@ -1,0 +1,199 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Clock3, Users, CheckCircle2, AlertTriangle } from "lucide-react";
+
+type QueueStatusResponse = {
+  success: boolean;
+  status: "waiting" | "active" | "expired" | "closed" | "not_joined";
+  showScopeId: string;
+  showName?: string;
+  ticketId?: string;
+  name?: string;
+  rank?: number;
+  etaMs?: number;
+  estimatedWaitMinutes?: number;
+  activeToken?: string;
+  expiresAt?: number;
+  message?: string;
+  error?: string;
+};
+
+type QueueWaitingClientProps = {
+  showId: string;
+  schedId: string;
+};
+
+const POLL_WAITING_MS = 4000;
+const POLL_OTHER_MS = 8000;
+
+const formatDuration = (ms: number) => {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+};
+
+export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
+  const router = useRouter();
+  const [status, setStatus] = React.useState<QueueStatusResponse | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [now, setNow] = React.useState<number>(0);
+
+  const fetchStatus = React.useCallback(async () => {
+    try {
+      setError(null);
+      const response = await fetch(
+        `/api/queue/status?showId=${encodeURIComponent(showId)}&schedId=${encodeURIComponent(schedId)}`,
+        { cache: "no-store" },
+      );
+      const data = (await response.json()) as QueueStatusResponse;
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch queue status");
+      }
+      setStatus(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch queue status");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showId, schedId]);
+
+  React.useEffect(() => {
+    void fetchStatus();
+  }, [fetchStatus]);
+
+  React.useEffect(() => {
+    const intervalMs = status?.status === "waiting" ? POLL_WAITING_MS : POLL_OTHER_MS;
+    const timer = window.setInterval(() => {
+      void fetchStatus();
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [fetchStatus, status?.status]);
+
+  React.useEffect(() => {
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  React.useEffect(() => {
+    if (!status || status.status !== "active" || !status.ticketId || !status.activeToken || !status.expiresAt) {
+      return;
+    }
+
+    const storageKey = `seatwise:active:${status.showScopeId}:${status.ticketId}`;
+    const payload = {
+      ticketId: status.ticketId,
+      activeToken: status.activeToken,
+      expiresAt: status.expiresAt,
+      showScopeId: status.showScopeId,
+    };
+    sessionStorage.setItem(storageKey, JSON.stringify(payload));
+  }, [status]);
+
+  const expiresInMs =
+    status?.status === "active" && status.expiresAt ? status.expiresAt - now : undefined;
+
+  const goBackToShow = () => {
+    router.push(`/${showId}`);
+  };
+
+  const proceedToReservation = () => {
+    router.push(`/reserve/${showId}/${schedId}`);
+  };
+
+  return (
+    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-4 md:p-8">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Queue Status
+          </CardTitle>
+          <CardDescription>
+            {status?.showName ? `${status.showName}` : "Loading show..."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading queue status...
+            </div>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-red-600">
+              <AlertTriangle className="h-4 w-4" />
+              {error}
+            </div>
+          )}
+
+          {!isLoading && !error && status && (
+            <>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{status.status.toUpperCase()}</Badge>
+                {status.ticketId && (
+                  <span className="text-xs text-muted-foreground">Ticket: {status.ticketId}</span>
+                )}
+              </div>
+
+              {status.message && (
+                <p className="text-sm text-muted-foreground">{status.message}</p>
+              )}
+
+              {status.status === "waiting" && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-muted-foreground">Current rank</div>
+                    <div className="text-2xl font-semibold">#{status.rank ?? "-"}</div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-muted-foreground">Estimated wait</div>
+                    <div className="text-2xl font-semibold">
+                      ~{status.estimatedWaitMinutes ?? Math.ceil((status.etaMs ?? 0) / 60000)} min
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {status.status === "active" && (
+                <div className="space-y-3 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/30">
+                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span className="font-medium">Your turn is active</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock3 className="h-4 w-4" />
+                    Expires in:{" "}
+                    <span className="font-semibold">
+                      {expiresInMs !== undefined ? formatDuration(expiresInMs) : "--:--"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Use this active window to proceed with seat reservation.
+                  </div>
+                  <Button onClick={proceedToReservation} className="w-fit">
+                    Proceed to seat reservation
+                  </Button>
+                </div>
+              )}
+
+              {(status.status === "closed" || status.status === "expired" || status.status === "not_joined") && (
+                <Button variant="outline" onClick={goBackToShow}>
+                  Back to show
+                </Button>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -17,10 +17,10 @@ export interface ActiveSession {
 }
 
 export interface QueueStatus {
-    status: 'waiting' | 'active' | 'expired' | 'closed';
-    ticketId: string;
+    status: 'waiting' | 'active' | 'expired' | 'closed' | 'not_joined';
+    ticketId?: string;
     rank?: number;
-    name: string;
+    name?: string;
     eta?: number; // estimated time in ms
 }
 

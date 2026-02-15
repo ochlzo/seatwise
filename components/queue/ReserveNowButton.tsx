@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Ticket, Loader2, CalendarDays, Clock, ChevronLeft, DollarSign } from 'lucide-react';
+import { Ticket, Loader2, Clock, ChevronLeft, DollarSign } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -15,7 +15,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -174,6 +173,27 @@ export function ReserveNowButton({
                 throw new Error(data.error || 'Failed to join queue');
             }
 
+            if (data.status === 'active' && data.ticket?.ticketId && data.activeToken && data.expiresAt) {
+                const showScopeId = `${showId}:${selectedSchedId}`;
+                const storageKey = `seatwise:active:${showScopeId}:${data.ticket.ticketId}`;
+                sessionStorage.setItem(
+                    storageKey,
+                    JSON.stringify({
+                        ticketId: data.ticket.ticketId,
+                        activeToken: data.activeToken,
+                        expiresAt: data.expiresAt,
+                        showScopeId,
+                    })
+                );
+
+                toast.success('Your reservation window is active!', {
+                    description: 'Proceeding to reservation room...',
+                });
+
+                router.push(`/reserve/${showId}/${selectedSchedId}`);
+                return;
+            }
+
             // Success! Show toast and redirect to queue page
             toast.success('Successfully joined the queue!', {
                 description: `You're #${data.rank} in line. Estimated wait: ~${data.estimatedWaitMinutes} min`,
@@ -214,7 +234,7 @@ export function ReserveNowButton({
                             <DialogHeader>
                                 <DialogTitle>Select a Date</DialogTitle>
                                 <DialogDescription>
-                                    Choose which date you'd like to attend {showName}
+                                    Choose which date you&apos;d like to attend {showName}
                                 </DialogDescription>
                             </DialogHeader>
 
