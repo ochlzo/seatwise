@@ -86,17 +86,18 @@ export default async function ShowIdPage({
             </p>
           </div>
 
-          {isShowOpen && serializedSchedules.length > 0 && (
-            <div className="mb-6 flex justify-center sm:justify-start">
-              <ReserveNowButton
-                showId={show.show_id}
-                showName={show.show_name}
-                schedules={serializedSchedules}
-              />
-            </div>
-          )}
-
-          <ShowDetailReadOnly show={serializedShow} />
+          <ShowDetailReadOnly
+            show={serializedShow}
+            reserveButton={
+              isShowOpen && serializedSchedules.length > 0 ? (
+                <ReserveNowButton
+                  showId={show.show_id}
+                  showName={show.show_name}
+                  schedules={serializedSchedules}
+                />
+              ) : undefined
+            }
+          />
         </div>
       </div>
     </>
