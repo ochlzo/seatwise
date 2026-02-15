@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Clock3, Loader2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Clock3, Loader2, Plus, ShieldCheck, X } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
@@ -31,21 +31,38 @@ type ActiveValidationResponse = {
   };
 };
 
+type ReserveSeatCategory = SeatmapPreviewCategory & {
+  price: string;
+};
+
 type ReserveSeatClientProps = {
   showId: string;
   schedId: string;
   seatmapId?: string | null;
-  seatmapCategories: SeatmapPreviewCategory[];
+  seatmapCategories: ReserveSeatCategory[];
   seatCategoryAssignments: Record<string, string>;
 };
 
 const EXPIRED_WINDOW_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
+const MAX_SELECTED_SEATS = 10;
 
 const formatDuration = (ms: number) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+};
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 2,
+  }).format(value);
+
+const parseCurrency = (value: string) => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 };
 
 const getStoredSession = (showScopeId: string): StoredActiveSession | null => {
@@ -104,6 +121,8 @@ export function ReserveSeatClient({
   const [expiresAt, setExpiresAt] = React.useState<number | null>(null);
   const [now, setNow] = React.useState<number>(0);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
+  const [isAddSeatMode, setIsAddSeatMode] = React.useState(false);
+  const [selectionMessage, setSelectionMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -199,6 +218,8 @@ export function ReserveSeatClient({
 
   React.useEffect(() => {
     setSelectedSeatIds([]);
+    setIsAddSeatMode(false);
+    setSelectionMessage(null);
   }, [showId, schedId]);
 
   const goToQueue = () => {
@@ -263,10 +284,84 @@ export function ReserveSeatClient({
       .map(([categoryId, count]) => ({
         category: categoriesById.get(categoryId) ?? null,
         count,
+        unitPrice: parseCurrency(categoriesById.get(categoryId)?.price ?? "0"),
       }))
       .filter((item) => item.category !== null)
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => b.count - a.count)
+      .map((item) => ({
+        ...item,
+        lineTotal: item.count * item.unitPrice,
+      }));
   }, [categoriesById, seatCategoryAssignments, selectedSeatIds]);
+
+  const subtotal = React.useMemo(
+    () => selectedBreakdown.reduce((total, item) => total + item.lineTotal, 0),
+    [selectedBreakdown],
+  );
+
+  const handleArmAddSeat = React.useCallback(() => {
+    if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
+      setSelectionMessage(`You can select up to ${MAX_SELECTED_SEATS} seats only.`);
+      setIsAddSeatMode(false);
+      return;
+    }
+
+    setSelectionMessage("Add mode enabled. Tap one more seat on the map.");
+    setIsAddSeatMode(true);
+  }, [selectedSeatIds.length]);
+
+  const handleSeatSelectionChange = React.useCallback(
+    (ids: string[]) => {
+      const clickedSeatId = ids[ids.length - 1];
+      if (!clickedSeatId) return;
+
+      setSelectionMessage(null);
+
+      if (selectedSeatIds.length === 0) {
+        setSelectedSeatIds([clickedSeatId]);
+        setIsAddSeatMode(false);
+        return;
+      }
+
+      if (isAddSeatMode) {
+        if (selectedSeatIds.includes(clickedSeatId)) {
+          setSelectionMessage("Seat already selected.");
+          setIsAddSeatMode(false);
+          return;
+        }
+
+        if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
+          setSelectionMessage(`You can select up to ${MAX_SELECTED_SEATS} seats only.`);
+          setIsAddSeatMode(false);
+          return;
+        }
+
+        setSelectedSeatIds([...selectedSeatIds, clickedSeatId]);
+        setIsAddSeatMode(false);
+        return;
+      }
+
+      if (selectedSeatIds.includes(clickedSeatId)) {
+        setSelectedSeatIds(selectedSeatIds.filter((seatId) => seatId !== clickedSeatId));
+        return;
+      }
+
+      setSelectionMessage(`Tap "+ Add Seat" to add another seat (max ${MAX_SELECTED_SEATS}).`);
+    },
+    [isAddSeatMode, selectedSeatIds],
+  );
+
+  const handleRemoveSeat = React.useCallback((seatId: string) => {
+    setSelectedSeatIds((prev) => prev.filter((id) => id !== seatId));
+    setSelectionMessage(null);
+    setIsAddSeatMode(false);
+  }, []);
+
+  const handleClearSelection = React.useCallback(() => {
+    setSelectedSeatIds([]);
+    setSelectionMessage(null);
+    setIsAddSeatMode(false);
+  }, []);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 lg:p-8">
@@ -320,10 +415,28 @@ export function ReserveSeatClient({
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <Card className="border-sidebar-border/70">
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-base sm:text-lg">Select your seats</CardTitle>
-                  <CardDescription>
-                    Tap seats on the chart to prepare your reservation before your session expires.
-                  </CardDescription>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <CardTitle className="text-base sm:text-lg">Select your seats</CardTitle>
+                      <CardDescription>
+                        Pick your first seat, then use <strong>+ Add Seat</strong> for additional seats.
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{selectedSeatIds.length}/{MAX_SELECTED_SEATS}</Badge>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isAddSeatMode ? "default" : "outline"}
+                        onClick={handleArmAddSeat}
+                        disabled={selectedSeatIds.length >= MAX_SELECTED_SEATS}
+                        className="w-fit"
+                      >
+                        <Plus className="mr-1.5 h-4 w-4" />
+                        Add Seat
+                      </Button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <SeatmapPreview
@@ -331,10 +444,16 @@ export function ReserveSeatClient({
                     heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
                     allowMarqueeSelection={false}
                     selectedSeatIds={selectedSeatIds}
-                    onSelectionChange={setSelectedSeatIds}
+                    onSelectionChange={handleSeatSelectionChange}
                     categories={seatmapCategories}
                     seatCategories={seatCategoryAssignments}
                   />
+
+                  {selectionMessage && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                      {selectionMessage}
+                    </p>
+                  )}
 
                   {!seatmapId && (
                     <p className="text-xs text-muted-foreground">
@@ -361,6 +480,7 @@ export function ReserveSeatClient({
                             }}
                           />
                           <span className="font-medium">{category.name}</span>
+                          <span className="text-muted-foreground">{formatCurrency(parseCurrency(category.price))}</span>
                         </div>
                       ))}
                     </div>
@@ -394,12 +514,61 @@ export function ReserveSeatClient({
                             key={item.category?.category_id}
                             className="flex items-center justify-between gap-2 rounded-md border border-sidebar-border/60 px-2.5 py-2"
                           >
-                            <span className="truncate text-xs sm:text-sm">{item.category?.name}</span>
-                            <Badge variant="secondary">{item.count}</Badge>
+                            <div className="min-w-0">
+                              <p className="truncate text-xs sm:text-sm">{item.category?.name}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {item.count} x {formatCurrency(item.unitPrice)}
+                              </p>
+                            </div>
+                            <Badge variant="secondary">{formatCurrency(item.lineTotal)}</Badge>
                           </div>
                         ))}
                       </div>
                     )}
+
+                    {selectedSeatIds.length > 0 && (
+                      <>
+                        <Separator />
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">Selected seat IDs</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-xs"
+                              onClick={handleClearSelection}
+                            >
+                              Clear all
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedSeatIds.map((seatId) => (
+                              <div
+                                key={seatId}
+                                className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px]"
+                              >
+                                <span className="max-w-[120px] truncate">{seatId}</span>
+                                <button
+                                  type="button"
+                                  className="rounded-sm p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                  onClick={() => handleRemoveSeat(seatId)}
+                                  aria-label={`Remove seat ${seatId}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <Separator />
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <span>Subtotal</span>
+                      <span>{formatCurrency(subtotal)}</span>
+                    </div>
                   </CardContent>
                 </Card>
 
