@@ -422,8 +422,8 @@ export function ReserveSeatClient({
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 lg:p-8">
-      <Card className="border-sidebar-border/70">
-        <CardHeader>
+      <Card className="border-0 bg-transparent py-0 shadow-none rounded-none gap-4 sm:border-sidebar-border/70 sm:bg-card sm:py-6 sm:shadow-sm sm:rounded-xl sm:gap-6">
+        <CardHeader className="px-0 sm:px-6">
           <div className="space-y-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
@@ -447,7 +447,7 @@ export function ReserveSeatClient({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-0 sm:px-6">
           {isLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -488,7 +488,7 @@ export function ReserveSeatClient({
           {!isLoading && !error && expiresAt && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <Card className="border-sidebar-border/70">
-                <CardContent className="space-y-4 pt-0">
+                <CardContent className="space-y-3 pt-0 px-2 sm:px-3 md:px-4">
                   <SeatmapPreview
                     seatmapId={seatmapId ?? undefined}
                     heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
@@ -516,7 +516,7 @@ export function ReserveSeatClient({
                       {seatmapCategories.map((category) => (
                         <div
                           key={category.category_id}
-                          className="inline-flex items-center gap-2 rounded-md border border-sidebar-border/70 bg-background px-2.5 py-1 text-xs"
+                          className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/70 bg-background px-2 py-0.5 text-[11px]"
                         >
                           <span
                             className="h-2.5 w-2.5 rounded-full border border-zinc-300"
