@@ -15,6 +15,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
   addSeatGrid,
   setDrawShape,
+  setMode,
   setShowGuidePaths,
   setSnapSpacing,
 } from "@/lib/features/seatmap/seatmapSlice";
@@ -268,6 +269,9 @@ export function SeatMapSidebar({
                 e.dataTransfer.effectAllowed = "copy";
               }}
               onClick={() => {
+                if (item.shape === "line") {
+                  dispatch(setMode("draw"));
+                }
                 dispatch(
                   setDrawShape({
                     shape: item.shape,
@@ -302,6 +306,7 @@ export function SeatMapSidebar({
             e.dataTransfer.effectAllowed = "copy";
           }}
           onClick={() => {
+            dispatch(setMode("draw"));
             dispatch(setDrawShape({ shape: "guidePath" }));
           }}
         >

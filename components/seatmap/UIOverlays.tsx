@@ -142,6 +142,9 @@ export function Sidebar() {
                 : "border-zinc-200 dark:border-zinc-800"
                 }`}
               onClick={() => {
+                if (item.shape === "line") {
+                  dispatch(setMode("draw"));
+                }
                 dispatch(
                   setDrawShape({
                     shape: item.shape as SeatmapShapeNode["shape"],
@@ -254,7 +257,7 @@ export function SelectionPanel() {
   if (selectedNode.type === "helper") return null;
 
   const palette = [
-    "#ffffff", "#cccccc", "#b2b2b2", "#e5e5e5", "#999999", "#7f7f7f",
+    "#ffffff", "#000000", "#cccccc", "#b2b2b2", "#e5e5e5", "#999999", "#7f7f7f",
     "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#6366f1", "#8b5cf6",
   ];
 

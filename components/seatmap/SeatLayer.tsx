@@ -25,7 +25,6 @@ import {
 import {
   // closestPointOnPolyline,
   getNodeBoundingBox,
-  getNodesBoundingBox,
   getSnapResults,
 } from "@/lib/seatmap/geometry";
 import type {
@@ -481,49 +480,8 @@ export default function SeatLayer({
     let dx = pos.x - origin.x;
     let dy = pos.y - origin.y;
 
-    const draggedNodes = selectedIds.map((sid) => {
-      const node = nodes[sid];
-      if (sid === id) {
-        return { ...node, position: { x: origin.x + dx, y: origin.y + dy } };
-      }
-      return {
-        ...node,
-        position: {
-          x: state.startPositions[sid].x + dx,
-          y: state.startPositions[sid].y + dy,
-        },
-      };
-    });
-
-    const draggedBB = getNodesBoundingBox(draggedNodes);
-
-    let bestSnapX: number | null = null;
-    let bestSnapY: number | null = null;
-    let isSpacingX = false;
-    let isSpacingY = false;
-
-    if (draggedBB) {
-      const snap = getSnapResults(
-        draggedBB,
-        Object.values(nodes),
-        selectedIds,
-        snapSpacing,
-      );
-      dx += snap.x - draggedBB.centerX;
-      dy += snap.y - draggedBB.centerY;
-      bestSnapX = snap.snapX;
-      bestSnapY = snap.snapY;
-      isSpacingX = snap.isSpacingX;
-      isSpacingY = snap.isSpacingY;
-    }
-
-    onSnap({
-      x: bestSnapX,
-      y: bestSnapY,
-      isSpacingX,
-      isSpacingY,
-      spacingValue: snapSpacing,
-    });
+    // Disable all snap behavior during multi-seat drag for smooth grouped movement.
+    onSnap({ x: null, y: null });
     const positions: Record<string, { x: number; y: number }> = {};
     Object.entries(state.startPositions).forEach(([nodeId, start]) => {
       positions[nodeId] = { x: start.x + dx, y: start.y + dy };
