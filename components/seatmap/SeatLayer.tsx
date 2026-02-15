@@ -25,6 +25,7 @@ import {
 import {
   // closestPointOnPolyline,
   getNodeBoundingBox,
+  getNodesBoundingBox,
   getSnapResults,
 } from "@/lib/seatmap/geometry";
 import type {
@@ -419,7 +420,8 @@ export default function SeatLayer({
     active: boolean;
     draggedId: string | null;
     startPositions: Record<string, { x: number; y: number }>;
-  }>({ active: false, draggedId: null, startPositions: {} });
+    currentDelta: { dx: number; dy: number } | null;
+  }>({ active: false, draggedId: null, startPositions: {}, currentDelta: null });
   const multiDragRafRef = React.useRef<number | null>(null);
   const pendingMultiDragRef = React.useRef<Record<
     string,
@@ -477,6 +479,7 @@ export default function SeatLayer({
       active: true,
       draggedId: id,
       startPositions,
+      currentDelta: { dx: 0, dy: 0 },
     };
     multiDragKonvaNodesRef.current = konvaNodes;
     return true;
@@ -489,9 +492,48 @@ export default function SeatLayer({
     if (!origin) return false;
     let dx = pos.x - origin.x;
     let dy = pos.y - origin.y;
+    const draggedNodes = Object.entries(state.startPositions).map(([nodeId, start]) => {
+      const node = nodes[nodeId] as SeatmapSeatNode | undefined;
+      if (!node) return null;
+      return {
+        ...node,
+        position: {
+          x: start.x + dx,
+          y: start.y + dy,
+        },
+      };
+    }).filter(Boolean) as SeatmapSeatNode[];
 
-    // Disable all snap behavior during multi-seat drag for smooth grouped movement.
-    onSnap({ x: null, y: null });
+    let bestSnapX: number | null = null;
+    let bestSnapY: number | null = null;
+    let isSpacingX = false;
+    let isSpacingY = false;
+
+    const draggedBB = getNodesBoundingBox(draggedNodes);
+    if (draggedBB) {
+      // Multi-drag uses axis alignment snap only (no mirror/symmetry logic).
+      const snap = getSnapResults(
+        draggedBB,
+        Object.values(nodes),
+        Object.keys(state.startPositions),
+        0,
+      );
+      dx += snap.x - draggedBB.centerX;
+      dy += snap.y - draggedBB.centerY;
+      bestSnapX = snap.snapX;
+      bestSnapY = snap.snapY;
+      isSpacingX = false;
+      isSpacingY = false;
+    }
+
+    onSnap({
+      x: bestSnapX,
+      y: bestSnapY,
+      isSpacingX,
+      isSpacingY,
+    });
+
+    state.currentDelta = { dx, dy };
     const positions: Record<string, { x: number; y: number }> = {};
     Object.entries(state.startPositions).forEach(([nodeId, start]) => {
       positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -525,8 +567,8 @@ export default function SeatLayer({
     if (!state.active || state.draggedId !== id) return false;
     const origin = state.startPositions[id];
     if (!origin) return false;
-    const dx = pos.x - origin.x;
-    const dy = pos.y - origin.y;
+    const dx = state.currentDelta?.dx ?? pos.x - origin.x;
+    const dy = state.currentDelta?.dy ?? pos.y - origin.y;
     const positions: Record<string, { x: number; y: number }> = {};
     Object.entries(state.startPositions).forEach(([nodeId, start]) => {
       positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -551,6 +593,7 @@ export default function SeatLayer({
       active: false,
       draggedId: null,
       startPositions: {},
+      currentDelta: null,
     };
     dispatch(updateNodesPositions({ positions, history: true }));
     return true;
