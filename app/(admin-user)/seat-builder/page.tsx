@@ -9,8 +9,8 @@ import { SeatMapSidebar } from "@/components/seatmap/seatmap-sidebar";
 import { SeatmapPageHeader } from "@/components/seatmap/seatmap-page-header";
 import { SeatmapTitle } from "@/components/seatmap/SeatmapTitle";
 import { SeatmapFileMenu } from "@/components/seatmap/SeatmapFileMenu";
+import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { useTheme } from "next-themes";
 import LoadingPage from "@/app/LoadingPage";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { loadSeatmap, setTitle, markSeatmapSaved } from "@/lib/features/seatmap/seatmapSlice";
@@ -21,22 +21,21 @@ const SeatmapCanvas = dynamic(
     () => import("@/components/seatmap/SeatmapCanvas"),
     {
         ssr: false,
-        loading: () => <div className="w-full h-full flex items-center justify-center text-zinc-400">Loading Canvas...</div>
+        loading: () => (
+            <div className="flex h-full w-full items-center justify-center text-zinc-500 dark:text-zinc-400">
+                Loading Canvas...
+            </div>
+        )
     }
 );
 
 export default function Page() {
-    const { setTheme } = useTheme();
     const searchParams = useSearchParams();
     const seatmapId = searchParams.get("seatmapId");
     const dispatch = useAppDispatch();
     const [isLoadingSeatmap, setIsLoadingSeatmap] = React.useState(false);
     const hasUnsavedChanges = useAppSelector((state) => state.seatmap.hasUnsavedChanges);
     const seatmapTitle = useAppSelector((state) => state.seatmap.title);
-
-    React.useEffect(() => {
-        setTheme("light");
-    }, [setTheme]);
 
     React.useEffect(() => {
         if (!seatmapId) return;
@@ -155,19 +154,20 @@ export default function Page() {
                     }
                     rightSlot={
                         <div className="flex items-center gap-2">
+                            <ThemeSwithcer />
                             <SeatmapTitle />
                             <SeatmapFileMenu />
                         </div>
                     }
                 />
-                <div className="flex-1 relative bg-zinc-100 overflow-hidden">
+                <div className="relative flex-1 overflow-hidden bg-zinc-100 dark:bg-zinc-950">
                     <ModeToolbar />
                     <SeatmapToolbar />
                     <SelectionPanel />
                     {isLoadingSeatmap && (
-                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-                            <div className="flex flex-col items-center gap-3 text-zinc-600">
-                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
+                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-sm dark:bg-zinc-950/70">
+                            <div className="flex flex-col items-center gap-3 text-zinc-700 dark:text-zinc-200">
+                                <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600 dark:border-zinc-700 dark:border-t-zinc-200" />
                                 <span className="text-sm font-medium">Loading seatmap...</span>
                             </div>
                         </div>

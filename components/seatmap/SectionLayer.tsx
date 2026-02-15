@@ -4,6 +4,7 @@ import React from "react";
 import { Rect, Circle, RegularPolygon, Line, Group, Transformer, Text } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { Node as KonvaNode } from "konva/lib/Node";
+import type { Text as KonvaText } from "konva/lib/shapes/Text";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import { useAppSelector, useAppDispatch } from "@/lib/hooks";
@@ -97,6 +98,7 @@ const ShapeItem = React.memo(({
     snapSpacing: number;
 }) => {
     const shapeNodeRef = React.useRef<KonvaNode | null>(null);
+    const textNodeRef = React.useRef<KonvaText | null>(null);
     const transformerRef = React.useRef<KonvaTransformer | null>(null);
     const rafRef = React.useRef<number | null>(null);
     const pendingPosRef = React.useRef<{ x: number; y: number } | null>(null);
@@ -292,6 +294,115 @@ const ShapeItem = React.memo(({
             const height = shape.height ?? measured.height;
             const fillColor = shape.fill;
             const strokeColor = isSelected ? commonProps.stroke : shape.stroke;
+            const startInlineEdit = () => {
+                if (typeof document === "undefined") return;
+                const existingEditor = document.querySelector('textarea[data-seatmap-text-editor="true"]');
+                if (existingEditor) return;
+
+                const textNode = textNodeRef.current;
+                if (!textNode) return;
+
+                const stage = textNode.getStage();
+                if (!stage) return;
+
+                const absPos = textNode.absolutePosition();
+                const stageBox = stage.container().getBoundingClientRect();
+                const absScale = textNode.getAbsoluteScale();
+                const absRotation = textNode.getAbsoluteRotation();
+
+                const textarea = document.createElement("textarea");
+                textarea.setAttribute("data-seatmap-text-editor", "true");
+                textarea.value = shape.text ?? DEFAULT_TEXT;
+                textarea.style.position = "fixed";
+                textarea.style.left = `${stageBox.left + absPos.x}px`;
+                textarea.style.top = `${stageBox.top + absPos.y}px`;
+                textarea.style.width = `${Math.max(1, textNode.width() * absScale.x)}px`;
+                textarea.style.height = `${Math.max(1, textNode.height() * absScale.y)}px`;
+                textarea.style.fontSize = `${fontSize * absScale.y}px`;
+                textarea.style.fontFamily = fontFamily;
+                textarea.style.lineHeight = "1.2";
+                textarea.style.color = textColor;
+                textarea.style.background = "transparent";
+                textarea.style.border = "1px solid #3b82f6";
+                textarea.style.borderRadius = "4px";
+                textarea.style.margin = "0";
+                textarea.style.padding = "0";
+                textarea.style.overflow = "hidden";
+                textarea.style.outline = "none";
+                textarea.style.resize = "none";
+                textarea.style.whiteSpace = "pre-wrap";
+                textarea.style.wordBreak = "break-word";
+                textarea.style.transformOrigin = "left top";
+                textarea.style.zIndex = "9999";
+                if (absRotation) {
+                    textarea.style.transform = `rotateZ(${absRotation}deg)`;
+                }
+
+                document.body.appendChild(textarea);
+                textNode.hide();
+                textNode.getLayer()?.batchDraw();
+                textarea.focus();
+                textarea.select();
+
+                const syncTextareaSize = (value: string) => {
+                    const box = measureTextBox(value || " ", fontSize, fontFamily, padding);
+                    textarea.style.width = `${Math.max(1, box.width * absScale.x)}px`;
+                    textarea.style.height = `${Math.max(1, box.height * absScale.y)}px`;
+                };
+
+                const cleanup = () => {
+                    textarea.removeEventListener("keydown", onKeyDown);
+                    textarea.removeEventListener("input", onInput);
+                    textarea.removeEventListener("blur", onBlur);
+                    if (textarea.parentNode) {
+                        textarea.parentNode.removeChild(textarea);
+                    }
+                    textNode.show();
+                    textNode.getLayer()?.batchDraw();
+                };
+
+                const commit = () => {
+                    const nextText = textarea.value;
+                    const nextBox = measureTextBox(nextText || " ", fontSize, fontFamily, padding);
+                    onChange(
+                        shape.id,
+                        {
+                            text: nextText,
+                            width: nextBox.width,
+                            height: nextBox.height,
+                        },
+                        true,
+                    );
+                    cleanup();
+                };
+
+                const cancel = () => {
+                    cleanup();
+                };
+
+                const onInput = () => {
+                    syncTextareaSize(textarea.value);
+                };
+
+                const onKeyDown = (event: KeyboardEvent) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        commit();
+                    } else if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancel();
+                    }
+                };
+
+                const onBlur = () => {
+                    commit();
+                };
+
+                textarea.addEventListener("keydown", onKeyDown);
+                textarea.addEventListener("input", onInput);
+                textarea.addEventListener("blur", onBlur);
+                syncTextareaSize(textarea.value);
+            };
 
             return (
                 <>
@@ -302,6 +413,14 @@ const ShapeItem = React.memo(({
                         {...commonProps}
                         offsetX={width / 2}
                         offsetY={height / 2}
+                        onDblClick={(e) => {
+                            e.cancelBubble = true;
+                            startInlineEdit();
+                        }}
+                        onDblTap={(e) => {
+                            e.cancelBubble = true;
+                            startInlineEdit();
+                        }}
                     >
                         <Rect
                             width={width}
@@ -314,6 +433,9 @@ const ShapeItem = React.memo(({
                             cornerRadius={4}
                         />
                         <Text
+                            ref={(node) => {
+                                textNodeRef.current = node;
+                            }}
                             x={padding}
                             y={padding}
                             width={Math.max(0, width - padding * 2)}

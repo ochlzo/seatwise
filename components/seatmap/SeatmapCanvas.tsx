@@ -21,6 +21,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { toast } from "sonner";
 import {
   setViewport,
+  setMode,
   addSeat,
   addShape,
   deselectAll,
@@ -58,6 +59,9 @@ export default function SeatmapCanvas() {
   const [isCtrlDown, setIsCtrlDown] = React.useState(false);
   const [isAltDown, setIsAltDown] = React.useState(false);
   const [isMarqueeSelecting, setIsMarqueeSelecting] = React.useState(false);
+  const modeRef = useRef(mode);
+  const ctrlSelectPrevModeRef = useRef<"select" | "pan" | "draw" | null>(null);
+  const ctrlSelectActiveRef = useRef(false);
   const rotationStateRef = useRef<{
     active: boolean;
     pivot: { x: number; y: number } | null;
@@ -136,14 +140,40 @@ export default function SeatmapCanvas() {
   }, []);
 
   useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Shift") setIsShiftDown(true);
-      if (e.key === "Control") setIsCtrlDown(true);
+      if (e.key === "Control") {
+        setIsCtrlDown(true);
+        if (!ctrlSelectActiveRef.current) {
+          const currentMode = modeRef.current;
+          if (currentMode !== "select") {
+            ctrlSelectPrevModeRef.current = currentMode;
+            dispatch(setMode("select"));
+          } else {
+            ctrlSelectPrevModeRef.current = null;
+          }
+          ctrlSelectActiveRef.current = true;
+        }
+      }
       if (e.key === "Alt") setIsAltDown(true);
     };
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.key === "Shift") setIsShiftDown(false);
-      if (e.key === "Control") setIsCtrlDown(false);
+      if (e.key === "Control") {
+        setIsCtrlDown(false);
+        if (ctrlSelectActiveRef.current) {
+          const previousMode = ctrlSelectPrevModeRef.current;
+          if (previousMode && modeRef.current === "select") {
+            dispatch(setMode(previousMode));
+          }
+          ctrlSelectPrevModeRef.current = null;
+          ctrlSelectActiveRef.current = false;
+        }
+      }
       if (e.key === "Alt") setIsAltDown(false);
     };
     const handleBlur = () => {
@@ -155,6 +185,14 @@ export default function SeatmapCanvas() {
       setMarqueeRect((prev) => ({ ...prev, visible: false }));
       setDrawDraft(null);
       setSnapLines({ x: null, y: null });
+      if (ctrlSelectActiveRef.current) {
+        const previousMode = ctrlSelectPrevModeRef.current;
+        if (previousMode && modeRef.current === "select") {
+          dispatch(setMode(previousMode));
+        }
+        ctrlSelectPrevModeRef.current = null;
+        ctrlSelectActiveRef.current = false;
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -690,6 +728,8 @@ export default function SeatmapCanvas() {
           shape: shape as SeatmapShapeNode["shape"],
           sides: sides ? parseInt(sides) : undefined,
           dash: dash,
+          stroke: "#000000",
+          fill: null,
         }),
       );
     } else {
