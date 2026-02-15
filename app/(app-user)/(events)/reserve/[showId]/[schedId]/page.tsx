@@ -33,6 +33,11 @@ export default async function ReserveSeatPage({
       seatAssignments: {
         select: {
           seat_id: true,
+          seat: {
+            select: {
+              seat_number: true,
+            },
+          },
           set: {
             select: {
               seat_category_id: true,
@@ -56,10 +61,12 @@ export default async function ReserveSeatPage({
 
   const categoriesById = new Map<string, SeatmapCategoryPayload>();
   const seatCategoryAssignments: Record<string, string> = {};
+  const seatNumbersById: Record<string, string> = {};
 
   for (const assignment of schedule.seatAssignments) {
     const categoryId = assignment.set.seat_category_id;
     seatCategoryAssignments[assignment.seat_id] = categoryId;
+    seatNumbersById[assignment.seat_id] = assignment.seat.seat_number;
 
     if (!categoriesById.has(categoryId)) {
       categoriesById.set(categoryId, {
@@ -88,6 +95,7 @@ export default async function ReserveSeatPage({
           seatmapId={schedule.show.seatmap_id}
           seatmapCategories={seatmapCategories}
           seatCategoryAssignments={seatCategoryAssignments}
+          seatNumbersById={seatNumbersById}
         />
       </div>
     </>
