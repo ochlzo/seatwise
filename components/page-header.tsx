@@ -53,6 +53,21 @@ export function PageHeader({
     // Always start with Home
     crumbs.push({ label: "Home", href: "/" });
 
+    // Simplified app-user queue/reserve breadcrumbs:
+    // Home > Dashboard > Queue
+    // Home > Dashboard > Reserve Seat
+    if (segments[0] === "queue" && segments.length >= 3) {
+      crumbs.push({ label: "Dashboard", href: "/dashboard" });
+      crumbs.push({ label: "Queue", href: "/queue" });
+      return crumbs;
+    }
+
+    if (segments[0] === "reserve" && segments.length >= 3) {
+      crumbs.push({ label: "Dashboard", href: "/dashboard" });
+      crumbs.push({ label: "Reserve Seat", href: "/reserve" });
+      return crumbs;
+    }
+
     let currentHref = "";
 
     // Logic for parent breadcrumb (Dashboard/Admin Dashboard)
