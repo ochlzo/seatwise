@@ -85,13 +85,13 @@ const COLOR_OPTIONS: Array<{
   label: string;
   swatch: string | null;
 }> = [
-  { value: "NO_COLOR", label: "No Color", swatch: null },
-  { value: "GOLD", label: "Gold", swatch: "#ffd700" },
-  { value: "PINK", label: "Pink", swatch: "#e005b9" },
-  { value: "BLUE", label: "Blue", swatch: "#111184" },
-  { value: "BURGUNDY", label: "Burgundy", swatch: "#800020" },
-  { value: "GREEN", label: "Green", swatch: "#046307" },
-];
+    { value: "NO_COLOR", label: "No Color", swatch: null },
+    { value: "GOLD", label: "Gold", swatch: "#ffd700" },
+    { value: "PINK", label: "Pink", swatch: "#e005b9" },
+    { value: "BLUE", label: "Blue", swatch: "#111184" },
+    { value: "BURGUNDY", label: "Burgundy", swatch: "#800020" },
+    { value: "GREEN", label: "Green", swatch: "#046307" },
+  ];
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -220,12 +220,12 @@ type ShowDetail = {
           category_name: string;
           price: string; // Serialized from Decimal
           color_code:
-            | "NO_COLOR"
-            | "GOLD"
-            | "PINK"
-            | "BLUE"
-            | "BURGUNDY"
-            | "GREEN";
+          | "NO_COLOR"
+          | "GOLD"
+          | "PINK"
+          | "BLUE"
+          | "BURGUNDY"
+          | "GREEN";
         };
       };
     }>;
@@ -239,12 +239,12 @@ type ShowDetail = {
         category_name: string;
         price: string; // Serialized from Decimal
         color_code:
-          | "NO_COLOR"
-          | "GOLD"
-          | "PINK"
-          | "BLUE"
-          | "BURGUNDY"
-          | "GREEN";
+        | "NO_COLOR"
+        | "GOLD"
+        | "PINK"
+        | "BLUE"
+        | "BURGUNDY"
+        | "GREEN";
       };
     }>;
   }>;
@@ -253,6 +253,7 @@ type ShowDetail = {
 interface ShowDetailFormProps {
   show: ShowDetail;
   allowEdit?: boolean;
+  reserveButton?: React.ReactNode;
 }
 
 type SeatmapOption = {
@@ -271,7 +272,7 @@ type SchedDraft = Omit<
   sched_end_time: string;
 };
 
-export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) {
+export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDetailFormProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
@@ -325,7 +326,7 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
       sched_date: toManilaDateKey(new Date(s.sched_date)),
       sched_start_time:
         typeof s.sched_start_time === "string" &&
-        s.sched_start_time.includes("T")
+          s.sched_start_time.includes("T")
           ? formatManilaTimeKey(new Date(s.sched_start_time))
           : typeof s.sched_start_time === "string"
             ? s.sched_start_time
@@ -355,7 +356,7 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
         sched_date: toManilaDateKey(new Date(s.sched_date)),
         sched_start_time:
           typeof s.sched_start_time === "string" &&
-          s.sched_start_time.includes("T")
+            s.sched_start_time.includes("T")
             ? formatManilaTimeKey(new Date(s.sched_start_time))
             : typeof s.sched_start_time === "string"
               ? s.sched_start_time
@@ -388,8 +389,8 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
   );
   const numberOfMonths =
     showStartDate &&
-    showEndDate &&
-    differenceInCalendarMonths(showEndDate, showStartDate) >= 1
+      showEndDate &&
+      differenceInCalendarMonths(showEndDate, showStartDate) >= 1
       ? 2
       : 1;
 
@@ -1824,10 +1825,10 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
                               onSeatCategoriesChange={
                                 isEditing
                                   ? (newAssignments) =>
-                                      updateSetSeatAssignments(
-                                        activeSet.id,
-                                        newAssignments,
-                                      )
+                                    updateSetSeatAssignments(
+                                      activeSet.id,
+                                      newAssignments,
+                                    )
                                   : undefined
                               }
                             />
@@ -1839,33 +1840,33 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
                               onAssign={
                                 isEditing
                                   ? (seatIds, categoryId) => {
-                                      updateSetSeatAssignments(
-                                        activeSet.id,
-                                        (prev) => {
-                                          const next = { ...prev };
-                                          seatIds.forEach((id) => {
-                                            next[id] = categoryId;
-                                          });
-                                          return next;
-                                        },
-                                      );
-                                    }
+                                    updateSetSeatAssignments(
+                                      activeSet.id,
+                                      (prev) => {
+                                        const next = { ...prev };
+                                        seatIds.forEach((id) => {
+                                          next[id] = categoryId;
+                                        });
+                                        return next;
+                                      },
+                                    );
+                                  }
                                   : undefined
                               }
                               onClear={
                                 isEditing
                                   ? (seatIds) => {
-                                      updateSetSeatAssignments(
-                                        activeSet.id,
-                                        (prev) => {
-                                          const next = { ...prev };
-                                          seatIds.forEach((id) => {
-                                            delete next[id];
-                                          });
-                                          return next;
-                                        },
-                                      );
-                                    }
+                                    updateSetSeatAssignments(
+                                      activeSet.id,
+                                      (prev) => {
+                                        const next = { ...prev };
+                                        seatIds.forEach((id) => {
+                                          delete next[id];
+                                        });
+                                        return next;
+                                      },
+                                    );
+                                  }
                                   : undefined
                               }
                             />
@@ -2072,7 +2073,7 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
                                 )}
                                 {formData.scheds.length > 0 &&
                                   getAvailableScheds(setItem.id).length ===
-                                    0 && (
+                                  0 && (
                                     <p className="text-xs text-destructive">
                                       All schedules already assigned.
                                     </p>
@@ -2319,6 +2320,13 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
             </CardContent>
           </Card>
 
+          {/* Reserve Now Button (for user view only) */}
+          {!isEditing && reserveButton && (
+            <div className="w-full">
+              {reserveButton}
+            </div>
+          )}
+
           {allowEdit && isEditing ? (
             <div className="grid gap-3">
               {!isFormValid && !isSaving && (
@@ -2368,14 +2376,14 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
                       sched_date: toManilaDateKey(new Date(s.sched_date)),
                       sched_start_time:
                         typeof s.sched_start_time === "string" &&
-                        s.sched_start_time.includes("T")
+                          s.sched_start_time.includes("T")
                           ? formatManilaTimeKey(new Date(s.sched_start_time))
                           : typeof s.sched_start_time === "string"
                             ? s.sched_start_time
                             : formatManilaTimeKey(new Date(s.sched_start_time)),
                       sched_end_time:
                         typeof s.sched_end_time === "string" &&
-                        s.sched_end_time.includes("T")
+                          s.sched_end_time.includes("T")
                           ? formatManilaTimeKey(new Date(s.sched_end_time))
                           : typeof s.sched_end_time === "string"
                             ? s.sched_end_time
@@ -2526,6 +2534,9 @@ export function ShowDetailForm({ show, allowEdit = true }: ShowDetailFormProps) 
   );
 }
 
-export function ShowDetailReadOnly({ show }: Pick<ShowDetailFormProps, "show">) {
-  return <ShowDetailForm show={show} allowEdit={false} />;
+export function ShowDetailReadOnly({
+  show,
+  reserveButton
+}: Pick<ShowDetailFormProps, "show"> & { reserveButton?: React.ReactNode }) {
+  return <ShowDetailForm show={show} allowEdit={false} reserveButton={reserveButton} />;
 }
