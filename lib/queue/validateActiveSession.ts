@@ -1,5 +1,6 @@
 import { redis } from "@/lib/clients/redis";
 import type { ActiveSession } from "@/lib/types/queue";
+import { expireQueueSession } from "@/lib/queue/queueLifecycle";
 
 export interface ValidateActiveSessionParams {
   showScopeId: string;
@@ -40,6 +41,21 @@ export async function validateActiveSession({
   const session = parseActiveSession(activeJson);
 
   if (!session) {
+    const userTicketKey = `seatwise:user_ticket:${showScopeId}`;
+    const mappedTicketId = (await redis.hget(userTicketKey, userId)) as string | null;
+
+    if (mappedTicketId === ticketId) {
+      const queueKey = `seatwise:queue:${showScopeId}`;
+      const rank = await redis.zrank(queueKey, ticketId);
+      if (rank === null) {
+        await expireQueueSession({
+          showScopeId,
+          ticketId,
+          userId,
+        });
+      }
+    }
+
     return { valid: false, reason: "missing" };
   }
 
@@ -48,6 +64,12 @@ export async function validateActiveSession({
   }
 
   if (session.expiresAt <= Date.now()) {
+    await expireQueueSession({
+      showScopeId,
+      ticketId: session.ticketId || ticketId,
+      userId: session.userId || userId,
+    });
+
     return { valid: false, reason: "expired", session };
   }
 

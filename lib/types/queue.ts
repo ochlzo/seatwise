@@ -49,8 +49,16 @@ export interface QueueSnapshotEvent {
     headCount: number;
 }
 
+export interface QueueSessionExpiredEvent {
+    type: 'SESSION_EXPIRED';
+    message: string;
+    timestamp: number;
+    disconnect: true;
+}
+
 export type QueueEvent =
     | QueueMoveEvent
     | QueueActiveEvent
     | QueueClosedEvent
-    | QueueSnapshotEvent;
+    | QueueSnapshotEvent
+    | QueueSessionExpiredEvent;
