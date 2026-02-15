@@ -976,7 +976,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       {/* 1. Banner Section */}
-      <div className="relative aspect-[21/9] md:aspect-[3/1] bg-muted overflow-hidden rounded-xl border border-sidebar-border shadow-2xl">
+      <div className="relative aspect-[4/3] md:aspect-[3/1] bg-muted overflow-hidden rounded-xl border border-sidebar-border shadow-2xl">
         {show.show_image_key ? (
           <Image
             src={show.show_image_key}
@@ -1017,6 +1017,13 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
           </Badge>
         </div>
       </div>
+
+      {/* Reserve Now Button (Mobile Only - shown before Show Information) */}
+      {!isEditing && reserveButton && (
+        <div className="lg:hidden w-full px-4 -mt-2 mb-6">
+          {reserveButton}
+        </div>
+      )}
 
       <div className="grid gap-8 grid-cols-1 lg:grid-cols-3">
         {/* 2. Primary Details Section */}
@@ -2320,9 +2327,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
             </CardContent>
           </Card>
 
-          {/* Reserve Now Button (for user view only) */}
+          {/* Reserve Now Button (Desktop Only - shown in sidebar) */}
           {!isEditing && reserveButton && (
-            <div className="w-full">
+            <div className="hidden lg:block w-full">
               {reserveButton}
             </div>
           )}
