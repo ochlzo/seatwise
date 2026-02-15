@@ -8,6 +8,7 @@ type SeatmapCategoryPayload = {
   category_id: string;
   name: string;
   color_code: "NO_COLOR" | "GOLD" | "PINK" | "BLUE" | "BURGUNDY" | "GREEN";
+  price: string;
 };
 
 export default async function ReserveSeatPage({
@@ -39,6 +40,7 @@ export default async function ReserveSeatPage({
                 select: {
                   category_name: true,
                   color_code: true,
+                  price: true,
                 },
               },
             },
@@ -64,6 +66,7 @@ export default async function ReserveSeatPage({
         category_id: categoryId,
         name: assignment.set.seatCategory.category_name,
         color_code: assignment.set.seatCategory.color_code,
+        price: assignment.set.seatCategory.price.toString(),
       });
     }
   }
