@@ -34,6 +34,7 @@ import type {
   SeatmapNode,
   SeatmapSeatNode,
 } from "@/lib/seatmap/types";
+import { useTheme } from "next-themes";
 
 const ROTATION_SNAP = 15;
 const MIN_SIZE = 16;
@@ -100,7 +101,10 @@ const SeatItem = React.memo(
     snapSpacing,
     categories,
   }: SeatItemProps) => {
-    let imageUrl = "/seat-default.svg";
+    const { theme, resolvedTheme } = useTheme();
+    const isDark = resolvedTheme === "dark" || theme === "dark";
+
+    let imageUrl = isDark ? "/seat-default-darkmode.svg" : "/seat-default.svg";
 
     if (seat.categoryId) {
       const category = categories.find((c) => c.id === seat.categoryId);
@@ -196,9 +200,9 @@ const SeatItem = React.memo(
           onDragEnd={(e) => {
             const handled = onMultiDragEnd
               ? onMultiDragEnd(seat.id, {
-                  x: e.target.x(),
-                  y: e.target.y(),
-                })
+                x: e.target.x(),
+                y: e.target.y(),
+              })
               : false;
             if (rafRef.current !== null) {
               cancelAnimationFrame(rafRef.current);
@@ -259,9 +263,9 @@ const SeatItem = React.memo(
           onDragMove={(e) => {
             const handled = onMultiDragMove
               ? onMultiDragMove(seat.id, {
-                  x: e.target.x(),
-                  y: e.target.y(),
-                })
+                x: e.target.x(),
+                y: e.target.y(),
+              })
               : false;
             if (handled) return;
             const nextPos = { x: e.target.x(), y: e.target.y() };
@@ -330,7 +334,7 @@ const SeatItem = React.memo(
               height={32}
               offsetX={16}
               offsetY={16}
-                        rotation={-(seat.rotation ?? 0)}
+              rotation={-(seat.rotation ?? 0)}
               fontSize={10}
               fontStyle="bold"
               fill={getLabelColor()}
@@ -614,9 +618,9 @@ export default function SeatLayer({
           onDragStart={onNodeDragStart}
           onDragEnd={onNodeDragEnd}
           isShiftDown={isShiftDown}
-        onMultiDragStart={(id: string, pos: { x: number; y: number }) =>
-          beginMultiDrag(id, pos)
-        }
+          onMultiDragStart={(id: string, pos: { x: number; y: number }) =>
+            beginMultiDrag(id, pos)
+          }
           onMultiDragMove={(id: string, pos: { x: number; y: number }) =>
             updateMultiDrag(id, pos)
           }

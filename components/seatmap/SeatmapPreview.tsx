@@ -21,6 +21,7 @@ import { LocateFixed, Move, MousePointer2, Lock, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { type SeatmapPreviewCategory, COLOR_CODE_TO_HEX } from "./CategoryAssignPanel";
+import { useTheme } from "next-themes";
 
 
 
@@ -340,10 +341,10 @@ export function SeatmapPreview({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white ${heightClassName ?? "h-[320px]"} ${className ?? ""}`.trim()}
+      className={`relative w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white dark:bg-zinc-950 ${heightClassName ?? "h-[320px]"} ${className ?? ""}`.trim()}
     >
       <div className={cn(
-        "absolute z-10 flex flex-col gap-2 bg-white shadow-lg border border-zinc-200 dark:border-zinc-800",
+        "absolute z-10 flex flex-col gap-2 bg-white dark:bg-zinc-900 shadow-lg border border-zinc-200 dark:border-zinc-800",
         "left-4 top-4 p-2 rounded-lg",
         "sm:left-4 sm:top-4 left-2 top-2 sm:p-2 p-1.5 sm:rounded-lg rounded-md",
         "sm:gap-2 gap-1.5"
@@ -477,7 +478,13 @@ function SeatNodes({
   seatCategories: Record<string, string>;
 }) {
   const seats = Object.values(nodes).filter((node): node is SeatmapSeatNode => node.type === "seat");
-  const [defaultImage] = useImage("/seat-default.svg");
+  const { theme, resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark" || theme === "dark";
+
+  const [defaultImageLight] = useImage("/seat-default.svg");
+  const [defaultImageDark] = useImage("/seat-default-darkmode.svg");
+  const defaultImage = isDark ? defaultImageDark : defaultImageLight;
+
   const [goldImage] = useImage("/vip-seat-1.svg");
   const [pinkImage] = useImage("/vip-seat-2.svg");
   const [blueImage] = useImage("/vip-seat-3.svg");
@@ -487,7 +494,10 @@ function SeatNodes({
   // Calculate contrasting text color based on background luminance
   const getContrastingTextColor = (colorCode: SeatmapPreviewCategory["color_code"]) => {
     const hex = COLOR_CODE_TO_HEX[colorCode];
-    if (!hex || hex === "transparent") return "#4b5563"; // Default gray for no color
+    if (!hex || hex === "transparent") {
+      // Keep default seat labels readable against light/dark default seat assets.
+      return isDark ? "#e5e7eb" : "#4b5563";
+    }
 
     // Parse hex to RGB
     const r = parseInt(hex.slice(1, 3), 16);
