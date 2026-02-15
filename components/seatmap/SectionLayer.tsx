@@ -74,7 +74,6 @@ const ShapeItem = React.memo(({
     selectionCount,
     nodes,
     onSnap,
-    snapSpacing,
 }: {
     shape: SeatmapShapeNode;
     isSelected: boolean;
@@ -95,7 +94,6 @@ const ShapeItem = React.memo(({
         isSpacingY?: boolean;
         spacingValue?: number;
     }) => void;
-    snapSpacing: number;
 }) => {
     const shapeNodeRef = React.useRef<KonvaNode | null>(null);
     const textNodeRef = React.useRef<KonvaText | null>(null);
@@ -172,6 +170,11 @@ const ShapeItem = React.memo(({
                     y: e.target.y(),
                 })
                 : false;
+            if (!handled && selectionCount > 1) {
+                onSnap({ x: null, y: null });
+                if (onDragEnd) onDragEnd();
+                return;
+            }
             if (rafRef.current !== null) {
                 cancelAnimationFrame(rafRef.current);
                 rafRef.current = null;
@@ -190,20 +193,20 @@ const ShapeItem = React.memo(({
                 let isSpacingX = false;
                 let isSpacingY = false;
 
-                if (draggedBB) {
-                    const snap = getSnapResults(
-                        draggedBB,
-                        Object.values(nodes),
-                        [shape.id],
-                        snapSpacing
-                    );
-                    nextPos.x = snap.x;
-                    nextPos.y = snap.y;
-                    bestSnapX = snap.snapX;
-                    bestSnapY = snap.snapY;
-                    isSpacingX = snap.isSpacingX;
-                    isSpacingY = snap.isSpacingY;
-                }
+              if (draggedBB) {
+                const snap = getSnapResults(
+                  draggedBB,
+                  Object.values(nodes),
+                  [shape.id],
+                  0
+                );
+                nextPos.x = snap.x;
+                nextPos.y = snap.y;
+                bestSnapX = snap.snapX;
+                bestSnapY = snap.snapY;
+                isSpacingX = false;
+                isSpacingY = false;
+              }
 
                 e.target.position(nextPos);
                 onSnap({
@@ -211,7 +214,7 @@ const ShapeItem = React.memo(({
                     y: bestSnapY,
                     isSpacingX,
                     isSpacingY,
-                    spacingValue: snapSpacing
+                    spacingValue: undefined,
                 });
 
                 onChange(
@@ -233,6 +236,10 @@ const ShapeItem = React.memo(({
                 })
                 : false;
             if (handled) return;
+            if (selectionCount > 1) {
+                onSnap({ x: null, y: null });
+                return;
+            }
 
             const nextPos = { x: e.target.x(), y: e.target.y() };
 
@@ -247,27 +254,27 @@ const ShapeItem = React.memo(({
             let isSpacingY = false;
 
             if (draggedBB) {
-                const snap = getSnapResults(
-                    draggedBB,
-                    Object.values(nodes),
-                    [shape.id],
-                    snapSpacing
-                );
-                nextPos.x = snap.x;
-                nextPos.y = snap.y;
-                bestSnapX = snap.snapX;
-                bestSnapY = snap.snapY;
-                isSpacingX = snap.isSpacingX;
-                isSpacingY = snap.isSpacingY;
+              const snap = getSnapResults(
+                draggedBB,
+                Object.values(nodes),
+                [shape.id],
+                0
+              );
+              nextPos.x = snap.x;
+              nextPos.y = snap.y;
+              bestSnapX = snap.snapX;
+              bestSnapY = snap.snapY;
+              isSpacingX = false;
+              isSpacingY = false;
             }
 
             e.target.position(nextPos);
             onSnap({
                 x: bestSnapX,
                 y: bestSnapY,
-                isSpacingX,
-                isSpacingY,
-                spacingValue: snapSpacing
+              isSpacingX,
+              isSpacingY,
+              spacingValue: undefined
             });
 
             pendingPosRef.current = nextPos;
@@ -275,8 +282,14 @@ const ShapeItem = React.memo(({
                 rafRef.current = requestAnimationFrame(flushDragPosition);
             }
         },
-        onTransform: (e: KonvaEventObject<Event>) => applyTransform(e?.evt, false),
-        onTransformEnd: (e: KonvaEventObject<Event>) => applyTransform(e?.evt, true),
+        onTransform: (e: KonvaEventObject<Event>) => {
+            if (selectionCount > 1) return;
+            applyTransform(e?.evt, false);
+        },
+        onTransformEnd: (e: KonvaEventObject<Event>) => {
+            if (selectionCount > 1) return;
+            applyTransform(e?.evt, true);
+        },
         shadowColor: "black",
         shadowBlur: isSelected ? 10 : 0,
         shadowOpacity: 0.3
@@ -789,7 +802,6 @@ export default function SectionLayer({
     onNodeDragEnd,
     stageRef,
     onSnap,
-    snapSpacing,
 }: {
     onNodeDragStart?: () => void;
     onNodeDragEnd?: () => void;
@@ -801,7 +813,6 @@ export default function SectionLayer({
         isSpacingY?: boolean;
         spacingValue?: number;
     }) => void;
-    snapSpacing: number;
 }) {
     const nodes = useAppSelector((state) => state.seatmap.nodes);
     const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
@@ -812,7 +823,9 @@ export default function SectionLayer({
         active: boolean;
         draggedId: string | null;
         startPositions: Record<string, { x: number; y: number }>;
-    }>({ active: false, draggedId: null, startPositions: {} });
+        historyGroupId: string | null;
+        currentDelta: { x: number; y: number } | null;
+    }>({ active: false, draggedId: null, startPositions: {}, historyGroupId: null, currentDelta: null });
     const multiDragRafRef = React.useRef<number | null>(null);
     const pendingMultiDragRef = React.useRef<Record<string, { x: number; y: number }> | null>(null);
     const multiDragKonvaNodesRef = React.useRef<Record<string, KonvaNode>>({});
@@ -834,13 +847,17 @@ export default function SectionLayer({
 
     const shapes = Object.values(nodes).filter((node): node is SeatmapShapeNode => node.type === "shape");
 
-    const beginMultiDrag = (id: string) => {
-        if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
+  const beginMultiDrag = (id: string) => {
+        const selectedShapeIds = selectedIds.filter((selectedId) => {
+            const node = nodes[selectedId];
+            return node?.type === "shape";
+        });
+        if (!selectedShapeIds.includes(id) || selectedShapeIds.length < 2) return false;
         const startPositions: Record<string, { x: number; y: number }> = {};
         const konvaNodes: Record<string, KonvaNode> = {};
         const stage = stageRef?.current;
 
-        selectedIds.forEach((selectedId) => {
+        selectedShapeIds.forEach((selectedId) => {
             const node = nodes[selectedId];
             if (!node || node.type !== "shape") return;
             startPositions[selectedId] = {
@@ -858,6 +875,8 @@ export default function SectionLayer({
             active: true,
             draggedId: id,
             startPositions,
+            historyGroupId: `multi-shape-drag:${Date.now()}:${id}`,
+            currentDelta: { x: 0, y: 0 },
         };
         multiDragKonvaNodesRef.current = konvaNodes;
         return true;
@@ -871,7 +890,8 @@ export default function SectionLayer({
         let dx = pos.x - origin.x;
         let dy = pos.y - origin.y;
 
-        const draggedNodes = selectedIds.map((sid) => {
+        const selectedShapeIds = Object.keys(state.startPositions);
+        const draggedNodes = selectedShapeIds.map((sid) => {
             const node = nodes[sid];
             if (!node || node.type !== "shape") return null;
             if (sid === id) {
@@ -897,15 +917,15 @@ export default function SectionLayer({
             const snap = getSnapResults(
                 draggedBB,
                 (Object.values(nodes) as SeatmapNode[]),
-                selectedIds,
-                snapSpacing
+                selectedShapeIds,
+                0
             );
             dx += (snap.x - draggedBB.centerX);
             dy += (snap.y - draggedBB.centerY);
             bestSnapX = snap.snapX;
             bestSnapY = snap.snapY;
-            isSpacingX = snap.isSpacingX;
-            isSpacingY = snap.isSpacingY;
+            isSpacingX = false;
+            isSpacingY = false;
         }
 
         onSnap({
@@ -913,8 +933,9 @@ export default function SectionLayer({
             y: bestSnapY,
             isSpacingX,
             isSpacingY,
-            spacingValue: snapSpacing
+            spacingValue: undefined
         });
+        state.currentDelta = { x: dx, y: dy };
 
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
@@ -947,8 +968,8 @@ export default function SectionLayer({
         if (!state.active || state.draggedId !== id) return false;
         const origin = state.startPositions[id];
         if (!origin) return false;
-        const dx = pos.x - origin.x;
-        const dy = pos.y - origin.y;
+        const dx = state.currentDelta?.x ?? pos.x - origin.x;
+        const dy = state.currentDelta?.y ?? pos.y - origin.y;
         const positions: Record<string, { x: number; y: number }> = {};
         Object.entries(state.startPositions).forEach(([nodeId, start]) => {
             positions[nodeId] = { x: start.x + dx, y: start.y + dy };
@@ -973,8 +994,14 @@ export default function SectionLayer({
             active: false,
             draggedId: null,
             startPositions: {},
+            historyGroupId: null,
+            currentDelta: null,
         };
-        dispatch(updateNodesPositions({ positions, history: true }));
+        dispatch(updateNodesPositions({
+            positions,
+            history: true,
+            historyGroupId: state.historyGroupId ?? undefined,
+        }));
         return true;
     };
 
@@ -1013,7 +1040,6 @@ export default function SectionLayer({
                     selectionCount={selectionCount}
                     nodes={nodes}
                     onSnap={onSnap}
-                    snapSpacing={snapSpacing}
                 />
             ))}
         </Group>

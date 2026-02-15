@@ -115,11 +115,12 @@ const SeatItem = React.memo(
 
     const label = `${seat.rowLabel ?? ""}${seat.seatNumber ?? ""}`;
     const getLabelColor = () => {
-      if (!seat.categoryId) return "#4b5563"; // gray-600
+      const defaultLabelColor = isDark ? "#e5e7eb" : "#4b5563";
+      if (!seat.categoryId) return defaultLabelColor;
       const category = categories.find((c) => c.id === seat.categoryId);
-      if (!category) return "#4b5563";
+      if (!category) return defaultLabelColor;
       if (category.color === "#ffd700") return "#000000"; // Gold gets black
-      if (category.color === "transparent") return "#4b5563"; // Use default for Regular
+      if (category.color === "transparent") return defaultLabelColor; // Use theme-adaptive default for Regular
       return "#ffffff"; // Dark colors get white
     };
 
@@ -204,6 +205,11 @@ const SeatItem = React.memo(
                 y: e.target.y(),
               })
               : false;
+            if (!handled && selectionCount > 1) {
+              onSnap({ x: null, y: null });
+              if (onDragEnd) onDragEnd();
+              return;
+            }
             if (rafRef.current !== null) {
               cancelAnimationFrame(rafRef.current);
               rafRef.current = null;
@@ -271,6 +277,10 @@ const SeatItem = React.memo(
               })
               : false;
             if (handled) return;
+            if (selectionCount > 1) {
+              onSnap({ x: null, y: null });
+              return;
+            }
             const nextPos = { x: e.target.x(), y: e.target.y() };
             const disableSnap = selectionCount > 1;
 
@@ -317,8 +327,14 @@ const SeatItem = React.memo(
               rafRef.current = requestAnimationFrame(flushDragPosition);
             }
           }}
-          onTransform={(e) => applyTransform(e?.evt, false)}
-          onTransformEnd={(e) => applyTransform(e?.evt, true)}
+          onTransform={(e) => {
+            if (selectionCount > 1) return;
+            applyTransform(e?.evt, false);
+          }}
+          onTransformEnd={(e) => {
+            if (selectionCount > 1) return;
+            applyTransform(e?.evt, true);
+          }}
           id={seat.id}
           name="seat-group seat-item selectable"
         >
@@ -421,7 +437,8 @@ export default function SeatLayer({
     draggedId: string | null;
     startPositions: Record<string, { x: number; y: number }>;
     currentDelta: { dx: number; dy: number } | null;
-  }>({ active: false, draggedId: null, startPositions: {}, currentDelta: null });
+    historyGroupId: string | null;
+  }>({ active: false, draggedId: null, startPositions: {}, currentDelta: null, historyGroupId: null });
   const multiDragRafRef = React.useRef<number | null>(null);
   const pendingMultiDragRef = React.useRef<Record<
     string,
@@ -480,6 +497,7 @@ export default function SeatLayer({
       draggedId: id,
       startPositions,
       currentDelta: { dx: 0, dy: 0 },
+      historyGroupId: `multi-seat-drag:${Date.now()}:${id}`,
     };
     multiDragKonvaNodesRef.current = konvaNodes;
     return true;
@@ -594,8 +612,13 @@ export default function SeatLayer({
       draggedId: null,
       startPositions: {},
       currentDelta: null,
+      historyGroupId: null,
     };
-    dispatch(updateNodesPositions({ positions, history: true }));
+    dispatch(updateNodesPositions({
+      positions,
+      history: true,
+      historyGroupId: state.historyGroupId ?? undefined,
+    }));
     return true;
   };
 
