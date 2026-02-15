@@ -79,6 +79,7 @@ type SeatItemProps = {
   selectionCount: number;
   snapSpacing: number;
   categories: SeatCategory[];
+  forceLightMode?: boolean;
 };
 
 const SeatItem = React.memo(
@@ -100,9 +101,10 @@ const SeatItem = React.memo(
     selectionCount,
     snapSpacing,
     categories,
+    forceLightMode = false,
   }: SeatItemProps) => {
     const { theme, resolvedTheme } = useTheme();
-    const isDark = resolvedTheme === "dark" || theme === "dark";
+    const isDark = !forceLightMode && (resolvedTheme === "dark" || theme === "dark");
 
     let imageUrl = isDark ? "/seat-default-darkmode.svg" : "/seat-default.svg";
 
@@ -397,7 +399,8 @@ const SeatItem = React.memo(
       prev.isShiftDown === next.isShiftDown &&
       prev.showGuidePaths === next.showGuidePaths &&
       prev.guidePaths.length === next.guidePaths.length &&
-      prev.categories === next.categories
+      prev.categories === next.categories &&
+      prev.forceLightMode === next.forceLightMode
     );
   },
 );
@@ -410,6 +413,7 @@ export default function SeatLayer({
   stageRef,
   onSnap,
   snapSpacing,
+  forceLightMode = false,
 }: {
   onNodeDragStart?: () => void;
   onNodeDragEnd?: () => void;
@@ -422,6 +426,7 @@ export default function SeatLayer({
     spacingValue?: number;
   }) => void;
   snapSpacing: number;
+  forceLightMode?: boolean;
 }) {
   const nodes = useAppSelector((state) => state.seatmap.nodes);
   const selectedIds = useAppSelector((state) => state.seatmap.selectedIds);
@@ -668,6 +673,7 @@ export default function SeatLayer({
           nodes={nodes}
           snapSpacing={snapSpacing}
           categories={categories}
+          forceLightMode={forceLightMode}
         />
       ))}
     </Group>
