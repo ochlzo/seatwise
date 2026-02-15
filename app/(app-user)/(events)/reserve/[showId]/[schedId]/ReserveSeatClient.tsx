@@ -2,8 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Clock3, Loader2, Plus, ShieldCheck, X } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, Clock3, Loader2, Plus, X } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { Badge } from "@/components/ui/badge";
@@ -262,10 +262,6 @@ export function ReserveSeatClient({
 
   const remaining = expiresAt ? expiresAt - now : 0;
   const isExpiredWindowError = error === EXPIRED_WINDOW_MESSAGE;
-  const totalScheduleSeats = React.useMemo(
-    () => Object.keys(seatCategoryAssignments).length,
-    [seatCategoryAssignments],
-  );
 
   const categoriesById = React.useMemo(
     () => new Map(seatmapCategories.map((category) => [category.category_id, category])),
@@ -367,22 +363,20 @@ export function ReserveSeatClient({
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 lg:p-8">
       <Card className="border-sidebar-border/70">
         <CardHeader>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="h-5 w-5" />
-                Reserve Seats
-              </CardTitle>
-              <CardDescription>
-                {showName || "Validating your queue access token..."}
-              </CardDescription>
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
+                  {showName || "Validating your queue access token..."}
+                </CardTitle>
+              </div>
+              {!isLoading && !error && expiresAt && (
+                <Badge variant="outline" className="w-fit text-sm">
+                  <Clock3 className="mr-1 h-3.5 w-3.5" />
+                  {formatDuration(remaining)} left
+                </Badge>
+              )}
             </div>
-            {!isLoading && !error && expiresAt && (
-              <Badge variant="outline" className="w-fit text-sm">
-                <Clock3 className="mr-1 h-3.5 w-3.5" />
-                {formatDuration(remaining)} left
-              </Badge>
-            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -414,31 +408,7 @@ export function ReserveSeatClient({
           {!isLoading && !error && expiresAt && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <Card className="border-sidebar-border/70">
-                <CardHeader className="pb-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <CardTitle className="text-base sm:text-lg">Select your seats</CardTitle>
-                      <CardDescription>
-                        Pick your first seat, then use <strong>+ Add Seat</strong> for additional seats.
-                      </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{selectedSeatIds.length}/{MAX_SELECTED_SEATS}</Badge>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={isAddSeatMode ? "default" : "outline"}
-                        onClick={handleArmAddSeat}
-                        disabled={selectedSeatIds.length >= MAX_SELECTED_SEATS}
-                        className="w-fit"
-                      >
-                        <Plus className="mr-1.5 h-4 w-4" />
-                        Add Seat
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 pt-0">
                   <SeatmapPreview
                     seatmapId={seatmapId ?? undefined}
                     heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
@@ -491,17 +461,23 @@ export function ReserveSeatClient({
               <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
                 <Card className="border-sidebar-border/70">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Booking Summary</CardTitle>
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-base">Booking Summary</CardTitle>
+                      <Badge variant="outline" className="w-fit">{selectedSeatIds.length}/{MAX_SELECTED_SEATS}</Badge>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Selected seats</span>
-                      <span className="font-semibold">{selectedSeatIds.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Total seats in schedule</span>
-                      <span className="font-semibold">{totalScheduleSeats}</span>
-                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={isAddSeatMode ? "default" : "outline"}
+                      onClick={handleArmAddSeat}
+                      disabled={selectedSeatIds.length >= MAX_SELECTED_SEATS}
+                      className="w-full"
+                    >
+                      <Plus className="mr-1.5 h-4 w-4" />
+                      Add Seat
+                    </Button>
                     <Separator />
                     {selectedBreakdown.length === 0 ? (
                       <p className="text-xs text-muted-foreground">
