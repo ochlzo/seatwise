@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Clock3, Loader2, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
+import type { SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
 
 type StoredActiveSession = {
   ticketId: string;
@@ -30,6 +32,9 @@ type ActiveValidationResponse = {
 type ReserveSeatClientProps = {
   showId: string;
   schedId: string;
+  seatmapId?: string | null;
+  seatmapCategories: SeatmapPreviewCategory[];
+  seatCategoryAssignments: Record<string, string>;
 };
 
 const formatDuration = (ms: number) => {
@@ -78,7 +83,13 @@ const clearStoredSession = (showScopeId: string) => {
   keysToRemove.forEach((key) => window.sessionStorage.removeItem(key));
 };
 
-export function ReserveSeatClient({ showId, schedId }: ReserveSeatClientProps) {
+export function ReserveSeatClient({
+  showId,
+  schedId,
+  seatmapId,
+  seatmapCategories,
+  seatCategoryAssignments,
+}: ReserveSeatClientProps) {
   const router = useRouter();
   const showScopeId = `${showId}:${schedId}`;
   const [isLoading, setIsLoading] = React.useState(true);
@@ -191,7 +202,7 @@ export function ReserveSeatClient({ showId, schedId }: ReserveSeatClientProps) {
   const remaining = expiresAt ? expiresAt - now : 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 md:p-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-8">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -232,8 +243,24 @@ export function ReserveSeatClient({ showId, schedId }: ReserveSeatClientProps) {
               </div>
 
               <div className="rounded-md border p-4 text-sm text-muted-foreground">
-                Seat reservation canvas should render here. Keep all booking API calls fenced by
-                the same queue `ticketId + activeToken` pair.
+                Keep all booking API calls fenced by the same queue{" "}
+                <code>ticketId + activeToken</code> pair.
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Seating Chart</p>
+                <SeatmapPreview
+                  seatmapId={seatmapId ?? undefined}
+                  heightClassName="h-[420px] md:h-[520px]"
+                  allowMarqueeSelection={false}
+                  categories={seatmapCategories}
+                  seatCategories={seatCategoryAssignments}
+                />
+                {!seatmapId && (
+                  <p className="text-xs text-muted-foreground">
+                    This schedule does not have an associated seatmap.
+                  </p>
+                )}
               </div>
 
               <Button onClick={handleDoneReserving} disabled={isCompleting} className="w-fit">
