@@ -56,6 +56,7 @@ export default function SeatmapCanvas() {
   const transformerRef = useRef<KonvaTransformer | null>(null);
 
   const [isRightPanning, setIsRightPanning] = React.useState(false);
+  const [forceLightExportRender, setForceLightExportRender] = React.useState(false);
   const [isShiftDown, setIsShiftDown] = React.useState(false);
   const [isCtrlDown, setIsCtrlDown] = React.useState(false);
   const [isAltDown, setIsAltDown] = React.useState(false);
@@ -208,6 +209,7 @@ export default function SeatmapCanvas() {
       const event = e as CustomEvent<{ fileName?: string }>;
       const { fileName } = event.detail || { fileName: "seatmap.png" };
 
+      setForceLightExportRender(true);
       // Deselect all for a clean export
       dispatch(deselectAll());
 
@@ -216,11 +218,15 @@ export default function SeatmapCanvas() {
         const bounds = calculateNodesBounds(nodes);
         if (!bounds) {
           toast.error("No content to export.");
+          setForceLightExportRender(false);
           return;
         }
 
         const layer = stage.getLayers()[0];
-        if (!layer) return;
+        if (!layer) {
+          setForceLightExportRender(false);
+          return;
+        }
 
         // Save current stage state to restore later
         const oldSize = { width: stage.width(), height: stage.height() };
@@ -282,6 +288,7 @@ export default function SeatmapCanvas() {
 
           // Dispatch success
           window.dispatchEvent(new CustomEvent("seatmap-export-success", { detail: { type: "png" } }));
+          setForceLightExportRender(false);
         } catch (error) {
           console.error("Export failed:", error);
           toast.error("Failed to generate PNG.");
@@ -292,6 +299,7 @@ export default function SeatmapCanvas() {
           stage.position(oldPos);
           stage.scale({ x: oldScale, y: oldScale });
           stage.draw();
+          setForceLightExportRender(false);
         }
       }, 150);
     };
@@ -1203,6 +1211,7 @@ export default function SeatmapCanvas() {
             }}
             onSnap={setSnapLines}
             snapSpacing={snapSpacing}
+            forceLightMode={forceLightExportRender}
           />
 
           {/* Centralized Snap Lines Rendering */}
