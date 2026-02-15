@@ -2540,10 +2540,3 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     </div>
   );
 }
-
-export function ShowDetailReadOnly({
-  show,
-  reserveButton
-}: Pick<ShowDetailFormProps, "show"> & { reserveButton?: React.ReactNode }) {
-  return <ShowDetailForm show={show} allowEdit={false} reserveButton={reserveButton} />;
-}
