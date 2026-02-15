@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Ticket, Loader2, Clock, ChevronLeft, DollarSign } from 'lucide-react';
+import { Ticket, Loader2, Clock, ChevronLeft } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -15,7 +15,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
@@ -52,14 +51,11 @@ export function ReserveNowButton({
     const [selectedSchedId, setSelectedSchedId] = useState<string | null>(null);
     const [isJoining, setIsJoining] = useState(false);
 
-
-    // Helper to parse date string as local date (avoiding timezone issues)
     const parseLocalDate = (dateStr: string): Date => {
         const [year, month, day] = dateStr.split('-').map(Number);
         return new Date(year, month - 1, day);
     };
 
-    // Helper to format date as YYYY-MM-DD in local timezone
     const formatLocalDate = (date: Date): string => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -67,7 +63,6 @@ export function ReserveNowButton({
         return `${year}-${month}-${day}`;
     };
 
-    // Group schedules by date
     const schedulesByDate = useMemo(() => {
         const grouped = new Map<string, Schedule[]>();
         schedules.forEach((sched) => {
@@ -83,12 +78,10 @@ export function ReserveNowButton({
         return grouped;
     }, [schedules]);
 
-    // Get available dates for calendar (using local date parsing)
     const availableDates = useMemo(() => {
-        return Array.from(schedulesByDate.keys()).map(dateStr => parseLocalDate(dateStr));
+        return Array.from(schedulesByDate.keys()).map((dateStr) => parseLocalDate(dateStr));
     }, [schedulesByDate]);
 
-    // Get schedules for selected date
     const schedulesForSelectedDate = useMemo(() => {
         if (!selectedDate) return [];
         const dateStr = formatLocalDate(selectedDate);
@@ -118,14 +111,6 @@ export function ReserveNowButton({
         }).format(t);
     };
 
-    const getMinPrice = (sched: Schedule) => {
-        if (!sched.categories || sched.categories.length === 0) {
-            return null;
-        }
-        const prices = sched.categories.map(c => parseFloat(c.price));
-        return Math.min(...prices);
-    };
-
     const handleReserveClick = () => {
         setStep('date');
         setSelectedDate(undefined);
@@ -135,8 +120,6 @@ export function ReserveNowButton({
 
     const handleDateSelect = (date: Date | undefined) => {
         if (!date) return;
-
-        // Check if date has schedules (using local date formatting)
         const dateStr = formatLocalDate(date);
         if (schedulesByDate.has(dateStr)) {
             setSelectedDate(date);
@@ -188,7 +171,7 @@ export function ReserveNowButton({
                         activeToken: data.activeToken,
                         expiresAt: data.expiresAt,
                         showScopeId,
-                    })
+                    }),
                 );
 
                 toast.success('Your reservation window is active!', {
@@ -199,12 +182,10 @@ export function ReserveNowButton({
                 return;
             }
 
-            // Success! Show toast and redirect to queue page
             toast.success('Successfully joined the queue!', {
                 description: `You're #${data.rank} in line. Estimated wait: ~${data.estimatedWaitMinutes} min`,
             });
 
-            // Redirect to queue waiting page
             router.push(`/queue/${showId}/${selectedSchedId}`);
         } catch (error) {
             toast.error('Failed to join queue', {
@@ -215,7 +196,6 @@ export function ReserveNowButton({
         }
     };
 
-    // Disable dates that don't have schedules (using local date formatting)
     const disabledDates = (date: Date) => {
         const dateStr = formatLocalDate(date);
         return !schedulesByDate.has(dateStr);
@@ -260,16 +240,10 @@ export function ReserveNowButton({
                             </div>
 
                             <DialogFooter>
-                                <Button
-                                    variant="outline"
-                                    onClick={handleCancel}
-                                >
+                                <Button variant="outline" onClick={handleCancel}>
                                     Cancel
                                 </Button>
-                                <Button
-                                    onClick={handleDateConfirm}
-                                    disabled={!selectedDate}
-                                >
+                                <Button onClick={handleDateConfirm} disabled={!selectedDate}>
                                     Confirm
                                 </Button>
                             </DialogFooter>
@@ -298,16 +272,16 @@ export function ReserveNowButton({
                             <div className="space-y-3 max-h-[400px] overflow-y-auto py-4">
                                 <RadioGroup value={selectedSchedId || ''} onValueChange={setSelectedSchedId}>
                                     {schedulesForSelectedDate.map((sched) => {
-                                        const minPrice = getMinPrice(sched);
-                                        const categoryCount = sched.categories?.length || 0;
+                                        const categories = sched.categories || [];
 
                                         return (
                                             <Card
                                                 key={sched.sched_id}
-                                                className={`cursor-pointer transition-all hover:shadow-md ${selectedSchedId === sched.sched_id
-                                                    ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
-                                                    : 'hover:bg-muted/50'
-                                                    }`}
+                                                className={`cursor-pointer transition-all hover:shadow-md ${
+                                                    selectedSchedId === sched.sched_id
+                                                        ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
+                                                        : 'hover:bg-muted/50'
+                                                }`}
                                                 onClick={() => setSelectedSchedId(sched.sched_id || '')}
                                             >
                                                 <CardContent className="p-4">
@@ -329,14 +303,19 @@ export function ReserveNowButton({
                                                                 </span>
                                                             </div>
 
-                                                            {minPrice !== null && (
-                                                                <div className="flex items-center gap-3 text-sm text-muted-foreground pl-6">
-                                                                    <div className="flex items-center gap-1">
-                                                                        <DollarSign className="h-3 w-3" />
-                                                                        <span>From ₱{minPrice.toFixed(2)}</span>
-                                                                    </div>
-                                                                    <Separator orientation="vertical" className="h-4" />
-                                                                    <span>{categoryCount} {categoryCount === 1 ? 'category' : 'categories'}</span>
+                                                            {categories.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1.5 pl-6">
+                                                                    {categories.map((category) => (
+                                                                        <div
+                                                                            key={`${sched.sched_id}-${category.name}`}
+                                                                            className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/60 bg-background px-2 py-0.5 text-[10px]"
+                                                                        >
+                                                                            <span className="font-medium">{category.name}</span>
+                                                                            <span className="text-muted-foreground">
+                                                                                PHP {Number.parseFloat(category.price).toFixed(2)}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
                                                             )}
                                                         </Label>
@@ -349,11 +328,7 @@ export function ReserveNowButton({
                             </div>
 
                             <DialogFooter>
-                                <Button
-                                    variant="outline"
-                                    onClick={handleCancel}
-                                    disabled={isJoining}
-                                >
+                                <Button variant="outline" onClick={handleCancel} disabled={isJoining}>
                                     Cancel
                                 </Button>
                                 <Button
