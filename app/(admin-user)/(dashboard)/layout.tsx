@@ -14,7 +14,7 @@ export default async function AdminDashboardLayout({
     // Verify admin access before rendering
     await verifyAdmin();
     return (
-        <SidebarProvider className="h-svh overflow-hidden">
+        <SidebarProvider className="h-svh overflow-hidden" suppressHydrationWarning>
             <LoadingPage />
             <AdminSidebar />
             <SidebarInset className="overflow-y-auto">

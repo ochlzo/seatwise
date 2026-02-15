@@ -135,7 +135,7 @@ export default function Page() {
     }, [hasUnsavedChanges]);
 
     return (
-        <SidebarProvider className="h-svh overflow-hidden">
+        <SidebarProvider className="h-svh overflow-hidden" suppressHydrationWarning>
             <LoadingPage />
             <SeatMapSidebar />
             <SidebarInset className="overflow-hidden">

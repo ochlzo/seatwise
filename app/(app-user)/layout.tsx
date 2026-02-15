@@ -16,7 +16,7 @@ export default async function AppUserLayout({
     await verifySession();
 
     return (
-        <SidebarProvider className="h-svh overflow-hidden">
+        <SidebarProvider className="h-svh overflow-hidden" suppressHydrationWarning>
             <LoadingPage />
             <AppSidebar />
             <SidebarInset className="overflow-y-auto">
