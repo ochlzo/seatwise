@@ -82,6 +82,7 @@ export default function SeatmapCanvas() {
     baseNodes: {},
   });
   const activeTransformAnchorRef = useRef<string | null>(null);
+  const transformHistoryGroupIdRef = useRef<string | null>(null);
   const [drawDraft, setDrawDraft] = React.useState<{
     shape: typeof drawShape.shape;
     dash?: number[];
@@ -337,7 +338,7 @@ export default function SeatmapCanvas() {
     transformer.getLayer()?.batchDraw();
   }, [selectedIds, nodes]);
 
-  const commitGroupTransform = (history: boolean) => {
+  const commitGroupTransform = (history: boolean, historyGroupId?: string) => {
     const transformer = transformerRef.current;
     if (!transformer) return;
     const targetNodes = transformer.nodes();
@@ -366,7 +367,7 @@ export default function SeatmapCanvas() {
     });
 
     if (history && Object.keys(changes).length) {
-      dispatch(updateNodes({ changes, history }));
+      dispatch(updateNodes({ changes, history, historyGroupId }));
     }
   };
 
@@ -375,7 +376,7 @@ export default function SeatmapCanvas() {
     return normalized < 0 ? normalized + 360 : normalized;
   };
 
-  const applyGroupRotation = (history: boolean) => {
+  const applyGroupRotation = (history: boolean, historyGroupId?: string) => {
     const transformer = transformerRef.current;
     const rotationState = rotationStateRef.current;
     const stage = stageRef.current;
@@ -407,7 +408,7 @@ export default function SeatmapCanvas() {
     });
 
     if (history && Object.keys(changes).length) {
-      dispatch(updateNodes({ changes, history }));
+      dispatch(updateNodes({ changes, history, historyGroupId }));
     }
 
     if (history) {
@@ -682,7 +683,7 @@ export default function SeatmapCanvas() {
     return t.point(p);
   }
 
-  const applyCursorDrivenGroupRotation = (history: boolean) => {
+  const applyCursorDrivenGroupRotation = (history: boolean, historyGroupId?: string) => {
     const stage = stageRef.current;
     const transformer = transformerRef.current;
     const state = rotationStateRef.current;
@@ -717,7 +718,7 @@ export default function SeatmapCanvas() {
     });
 
     if (history && Object.keys(changes).length) { // Added .length check
-      dispatch(updateNodes({ changes, history }));
+      dispatch(updateNodes({ changes, history, historyGroupId }));
     }
 
     if (history) {
@@ -1190,7 +1191,6 @@ export default function SeatmapCanvas() {
               setSnapLines({ x: null, y: null });
             }}
             onSnap={setSnapLines}
-            snapSpacing={snapSpacing}
           />
 
           {/* Stage Label Removed */}
@@ -1244,6 +1244,7 @@ export default function SeatmapCanvas() {
             rotationSnaps={isShiftDown ? ROTATION_SNAPS : []}
             rotateAnchorOffset={40}
             onTransformStart={() => {
+              transformHistoryGroupIdRef.current = `group-transform:${Date.now()}`;
               const stage = stageRef.current;
               const transformer = transformerRef.current;
               if (!stage || !transformer) return;
@@ -1289,15 +1290,26 @@ export default function SeatmapCanvas() {
               }
             }}
             onTransformEnd={() => {
+              const historyGroupId = transformHistoryGroupIdRef.current ?? undefined;
               if (activeTransformAnchorRef.current === "rotater") {
-                if (isAltDown && applyGroupRotation(true)) return;
-                if (applyCursorDrivenGroupRotation(true)) return;
-                commitGroupTransform(true);
+                if (isAltDown && applyGroupRotation(true, historyGroupId)) {
+                  activeTransformAnchorRef.current = null;
+                  transformHistoryGroupIdRef.current = null;
+                  return;
+                }
+                if (applyCursorDrivenGroupRotation(true, historyGroupId)) {
+                  activeTransformAnchorRef.current = null;
+                  transformHistoryGroupIdRef.current = null;
+                  return;
+                }
+                commitGroupTransform(true, historyGroupId);
                 activeTransformAnchorRef.current = null;
+                transformHistoryGroupIdRef.current = null;
                 return;
               }
-              commitGroupTransform(true);
+              commitGroupTransform(true, historyGroupId);
               activeTransformAnchorRef.current = null;
+              transformHistoryGroupIdRef.current = null;
             }}
           />
         </Layer>

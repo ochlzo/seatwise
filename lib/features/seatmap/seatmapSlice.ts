@@ -22,6 +22,7 @@ interface SeatmapState {
     history: {
         past: Array<{ nodes: Record<string, SeatmapNode>; selectedIds: string[] }>;
         future: Array<{ nodes: Record<string, SeatmapNode>; selectedIds: string[] }>;
+        lastGroupId: string | null;
     };
     zoomLocked: boolean;
     snapSpacing: number;
@@ -40,7 +41,7 @@ const initialState: SeatmapState = {
     showGrid: false,
     viewportSize: { width: 800, height: 600 },
     clipboard: [],
-    history: { past: [], future: [] },
+    history: { past: [], future: [], lastGroupId: null },
     zoomLocked: false,
     snapSpacing: 8,
     title: "Untitled Seatmap Prototype",
@@ -52,17 +53,27 @@ import { calculateFitViewport } from "@/lib/seatmap/view-utils";
 
 const HISTORY_LIMIT = 15;
 
+const cloneNodes = (nodes: Record<string, SeatmapNode>) => {
+    // Use JSON cloning here because this runs inside Immer reducers where
+    // values can be draft/proxy objects that throw in structuredClone.
+    return JSON.parse(JSON.stringify(nodes)) as Record<string, SeatmapNode>;
+};
+
 const snapshotState = (state: SeatmapState) => ({
-    nodes: { ...state.nodes },
+    nodes: cloneNodes(state.nodes),
     selectedIds: [...state.selectedIds],
 });
 
-const pushHistory = (state: SeatmapState) => {
+const pushHistory = (state: SeatmapState, historyGroupId?: string) => {
+    if (historyGroupId && state.history.lastGroupId === historyGroupId) {
+        return;
+    }
     state.history.past.push(snapshotState(state));
     if (state.history.past.length > HISTORY_LIMIT) {
         state.history.past.shift();
     }
     state.history.future = [];
+    state.history.lastGroupId = historyGroupId ?? null;
     state.hasUnsavedChanges = true;
 };
 
@@ -70,7 +81,7 @@ const restoreSnapshot = (
     state: SeatmapState,
     snapshot: { nodes: Record<string, SeatmapNode>; selectedIds: string[] }
 ) => {
-    state.nodes = { ...snapshot.nodes };
+    state.nodes = cloneNodes(snapshot.nodes);
     state.selectedIds = [...snapshot.selectedIds];
 };
 
@@ -152,6 +163,7 @@ const seatmapSlice = createSlice({
             state.selectedIds = [];
             state.history.past = [];
             state.history.future = [];
+            state.history.lastGroupId = null;
             state.hasUnsavedChanges = false;
         },
         fitView(state) {
@@ -332,12 +344,12 @@ const seatmapSlice = createSlice({
         },
         updateNode: (
             state,
-            action: PayloadAction<{ id: string; changes: Partial<SeatmapNode>; history?: boolean }>
+            action: PayloadAction<{ id: string; changes: Partial<SeatmapNode>; history?: boolean; historyGroupId?: string }>
         ) => {
-            const { id, changes, history } = action.payload;
+            const { id, changes, history, historyGroupId } = action.payload;
             if (state.nodes[id]) {
                 if (history !== false) {
-                    pushHistory(state);
+                    pushHistory(state, historyGroupId);
                 }
                 const updated = { ...state.nodes[id], ...changes } as SeatmapNode;
                 state.nodes[id] = updated;
@@ -348,13 +360,14 @@ const seatmapSlice = createSlice({
             action: PayloadAction<{
                 changes: Record<string, Partial<SeatmapNode>>;
                 history?: boolean;
+                historyGroupId?: string;
             }>
         ) => {
-            const { changes, history } = action.payload;
+            const { changes, history, historyGroupId } = action.payload;
             const ids = Object.keys(changes);
             if (!ids.length) return;
             if (history !== false) {
-                pushHistory(state);
+                pushHistory(state, historyGroupId);
             }
             ids.forEach((id) => {
                 const node = state.nodes[id];
@@ -368,13 +381,14 @@ const seatmapSlice = createSlice({
             action: PayloadAction<{
                 positions: Record<string, { x: number; y: number }>;
                 history?: boolean;
+                historyGroupId?: string;
             }>
         ) => {
-            const { positions, history } = action.payload;
+            const { positions, history, historyGroupId } = action.payload;
             const ids = Object.keys(positions);
             if (!ids.length) return;
             if (history !== false) {
-                pushHistory(state);
+                pushHistory(state, historyGroupId);
             }
             ids.forEach((id) => {
                 const node = state.nodes[id];
@@ -501,12 +515,14 @@ const seatmapSlice = createSlice({
             const previous = state.history.past.pop();
             if (!previous) return;
             state.history.future.push(snapshotState(state));
+            state.history.lastGroupId = null;
             restoreSnapshot(state, previous);
         },
         redo: (state) => {
             const next = state.history.future.pop();
             if (!next) return;
             state.history.past.push(snapshotState(state));
+            state.history.lastGroupId = null;
             restoreSnapshot(state, next);
         },
     },
