@@ -210,32 +210,35 @@ const SeatItem = React.memo(
             pendingPosRef.current = null;
             if (!handled) {
               const nextPos = { x: e.target.x(), y: e.target.y() };
-
-              const draggedBB = getNodeBoundingBox({
-                type: "seat",
-                position: nextPos,
-                scaleX: seat.scaleX,
-                scaleY: seat.scaleY,
-              });
+              const disableSnap = selectionCount > 1;
 
               let bestSnapX: number | null = null;
               let bestSnapY: number | null = null;
               let isSpacingX = false;
               let isSpacingY = false;
 
-              if (draggedBB) {
-                const snap = getSnapResults(
-                  draggedBB,
-                  Object.values(nodes),
-                  [seat.id],
-                  snapSpacing,
-                );
-                nextPos.x = snap.x;
-                nextPos.y = snap.y;
-                bestSnapX = snap.snapX;
-                bestSnapY = snap.snapY;
-                isSpacingX = snap.isSpacingX;
-                isSpacingY = snap.isSpacingY;
+              if (!disableSnap) {
+                const draggedBB = getNodeBoundingBox({
+                  type: "seat",
+                  position: nextPos,
+                  scaleX: seat.scaleX,
+                  scaleY: seat.scaleY,
+                });
+
+                if (draggedBB) {
+                  const snap = getSnapResults(
+                    draggedBB,
+                    Object.values(nodes),
+                    [seat.id],
+                    snapSpacing,
+                  );
+                  nextPos.x = snap.x;
+                  nextPos.y = snap.y;
+                  bestSnapX = snap.snapX;
+                  bestSnapY = snap.snapY;
+                  isSpacingX = snap.isSpacingX;
+                  isSpacingY = snap.isSpacingY;
+                }
               }
 
               e.target.position(nextPos);
@@ -268,32 +271,35 @@ const SeatItem = React.memo(
               : false;
             if (handled) return;
             const nextPos = { x: e.target.x(), y: e.target.y() };
-
-            const draggedBB = getNodeBoundingBox({
-              type: "seat",
-              position: nextPos,
-              scaleX: seat.scaleX,
-              scaleY: seat.scaleY,
-            });
+            const disableSnap = selectionCount > 1;
 
             let bestSnapX: number | null = null;
             let bestSnapY: number | null = null;
             let isSpacingX = false;
             let isSpacingY = false;
 
-            if (draggedBB) {
-              const snap = getSnapResults(
-                draggedBB,
-                Object.values(nodes),
-                [seat.id],
-                snapSpacing,
-              );
-              nextPos.x = snap.x;
-              nextPos.y = snap.y;
-              bestSnapX = snap.snapX;
-              bestSnapY = snap.snapY;
-              isSpacingX = snap.isSpacingX;
-              isSpacingY = snap.isSpacingY;
+            if (!disableSnap) {
+              const draggedBB = getNodeBoundingBox({
+                type: "seat",
+                position: nextPos,
+                scaleX: seat.scaleX,
+                scaleY: seat.scaleY,
+              });
+
+              if (draggedBB) {
+                const snap = getSnapResults(
+                  draggedBB,
+                  Object.values(nodes),
+                  [seat.id],
+                  snapSpacing,
+                );
+                nextPos.x = snap.x;
+                nextPos.y = snap.y;
+                bestSnapX = snap.snapX;
+                bestSnapY = snap.snapY;
+                isSpacingX = snap.isSpacingX;
+                isSpacingY = snap.isSpacingY;
+              }
             }
 
             e.target.position(nextPos);
@@ -444,12 +450,16 @@ export default function SeatLayer({
   const multiDragKonvaNodesRef = React.useRef<Record<string, KonvaNode>>({});
 
   const beginMultiDrag = (id: string, pos: { x: number; y: number }) => {
-    if (!selectedIds.includes(id) || selectedIds.length < 2) return false;
+    const selectedSeatIds = selectedIds.filter((selectedId) => {
+      const node = nodes[selectedId];
+      return node?.type === "seat";
+    });
+    if (!selectedSeatIds.includes(id) || selectedSeatIds.length < 2) return false;
     const startPositions: Record<string, { x: number; y: number }> = {};
     const konvaNodes: Record<string, KonvaNode> = {};
     const stage = stageRef?.current;
 
-    selectedIds.forEach((selectedId) => {
+    selectedSeatIds.forEach((selectedId) => {
       const node = nodes[selectedId];
       if (!node || node.type !== "seat") return;
       startPositions[selectedId] =
