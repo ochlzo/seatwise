@@ -140,8 +140,13 @@ export function ReserveNowButton({
         const dateStr = formatLocalDate(date);
         if (schedulesByDate.has(dateStr)) {
             setSelectedDate(date);
-            setStep('time');
+            setSelectedSchedId(null);
         }
+    };
+
+    const handleDateConfirm = () => {
+        if (!selectedDate) return;
+        setStep('time');
     };
 
     const handleBack = () => {
@@ -260,6 +265,12 @@ export function ReserveNowButton({
                                     onClick={handleCancel}
                                 >
                                     Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleDateConfirm}
+                                    disabled={!selectedDate}
+                                >
+                                    Confirm
                                 </Button>
                             </DialogFooter>
                         </>

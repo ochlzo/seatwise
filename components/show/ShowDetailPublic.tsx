@@ -58,20 +58,6 @@ const toDateValue = (value: string | Date) => {
     return new Date(`${value}T00:00:00+08:00`);
 };
 
-const toTimeValue = (value: string | Date) => {
-    if (value instanceof Date) return value;
-    if (value.includes("T")) return new Date(value);
-    return new Date(`1970-01-01T${value}:00+08:00`);
-};
-
-const toManilaTimeKey = (value: Date) =>
-    new Intl.DateTimeFormat("en-GB", {
-        timeZone: MANILA_TZ,
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-    }).format(value);
-
 type CategoryDraft = {
     id: string;
     category_name: string;
@@ -164,6 +150,21 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
     const categorySets: CategorySetDraft[] = React.useMemo(() => {
         if (!show.categorySets) return [];
 
+        const seatAssignmentsBySetId = new Map<string, Record<string, string>>();
+
+        show.scheds.forEach((sched) => {
+            if (!sched.seatAssignments || !sched.category_set_id) return;
+
+            const currentAssignments = seatAssignmentsBySetId.get(sched.category_set_id) ?? {};
+            const mergedAssignments = { ...currentAssignments };
+
+            sched.seatAssignments.forEach((assignment) => {
+                mergedAssignments[assignment.seat_id] = assignment.set.seat_category_id;
+            });
+
+            seatAssignmentsBySetId.set(sched.category_set_id, mergedAssignments);
+        });
+
         return show.categorySets.map((dbSet) => ({
             id: dbSet.category_set_id,
             set_name: dbSet.set_name,
@@ -176,30 +177,9 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
                 price: item.seatCategory.price,
                 color_code: item.seatCategory.color_code,
             })),
-            seatAssignments: {},
+            seatAssignments: seatAssignmentsBySetId.get(dbSet.category_set_id) ?? {},
         }));
-    }, [show.categorySets]);
-
-    // Build seatAssignments from schedule data
-    React.useEffect(() => {
-        if (!show.scheds || categorySets.length === 0) return;
-
-        show.scheds.forEach((sched) => {
-            if (!sched.seatAssignments) return;
-
-            const categorySet = categorySets.find(
-                (set) => set.id === sched.category_set_id
-            );
-
-            if (categorySet) {
-                const assignments: Record<string, string> = {};
-                sched.seatAssignments.forEach((assignment) => {
-                    assignments[assignment.seat_id] = assignment.set.seat_category_id;
-                });
-                categorySet.seatAssignments = assignments;
-            }
-        });
-    }, [show.scheds, categorySets]);
+    }, [show.categorySets, show.scheds]);
 
     // Calculate total seats
     const totalSeatsCount = React.useMemo(() => {
