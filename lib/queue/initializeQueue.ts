@@ -55,16 +55,34 @@ export async function getQueueStats(showScopeId: string) {
 
         const [queueSize, avgServiceMs, seq] = await Promise.all([
             redis.zcard(queueKey),
-            redis.get<number>(metricsKey),
-            redis.get<number>(seqKey),
+            redis.get(metricsKey),
+            redis.get(seqKey),
         ]);
+
+        const avgServiceMsValue =
+            typeof avgServiceMs === 'number'
+                ? avgServiceMs
+                : typeof avgServiceMs === 'string'
+                    ? Number.parseInt(avgServiceMs, 10)
+                    : 60000;
+        const seqValue =
+            typeof seq === 'number'
+                ? seq
+                : typeof seq === 'string'
+                    ? Number.parseInt(seq, 10)
+                    : 0;
+        const safeAvgServiceMs =
+            Number.isFinite(avgServiceMsValue) && avgServiceMsValue > 0
+                ? avgServiceMsValue
+                : 60000;
+        const safeSeq = Number.isFinite(seqValue) ? seqValue : 0;
 
         return {
             showScopeId,
             queueSize: queueSize || 0,
-            avgServiceMs: avgServiceMs || 60000,
-            seq: seq || 0,
-            estimatedWaitTime: (queueSize || 0) * (avgServiceMs || 60000),
+            avgServiceMs: safeAvgServiceMs,
+            seq: safeSeq,
+            estimatedWaitTime: (queueSize || 0) * safeAvgServiceMs,
         };
     } catch (error) {
         console.error(`Failed to get queue stats for ${showScopeId}:`, error);

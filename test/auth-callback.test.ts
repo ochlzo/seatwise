@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   resolveLoginCallbackUrl,
   sanitizeInternalReturnPath,
-} from "../lib/auth/redirect.ts";
+} from "../lib/auth/redirect";
 
 test("sanitizeInternalReturnPath rejects unsafe values", () => {
   assert.equal(sanitizeInternalReturnPath(null), null);

@@ -14,7 +14,7 @@ export async function closeQueueChannel(
         const queueKey = `seatwise:queue:${showScopeId}`;
 
         // Get all users currently in queue
-        const ticketIds = await redis.zrange<string[]>(queueKey, 0, -1);
+        const ticketIds = (await redis.zrange(queueKey, 0, -1)) as string[];
 
         // Notify all users via public channel
         const channel = ably.channels.get(`seatwise:${showScopeId}:public`);

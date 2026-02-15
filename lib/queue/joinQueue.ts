@@ -102,7 +102,7 @@ export async function joinQueue({
 
         // 8. Calculate estimated wait time
         const avgServiceMsKey = `seatwise:metrics:avg_service_ms:${showScopeId}`;
-        const avgServiceMs = await redis.get<string | number>(avgServiceMsKey);
+        const avgServiceMs = (await redis.get(avgServiceMsKey)) as string | number | null;
         const avgServiceTime =
             typeof avgServiceMs === 'number'
                 ? avgServiceMs

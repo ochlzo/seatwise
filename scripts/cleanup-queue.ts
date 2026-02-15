@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 type CliOptions = {
   all: boolean;
@@ -349,7 +350,10 @@ async function main() {
     throw new Error("Destructive run blocked. Re-run with --yes or use --dry-run.");
   }
 
-  const { redis } = await import("../lib/clients/redis.ts");
+  const redisModuleUrl = pathToFileURL(
+    path.resolve(process.cwd(), "lib/clients/redis.ts"),
+  ).href;
+  const { redis } = await import(redisModuleUrl);
   const redisClient = redis as unknown as RedisClient;
 
   const scopeIds = new Set<string>(options.showScopeIds);
