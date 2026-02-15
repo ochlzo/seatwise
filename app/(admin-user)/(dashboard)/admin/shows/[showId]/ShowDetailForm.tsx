@@ -976,7 +976,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       {/* 1. Banner Section */}
-      <div className="relative aspect-[4/3] md:aspect-[3/1] bg-muted overflow-hidden rounded-xl border border-sidebar-border shadow-2xl">
+      <div className="relative aspect-square md:aspect-[3/1] bg-muted overflow-hidden rounded-xl border border-sidebar-border shadow-2xl">
         {show.show_image_key ? (
           <Image
             src={show.show_image_key}
@@ -994,13 +994,13 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-        <div className="absolute bottom-6 left-8 right-8 flex justify-between items-end">
-          <div className="space-y-1">
-            <h1 className="text-3xl md:text-4xl font-semibold text-white drop-shadow-md">
+        <div className="absolute bottom-3 md:bottom-6 left-4 md:left-8 right-4 md:right-8 flex justify-between items-end">
+          <div className="space-y-0.5 md:space-y-1">
+            <h1 className="text-xl md:text-3xl lg:text-4xl font-semibold text-white drop-shadow-md">
               {formData.show_name}
             </h1>
-            <p className="text-white/80 font-medium flex items-center gap-2 drop-shadow-sm">
-              <MapPin className="w-4 h-4" />
+            <p className="text-xs md:text-base text-white/80 font-medium flex items-center gap-1 md:gap-2 drop-shadow-sm">
+              <MapPin className="w-3 h-3 md:w-4 md:h-4" />
               {formData.venue}
             </p>
           </div>
@@ -1011,7 +1011,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
               color: "white",
               borderColor: "transparent",
             }}
-            className="shadow-xl font-bold italic px-4 py-1.5 text-sm uppercase tracking-wider"
+            className="shadow-xl font-bold italic px-2 md:px-4 py-1 md:py-1.5 text-xs md:text-sm uppercase tracking-wider"
           >
             {formData.show_status.replace("_", " ")}
           </Badge>
