@@ -205,7 +205,7 @@ export function ReserveNowButton({
         <>
             <Button
                 size="lg"
-                className="w-full sm:w-auto gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all"
+                className="w-full gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg hover:shadow-xl transition-all"
                 onClick={handleReserveClick}
             >
                 <Ticket className="h-5 w-5" />
@@ -217,8 +217,8 @@ export function ReserveNowButton({
                     {step === 'date' ? (
                         <>
                             <DialogHeader>
-                                <DialogTitle>Select a Date</DialogTitle>
-                                <DialogDescription>
+                                <DialogTitle className="text-base sm:text-lg">Select a Date</DialogTitle>
+                                <DialogDescription className="text-xs sm:text-sm">
                                     Choose which date you&apos;d like to attend {showName}
                                 </DialogDescription>
                             </DialogHeader>
@@ -239,11 +239,11 @@ export function ReserveNowButton({
                                 />
                             </div>
 
-                            <DialogFooter>
-                                <Button variant="outline" onClick={handleCancel}>
+                            <DialogFooter className="flex-row justify-end gap-2">
+                                <Button variant="outline" onClick={handleCancel} className="text-xs sm:text-sm">
                                     Cancel
                                 </Button>
-                                <Button onClick={handleDateConfirm} disabled={!selectedDate}>
+                                <Button onClick={handleDateConfirm} disabled={!selectedDate} className="text-xs sm:text-sm">
                                     Confirm
                                 </Button>
                             </DialogFooter>
@@ -261,8 +261,8 @@ export function ReserveNowButton({
                                         <ChevronLeft className="h-4 w-4" />
                                     </Button>
                                     <div className="flex-1">
-                                        <DialogTitle>Select Time Slot</DialogTitle>
-                                        <DialogDescription>
+                                        <DialogTitle className="text-base sm:text-lg">Select Time Slot</DialogTitle>
+                                        <DialogDescription className="text-xs sm:text-sm">
                                             {selectedDate && formatDate(selectedDate)}
                                         </DialogDescription>
                                     </div>
@@ -297,7 +297,7 @@ export function ReserveNowButton({
                                                         >
                                                             <div className="flex items-center gap-2">
                                                                 <Clock className="h-4 w-4 text-muted-foreground" />
-                                                                <span className="font-semibold text-base">
+                                                                <span className="text-sm font-semibold sm:text-base">
                                                                     {formatTime(sched.sched_start_time)} -{' '}
                                                                     {formatTime(sched.sched_end_time)}
                                                                 </span>
@@ -308,7 +308,7 @@ export function ReserveNowButton({
                                                                     {categories.map((category) => (
                                                                         <div
                                                                             key={`${sched.sched_id}-${category.name}`}
-                                                                            className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/60 bg-background px-2 py-0.5 text-[10px]"
+                                                                            className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/60 bg-background px-2 py-0.5 text-[9px] sm:text-[10px]"
                                                                         >
                                                                             <span className="font-medium">{category.name}</span>
                                                                             <span className="text-muted-foreground">
@@ -327,14 +327,14 @@ export function ReserveNowButton({
                                 </RadioGroup>
                             </div>
 
-                            <DialogFooter>
-                                <Button variant="outline" onClick={handleCancel} disabled={isJoining}>
+                            <DialogFooter className="flex-row justify-end gap-2">
+                                <Button variant="outline" onClick={handleCancel} disabled={isJoining} className="text-xs sm:text-sm">
                                     Cancel
                                 </Button>
                                 <Button
                                     onClick={handleJoinQueue}
                                     disabled={!selectedSchedId || isJoining}
-                                    className="gap-2"
+                                    className="gap-2 text-xs sm:text-sm"
                                 >
                                     {isJoining && <Loader2 className="h-4 w-4 animate-spin" />}
                                     {isJoining ? 'Joining...' : 'Confirm & Join Queue'}
