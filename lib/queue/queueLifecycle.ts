@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { redis } from "@/lib/clients/redis";
 import { ably } from "@/lib/clients/ably";
-import type { ActiveSession, QueueActiveEvent, QueueMoveEvent, TicketData } from "@/lib/types/queue";
+import type {
+  ActiveSession,
+  QueueActiveEvent,
+  QueueMoveEvent,
+  QueueSessionExpiredEvent,
+  TicketData,
+} from "@/lib/types/queue";
 
 const ACTIVE_WINDOW_MS = 5 * 60 * 1000;
 const PROMOTION_LOCK_TTL_SECONDS = 3;
@@ -14,6 +20,14 @@ interface PromoteNextParams {
 interface CompleteActiveSessionParams {
   showScopeId: string;
   session: ActiveSession;
+}
+
+interface ExpireQueueSessionParams {
+  showScopeId: string;
+  ticketId: string;
+  userId?: string | null;
+  reason?: string;
+  promoteNext?: boolean;
 }
 
 export interface PromoteNextResult {
@@ -37,6 +51,104 @@ const parseJson = <T>(value: unknown): T | null => {
   return null;
 };
 
+const EXPIRED_SESSION_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
+
+const resolveUserIdForTicket = async ({
+  showScopeId,
+  ticketId,
+  userId,
+}: {
+  showScopeId: string;
+  ticketId: string;
+  userId?: string | null;
+}): Promise<string | null> => {
+  if (userId) {
+    return userId;
+  }
+
+  const ticketKey = `seatwise:ticket:${showScopeId}:${ticketId}`;
+  const ticketRaw = await redis.get(ticketKey);
+  const ticket = parseJson<TicketData>(ticketRaw);
+  return ticket?.userId ?? null;
+};
+
+const cleanupQueueTicketArtifacts = async ({
+  showScopeId,
+  ticketId,
+  userId,
+}: {
+  showScopeId: string;
+  ticketId: string;
+  userId?: string | null;
+}) => {
+  const resolvedUserId = await resolveUserIdForTicket({
+    showScopeId,
+    ticketId,
+    userId,
+  });
+
+  const activeKey = `seatwise:active:${showScopeId}:${ticketId}`;
+  const ticketKey = `seatwise:ticket:${showScopeId}:${ticketId}`;
+  const userTicketKey = `seatwise:user_ticket:${showScopeId}`;
+
+  await redis.del(activeKey, ticketKey);
+  if (resolvedUserId) {
+    await redis.hdel(userTicketKey, resolvedUserId);
+  }
+};
+
+const publishSessionExpiredEvent = async ({
+  showScopeId,
+  ticketId,
+  reason,
+}: {
+  showScopeId: string;
+  ticketId: string;
+  reason?: string;
+}) => {
+  try {
+    const event: QueueSessionExpiredEvent = {
+      type: "SESSION_EXPIRED",
+      message: reason ?? EXPIRED_SESSION_MESSAGE,
+      timestamp: Date.now(),
+      disconnect: true,
+    };
+
+    await ably.channels
+      .get(`seatwise:${showScopeId}:private:${ticketId}`)
+      .publish("queue-event", event);
+  } catch (error) {
+    console.error(`Failed to publish SESSION_EXPIRED for ${showScopeId}/${ticketId}:`, error);
+  }
+};
+
+const extractTicketIdFromActiveKey = (showScopeId: string, activeKey: string): string | null => {
+  const prefix = `seatwise:active:${showScopeId}:`;
+  if (!activeKey.startsWith(prefix)) {
+    return null;
+  }
+
+  const ticketId = activeKey.slice(prefix.length).trim();
+  return ticketId.length > 0 ? ticketId : null;
+};
+
+export async function expireQueueSession({
+  showScopeId,
+  ticketId,
+  userId,
+  reason,
+  promoteNext = true,
+}: ExpireQueueSessionParams): Promise<PromoteNextResult> {
+  await cleanupQueueTicketArtifacts({ showScopeId, ticketId, userId });
+  await publishSessionExpiredEvent({ showScopeId, ticketId, reason });
+
+  if (!promoteNext) {
+    return { promoted: false };
+  }
+
+  return promoteNextInQueue({ showScopeId });
+}
+
 const hasValidActiveSession = async (showScopeId: string): Promise<boolean> => {
   const activePattern = `seatwise:active:${showScopeId}:*`;
   const activeKeys = (await redis.keys(activePattern)) as string[];
@@ -48,11 +160,35 @@ const hasValidActiveSession = async (showScopeId: string): Promise<boolean> => {
   let hasActive = false;
 
   for (const activeKey of activeKeys) {
+    const ticketIdFromKey = extractTicketIdFromActiveKey(showScopeId, activeKey);
     const raw = await redis.get(activeKey);
     const active = parseJson<ActiveSession>(raw);
 
-    if (!active || active.expiresAt <= now) {
-      await redis.del(activeKey);
+    if (!active) {
+      if (ticketIdFromKey) {
+        await cleanupQueueTicketArtifacts({
+          showScopeId,
+          ticketId: ticketIdFromKey,
+        });
+      } else {
+        await redis.del(activeKey);
+      }
+      continue;
+    }
+
+    if (active.expiresAt <= now) {
+      const expiredTicketId = active.ticketId || ticketIdFromKey;
+      if (!expiredTicketId) {
+        await redis.del(activeKey);
+        continue;
+      }
+
+      await expireQueueSession({
+        showScopeId,
+        ticketId: expiredTicketId,
+        userId: active.userId,
+        promoteNext: false,
+      });
       continue;
     }
 
@@ -175,13 +311,11 @@ export async function completeActiveSessionAndPromoteNext({
   showScopeId,
   session,
 }: CompleteActiveSessionParams): Promise<PromoteNextResult> {
-  const activeKey = `seatwise:active:${showScopeId}:${session.ticketId}`;
-  const ticketKey = `seatwise:ticket:${showScopeId}:${session.ticketId}`;
-  const userTicketKey = `seatwise:user_ticket:${showScopeId}`;
-
-  await redis.del(activeKey);
-  await redis.hdel(userTicketKey, session.userId);
-  await redis.del(ticketKey);
+  await cleanupQueueTicketArtifacts({
+    showScopeId,
+    ticketId: session.ticketId,
+    userId: session.userId,
+  });
 
   const avgServiceMsKey = `seatwise:metrics:avg_service_ms:${showScopeId}`;
   const rawAvg = (await redis.get(avgServiceMsKey)) as number | string | null;
