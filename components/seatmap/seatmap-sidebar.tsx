@@ -47,8 +47,23 @@ export function SeatMapSidebar({
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
-        <div className="px-2 py-1">
-          <h2 className="text-sm font-semibold">Seat Palette</h2>
+        <div className="px-2 py-2 flex items-center justify-center">
+          <Image
+            src="/logo_light.png"
+            alt="Seatwise"
+            width={120}
+            height={32}
+            className="h-8 w-auto object-contain dark:hidden"
+            priority
+          />
+          <Image
+            src="/logo_dark.png"
+            alt="Seatwise"
+            width={120}
+            height={32}
+            className="h-8 w-auto object-contain hidden dark:block"
+            priority
+          />
         </div>
       </SidebarHeader>
       <SidebarContent className="px-2 pb-2">
@@ -131,54 +146,54 @@ export function SeatMapSidebar({
         <div className="grid grid-cols-2 gap-2">
           {(
             [
-            {
-              label: "Square",
-              shape: "rect",
-              icon: <div className="w-8 h-8 border-2 border-zinc-500" />,
-            },
-            {
-              label: "Circle",
-              shape: "circle",
-              icon: (
-                <div className="w-8 h-8 rounded-full border-2 border-zinc-500" />
-              ),
-            },
-            {
-              label: "Hexagon",
-              shape: "polygon",
-              sides: 6,
-              icon: (
-                <svg
-                  viewBox="0 0 100 100"
-                  className="w-8 h-8"
-                  aria-hidden="true"
-                >
-                  <polygon
-                    points="25,6 75,6 98,50 75,94 25,94 2,50"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="6"
-                  />
-                </svg>
-              ),
-            },
-            {
-              label: "Line",
-              shape: "line",
-              icon: (
-                <div className="w-8 h-0 border-t-2 border-zinc-500 mt-4" />
-              ),
-            },
-            {
-              label: "Text",
-              shape: "text",
-              icon: (
-                <div className="w-8 h-8 border-2 border-zinc-500 flex items-center justify-center text-xs font-semibold text-zinc-600">
-                  T
-                </div>
-              ),
-            },
-          ] as Array<{
+              {
+                label: "Square",
+                shape: "rect",
+                icon: <div className="w-8 h-8 border-2 border-zinc-500" />,
+              },
+              {
+                label: "Circle",
+                shape: "circle",
+                icon: (
+                  <div className="w-8 h-8 rounded-full border-2 border-zinc-500" />
+                ),
+              },
+              {
+                label: "Hexagon",
+                shape: "polygon",
+                sides: 6,
+                icon: (
+                  <svg
+                    viewBox="0 0 100 100"
+                    className="w-8 h-8"
+                    aria-hidden="true"
+                  >
+                    <polygon
+                      points="25,6 75,6 98,50 75,94 25,94 2,50"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="6"
+                    />
+                  </svg>
+                ),
+              },
+              {
+                label: "Line",
+                shape: "line",
+                icon: (
+                  <div className="w-8 h-0 border-t-2 border-zinc-500 mt-4" />
+                ),
+              },
+              {
+                label: "Text",
+                shape: "text",
+                icon: (
+                  <div className="w-8 h-8 border-2 border-zinc-500 flex items-center justify-center text-xs font-semibold text-zinc-600">
+                    T
+                  </div>
+                ),
+              },
+            ] as Array<{
               label: string;
               shape: SeatmapShapeNode["shape"];
               icon: React.ReactNode;
