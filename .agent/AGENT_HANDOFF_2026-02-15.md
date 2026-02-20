@@ -54,7 +54,7 @@ Current queue behavior:
 
 Client-side queue/reserve pages:
 - `QueueWaitingClient` persists active session payload to `sessionStorage` when status becomes active.
-- `ReserveSeatClient` validates active session on load and currently shows placeholder booking area plus `Done reserving (simulate)` button.
+- `ReserveSeatClient` validates active session on load and now renders a booking-style reserve UI with seatmap preview, category pricing, selected-seat summary, and queue session actions.
 
 ## Queue cleanup script
 - Script: `scripts/cleanup-queue.ts`
@@ -90,10 +90,48 @@ Data loading fix:
 
 ## Breadcrumb changes
 - File: `components/page-header.tsx`
-- Queue and reserve pages now use simplified breadcrumbs:
-- Queue: `Home > Dashboard > Queue`
-- Reserve: `Home > Dashboard > Reserve Seat`
-- Dynamic show/schedule IDs are no longer shown in breadcrumbs.
+- Queue and reserve breadcrumbs include show name:
+- Queue: `Home > Dashboard > Show_Name > Queue`
+- Reserve: `Home > Dashboard > Show_Name > Reserve Seats`
+- Dynamic IDs are not shown.
+
+## Reserve flow updates in this session
+Primary files:
+- `app/(app-user)/(events)/reserve/[showId]/[schedId]/page.tsx`
+- `app/(app-user)/(events)/reserve/[showId]/[schedId]/ReserveSeatClient.tsx`
+- `components/page-header.tsx`
+- `lib/queue/queueLifecycle.ts`
+- `lib/queue/validateActiveSession.ts`
+- `lib/types/queue.ts`
+- `components/ui/sonner.tsx`
+
+Implemented data and UI behavior:
+- Reserve route now loads schedule-scoped seatmap data via Prisma (`show_id + sched_id`) and passes seatmap/category payload to client.
+- Reserve client now renders `SeatmapPreview` for the schedule seatmap (instead of placeholder text).
+- Category chips and booking summary now display category prices (PHP format).
+- Selected-seat list shows seat numbers (from DB `seat.seat_number`) instead of seat IDs.
+- Multi-seat flow added with capped selection at 10 seats:
+- First tap selects initial seat.
+- `Add Seat` arms add mode; label switches to `Select a seat` and button appears disabled until user picks a seat.
+- Individual remove and clear-all actions remain available in summary.
+- Parent reserve card is visually removed on mobile while preserved on `sm+` screens.
+- Right-column Session Controls card was removed; only action buttons remain.
+- Top timer badge is color-coded:
+- Default active state is green.
+- Turns red at 20s remaining.
+- Countdown warnings use Sonner default styling (`components/ui/sonner.tsx`):
+- `1 minute left`
+- `Hurry! 20 seconds left!`
+
+Expired-window and rejoin behavior:
+- Expired message UX changed to:
+- `Uh oh! Your time ran out. Rejoin the queue?`
+- `Yes` rejoins via `POST /api/queue/join` and routes to queue page.
+- `No` routes back to public show detail page (`/${showId}`).
+- Queue expiry cleanup now publishes `SESSION_EXPIRED` on private Ably channel and cleans Redis ticket/session keys.
+- Added `QueueSessionExpiredEvent` type in `lib/types/queue.ts`.
+- Fixed race condition during rapid rejoin:
+- cleanup now only removes `seatwise:user_ticket` mapping if it still points to the same expiring ticket, preventing accidental deletion of a newly rejoined ticket mapping.
 
 ## Admin hydration fix
 - File: `app/(admin-user)/(dashboard)/layout.tsx`
@@ -143,7 +181,7 @@ Selection panel:
 - Bulk seat labeling and text editing controls remain in panel.
 
 ## Current known limitations / watchlist
-- Reserve seat page is still scaffolded; real booking canvas/API fencing integration is pending.
+- Reserve seat page is no longer a placeholder; seatmap preview + client-side selection UX are integrated, but actual seat hold/commit booking API integration is still pending.
 - Queue/reseve portal overlay behavior is not active because modal route integration was reverted.
 - `ThemeSwithcer` component/file name is misspelled but consistently referenced; no functional break.
 - There are a few encoding artifacts in some UI strings (for example peso symbol rendering in one file).
@@ -167,4 +205,3 @@ Selection panel:
 - `UPSTASH_REDIS_REST_TOKEN`
 - `ABLY_API_KEY`
 - Auth/session cookie + Firebase admin config are required for queue APIs.
-
