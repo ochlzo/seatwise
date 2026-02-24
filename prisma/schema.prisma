@@ -1,8 +1,3 @@
-// Prisma schema for Seatwise v2
-// Adds CategorySet (bundle) so schedules can share a named set of SeatCategories,
-// while still allowing schedules to have different category bundles or custom categories.
-// SeatAssignment maps to a schedule-specific Set, which maps to a SeatCategory.
-
 generator client {
   provider   = "prisma-client-js"
   engineType = "library"
@@ -14,150 +9,116 @@ datasource db {
 }
 
 model User {
-  user_id       String     @id @default(cuid())
-  firebase_uid  String     @unique
-  username      String?    @unique
-  email         String     @unique
-  first_name    String
-  last_name     String
-  status        UserStatus
-  role          UserRole
-
-  avatar_key    String?
-
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  user_id      String        @id @default(cuid())
+  firebase_uid String        @unique
+  username     String?       @unique
+  email        String        @unique
+  first_name   String
+  last_name    String
+  status       UserStatus
+  role         UserRole
+  avatar_key   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reservations Reservation[]
+  reviews      Review[]
 }
 
 model Show {
-  show_id          String      @id @default(cuid())
-  show_name        String      @unique
+  show_id          String        @id @default(cuid())
+  show_name        String        @unique
   show_description String
   venue            String
   address          String
   show_status      ShowStatus
-  show_start_date  DateTime    @db.Date
-  show_end_date    DateTime    @db.Date
+  show_start_date  DateTime      @db.Date
+  show_end_date    DateTime      @db.Date
   show_image_key   String?
-
-  // OPTIONAL: show can have a seatmap (required for UPCOMING/OPEN shows)
   seatmap_id       String?
-  seatmap          Seatmap?    @relation(fields: [seatmap_id], references: [seatmap_id])
-
-  scheds           Sched[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
   categorySets     CategorySet[]
-
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  scheds           Sched[]
+  seatmap          Seatmap?      @relation(fields: [seatmap_id], references: [seatmap_id])
+  reviews          Review[]
 }
 
 model Sched {
-  sched_id          String      @id @default(cuid())
-  sched_date        DateTime    @db.Date
-  sched_start_time  DateTime    @db.Time
-  sched_end_time    DateTime    @db.Time
-
-  // REQUIRED: schedule belongs to a show
-  show_id           String
-  show              Show        @relation(fields: [show_id], references: [show_id])
-
-  // OPTIONAL: schedule can reference a reusable bundle of categories
-  category_set_id   String?
-  categorySet       CategorySet? @relation(fields: [category_set_id], references: [category_set_id])
-
-  seatAssignments   SeatAssignment[]
-  sets              Set[]
-
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  sched_id         String           @id @default(cuid())
+  sched_date       DateTime         @db.Date
+  sched_start_time DateTime         @db.Time(6)
+  sched_end_time   DateTime         @db.Time(6)
+  show_id          String
+  category_set_id  String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  categorySet      CategorySet?     @relation(fields: [category_set_id], references: [category_set_id])
+  show             Show             @relation(fields: [show_id], references: [show_id])
+  seatAssignments  SeatAssignment[]
+  sets             Set[]
 
   @@index([show_id])
   @@index([category_set_id])
 }
 
 model Seatmap {
-  seatmap_id        String        @id @default(cuid())
-  seatmap_name      String        @unique
-  seatmap_json      Json
-  seatmap_status    SeatmapStatus @default(ACTIVE)
-
-  shows             Show[]
-  seats             Seat[]
-  seatCategories    SeatCategory[]
-
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  seatmap_id     String         @id @default(cuid())
+  seatmap_name   String         @unique
+  seatmap_json   Json
+  seatmap_status SeatmapStatus  @default(ACTIVE)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  seats          Seat[]
+  seatCategories SeatCategory[]
+  shows          Show[]
 }
 
 model Seat {
-  seat_id           String      @id @default(cuid())
-  seat_number       String
+  seat_id         String           @id @default(cuid())
+  seat_number     String
+  seatmap_id      String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  seatmap         Seatmap          @relation(fields: [seatmap_id], references: [seatmap_id])
+  seatAssignments SeatAssignment[]
 
-  // Seat belongs to a seatmap (physical seat)
-  seatmap_id        String
-  seatmap           Seatmap     @relation(fields: [seatmap_id], references: [seatmap_id])
-
-  seatAssignments   SeatAssignment[]
-
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-
-  @@index([seatmap_id])
   @@unique([seatmap_id, seat_number])
+  @@index([seatmap_id])
 }
 
 model SeatCategory {
-  seat_category_id  String     @id @default(cuid())
-  category_name     String
-  price             Decimal    @db.Decimal(10, 2) @default(0.00)
-  color_code        ColorCodes
-
-  // Scope categories to a seatmap (prevents mixing categories across unrelated seatmaps/shows)
-  seatmap_id        String
-  seatmap           Seatmap    @relation(fields: [seatmap_id], references: [seatmap_id])
-
-  // relation back to Set (per-schedule instance)
-  sets              Set[]
-
-  // relation to CategorySet bundles
-  categorySetItems  CategorySetItem[]
-
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  seat_category_id String            @id @default(cuid())
+  category_name    String
+  price            Decimal           @default(0.00) @db.Decimal(10, 2)
+  color_code       ColorCodes
+  seatmap_id       String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  categorySetItems CategorySetItem[]
+  seatmap          Seatmap           @relation(fields: [seatmap_id], references: [seatmap_id])
+  sets             Set[]
 
   @@unique([seatmap_id, category_name, price, color_code])
   @@index([seatmap_id])
 }
 
-//
-// A reusable named bundle of SeatCategories for a Show.
-// Example: "SET A" = VIP + REGULAR + BALCONY
-//
 model CategorySet {
-  category_set_id String   @id @default(cuid())
+  category_set_id String            @id @default(cuid())
   set_name        String
-
   show_id         String
-  show            Show     @relation(fields: [show_id], references: [show_id])
-
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  show            Show              @relation(fields: [show_id], references: [show_id])
   items           CategorySetItem[]
   scheds          Sched[]
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  // "SET A" can repeat across different shows, but not within the same show
   @@unique([show_id, set_name])
   @@index([show_id])
 }
 
-//
-// Join table: which SeatCategories belong to a CategorySet bundle
-//
 model CategorySetItem {
   category_set_id  String
   seat_category_id String
-
   categorySet      CategorySet  @relation(fields: [category_set_id], references: [category_set_id])
   seatCategory     SeatCategory @relation(fields: [seat_category_id], references: [seat_category_id])
 
@@ -165,25 +126,16 @@ model CategorySetItem {
   @@index([seat_category_id])
 }
 
-//
-// Per-schedule link: which SeatCategory is used for this specific schedule.
-// SeatAssignment points here via set_id.
-//
 model Set {
-  set_id            String       @id @default(cuid())
+  set_id           String           @id @default(cuid())
+  sched_id         String
+  seat_category_id String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  seatAssignments  SeatAssignment[]
+  sched            Sched            @relation(fields: [sched_id], references: [sched_id])
+  seatCategory     SeatCategory     @relation(fields: [seat_category_id], references: [seat_category_id])
 
-  sched_id          String
-  sched             Sched        @relation(fields: [sched_id], references: [sched_id])
-
-  seat_category_id  String
-  seatCategory      SeatCategory @relation(fields: [seat_category_id], references: [seat_category_id])
-
-  seatAssignments   SeatAssignment[]
-
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-
-  // Prevent linking the same category more than once to the same schedule
   @@unique([sched_id, seat_category_id])
   @@unique([set_id, sched_id])
   @@index([sched_id])
@@ -191,28 +143,74 @@ model Set {
 }
 
 model SeatAssignment {
-  seat_assignment_id String      @id @default(cuid())
-  seat_status        SeatStatus  @default(OPEN)
-
+  seat_assignment_id String        @id @default(cuid())
+  seat_status        SeatStatus    @default(OPEN)
   seat_id            String
   sched_id           String
-
-  // Which category (via Set) this seat belongs to for this schedule
   set_id             String
-  set Set @relation(fields: [set_id, sched_id], references: [set_id, sched_id])
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  sched              Sched         @relation(fields: [sched_id], references: [sched_id])
+  seat               Seat          @relation(fields: [seat_id], references: [seat_id])
+  set                Set           @relation(fields: [set_id, sched_id], references: [set_id, sched_id])
+  reservations       Reservation[]
 
-  seat               Seat        @relation(fields: [seat_id], references: [seat_id])
-  sched              Sched       @relation(fields: [sched_id], references: [sched_id])
-
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
-
-  // One seat-state row per seat per schedule
   @@unique([seat_id, sched_id])
-
   @@index([sched_id])
   @@index([seat_id])
   @@index([set_id])
+}
+
+model Reservation {
+  reservation_id     String            @id @default(cuid())
+  user_id            String
+  seat_assignment_id String
+  status             ReservationStatus @default(PENDING)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  user               User              @relation(fields: [user_id], references: [user_id])
+  seatAssignment     SeatAssignment    @relation(fields: [seat_assignment_id], references: [seat_assignment_id])
+  payment            Payment?
+
+  @@index([user_id])
+  @@index([seat_assignment_id])
+}
+
+model Payment {
+  payment_id     String        @id @default(cuid())
+  reservation_id String        @unique
+  amount         Decimal       @db.Decimal(10, 2)
+  method         PaymentMethod
+  status         PaymentStatus @default(PENDING)
+  reference_no   String?       @unique
+  paid_at        DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  reservation    Reservation   @relation(fields: [reservation_id], references: [reservation_id])
+
+  @@index([reservation_id])
+}
+
+model Review {
+  review_id String   @id @default(cuid())
+  user_id   String
+  show_id   String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [user_id], references: [user_id])
+  show      Show     @relation(fields: [show_id], references: [show_id])
+
+  @@unique([user_id, show_id])
+  @@index([user_id])
+  @@index([show_id])
+}
+
+model playing_with_neon {
+  id    Int    @id @default(autoincrement())
+  name  String
+  value Float? @db.Real
 }
 
 enum UserRole {
@@ -252,4 +250,26 @@ enum ColorCodes {
 enum SeatStatus {
   OPEN
   RESERVED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  CASH
+  GCASH
+  MAYA
+  CREDIT_CARD
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
 }
