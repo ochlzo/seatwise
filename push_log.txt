@@ -1,0 +1,24 @@
+﻿Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "neondb", schema "public" at "ep-cool-shape-a1g5os1j.ap-southeast-1.aws.neon.tech"
+
+node.exe : Error: P1001: Can't 
+reach database server at `ep-cool-sh
+ape-a1g5os1j.ap-southeast-1.aws.neon
+.tech:5432`
+At C:\Program 
+Files\nodejs\npx.ps1:29 char:3
++   & $NODE_EXE $NPX_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSp 
+   ecified: (Error: P1001: C...neo  
+  n.tech:5432`:String) [], Remote   
+ Exception
+    + FullyQualifiedErrorId : Nativ 
+   eCommandError
+ 
+
+Please make sure your database 
+server is running at `ep-cool-shape-
+a1g5os1j.ap-southeast-1.aws.neon.tec
+h:5432`.
