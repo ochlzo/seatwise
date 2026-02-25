@@ -186,6 +186,7 @@ model Payment {
   method         PaymentMethod
   status         PaymentStatus @default(PENDING)
   reference_no   String?       @unique
+  screenshot_url String?
   paid_at        DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt

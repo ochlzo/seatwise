@@ -4,7 +4,7 @@ import cloudinary from "@/lib/cloudinary";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { prisma } from "@/lib/prisma";
 
-type UploadPurpose = "show-thumbnail" | "avatar-custom";
+type UploadPurpose = "show-thumbnail" | "avatar-custom" | "gcash-receipt";
 
 const PURPOSES: Record<
   UploadPurpose,
@@ -19,6 +19,10 @@ const PURPOSES: Record<
   },
   "avatar-custom": {
     folder: "seatwise/avatars/user_custom",
+    requiresAdmin: false,
+  },
+  "gcash-receipt": {
+    folder: "seatwise/settings/payment_submission",
     requiresAdmin: false,
   },
 };

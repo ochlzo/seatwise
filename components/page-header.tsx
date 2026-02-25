@@ -20,6 +20,7 @@ const segmentMap: Record<string, string> = {
   profile: "Profile",
   account: "Account",
   admin: "Admin Dashboard",
+  reservations: "Reservations",
   "seat-builder": "Seatmap Builder",
 };
 

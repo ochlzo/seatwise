@@ -1,1 +1,0 @@
-﻿components/ui/accordion.tsx(5,49): error TS2307: Cannot find module 'radix-ui' or its corresponding type declarations.

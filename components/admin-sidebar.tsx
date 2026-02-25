@@ -52,6 +52,10 @@ const data = {
                     url: "/admin",
                 },
                 {
+                    title: "Reservations",
+                    url: "/admin/reservations",
+                },
+                {
                     title: "Settings",
                     url: "/admin/settings",
                 },
