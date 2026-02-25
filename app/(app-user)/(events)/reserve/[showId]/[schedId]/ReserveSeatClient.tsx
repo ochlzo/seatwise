@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Clock3, Loader2, Plus, X } from "lucide-react";
+import { AlertTriangle, Clock3, Loader2, Plus, X, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { COLOR_CODE_TO_HEX, type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
 import { toast } from "@/components/ui/sonner";
+import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
 
 type StoredActiveSession = {
   ticketId: string;
@@ -129,6 +130,7 @@ export function ReserveSeatClient({
   const [isAddSeatMode, setIsAddSeatMode] = React.useState(false);
   const [selectionMessage, setSelectionMessage] = React.useState<string | null>(null);
   const [isRejoining, setIsRejoining] = React.useState(false);
+  const [isSuccess, setIsSuccess] = React.useState(false);
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -211,7 +213,7 @@ export function ReserveSeatClient({
   }, [schedId, showId, showScopeId]);
 
   React.useEffect(() => {
-    if (!expiresAt) return;
+    if (isSuccess || !expiresAt) return;
     if (expiresAt > now) return;
     if (hasHandledExpiryRef.current) return;
 
@@ -225,7 +227,7 @@ export function ReserveSeatClient({
   }, [expiresAt, now, notifyExpiry, showScopeId]);
 
   React.useEffect(() => {
-    if (!expiresAt || isLoading || !!error) return;
+    if (isSuccess || !expiresAt || isLoading || !!error) return;
 
     const remainingMs = expiresAt - now;
     if (remainingMs <= 0) return;
@@ -304,6 +306,7 @@ export function ReserveSeatClient({
           schedId,
           ticketId: stored.ticketId,
           activeToken: stored.activeToken,
+          seatIds: selectedSeatIds,
         }),
       });
 
@@ -313,7 +316,7 @@ export function ReserveSeatClient({
       }
 
       clearStoredSession(showScopeId);
-      router.push(`/queue/${showId}/${schedId}`);
+      setIsSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to complete reservation session");
     } finally {
@@ -431,7 +434,7 @@ export function ReserveSeatClient({
                   {showName || "Validating your queue access token..."}
                 </CardTitle>
               </div>
-              {!isLoading && !error && expiresAt && (
+              {!isSuccess && !isLoading && !error && expiresAt && (
                 <Badge
                   variant="outline"
                   className={
@@ -448,14 +451,23 @@ export function ReserveSeatClient({
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-0 sm:px-6">
-          {isLoading && (
+          {isSuccess && (
+            <ReservationSuccessPanel
+              showName={showName}
+              selectedSeatIds={selectedSeatIds}
+              seatNumbersById={seatNumbersById}
+              showId={showId}
+            />
+          )}
+
+          {!isSuccess && isLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Verifying active session...
             </div>
           )}
 
-          {!isLoading && error && (
+          {!isSuccess && !isLoading && error && (
             <div className={isExpiredWindowError ? "rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20" : ""}>
               <div className={isExpiredWindowError ? "flex min-h-[50vh] items-center justify-center px-4 py-8" : ""}>
                 <div className={isExpiredWindowError ? "mx-auto flex max-w-lg flex-col items-center gap-4 text-center" : "space-y-3"}>
@@ -485,7 +497,7 @@ export function ReserveSeatClient({
             </div>
           )}
 
-          {!isLoading && !error && expiresAt && (
+          {!isSuccess && !isLoading && !error && expiresAt && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <Card className="border-sidebar-border/70">
                 <CardContent className="space-y-3 pt-0 px-2 sm:px-3 md:px-4">

@@ -1,0 +1,43 @@
+Seatwise v2 - Tech Stack Overview
+================================
+
+What is Seatwise?
+-----------------
+Seatwise is a high-performance, real-time queuing and ticketing system. It is designed to handle high-concurrency events where users need to wait in line to purchase tickets or book seats. It features an interactive, visual seat selection experience (including 3D venue rendering) and ensures a fair, secure, and coordinated booking process by managing user traffic through an intelligent queue.
+
+What does it do?
+----------------
+1. Queue Management: When users want to buy a ticket for a high-demand show, they join a queue. The system places them in line and gives them a real-time ETA and rank.
+2. Real-Time Orchestration: It instantly notifies users when their turn arrives.
+3. Secure Booking Windows: Once it's a user's turn, they are granted a time-limited "Active Session" (enforced by secure tokens) to complete their booking securely without interference from other users.
+4. Interactive Seat Selection: It features 3D rendering of venues (e.g., an amphitheater) allowing users to visually pick and interact with available seats.
+5. Live Metrics: Broadcasts live viewer counts and queue movements to all waiting users without crashing the server.
+
+
+The Tech Stack
+--------------
+
+1. Core Framework & Language
+   - Next.js (React 19, TypeScript): The backbone of the application leveraging the modern App Router. It handles both the frontend UI and the backend API routes/server actions.
+
+2. Database & Data Layer
+   - Prisma ORM: Used for strict, type-safe database access.
+   - Neon (Serverless PostgreSQL): The primary database for persistent data, such as user profiles, static show schedules, and historical records.
+
+3. Queuing & Real-Time Engine (The Secret Sauce)
+   - Upstash (Serverless Redis): Acts as the 'Source of Truth' for the queue. It handles structured data like sorted sets (who is next in line), active session tokens, expirations, and rolling metrics.
+   - Ably (Real-time WebSockets): Manages the push notifications. It handles private channels (to tell a specific user "It's your turn!") and public channels for low-cost broadcasts (queue movement, live viewer counts) to prevent the "thundering herd" problem where thousands of users hammer the database polling for updates.
+
+4. UI, Styling, & Animations
+   - Tailwind CSS (v4): Modern utility-first CSS framework for styling.
+   - Radix UI & Base UI: Headless, accessible UI components used to build out standard interfaces (dialogs, dropdowns, forms).
+   - Framer Motion & GSAP: Powerful animation libraries used for smooth UI transitions and complex timeline animations.
+
+5. 3D Rendering & Venue Visualization
+   - Three.js & React Three Fiber (@react-three/fiber, @react-three/drei): Used to render 3D models of venues directly in the browser (e.g., loading GLTF models like the amphitheater). It provides an immersive top-down or 3D view of the seating chart.
+   - React Konva: 2D Canvas drawing capabilities, likely used as an alternative or fallback for flat seating map interactions.
+
+6. State Management & Media
+   - Redux Toolkit (@reduxjs/toolkit): Manages complex global state on the frontend.
+   - Cloudinary / Next Cloudinary: Optimized image and media asset management.
+   - Firebase / Firebase Admin: Integrated likely for secondary authentication, push notifications, or legacy data bridging.

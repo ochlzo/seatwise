@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -38,9 +39,9 @@ model Show {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   categorySets     CategorySet[]
+  reviews          Review[]
   scheds           Sched[]
   seatmap          Seatmap?      @relation(fields: [seatmap_id], references: [seatmap_id])
-  reviews          Review[]
 }
 
 model Sched {
@@ -150,10 +151,11 @@ model SeatAssignment {
   set_id             String
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+  reservations       Reservation[]
+  reservedSeats      ReservedSeat[]
   sched              Sched         @relation(fields: [sched_id], references: [sched_id])
   seat               Seat          @relation(fields: [seat_id], references: [seat_id])
   set                Set           @relation(fields: [set_id, sched_id], references: [set_id, sched_id])
-  reservations       Reservation[]
 
   @@unique([seat_id, sched_id])
   @@index([sched_id])
@@ -168,9 +170,10 @@ model Reservation {
   status             ReservationStatus @default(PENDING)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
-  user               User              @relation(fields: [user_id], references: [user_id])
-  seatAssignment     SeatAssignment    @relation(fields: [seat_assignment_id], references: [seat_assignment_id])
   payment            Payment?
+  seatAssignment     SeatAssignment    @relation(fields: [seat_assignment_id], references: [seat_assignment_id])
+  user               User              @relation(fields: [user_id], references: [user_id])
+  reservedSeats      ReservedSeat[]
 
   @@index([user_id])
   @@index([seat_assignment_id])
@@ -191,6 +194,21 @@ model Payment {
   @@index([reservation_id])
 }
 
+model ReservedSeat {
+  res_seats_id       String         @id @default(cuid())
+  reservation_id     String
+  seat_assignment_id String
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  reservation        Reservation    @relation(fields: [reservation_id], references: [reservation_id])
+  seatAssignment     SeatAssignment @relation(fields: [seat_assignment_id], references: [seat_assignment_id])
+
+  @@map("reserved_seats")
+  @@index([reservation_id])
+  @@index([seat_assignment_id])
+}
+
 model Review {
   review_id String   @id @default(cuid())
   user_id   String
@@ -199,8 +217,8 @@ model Review {
   comment   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [user_id], references: [user_id])
   show      Show     @relation(fields: [show_id], references: [show_id])
+  user      User     @relation(fields: [user_id], references: [user_id])
 
   @@unique([user_id, show_id])
   @@index([user_id])
