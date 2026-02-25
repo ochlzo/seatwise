@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Clock3, Loader2, Plus, X, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Clock3, Loader2, Plus, X, CheckCircle2, CreditCard, ChevronLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { COLOR_CODE_TO_HEX, type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
 import { toast } from "@/components/ui/sonner";
 import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
+import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
 
 type StoredActiveSession = {
   ticketId: string;
@@ -48,6 +49,8 @@ type ReserveSeatClientProps = {
 
 const EXPIRED_WINDOW_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
 const MAX_SELECTED_SEATS = 10;
+
+type ReservationStep = "seats" | "payment" | "success";
 
 const formatDuration = (ms: number) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -130,7 +133,8 @@ export function ReserveSeatClient({
   const [isAddSeatMode, setIsAddSeatMode] = React.useState(false);
   const [selectionMessage, setSelectionMessage] = React.useState<string | null>(null);
   const [isRejoining, setIsRejoining] = React.useState(false);
-  const [isSuccess, setIsSuccess] = React.useState(false);
+  const [step, setStep] = React.useState<ReservationStep>("seats");
+  const [screenshotUrl, setScreenshotUrl] = React.useState<string>("");
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -213,7 +217,7 @@ export function ReserveSeatClient({
   }, [schedId, showId, showScopeId]);
 
   React.useEffect(() => {
-    if (isSuccess || !expiresAt) return;
+    if (step === "success" || !expiresAt) return;
     if (expiresAt > now) return;
     if (hasHandledExpiryRef.current) return;
 
@@ -227,7 +231,7 @@ export function ReserveSeatClient({
   }, [expiresAt, now, notifyExpiry, showScopeId]);
 
   React.useEffect(() => {
-    if (isSuccess || !expiresAt || isLoading || !!error) return;
+    if (step === "success" || !expiresAt || isLoading || !!error) return;
 
     const remainingMs = expiresAt - now;
     if (remainingMs <= 0) return;
@@ -289,7 +293,32 @@ export function ReserveSeatClient({
     router.push(`/${showId}`);
   };
 
-  const handleDoneReserving = async () => {
+  // Step transition: seats → payment
+  const handleProceedToPayment = () => {
+    if (selectedSeatIds.length === 0) {
+      setSelectionMessage("Please select at least one seat.");
+      return;
+    }
+    setStep("payment");
+  };
+
+  // Step transition: payment → back to seats
+  const handleBackToSeats = () => {
+    setStep("seats");
+  };
+
+  // Callback from GcashUploadPanel when upload completes
+  const handleScreenshotUploaded = React.useCallback((url: string) => {
+    setScreenshotUrl(url);
+  }, []);
+
+  // Final confirmation: complete reservation with screenshot
+  const handleConfirmReservation = async () => {
+    if (!screenshotUrl) {
+      toast.error("Please upload your GCash payment screenshot first.");
+      return;
+    }
+
     const stored = getStoredSession(showScopeId);
     if (!stored) {
       setError("No active queue session found. Join the queue first.");
@@ -307,6 +336,7 @@ export function ReserveSeatClient({
           ticketId: stored.ticketId,
           activeToken: stored.activeToken,
           seatIds: selectedSeatIds,
+          screenshotUrl,
         }),
       });
 
@@ -316,7 +346,7 @@ export function ReserveSeatClient({
       }
 
       clearStoredSession(showScopeId);
-      setIsSuccess(true);
+      setStep("success");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to complete reservation session");
     } finally {
@@ -326,6 +356,7 @@ export function ReserveSeatClient({
 
   const remaining = expiresAt ? expiresAt - now : 0;
   const isExpiredWindowError = error === EXPIRED_WINDOW_MESSAGE;
+  const isSuccess = step === "success";
 
   const categoriesById = React.useMemo(
     () => new Map(seatmapCategories.map((category) => [category.category_id, category])),
@@ -435,17 +466,25 @@ export function ReserveSeatClient({
                 </CardTitle>
               </div>
               {!isSuccess && !isLoading && !error && expiresAt && (
-                <Badge
-                  variant="outline"
-                  className={
-                    remaining <= 20_000
-                      ? "w-fit border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300 text-sm"
-                      : "w-fit border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300 text-sm"
-                  }
-                >
-                  <Clock3 className="mr-1 h-3.5 w-3.5" />
-                  {formatDuration(remaining)} left
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {step === "payment" && (
+                    <Badge variant="secondary" className="w-fit gap-1 text-sm">
+                      <CreditCard className="h-3.5 w-3.5" />
+                      Payment
+                    </Badge>
+                  )}
+                  <Badge
+                    variant="outline"
+                    className={
+                      remaining <= 20_000
+                        ? "w-fit border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300 text-sm"
+                        : "w-fit border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300 text-sm"
+                    }
+                  >
+                    <Clock3 className="mr-1 h-3.5 w-3.5" />
+                    {formatDuration(remaining)} left
+                  </Badge>
+                </div>
               )}
             </div>
           </div>
@@ -497,7 +536,7 @@ export function ReserveSeatClient({
             </div>
           )}
 
-          {!isSuccess && !isLoading && !error && expiresAt && (
+          {!isSuccess && !isLoading && !error && expiresAt && step === "seats" && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <Card className="border-sidebar-border/70">
                 <CardContent className="space-y-3 pt-0 px-2 sm:px-3 md:px-4">
@@ -644,11 +683,103 @@ export function ReserveSeatClient({
                   <Button variant="outline" onClick={goToQueue} className="w-full">
                     Back to queue
                   </Button>
-                  <Button onClick={handleDoneReserving} disabled={isCompleting} className="w-full">
-                    {isCompleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {isCompleting ? "Completing..." : "Done reserving (simulate)"}
+                  <Button
+                    onClick={handleProceedToPayment}
+                    disabled={selectedSeatIds.length === 0}
+                    className="w-full gap-2"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Proceed to Payment
                   </Button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Payment Step ── */}
+          {!isSuccess && !isLoading && !error && expiresAt && step === "payment" && (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              {/* Left: GCash Upload */}
+              <Card className="border-sidebar-border/70">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={handleBackToSeats} className="h-8 w-8">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <CardTitle className="text-base">Upload GCash Payment</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <GcashUploadPanel
+                    onUploadComplete={handleScreenshotUploaded}
+                    onBack={handleBackToSeats}
+                    disabled={isCompleting}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Right: Order Summary + Confirm */}
+              <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+                <Card className="border-sidebar-border/70">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Order Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {selectedBreakdown.map((item) => (
+                      <div
+                        key={item.category?.category_id}
+                        className="flex items-center justify-between gap-2 rounded-md border border-sidebar-border/60 px-2.5 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-xs sm:text-sm">{item.category?.name}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {item.count} x {formatCurrency(item.unitPrice)}
+                          </p>
+                        </div>
+                        <Badge variant="secondary">{formatCurrency(item.lineTotal)}</Badge>
+                      </div>
+                    ))}
+
+                    <Separator />
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Seats</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedSeatIds.map((seatId) => (
+                          <div
+                            key={seatId}
+                            className="inline-flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] font-medium"
+                          >
+                            {seatNumbersById[seatId] ?? seatId}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <Separator />
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <span>Total</span>
+                      <span>{formatCurrency(subtotal)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Button
+                  onClick={handleConfirmReservation}
+                  disabled={isCompleting || !screenshotUrl}
+                  className="w-full gap-2"
+                >
+                  {isCompleting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Confirming...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      Confirm Reservation
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           )}

@@ -25,12 +25,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { showId, schedId, ticketId, activeToken, seatIds } = body as {
+    const { showId, schedId, ticketId, activeToken, seatIds, screenshotUrl } = body as {
       showId?: string;
       schedId?: string;
       ticketId?: string;
       activeToken?: string;
       seatIds?: string[];
+      screenshotUrl?: string;
     };
 
     if (!showId || !schedId || !ticketId || !activeToken) {
@@ -229,9 +230,49 @@ export async function POST(request: NextRequest) {
             skipDuplicates: true,
           });
 
-          console.log(
-            `[queue/complete] Created ${createdReservations.length} ReservedSeat record(s).`,
-          );
+          // Create Payment records for each reservation (GCash with screenshot)
+          if (screenshotUrl) {
+            // Look up seat category prices to compute amount per reservation
+            const seatAssignmentDetails = await tx.seatAssignment.findMany({
+              where: { seat_assignment_id: { in: openIds } },
+              select: {
+                seat_assignment_id: true,
+                set: {
+                  select: {
+                    seatCategory: {
+                      select: { price: true },
+                    },
+                  },
+                },
+              },
+            });
+
+            const priceByAssignment = new Map(
+              seatAssignmentDetails.map((sa) => [
+                sa.seat_assignment_id,
+                sa.set.seatCategory.price,
+              ]),
+            );
+
+            await Promise.all(
+              createdReservations.map(({ reservation_id, seat_assignment_id }) => {
+                const amount = priceByAssignment.get(seat_assignment_id) ?? 0;
+                return tx.payment.create({
+                  data: {
+                    reservation_id,
+                    amount,
+                    method: "GCASH",
+                    status: "PENDING",
+                    screenshot_url: screenshotUrl,
+                  },
+                });
+              }),
+            );
+
+            console.log(
+              `[queue/complete] Created ${createdReservations.length} Payment record(s) with GCash screenshot.`,
+            );
+          }
         });
 
         reservedCount = openIds.length;
