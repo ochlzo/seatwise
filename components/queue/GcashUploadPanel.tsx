@@ -2,10 +2,11 @@
 
 import * as React from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
-import { Upload, X, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Upload, X, Loader2, AlertCircle, CheckCircle2, Expand, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_TYPES: Record<string, string[]> = {
@@ -16,7 +17,7 @@ const ACCEPTED_TYPES: Record<string, string[]> = {
 
 type GcashUploadPanelProps = {
     onUploadComplete: (url: string) => void;
-    onBack: () => void;
+    onBack?: () => void;
     disabled?: boolean;
 };
 
@@ -25,6 +26,7 @@ export function GcashUploadPanel({
     onBack,
     disabled = false,
 }: GcashUploadPanelProps) {
+    const [isQrFullscreenOpen, setIsQrFullscreenOpen] = React.useState(false);
     const [isProcessing, setIsProcessing] = React.useState(false);
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
     const [storedAsset, setStoredAsset] = React.useState<string | null>(null);
@@ -123,6 +125,31 @@ export function GcashUploadPanel({
                         </div>
                     </div>
 
+                    <div className="flex items-center justify-center gap-2">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1.5 text-[11px]"
+                            onClick={() => setIsQrFullscreenOpen(true)}
+                        >
+                            <Expand className="h-3.5 w-3.5" />
+                            View full screen
+                        </Button>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1.5 text-[11px]"
+                            asChild
+                        >
+                            <a href="/gcashimage/gcashpayment.jpg" download="seatwise-gcash-qr.jpg">
+                                <Download className="h-3.5 w-3.5" />
+                                Download
+                            </a>
+                        </Button>
+                    </div>
+
                     {/* Instructions */}
                     <ol className="list-decimal space-y-1.5 pl-5 text-blue-700 dark:text-blue-400 text-xs sm:text-sm">
                         <li>Scan the QR code above using your <strong>GCash app</strong>.</li>
@@ -214,16 +241,41 @@ export function GcashUploadPanel({
                 </div>
             )}
 
-            {/* Back button */}
-            <Button
-                type="button"
-                variant="outline"
-                onClick={onBack}
-                disabled={isProcessing}
-                className="w-full"
-            >
-                Back to seat selection
-            </Button>
+            {onBack && (
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={onBack}
+                    disabled={isProcessing}
+                    className="w-full"
+                >
+                    Back to seat selection
+                </Button>
+            )}
+
+            <Dialog open={isQrFullscreenOpen} onOpenChange={setIsQrFullscreenOpen}>
+                <DialogContent
+                    className="h-[100dvh] w-[100vw] max-w-none translate-x-[-50%] translate-y-[-50%] rounded-none border-0 bg-black/95 p-0 [&>[data-slot=dialog-close]]:text-white [&>[data-slot=dialog-close]]:opacity-100"
+                    showCloseButton
+                >
+                    <DialogTitle className="sr-only">GCash Payment QR Code</DialogTitle>
+                    <div className="flex h-full w-full items-center justify-center p-3 sm:p-6">
+                        <img
+                            src="/gcashimage/gcashpayment.jpg"
+                            alt="GCash Payment QR Code"
+                            className="max-h-full max-w-full object-contain"
+                        />
+                    </div>
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                        <Button size="sm" variant="secondary" asChild>
+                            <a href="/gcashimage/gcashpayment.jpg" download="seatwise-gcash-qr.jpg">
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                                Download
+                            </a>
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

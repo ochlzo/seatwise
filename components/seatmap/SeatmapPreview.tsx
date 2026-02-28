@@ -38,6 +38,7 @@ type SeatmapPreviewProps = {
   categories?: SeatmapPreviewCategory[];
   seatCategories?: Record<string, string>;
   seatStatusById?: Record<string, "OPEN" | "RESERVED">;
+  showReservationOverlay?: boolean;
   onSeatCategoriesChange?: (categories: Record<string, string>) => void;
 };
 
@@ -55,6 +56,7 @@ export function SeatmapPreview({
   categories = [],
   seatCategories: controlledSeatCategories,
   seatStatusById = {},
+  showReservationOverlay = false,
   onSeatCategoriesChange,
 }: SeatmapPreviewProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -397,6 +399,51 @@ export function SeatmapPreview({
           <LocateFixed className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
         </Button>
       </div>
+      {showReservationOverlay && (
+        <div className="absolute right-2 top-2 z-10 max-w-[48%] rounded-md border border-zinc-200 bg-white/95 p-2 shadow-md backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
+          {categories.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1">
+              {categories.map((category) => {
+                const rawPrice = (category as { price?: string }).price;
+                const parsedPrice = rawPrice ? Number.parseFloat(rawPrice) : NaN;
+                const priceLabel = Number.isFinite(parsedPrice)
+                  ? `PHP ${parsedPrice.toFixed(2)}`
+                  : "";
+                return (
+                  <div
+                    key={category.category_id}
+                    className="inline-flex items-center gap-1 rounded border border-zinc-200 bg-white px-1.5 py-0.5 text-[9px] dark:border-zinc-700 dark:bg-zinc-950"
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full border border-zinc-300"
+                      style={{
+                        backgroundColor: COLOR_CODE_TO_HEX[category.color_code],
+                        backgroundImage:
+                          category.color_code === "NO_COLOR"
+                            ? "linear-gradient(45deg, #d4d4d8 25%, transparent 25%, transparent 50%, #d4d4d8 50%, #d4d4d8 75%, transparent 75%, transparent)"
+                            : undefined,
+                        backgroundSize: category.color_code === "NO_COLOR" ? "6px 6px" : undefined,
+                      }}
+                    />
+                    <span className="font-medium leading-none">{category.name}</span>
+                    {priceLabel && <span className="text-zinc-500 leading-none">{priceLabel}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-1 text-[9px]">
+            <div className="inline-flex items-center gap-1">
+              <img src="/seat-selected.svg" alt="Selected seat" className="h-3 w-3 object-contain" />
+              <span>Selected</span>
+            </div>
+            <div className="inline-flex items-center gap-1">
+              <img src="/seat-taken.svg" alt="Taken seat" className="h-3 w-3 object-contain" />
+              <span>Taken</span>
+            </div>
+          </div>
+        </div>
+      )}
       {!seatmapId && (
         <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
           Select a seatmap to preview.
