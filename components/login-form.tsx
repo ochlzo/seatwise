@@ -85,8 +85,8 @@ export function LoginForm({
       user.firstName.trim() === "" ||
       !user.lastName ||
       user.lastName.trim() === "";
-    // Password is NOT required - users can use Google-only authentication
-    return missingUsername || missingName;
+    const missingPassword = !user.hasPassword;
+    return missingUsername || missingName || missingPassword;
   };
 
   const handleUsernameChange = (val: string) => {
