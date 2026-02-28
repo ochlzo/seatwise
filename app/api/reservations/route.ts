@@ -27,6 +27,14 @@ export async function GET() {
         const reservations = await prisma.reservation.findMany({
             orderBy: { createdAt: "desc" },
             include: {
+                show: {
+                    select: {
+                        show_id: true,
+                        show_name: true,
+                        venue: true,
+                        show_image_key: true,
+                    },
+                },
                 user: {
                     select: {
                         user_id: true,
@@ -48,35 +56,31 @@ export async function GET() {
                         createdAt: true,
                     },
                 },
-                seatAssignment: {
+                reservedSeats: {
                     select: {
-                        seat_assignment_id: true,
-                        seat: {
-                            select: { seat_number: true },
-                        },
-                        sched: {
+                        seatAssignment: {
                             select: {
-                                sched_id: true,
-                                sched_date: true,
-                                sched_start_time: true,
-                                sched_end_time: true,
-                                show: {
+                                seat_assignment_id: true,
+                                seat: {
+                                    select: { seat_number: true },
+                                },
+                                sched: {
                                     select: {
-                                        show_id: true,
-                                        show_name: true,
-                                        venue: true,
-                                        show_image_key: true,
+                                        sched_id: true,
+                                        sched_date: true,
+                                        sched_start_time: true,
+                                        sched_end_time: true,
                                     },
                                 },
-                            },
-                        },
-                        set: {
-                            select: {
-                                seatCategory: {
+                                set: {
                                     select: {
-                                        category_name: true,
-                                        price: true,
-                                        color_code: true,
+                                        seatCategory: {
+                                            select: {
+                                                category_name: true,
+                                                price: true,
+                                                color_code: true,
+                                            },
+                                        },
                                     },
                                 },
                             },
@@ -98,8 +102,19 @@ export async function GET() {
             }
         >();
 
-        for (const reservation of reservations) {
-            const show = reservation.seatAssignment.sched.show;
+        const normalizedReservations = reservations
+            .map((reservation) => {
+                const primarySeat = reservation.reservedSeats[0]?.seatAssignment;
+                if (!primarySeat) return null;
+                return {
+                    ...reservation,
+                    seatAssignment: primarySeat,
+                };
+            })
+            .filter((reservation): reservation is NonNullable<typeof reservation> => !!reservation);
+
+        for (const reservation of normalizedReservations) {
+            const show = reservation.show;
             if (!showMap.has(show.show_id)) {
                 showMap.set(show.show_id, {
                     showId: show.show_id,

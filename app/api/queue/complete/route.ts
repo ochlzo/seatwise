@@ -207,10 +207,11 @@ export async function POST(request: NextRequest) {
               tx.reservation.create({
                 data: {
                   user_id: user.user_id,
-                  seat_assignment_id,
+                  show_id: showId,
+                  sched_id: schedId,
                   status: "PENDING",
                 },
-                select: { reservation_id: true, seat_assignment_id: true },
+                select: { reservation_id: true },
               }),
             ),
           );
@@ -223,9 +224,9 @@ export async function POST(request: NextRequest) {
 
           // Create a ReservedSeat record linking each Reservation ↔ SeatAssignment
           await tx.reservedSeat.createMany({
-            data: createdReservations.map(({ reservation_id, seat_assignment_id }) => ({
+            data: createdReservations.map(({ reservation_id }, index) => ({
               reservation_id,
-              seat_assignment_id,
+              seat_assignment_id: openIds[index],
             })),
             skipDuplicates: true,
           });
@@ -255,7 +256,8 @@ export async function POST(request: NextRequest) {
             );
 
             await Promise.all(
-              createdReservations.map(({ reservation_id, seat_assignment_id }) => {
+              createdReservations.map(({ reservation_id }, index) => {
+                const seat_assignment_id = openIds[index];
                 const amount = priceByAssignment.get(seat_assignment_id) ?? 0;
                 return tx.payment.create({
                   data: {
