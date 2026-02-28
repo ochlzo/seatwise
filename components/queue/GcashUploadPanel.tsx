@@ -25,86 +25,41 @@ export function GcashUploadPanel({
     onBack,
     disabled = false,
 }: GcashUploadPanelProps) {
-    const [isUploading, setIsUploading] = React.useState(false);
-    const [uploadProgress, setUploadProgress] = React.useState(0);
+    const [isProcessing, setIsProcessing] = React.useState(false);
     const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
-    const [uploadedUrl, setUploadedUrl] = React.useState<string | null>(null);
+    const [storedAsset, setStoredAsset] = React.useState<string | null>(null);
     const [uploadError, setUploadError] = React.useState<string | null>(null);
 
-    // Cleanup preview blob URL on unmount
-    React.useEffect(() => {
-        return () => {
-            if (previewUrl) URL.revokeObjectURL(previewUrl);
-        };
-    }, [previewUrl]);
-
-    const uploadToCloudinary = React.useCallback(
+    const readFileAsBase64 = React.useCallback(
         async (file: File) => {
-            setIsUploading(true);
+            setIsProcessing(true);
             setUploadError(null);
-            setUploadProgress(0);
 
             try {
-                // Step 1: Get a signed upload URL from our API
-                const signRes = await fetch("/api/uploads/cloudinary/sign", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ purpose: "gcash-receipt" }),
+                const base64Asset = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        if (typeof reader.result === "string") {
+                            resolve(reader.result);
+                            return;
+                        }
+                        reject(new Error("Failed to read screenshot"));
+                    };
+                    reader.onerror = () => reject(new Error("Failed to read screenshot"));
+                    reader.readAsDataURL(file);
                 });
 
-                if (!signRes.ok) {
-                    const signData = await signRes.json();
-                    throw new Error(signData.error || "Failed to get upload signature");
-                }
-
-                const { uploadUrl, apiKey, timestamp, signature, folder } =
-                    await signRes.json();
-
-                // Step 2: Upload directly to Cloudinary using XMLHttpRequest for progress
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("api_key", apiKey);
-                formData.append("timestamp", String(timestamp));
-                formData.append("signature", signature);
-                formData.append("folder", folder);
-
-                const cloudinaryUrl = await new Promise<string>((resolve, reject) => {
-                    const xhr = new XMLHttpRequest();
-
-                    xhr.upload.addEventListener("progress", (event) => {
-                        if (event.lengthComputable) {
-                            const pct = Math.round((event.loaded / event.total) * 100);
-                            setUploadProgress(pct);
-                        }
-                    });
-
-                    xhr.addEventListener("load", () => {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                            const data = JSON.parse(xhr.responseText);
-                            resolve(data.secure_url);
-                        } else {
-                            reject(new Error("Upload to Cloudinary failed"));
-                        }
-                    });
-
-                    xhr.addEventListener("error", () =>
-                        reject(new Error("Network error during upload")),
-                    );
-
-                    xhr.open("POST", uploadUrl);
-                    xhr.send(formData);
-                });
-
-                setUploadedUrl(cloudinaryUrl);
-                onUploadComplete(cloudinaryUrl);
-                toast.success("Screenshot uploaded successfully!");
+                setPreviewUrl(base64Asset);
+                setStoredAsset(base64Asset);
+                onUploadComplete(base64Asset);
+                toast.success("Screenshot attached successfully!");
             } catch (err) {
                 const message =
-                    err instanceof Error ? err.message : "Upload failed. Please try again.";
+                    err instanceof Error ? err.message : "Attachment failed. Please try again.";
                 setUploadError(message);
-                toast.error("Upload failed", { description: message });
+                toast.error("Attachment failed", { description: message });
             } finally {
-                setIsUploading(false);
+                setIsProcessing(false);
             }
         },
         [onUploadComplete],
@@ -124,17 +79,13 @@ export function GcashUploadPanel({
             if (acceptedFiles.length === 0) return;
 
             const file = acceptedFiles[0];
-
-            // Create local preview
-            if (previewUrl) URL.revokeObjectURL(previewUrl);
-            setPreviewUrl(URL.createObjectURL(file));
-            setUploadedUrl(null);
+            setPreviewUrl(null);
+            setStoredAsset(null);
             setUploadError(null);
 
-            // Start upload
-            void uploadToCloudinary(file);
+            void readFileAsBase64(file);
         },
-        [previewUrl, uploadToCloudinary],
+        [readFileAsBase64],
     );
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -142,15 +93,13 @@ export function GcashUploadPanel({
         accept: ACCEPTED_TYPES,
         maxSize: MAX_FILE_SIZE,
         multiple: false,
-        disabled: disabled || isUploading,
+        disabled: disabled || isProcessing,
     });
 
     const handleRemoveImage = () => {
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
         setPreviewUrl(null);
-        setUploadedUrl(null);
+        setStoredAsset(null);
         setUploadError(null);
-        setUploadProgress(0);
         onUploadComplete("");
     };
 
@@ -195,7 +144,7 @@ export function GcashUploadPanel({
                             ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/30"
                             : "border-sidebar-border/70 bg-muted/20 hover:border-blue-400 hover:bg-muted/40"
                         }
-            ${(disabled || isUploading) ? "pointer-events-none opacity-50" : ""}
+            ${(disabled || isProcessing) ? "pointer-events-none opacity-50" : ""}
           `}
                 >
                     <input {...getInputProps()} />
@@ -216,20 +165,12 @@ export function GcashUploadPanel({
             ) : (
                 <div className="relative rounded-xl border border-sidebar-border/70 bg-muted/10 p-3">
                     {/* Upload progress overlay */}
-                    {isUploading && (
+                    {isProcessing && (
                         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl bg-background/80 backdrop-blur-sm">
                             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-                            <div className="w-48 space-y-1">
-                                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                                    <div
-                                        className="h-full rounded-full bg-blue-600 transition-all duration-300"
-                                        style={{ width: `${uploadProgress}%` }}
-                                    />
-                                </div>
-                                <p className="text-center text-xs text-muted-foreground">
-                                    Uploading... {uploadProgress}%
-                                </p>
-                            </div>
+                            <p className="text-center text-xs text-muted-foreground">
+                                Processing screenshot...
+                            </p>
                         </div>
                     )}
 
@@ -242,7 +183,7 @@ export function GcashUploadPanel({
                         />
 
                         {/* Remove button */}
-                        {!isUploading && (
+                        {!isProcessing && (
                             <Button
                                 type="button"
                                 variant="destructive"
@@ -256,10 +197,10 @@ export function GcashUploadPanel({
                     </div>
 
                     {/* Upload status */}
-                    {uploadedUrl && (
+                    {storedAsset && (
                         <div className="mt-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-400">
                             <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span>Screenshot uploaded successfully</span>
+                            <span>Screenshot ready for submission</span>
                         </div>
                     )}
                 </div>
@@ -278,7 +219,7 @@ export function GcashUploadPanel({
                 type="button"
                 variant="outline"
                 onClick={onBack}
-                disabled={isUploading}
+                disabled={isProcessing}
                 className="w-full"
             >
                 Back to seat selection

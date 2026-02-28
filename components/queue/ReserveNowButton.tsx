@@ -38,6 +38,7 @@ interface ReserveNowButtonProps {
 }
 
 type Step = 'date' | 'time';
+type JoinPhase = 'idle' | 'joining_queue' | 'processing_response' | 'saving_session' | 'redirecting';
 
 export function ReserveNowButton({
     showId,
@@ -49,7 +50,23 @@ export function ReserveNowButton({
     const [step, setStep] = useState<Step>('date');
     const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
     const [selectedSchedId, setSelectedSchedId] = useState<string | null>(null);
-    const [isJoining, setIsJoining] = useState(false);
+    const [joinPhase, setJoinPhase] = useState<JoinPhase>('idle');
+    const isJoining = joinPhase !== 'idle';
+
+    const joinButtonLabel = (() => {
+        switch (joinPhase) {
+            case 'joining_queue':
+                return 'Joining queue...';
+            case 'processing_response':
+                return 'Processing response...';
+            case 'saving_session':
+                return 'Preparing reservation room...';
+            case 'redirecting':
+                return 'Redirecting...';
+            default:
+                return 'Confirm & Join Queue';
+        }
+    })();
 
     const parseLocalDate = (dateStr: string): Date => {
         const [year, month, day] = dateStr.split('-').map(Number);
@@ -138,6 +155,7 @@ export function ReserveNowButton({
     };
 
     const handleCancel = () => {
+        if (isJoining) return;
         setIsOpen(false);
         setStep('date');
         setSelectedDate(undefined);
@@ -147,7 +165,7 @@ export function ReserveNowButton({
     const handleJoinQueue = async () => {
         if (!selectedSchedId) return;
 
-        setIsJoining(true);
+        setJoinPhase('joining_queue');
         try {
             const response = await fetch('/api/queue/join', {
                 method: 'POST',
@@ -155,6 +173,7 @@ export function ReserveNowButton({
                 body: JSON.stringify({ showId, schedId: selectedSchedId }),
             });
 
+            setJoinPhase('processing_response');
             const data = await response.json();
 
             if (!response.ok || !data.success) {
@@ -162,6 +181,7 @@ export function ReserveNowButton({
             }
 
             if (data.status === 'active' && data.ticket?.ticketId && data.activeToken && data.expiresAt) {
+                setJoinPhase('saving_session');
                 const showScopeId = `${showId}:${selectedSchedId}`;
                 const storageKey = `seatwise:active:${showScopeId}:${data.ticket.ticketId}`;
                 sessionStorage.setItem(
@@ -178,6 +198,8 @@ export function ReserveNowButton({
                     description: 'Proceeding to reservation room...',
                 });
 
+                setJoinPhase('redirecting');
+                setIsOpen(false);
                 router.push(`/reserve/${showId}/${selectedSchedId}`);
                 return;
             }
@@ -186,13 +208,14 @@ export function ReserveNowButton({
                 description: `You're #${data.rank} in line. Estimated wait: ~${data.estimatedWaitMinutes} min`,
             });
 
+            setJoinPhase('redirecting');
+            setIsOpen(false);
             router.push(`/queue/${showId}/${selectedSchedId}`);
         } catch (error) {
             toast.error('Failed to join queue', {
                 description: error instanceof Error ? error.message : 'Please try again',
             });
-        } finally {
-            setIsJoining(false);
+            setJoinPhase('idle');
         }
     };
 
@@ -212,7 +235,10 @@ export function ReserveNowButton({
                 Reserve Now
             </Button>
 
-            <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <Dialog open={isOpen} onOpenChange={(open) => {
+                if (isJoining) return;
+                setIsOpen(open);
+            }}>
                 <DialogContent className="sm:max-w-[600px]">
                     {step === 'date' ? (
                         <>
@@ -256,6 +282,7 @@ export function ReserveNowButton({
                                         variant="ghost"
                                         size="icon"
                                         onClick={handleBack}
+                                        disabled={isJoining}
                                         className="h-8 w-8"
                                     >
                                         <ChevronLeft className="h-4 w-4" />
@@ -338,7 +365,7 @@ export function ReserveNowButton({
                                     className="gap-2 text-xs sm:text-sm"
                                 >
                                     {isJoining && <Loader2 className="h-4 w-4 animate-spin" />}
-                                    {isJoining ? 'Joining...' : 'Confirm & Join Queue'}
+                                    {joinButtonLabel}
                                 </Button>
                             </DialogFooter>
                         </>

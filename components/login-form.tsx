@@ -241,7 +241,7 @@ export function LoginForm({
           }
         }
 
-        const idToken = await auth.currentUser?.getIdToken();
+        const idToken = await auth.currentUser?.getIdToken(true);
 
         const response = await fetch("/api/auth/login", {
           method: "POST",

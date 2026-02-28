@@ -125,12 +125,13 @@ export function ReserveSeatClient({
   const hasShownTwentySecondToastRef = React.useRef(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isCompleting, setIsCompleting] = React.useState(false);
+  const [isLeaving, setIsLeaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [showName, setShowName] = React.useState<string>("");
   const [expiresAt, setExpiresAt] = React.useState<number | null>(null);
   const [now, setNow] = React.useState<number>(0);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
-  const [isAddSeatMode, setIsAddSeatMode] = React.useState(false);
+  const [pendingSeatId, setPendingSeatId] = React.useState<string | null>(null);
   const [selectionMessage, setSelectionMessage] = React.useState<string | null>(null);
   const [isRejoining, setIsRejoining] = React.useState(false);
   const [step, setStep] = React.useState<ReservationStep>("seats");
@@ -251,7 +252,7 @@ export function ReserveSeatClient({
 
   React.useEffect(() => {
     setSelectedSeatIds([]);
-    setIsAddSeatMode(false);
+    setPendingSeatId(null);
     setSelectionMessage(null);
   }, [showId, schedId]);
 
@@ -291,6 +292,41 @@ export function ReserveSeatClient({
 
   const handleDeclineRejoin = () => {
     router.push(`/${showId}`);
+  };
+
+  const handleLeaveReservationRoom = async () => {
+    const stored = getStoredSession(showScopeId);
+    if (!stored) {
+      clearStoredSession(showScopeId);
+      router.push(`/${showId}`);
+      return;
+    }
+
+    setIsLeaving(true);
+    try {
+      const response = await fetch("/api/queue/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          schedId,
+          ticketId: stored.ticketId,
+          activeToken: stored.activeToken,
+        }),
+      });
+
+      const data = (await response.json()) as { success: boolean; error?: string };
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to leave reservation room");
+      }
+
+      clearStoredSession(showScopeId);
+      router.push(`/${showId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to leave reservation room");
+    } finally {
+      setIsLeaving(false);
+    }
   };
 
   // Step transition: seats → payment
@@ -390,68 +426,71 @@ export function ReserveSeatClient({
     [selectedBreakdown],
   );
 
-  const handleArmAddSeat = React.useCallback(() => {
-    if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
-      setSelectionMessage(`You can select up to ${MAX_SELECTED_SEATS} seats only.`);
-      setIsAddSeatMode(false);
+  const pendingSeatLabel = pendingSeatId
+    ? (seatNumbersById[pendingSeatId] ?? pendingSeatId)
+    : "";
+
+  const previewSelectedSeatIds = React.useMemo(() => {
+    if (!pendingSeatId) {
+      return selectedSeatIds;
+    }
+
+    return selectedSeatIds.includes(pendingSeatId)
+      ? selectedSeatIds
+      : [...selectedSeatIds, pendingSeatId];
+  }, [pendingSeatId, selectedSeatIds]);
+
+  const handleAddPendingSeat = React.useCallback(() => {
+    if (!pendingSeatId) return;
+
+    if (selectedSeatIds.includes(pendingSeatId)) {
+      setPendingSeatId(null);
       return;
     }
 
+    if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
+      setSelectionMessage(`You can select up to ${MAX_SELECTED_SEATS} seats only.`);
+      return;
+    }
+
+    setSelectedSeatIds([...selectedSeatIds, pendingSeatId]);
+    setPendingSeatId(null);
     setSelectionMessage(null);
-    setIsAddSeatMode(true);
-  }, [selectedSeatIds.length]);
+  }, [pendingSeatId, selectedSeatIds]);
 
   const handleSeatSelectionChange = React.useCallback(
     (ids: string[]) => {
       const clickedSeatId = ids[ids.length - 1];
       if (!clickedSeatId) return;
 
-      setSelectionMessage(null);
-
-      if (selectedSeatIds.length === 0) {
-        setSelectedSeatIds([clickedSeatId]);
-        setIsAddSeatMode(false);
-        return;
-      }
-
-      if (isAddSeatMode) {
-        if (selectedSeatIds.includes(clickedSeatId)) {
-          setSelectionMessage("Seat already selected.");
-          setIsAddSeatMode(false);
-          return;
-        }
-
-        if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
-          setSelectionMessage(`You can select up to ${MAX_SELECTED_SEATS} seats only.`);
-          setIsAddSeatMode(false);
-          return;
-        }
-
-        setSelectedSeatIds([...selectedSeatIds, clickedSeatId]);
-        setIsAddSeatMode(false);
-        return;
-      }
-
       if (selectedSeatIds.includes(clickedSeatId)) {
-        setSelectedSeatIds(selectedSeatIds.filter((seatId) => seatId !== clickedSeatId));
+        setPendingSeatId(null);
+        setSelectionMessage("Seat already in your cart.");
         return;
       }
 
-      setSelectionMessage(`Tap "+ Add Seat" to add another seat (max ${MAX_SELECTED_SEATS}).`);
+      if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
+        setSelectionMessage(`You can select up to ${MAX_SELECTED_SEATS} seats only.`);
+        setPendingSeatId(null);
+        return;
+      }
+
+      setPendingSeatId(clickedSeatId);
+      setSelectionMessage(null);
     },
-    [isAddSeatMode, selectedSeatIds],
+    [selectedSeatIds],
   );
 
   const handleRemoveSeat = React.useCallback((seatId: string) => {
     setSelectedSeatIds((prev) => prev.filter((id) => id !== seatId));
     setSelectionMessage(null);
-    setIsAddSeatMode(false);
+    setPendingSeatId((prev) => (prev === seatId ? null : prev));
   }, []);
 
   const handleClearSelection = React.useCallback(() => {
     setSelectedSeatIds([]);
     setSelectionMessage(null);
-    setIsAddSeatMode(false);
+    setPendingSeatId(null);
   }, []);
 
   return (
@@ -544,7 +583,7 @@ export function ReserveSeatClient({
                     seatmapId={seatmapId ?? undefined}
                     heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
                     allowMarqueeSelection={false}
-                    selectedSeatIds={selectedSeatIds}
+                    selectedSeatIds={previewSelectedSeatIds}
                     onSelectionChange={handleSeatSelectionChange}
                     categories={seatmapCategories}
                     seatCategories={seatCategoryAssignments}
@@ -598,17 +637,19 @@ export function ReserveSeatClient({
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleArmAddSeat}
-                      disabled={isAddSeatMode || selectedSeatIds.length >= MAX_SELECTED_SEATS}
-                      className="w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Plus className="mr-1.5 h-4 w-4" />
-                      {isAddSeatMode ? "Select a seat" : "Add Seat"}
-                    </Button>
+                    {pendingSeatId && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleAddPendingSeat}
+                        disabled={selectedSeatIds.length >= MAX_SELECTED_SEATS}
+                        className="w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="mr-1.5 h-4 w-4" />
+                        {`Seat ${pendingSeatLabel}`}
+                      </Button>
+                    )}
                     <Separator />
                     {selectedBreakdown.length === 0 ? (
                       <p className="text-xs text-muted-foreground">
@@ -680,12 +721,24 @@ export function ReserveSeatClient({
                 </Card>
 
                 <div className="space-y-3">
-                  <Button variant="outline" onClick={goToQueue} className="w-full">
-                    Back to queue
+                  <Button
+                    variant="outline"
+                    onClick={handleLeaveReservationRoom}
+                    disabled={isLeaving || isCompleting}
+                    className="w-full gap-2"
+                  >
+                    {isLeaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Leaving...
+                      </>
+                    ) : (
+                      "Leave Reservation Room"
+                    )}
                   </Button>
                   <Button
                     onClick={handleProceedToPayment}
-                    disabled={selectedSeatIds.length === 0}
+                    disabled={selectedSeatIds.length === 0 || isLeaving}
                     className="w-full gap-2"
                   >
                     <CreditCard className="h-4 w-4" />
@@ -765,7 +818,7 @@ export function ReserveSeatClient({
 
                 <Button
                   onClick={handleConfirmReservation}
-                  disabled={isCompleting || !screenshotUrl}
+                  disabled={isCompleting || !screenshotUrl || isLeaving}
                   className="w-full gap-2"
                 >
                   {isCompleting ? (
