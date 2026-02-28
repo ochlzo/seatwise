@@ -78,15 +78,15 @@ export function useGoogleLogin() {
       isNewUser: user.isNewUser,
     });
 
-    // Check if profile is complete - all required fields must be present and non-empty
-    // Password is NOT required for Google-only users
+    // Check if profile is complete - username, name, and password login must exist.
     const hasCompleteProfile =
       user.username &&
       user.username.trim() !== "" &&
       user.firstName &&
       user.firstName.trim() !== "" &&
       user.lastName &&
-      user.lastName.trim() !== "";
+      user.lastName.trim() !== "" &&
+      user.hasPassword;
 
     console.log("🔍 Profile completion check:", {
       hasCompleteProfile,
@@ -94,6 +94,7 @@ export function useGoogleLogin() {
         hasUsername: Boolean(user.username && user.username.trim() !== ""),
         hasFirstName: Boolean(user.firstName && user.firstName.trim() !== ""),
         hasLastName: Boolean(user.lastName && user.lastName.trim() !== ""),
+        hasPassword: Boolean(user.hasPassword),
       },
     });
 

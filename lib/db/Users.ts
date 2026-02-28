@@ -115,26 +115,20 @@ export async function upsertUser(input: {
   }
 
   const normalizedUsername = normalizeString(input.username);
-  const derivedUsername =
-    normalizedUsername ??
-    email.split("@")[0] ??
-    normalizeString(input.firebase_uid);
-  if (!derivedUsername) {
-    throw new Error("Missing username");
-  }
-
-  const existingByUsername = await prisma.user.findFirst({
-    where: {
-      username: {
-        equals: normalizedUsername ?? derivedUsername,
-        mode: "insensitive",
+  if (normalizedUsername) {
+    const existingByUsername = await prisma.user.findFirst({
+      where: {
+        username: {
+          equals: normalizedUsername,
+          mode: "insensitive",
+        },
+        firebase_uid: { not: input.firebase_uid },
       },
-      firebase_uid: { not: input.firebase_uid },
-    },
-    select: userSelect,
-  });
-  if (existingByUsername && normalizedUsername) {
-    throw new Error("Username is already taken");
+      select: userSelect,
+    });
+    if (existingByUsername) {
+      throw new Error("Username is already taken");
+    }
   }
 
   const updateData = {
@@ -190,7 +184,7 @@ export async function upsertUser(input: {
     data: {
       firebase_uid: input.firebase_uid,
       email,
-      username: derivedUsername,
+      username: normalizedUsername,
       first_name: normalizeString(input.first_name) ?? "",
       last_name: normalizeString(input.last_name) ?? "",
       status: "ACTIVE",
