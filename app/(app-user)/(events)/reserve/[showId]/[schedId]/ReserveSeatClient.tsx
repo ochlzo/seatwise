@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { COLOR_CODE_TO_HEX, type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
+import { type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
 import { toast } from "@/components/ui/sonner";
 import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
 import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
@@ -703,6 +703,7 @@ export function ReserveSeatClient({
                   categories={seatmapCategories}
                   seatCategories={seatCategoryAssignments}
                   seatStatusById={seatStatusById}
+                  showReservationOverlay
                 />
 
                 {selectionMessage && (
@@ -715,31 +716,6 @@ export function ReserveSeatClient({
                   <p className="text-xs text-muted-foreground">
                     This schedule does not have an associated seatmap.
                   </p>
-                )}
-
-                {seatmapCategories.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {seatmapCategories.map((category) => (
-                      <div
-                        key={category.category_id}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/70 bg-background px-2 py-0.5 text-[11px]"
-                      >
-                        <span
-                          className="h-2.5 w-2.5 rounded-full border border-zinc-300"
-                          style={{
-                            backgroundColor: COLOR_CODE_TO_HEX[category.color_code],
-                            backgroundImage:
-                              category.color_code === "NO_COLOR"
-                                ? "linear-gradient(45deg, #d4d4d8 25%, transparent 25%, transparent 50%, #d4d4d8 50%, #d4d4d8 75%, transparent 75%, transparent)"
-                                : undefined,
-                            backgroundSize: category.color_code === "NO_COLOR" ? "6px 6px" : undefined,
-                          }}
-                        />
-                        <span className="font-medium">{category.name}</span>
-                        <span className="text-muted-foreground">{formatCurrency(parseCurrency(category.price))}</span>
-                      </div>
-                    ))}
-                  </div>
                 )}
               </div>
 
@@ -880,7 +856,6 @@ export function ReserveSeatClient({
                 <CardContent>
                   <GcashUploadPanel
                     onUploadComplete={handleScreenshotUploaded}
-                    onBack={handleBackToSeats}
                     disabled={isCompleting}
                   />
                 </CardContent>

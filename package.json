@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --experimental-strip-types lib/db/showScheduleGrouping.test.ts",
-    "queue:cleanup": "node --experimental-strip-types scripts/cleanup-queue.ts"
+    "queue:cleanup": "node --experimental-strip-types scripts/cleanup-queue.ts",
+    "reservations:clear": "node --experimental-strip-types scripts/clear-reservations.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
