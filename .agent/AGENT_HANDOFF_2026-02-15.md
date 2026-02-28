@@ -200,6 +200,84 @@ Selection panel:
 - Double-click text shape and confirm inline edit works.
 - Export PNG while in dark mode and confirm light-background output.
 
+## Session updates (2026-03-01)
+Primary files touched:
+- `app/api/queue/leave/route.ts`
+- `app/api/queue/terminate/route.ts`
+- `app/(app-user)/(events)/queue/[showId]/[schedId]/QueueWaitingClient.tsx`
+- `app/(app-user)/(events)/reserve/[showId]/[schedId]/ReserveSeatClient.tsx`
+- `app/(app-user)/(events)/reserve/[showId]/[schedId]/page.tsx`
+- `components/seatmap/SeatmapPreview.tsx`
+- `components/queue/GcashUploadPanel.tsx`
+- `components/queue/ReserveNowButton.tsx`
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- `app/api/reservations/route.ts`
+- `app/api/queue/complete/route.ts`
+- `prisma/schema.prisma`
+- `scripts/clear-reservations.ts`
+- `package.json`
+
+Queue / session lifecycle:
+- Added `POST /api/queue/leave` for explicit active-session exit from reservation room.
+- Added `POST /api/queue/terminate` to terminate either waiting or active tickets for a user/scope, clean Redis artifacts, publish queue move when needed, and promote next.
+- Queue waiting page now has navigation guards:
+- Browser leave confirmation (`beforeunload`) while in queue/active state.
+- On confirmed leave/pagehide, ticket termination is attempted (`sendBeacon`/`fetch keepalive`).
+- Added `Maybe later` action when status is `active`; it terminates user ticket/session and redirects to show page.
+- Reservation room now also has leave guards with confirmation and termination-on-leave behavior.
+
+Reserve UX changes:
+- Replaced old add-seat arm flow with pending-seat flow:
+- Tap seat -> show `Seat <seat-number>` add button -> seat enters cart only on button click.
+- `Leave Reservation Room` action now exits queue session and routes back to show page.
+- Removed outer seatmap wrapper card in reserve layout.
+- Moved category capsules inside `SeatmapPreview` (reservation-only overlay, upper-right).
+- Added compact legend in the same overlay using seat SVG icons (`selected`, `taken`), removed `open` legend entry.
+- Seat availability now uses schedule `SeatAssignment.seat_status`:
+- Non-open seats are non-selectable.
+- Non-open seats render with `public/seat-taken.svg`.
+- Cart seats render with `public/seat-selected.svg`.
+- Taken-seat label text color forced to black.
+
+Reserve/payment upload changes:
+- Payment screenshot upload no longer immediately uploads to Cloudinary.
+- Screenshot is read and stored as base64 client-side, then submitted with confirm payload.
+- Removed "Back to seat selection" button from payment upload panel in reservation flow.
+- Added QR utility actions in payment panel:
+- `View full screen` portal dialog (mobile-friendly).
+- `Download` QR image to device.
+- Fullscreen dialog close `X` color adjusted to white.
+
+Join queue modal feedback:
+- `Confirm & Join Queue` now tracks multi-phase loading states:
+- Joining queue
+- Processing response
+- Saving active session payload
+- Redirecting
+- Modal close/back actions are blocked while join is in progress.
+
+Admin reservations page:
+- Reservations list now renders rows per user under each show (aggregated seats/categories/schedules/amount) instead of one row per seat reservation.
+- Verify action supports verifying multiple pending reservations for a user row.
+- Stats now reflect grouped user rows.
+
+Schema / data model refactor in progress:
+- `Reservation` refactored to reference `show_id` and `sched_id`.
+- Direct `Reservation -> SeatAssignment` link removed from schema.
+- Seat linkage is now intended to be canonical via `ReservedSeat`.
+- `app/api/queue/complete` updated to create reservations with `show_id`/`sched_id` and link seats via `ReservedSeat`.
+- `app/api/reservations` updated to fetch seat details through `reservedSeats.seatAssignment`.
+- Important: schema migration still needs to be applied in DB (`prisma migrate dev`) and Prisma client should be regenerated normally after stopping dev server (`npx prisma generate`).
+
+Ops / maintenance:
+- Added reservations cleanup script:
+- Script: `scripts/clear-reservations.ts`
+- NPM command: `npm run reservations:clear -- ...`
+- Supports:
+- `--dry-run`
+- `--yes`
+- Deletes `Payment`, `ReservedSeat`, `Reservation` rows and resets `SeatAssignment.seat_status` from `RESERVED` to `OPEN`.
+
 ## Environment variables used by queue features
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`

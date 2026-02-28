@@ -39,6 +39,7 @@ model Show {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   categorySets     CategorySet[]
+  reservations     Reservation[]
   reviews          Review[]
   scheds           Sched[]
   seatmap          Seatmap?      @relation(fields: [seatmap_id], references: [seatmap_id])
@@ -55,6 +56,7 @@ model Sched {
   updatedAt        DateTime         @updatedAt
   categorySet      CategorySet?     @relation(fields: [category_set_id], references: [category_set_id])
   show             Show             @relation(fields: [show_id], references: [show_id])
+  reservations     Reservation[]
   seatAssignments  SeatAssignment[]
   sets             Set[]
 
@@ -151,7 +153,6 @@ model SeatAssignment {
   set_id             String
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
-  reservations       Reservation[]
   reservedSeats      ReservedSeat[]
   sched              Sched         @relation(fields: [sched_id], references: [sched_id])
   seat               Seat          @relation(fields: [seat_id], references: [seat_id])
@@ -164,19 +165,22 @@ model SeatAssignment {
 }
 
 model Reservation {
-  reservation_id     String            @id @default(cuid())
-  user_id            String
-  seat_assignment_id String
-  status             ReservationStatus @default(PENDING)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  payment            Payment?
-  seatAssignment     SeatAssignment    @relation(fields: [seat_assignment_id], references: [seat_assignment_id])
-  user               User              @relation(fields: [user_id], references: [user_id])
-  reservedSeats      ReservedSeat[]
+  reservation_id String            @id @default(cuid())
+  user_id        String
+  show_id        String
+  sched_id       String
+  status         ReservationStatus @default(PENDING)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  payment        Payment?
+  user           User              @relation(fields: [user_id], references: [user_id])
+  show           Show              @relation(fields: [show_id], references: [show_id])
+  sched          Sched             @relation(fields: [sched_id], references: [sched_id])
+  reservedSeats  ReservedSeat[]
 
   @@index([user_id])
-  @@index([seat_assignment_id])
+  @@index([show_id])
+  @@index([sched_id])
 }
 
 model Payment {
