@@ -150,12 +150,12 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Authentication failed";
+    const code =
+      typeof err === "object" && err !== null && "code" in err
+        ? String((err as { code?: unknown }).code)
+        : undefined;
 
     if (process.env.NODE_ENV !== "production") {
-      const code =
-        typeof err === "object" && err !== null && "code" in err
-          ? String((err as { code?: unknown }).code)
-          : undefined;
       console.warn("Login error", { message, code });
     }
 
@@ -163,6 +163,15 @@ export async function POST(req: NextRequest) {
       message.toLowerCase().includes("missing firebase admin credentials") ||
       message.toLowerCase().includes("failed to parse private key") ||
       message.toLowerCase().includes("credential");
+
+    const isTokenIssue =
+      code === "auth/invalid-id-token" ||
+      code === "auth/id-token-expired" ||
+      code === "auth/argument-error" ||
+      message.toLowerCase().includes("id token") ||
+      message.toLowerCase().includes("token used too early") ||
+      message.toLowerCase().includes("incorrect \"aud\"") ||
+      message.toLowerCase().includes("incorrect \"iss\"");
 
     const status = isServerConfigIssue
       ? 500
@@ -180,10 +189,19 @@ export async function POST(req: NextRequest) {
           : message.toLowerCase().includes("username") || message.includes("Unique constraint failed")
           ? "Username is already taken"
           : "Missing email"
-        : "Invalid token";
+        : "Invalid or expired sign-in token. Please try logging in again.";
 
     return NextResponse.json(
-      { error: errorResponse },
+      {
+        error: errorResponse,
+        ...(process.env.NODE_ENV !== "production"
+          ? {
+            debugCode: code ?? null,
+            debugMessage: message,
+            debugIsTokenIssue: isTokenIssue,
+          }
+          : {}),
+      },
       { status }
     );
   }

@@ -54,8 +54,24 @@ export const getAuthErrorMessage = (error: unknown): string => {
 
 const readApiError = async (response: Response): Promise<string> => {
   try {
-    const data = (await response.json()) as { error?: unknown };
+    const data = (await response.json()) as {
+      error?: unknown;
+      debugCode?: unknown;
+      debugMessage?: unknown;
+    };
+    const debugCode =
+      typeof data?.debugCode === "string" && data.debugCode.trim() !== ""
+        ? data.debugCode
+        : null;
+    const debugMessage =
+      typeof data?.debugMessage === "string" && data.debugMessage.trim() !== ""
+        ? data.debugMessage
+        : null;
     if (typeof data?.error === "string" && data.error.trim() !== "") {
+      if (debugCode || debugMessage) {
+        const details = [debugCode, debugMessage].filter(Boolean).join(" | ");
+        return `${data.error} (${details})`;
+      }
       return data.error;
     }
     return "Request failed";
@@ -83,7 +99,7 @@ export function useEmailPass() {
       const displayName = `${firstName} ${lastName}`.trim();
       await updateProfile(firebaseUser, { displayName });
 
-      const idToken = await firebaseUser.getIdToken();
+      const idToken = await firebaseUser.getIdToken(true);
 
       const response = await fetch("/api/auth/login", {
         method: "POST",
@@ -132,7 +148,7 @@ export function useEmailPass() {
     try {
       const result = await signInWithEmailAndPassword(auth, email, pass);
       const firebaseUser = result.user;
-      const idToken = await firebaseUser.getIdToken();
+      const idToken = await firebaseUser.getIdToken(true);
 
       const response = await fetch("/api/auth/login", {
         method: "POST",
