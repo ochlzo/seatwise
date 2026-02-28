@@ -45,6 +45,7 @@ type ReserveSeatClientProps = {
   seatmapCategories: ReserveSeatCategory[];
   seatCategoryAssignments: Record<string, string>;
   seatNumbersById: Record<string, string>;
+  seatStatusById: Record<string, "OPEN" | "RESERVED">;
 };
 
 const EXPIRED_WINDOW_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
@@ -117,12 +118,15 @@ export function ReserveSeatClient({
   seatmapCategories,
   seatCategoryAssignments,
   seatNumbersById,
+  seatStatusById,
 }: ReserveSeatClientProps) {
   const router = useRouter();
   const showScopeId = `${showId}:${schedId}`;
   const hasHandledExpiryRef = React.useRef(false);
   const hasShownOneMinuteToastRef = React.useRef(false);
   const hasShownTwentySecondToastRef = React.useRef(false);
+  const hasTerminatedRef = React.useRef(false);
+  const allowNavigationRef = React.useRef(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isCompleting, setIsCompleting] = React.useState(false);
   const [isLeaving, setIsLeaving] = React.useState(false);
@@ -256,6 +260,109 @@ export function ReserveSeatClient({
     setSelectionMessage(null);
   }, [showId, schedId]);
 
+  const terminateQueueSession = React.useCallback(
+    async (preferBeacon: boolean) => {
+      const stored = getStoredSession(showScopeId);
+      if (!stored || hasTerminatedRef.current) {
+        return;
+      }
+
+      hasTerminatedRef.current = true;
+      const payload = JSON.stringify({
+        showId,
+        schedId,
+        ticketId: stored.ticketId,
+        activeToken: stored.activeToken,
+      });
+
+      if (preferBeacon && typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon("/api/queue/terminate", blob);
+        return;
+      }
+
+      try {
+        await fetch("/api/queue/terminate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+          keepalive: true,
+        });
+      } catch {
+        // Best effort termination during navigation.
+      }
+    },
+    [schedId, showId, showScopeId],
+  );
+
+  React.useEffect(() => {
+    hasTerminatedRef.current = false;
+    allowNavigationRef.current = false;
+  }, [showScopeId]);
+
+  React.useEffect(() => {
+    if (step === "success") return;
+
+    const confirmLeaveMessage = "Leaving this page will remove you from the queue. Continue?";
+    const reservePath = `/reserve/${showId}/${schedId}`;
+    const queuePath = `/queue/${showId}/${schedId}`;
+
+    const shouldGuard = () => {
+      if (allowNavigationRef.current) return false;
+      return !!getStoredSession(showScopeId);
+    };
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!shouldGuard()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const handlePageHide = () => {
+      if (!shouldGuard()) return;
+      void terminateQueueSession(true);
+    };
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (!shouldGuard()) return;
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.target && anchor.target !== "_self") return;
+      if (anchor.hasAttribute("download")) return;
+
+      const nextUrl = new URL(anchor.href, window.location.href);
+      const currentUrl = new URL(window.location.href);
+      if (nextUrl.origin !== currentUrl.origin) return;
+
+      const currentPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      if (currentPath === nextPath) return;
+      if (nextUrl.pathname === reservePath || nextUrl.pathname === queuePath) return;
+
+      event.preventDefault();
+      const confirmed = window.confirm(confirmLeaveMessage);
+      if (!confirmed) return;
+
+      allowNavigationRef.current = true;
+      terminateQueueSession(false).finally(() => {
+        router.push(nextPath);
+      });
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("click", handleDocumentClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [router, schedId, showId, showScopeId, step, terminateQueueSession]);
+
   const goToQueue = () => {
     router.push(`/queue/${showId}/${schedId}`);
   };
@@ -320,6 +427,7 @@ export function ReserveSeatClient({
         throw new Error(data.error || "Failed to leave reservation room");
       }
 
+      allowNavigationRef.current = true;
       clearStoredSession(showScopeId);
       router.push(`/${showId}`);
     } catch (err) {
@@ -463,6 +571,13 @@ export function ReserveSeatClient({
       const clickedSeatId = ids[ids.length - 1];
       if (!clickedSeatId) return;
 
+      const seatStatus = seatStatusById[clickedSeatId];
+      if (seatStatus && seatStatus !== "OPEN") {
+        setSelectionMessage(`${seatNumbersById[clickedSeatId] ?? clickedSeatId} is already taken.`);
+        setPendingSeatId(null);
+        return;
+      }
+
       if (selectedSeatIds.includes(clickedSeatId)) {
         setPendingSeatId(null);
         setSelectionMessage("Seat already in your cart.");
@@ -478,7 +593,7 @@ export function ReserveSeatClient({
       setPendingSeatId(clickedSeatId);
       setSelectionMessage(null);
     },
-    [selectedSeatIds],
+    [seatNumbersById, seatStatusById, selectedSeatIds],
   );
 
   const handleRemoveSeat = React.useCallback((seatId: string) => {
@@ -577,56 +692,56 @@ export function ReserveSeatClient({
 
           {!isSuccess && !isLoading && !error && expiresAt && step === "seats" && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <Card className="border-sidebar-border/70">
-                <CardContent className="space-y-3 pt-0 px-2 sm:px-3 md:px-4">
-                  <SeatmapPreview
-                    seatmapId={seatmapId ?? undefined}
-                    heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
-                    allowMarqueeSelection={false}
-                    selectedSeatIds={previewSelectedSeatIds}
-                    onSelectionChange={handleSeatSelectionChange}
-                    categories={seatmapCategories}
-                    seatCategories={seatCategoryAssignments}
-                  />
+              <div className="space-y-3 px-2 sm:px-3 md:px-4">
+                <SeatmapPreview
+                  seatmapId={seatmapId ?? undefined}
+                  heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
+                  allowMarqueeSelection={false}
+                  selectedSeatIds={previewSelectedSeatIds}
+                  cartSeatIds={selectedSeatIds}
+                  onSelectionChange={handleSeatSelectionChange}
+                  categories={seatmapCategories}
+                  seatCategories={seatCategoryAssignments}
+                  seatStatusById={seatStatusById}
+                />
 
-                  {selectionMessage && (
-                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
-                      {selectionMessage}
-                    </p>
-                  )}
+                {selectionMessage && (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                    {selectionMessage}
+                  </p>
+                )}
 
-                  {!seatmapId && (
-                    <p className="text-xs text-muted-foreground">
-                      This schedule does not have an associated seatmap.
-                    </p>
-                  )}
+                {!seatmapId && (
+                  <p className="text-xs text-muted-foreground">
+                    This schedule does not have an associated seatmap.
+                  </p>
+                )}
 
-                  {seatmapCategories.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {seatmapCategories.map((category) => (
-                        <div
-                          key={category.category_id}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/70 bg-background px-2 py-0.5 text-[11px]"
-                        >
-                          <span
-                            className="h-2.5 w-2.5 rounded-full border border-zinc-300"
-                            style={{
-                              backgroundColor: COLOR_CODE_TO_HEX[category.color_code],
-                              backgroundImage:
-                                category.color_code === "NO_COLOR"
-                                  ? "linear-gradient(45deg, #d4d4d8 25%, transparent 25%, transparent 50%, #d4d4d8 50%, #d4d4d8 75%, transparent 75%, transparent)"
-                                  : undefined,
-                              backgroundSize: category.color_code === "NO_COLOR" ? "6px 6px" : undefined,
-                            }}
-                          />
-                          <span className="font-medium">{category.name}</span>
-                          <span className="text-muted-foreground">{formatCurrency(parseCurrency(category.price))}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                {seatmapCategories.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {seatmapCategories.map((category) => (
+                      <div
+                        key={category.category_id}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/70 bg-background px-2 py-0.5 text-[11px]"
+                      >
+                        <span
+                          className="h-2.5 w-2.5 rounded-full border border-zinc-300"
+                          style={{
+                            backgroundColor: COLOR_CODE_TO_HEX[category.color_code],
+                            backgroundImage:
+                              category.color_code === "NO_COLOR"
+                                ? "linear-gradient(45deg, #d4d4d8 25%, transparent 25%, transparent 50%, #d4d4d8 50%, #d4d4d8 75%, transparent 75%, transparent)"
+                                : undefined,
+                            backgroundSize: category.color_code === "NO_COLOR" ? "6px 6px" : undefined,
+                          }}
+                        />
+                        <span className="font-medium">{category.name}</span>
+                        <span className="text-muted-foreground">{formatCurrency(parseCurrency(category.price))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
                 <Card className="border-sidebar-border/70">
@@ -641,10 +756,10 @@ export function ReserveSeatClient({
                       <Button
                         type="button"
                         size="sm"
-                        variant="outline"
+                        variant="default"
                         onClick={handleAddPendingSeat}
                         disabled={selectedSeatIds.length >= MAX_SELECTED_SEATS}
-                        className="w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Plus className="mr-1.5 h-4 w-4" />
                         {`Seat ${pendingSeatLabel}`}
