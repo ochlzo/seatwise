@@ -32,10 +32,12 @@ type SeatmapPreviewProps = {
   allowMarqueeSelection?: boolean;
   // Controlled selection props
   selectedSeatIds?: string[];
+  cartSeatIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
   // Controlled category assignment props (maps seat ID -> category ID)
   categories?: SeatmapPreviewCategory[];
   seatCategories?: Record<string, string>;
+  seatStatusById?: Record<string, "OPEN" | "RESERVED">;
   onSeatCategoriesChange?: (categories: Record<string, string>) => void;
 };
 
@@ -48,9 +50,11 @@ export function SeatmapPreview({
   heightClassName,
   allowMarqueeSelection = false,
   selectedSeatIds: controlledSelectedIds,
+  cartSeatIds = [],
   onSelectionChange,
   categories = [],
   seatCategories: controlledSeatCategories,
+  seatStatusById = {},
   onSeatCategoriesChange,
 }: SeatmapPreviewProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -445,11 +449,13 @@ export function SeatmapPreview({
             <SeatNodes
               nodes={nodes}
               selectedSeatIds={selectedSeatIds}
+              cartSeatIds={cartSeatIds}
               onSelectSeat={setSelectedSeatIds}
               isShiftDown={isShiftDown}
               isCtrlDown={isCtrlDown}
               categories={categories}
               seatCategories={seatCategories}
+              seatStatusById={seatStatusById}
             />
             <ShapeNodes nodes={nodes} />
             <GuidePathNodes nodes={nodes} />
@@ -463,19 +469,23 @@ export function SeatmapPreview({
 function SeatNodes({
   nodes,
   selectedSeatIds,
+  cartSeatIds,
   onSelectSeat,
   isShiftDown,
   isCtrlDown,
   categories,
   seatCategories,
+  seatStatusById,
 }: {
   nodes: Record<string, SeatmapNode>;
   selectedSeatIds: string[];
+  cartSeatIds: string[];
   onSelectSeat: (ids: string[]) => void;
   isShiftDown: boolean;
   isCtrlDown: boolean;
   categories: SeatmapPreviewCategory[];
   seatCategories: Record<string, string>;
+  seatStatusById: Record<string, "OPEN" | "RESERVED">;
 }) {
   const seats = Object.values(nodes).filter((node): node is SeatmapSeatNode => node.type === "seat");
   const { theme, resolvedTheme } = useTheme();
@@ -490,6 +500,8 @@ function SeatNodes({
   const [blueImage] = useImage("/vip-seat-3.svg");
   const [burgundyImage] = useImage("/vip-seat-4.svg");
   const [greenImage] = useImage("/vip-seat-5.svg");
+  const [takenImage] = useImage("/seat-taken.svg");
+  const [selectedImage] = useImage("/seat-selected.svg");
 
   // Calculate contrasting text color based on background luminance
   const getContrastingTextColor = (colorCode: SeatmapPreviewCategory["color_code"]) => {
@@ -516,6 +528,9 @@ function SeatNodes({
       {seats.map((seat) => {
         const label = `${seat.rowLabel ?? ""}${seat.seatNumber ?? ""}`;
         const isSelected = selectedSeatIds.includes(seat.id);
+        const isInCart = cartSeatIds.includes(seat.id);
+        const seatStatus = seatStatusById[seat.id];
+        const isUnavailable = !!seatStatus && seatStatus !== "OPEN";
         // Look up the category by ID to get the current color_code
         const categoryId = seatCategories[seat.id];
         const category = categoryId ? categories.find(c => c.category_id === categoryId) : null;
@@ -526,9 +541,17 @@ function SeatNodes({
         }
 
         const colorCode = category?.color_code ?? "NO_COLOR";
-        const textColor = getContrastingTextColor(colorCode);
+        const textColor = isUnavailable
+          ? "#000000"
+          : isInCart
+            ? "#ffffff"
+            : getContrastingTextColor(colorCode);
         const image =
-          colorCode === "GOLD"
+          isInCart
+            ? selectedImage
+            : isUnavailable
+              ? takenImage
+              : colorCode === "GOLD"
             ? goldImage
             : colorCode === "PINK"
               ? pinkImage
@@ -555,6 +578,7 @@ function SeatNodes({
             name="seat-item selectable"
             onClick={(e) => {
               e.cancelBubble = true;
+              if (isUnavailable) return;
               if (isShiftDown || isCtrlDown) {
                 onSelectSeat(
                   isSelected
@@ -567,6 +591,7 @@ function SeatNodes({
             }}
             onTap={(e) => {
               e.cancelBubble = true;
+              if (isUnavailable) return;
               if (isShiftDown || isCtrlDown) {
                 onSelectSeat(
                   isSelected

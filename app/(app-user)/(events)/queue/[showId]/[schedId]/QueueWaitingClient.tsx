@@ -42,8 +42,48 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   const router = useRouter();
   const [status, setStatus] = React.useState<QueueStatusResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isDeferring, setIsDeferring] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [now, setNow] = React.useState<number>(0);
+  const hasTerminatedRef = React.useRef(false);
+  const allowNavigationRef = React.useRef(false);
+
+  const hasTerminableTicket =
+    !!status?.ticketId && (status.status === "waiting" || status.status === "active");
+
+  const terminateTicket = React.useCallback(
+    async (preferBeacon: boolean) => {
+      if (!hasTerminableTicket || !status?.ticketId || hasTerminatedRef.current) {
+        return;
+      }
+
+      hasTerminatedRef.current = true;
+      const payload = JSON.stringify({
+        showId,
+        schedId,
+        ticketId: status.ticketId,
+        activeToken: status.activeToken,
+      });
+
+      if (preferBeacon && typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon("/api/queue/terminate", blob);
+        return;
+      }
+
+      try {
+        await fetch("/api/queue/terminate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+          keepalive: true,
+        });
+      } catch {
+        // Best effort termination during navigation.
+      }
+    },
+    [hasTerminableTicket, schedId, showId, status?.activeToken, status?.ticketId],
+  );
 
   const fetchStatus = React.useCallback(async () => {
     try {
@@ -101,12 +141,105 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     status?.status === "active" && status.expiresAt ? status.expiresAt - now : undefined;
 
   const goBackToShow = () => {
-    router.push(`/${showId}`);
+    if (!hasTerminableTicket) {
+      router.push(`/${showId}`);
+      return;
+    }
+
+    const confirmed = window.confirm("Leaving this page will remove you from the queue. Continue?");
+    if (!confirmed) {
+      return;
+    }
+
+    allowNavigationRef.current = true;
+    terminateTicket(false).finally(() => {
+      router.push(`/${showId}`);
+    });
   };
 
   const proceedToReservation = () => {
+    allowNavigationRef.current = true;
     router.push(`/reserve/${showId}/${schedId}`);
   };
+
+  const handleMaybeLater = async () => {
+    if (!hasTerminableTicket || isDeferring) return;
+
+    setIsDeferring(true);
+    setError(null);
+    allowNavigationRef.current = true;
+    try {
+      await terminateTicket(false);
+      router.push(`/${showId}`);
+    } catch (err) {
+      allowNavigationRef.current = false;
+      setError(err instanceof Error ? err.message : "Failed to leave queue");
+    } finally {
+      setIsDeferring(false);
+    }
+  };
+
+  React.useEffect(() => {
+    hasTerminatedRef.current = false;
+    allowNavigationRef.current = false;
+  }, [showId, schedId, status?.ticketId]);
+
+  React.useEffect(() => {
+    if (!hasTerminableTicket) return;
+
+    const confirmLeaveMessage = "Leaving this page will remove you from the queue.";
+    const reservePath = `/reserve/${showId}/${schedId}`;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowNavigationRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const handlePageHide = () => {
+      if (allowNavigationRef.current) return;
+      void terminateTicket(true);
+    };
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (allowNavigationRef.current) return;
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.target && anchor.target !== "_self") return;
+      if (anchor.hasAttribute("download")) return;
+
+      const nextUrl = new URL(anchor.href, window.location.href);
+      const currentUrl = new URL(window.location.href);
+      if (nextUrl.origin !== currentUrl.origin) return;
+
+      const currentPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      if (currentPath === nextPath) return;
+      if (nextUrl.pathname === reservePath && status?.status === "active") return;
+
+      event.preventDefault();
+      const confirmed = window.confirm(confirmLeaveMessage);
+      if (!confirmed) return;
+
+      allowNavigationRef.current = true;
+      terminateTicket(false).finally(() => {
+        router.push(nextPath);
+      });
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("click", handleDocumentClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [hasTerminableTicket, router, schedId, showId, status?.status, terminateTicket]);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-4 md:p-8">
@@ -179,9 +312,26 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
                   <div className="text-xs text-muted-foreground">
                     Use this active window to proceed with seat reservation.
                   </div>
-                  <Button onClick={proceedToReservation} className="w-fit">
-                    Proceed to seat reservation
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button onClick={proceedToReservation} className="w-fit" disabled={isDeferring}>
+                      Proceed to seat reservation
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleMaybeLater}
+                      disabled={isDeferring}
+                      className="w-fit"
+                    >
+                      {isDeferring ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Leaving...
+                        </>
+                      ) : (
+                        "Maybe later"
+                      )}
+                    </Button>
+                  </div>
                 </div>
               )}
 

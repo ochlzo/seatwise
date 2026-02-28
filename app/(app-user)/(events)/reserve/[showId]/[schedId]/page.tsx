@@ -11,6 +11,8 @@ type SeatmapCategoryPayload = {
   price: string;
 };
 
+type SeatStatusPayload = "OPEN" | "RESERVED";
+
 export default async function ReserveSeatPage({
   params,
 }: {
@@ -33,6 +35,7 @@ export default async function ReserveSeatPage({
       seatAssignments: {
         select: {
           seat_id: true,
+          seat_status: true,
           seat: {
             select: {
               seat_number: true,
@@ -62,11 +65,13 @@ export default async function ReserveSeatPage({
   const categoriesById = new Map<string, SeatmapCategoryPayload>();
   const seatCategoryAssignments: Record<string, string> = {};
   const seatNumbersById: Record<string, string> = {};
+  const seatStatusById: Record<string, SeatStatusPayload> = {};
 
   for (const assignment of schedule.seatAssignments) {
     const categoryId = assignment.set.seat_category_id;
     seatCategoryAssignments[assignment.seat_id] = categoryId;
     seatNumbersById[assignment.seat_id] = assignment.seat.seat_number;
+    seatStatusById[assignment.seat_id] = assignment.seat_status;
 
     if (!categoriesById.has(categoryId)) {
       categoriesById.set(categoryId, {
@@ -93,10 +98,11 @@ export default async function ReserveSeatPage({
           showId={showId}
           schedId={schedId}
           seatmapId={schedule.show.seatmap_id}
-          seatmapCategories={seatmapCategories}
-          seatCategoryAssignments={seatCategoryAssignments}
-          seatNumbersById={seatNumbersById}
-        />
+        seatmapCategories={seatmapCategories}
+        seatCategoryAssignments={seatCategoryAssignments}
+        seatNumbersById={seatNumbersById}
+        seatStatusById={seatStatusById}
+      />
       </div>
     </>
   );
