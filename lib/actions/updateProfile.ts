@@ -39,7 +39,7 @@ export async function updateProfileAction(data: {
 
         // 3. Check for username uniqueness (excluding current user) - case-insensitive check
         const normalizedUsername = username.toLowerCase();
-        const existingUser = await prisma.user.findFirst({
+        const existingUser = await prisma.admin.findFirst({
             where: {
                 username: {
                     equals: normalizedUsername,
@@ -54,7 +54,7 @@ export async function updateProfileAction(data: {
         }
 
         // 4. Update Database
-        await prisma.user.update({
+        await prisma.admin.update({
             where: { firebase_uid: uid },
             data: {
                 username,
@@ -81,7 +81,7 @@ export async function checkUsernameAction(username: string, excludeUid?: string)
         const normalized = username.trim().toLowerCase();
         if (normalized.length < 2) return { taken: false };
 
-        const existingUser = await prisma.user.findFirst({
+        const existingUser = await prisma.admin.findFirst({
             where: {
                 username: {
                     equals: normalized,
@@ -106,7 +106,7 @@ export async function checkEmailAction(email: string) {
         const normalized = email.trim().toLowerCase();
         if (normalized.length < 5 || !normalized.includes("@")) return { taken: false };
 
-        const existingUser = await prisma.user.findFirst({
+        const existingUser = await prisma.admin.findFirst({
             where: {
                 email: {
                     equals: normalized,

@@ -17,6 +17,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import { getOrCreateGuestId } from "@/lib/guest";
 
 type CategoryInfo = {
     name: string;
@@ -167,10 +168,11 @@ export function ReserveNowButton({
 
         setJoinPhase('joining_queue');
         try {
+            const guestId = getOrCreateGuestId();
             const response = await fetch('/api/queue/join', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ showId, schedId: selectedSchedId }),
+                body: JSON.stringify({ showId, schedId: selectedSchedId, guestId }),
             });
 
             setJoinPhase('processing_response');

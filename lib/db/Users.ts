@@ -7,7 +7,6 @@ export type DbUser = {
   first_name: string | null;
   last_name: string | null;
   username: string | null;
-  role: string | null;
   status: string | null;
   avatarKey: string | null;
   createdAt: Date;
@@ -52,14 +51,13 @@ const userSelect = {
   first_name: true,
   last_name: true,
   username: true,
-  role: true,
   status: true,
   avatar_key: true,
   createdAt: true,
   updatedAt: true,
 } as const;
 
-type UserRecord = Prisma.UserGetPayload<{ select: typeof userSelect }>;
+type UserRecord = Prisma.AdminGetPayload<{ select: typeof userSelect }>;
 
 function normalizeString(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
@@ -74,7 +72,6 @@ function toDbUser(user: UserRecord): DbUser {
     first_name: user.first_name ?? null,
     last_name: user.last_name ?? null,
     username: user.username ?? null,
-    role: user.role ?? null,
     status: user.status ?? null,
     avatarKey: user.avatar_key ?? null,
     createdAt: user.createdAt,
@@ -83,7 +80,7 @@ function toDbUser(user: UserRecord): DbUser {
 }
 
 export async function getUsers(): Promise<DbUser[]> {
-  const users = await prisma.user.findMany({
+  const users = await prisma.admin.findMany({
     select: userSelect,
     orderBy: { createdAt: "desc" },
   });
@@ -94,7 +91,7 @@ export async function getUsers(): Promise<DbUser[]> {
 export async function getUserByFirebaseUid(
   firebaseUid: string
 ): Promise<DbUser | null> {
-  const user = await prisma.user.findUnique({
+  const user = await prisma.admin.findUnique({
     where: { firebase_uid: firebaseUid },
     select: userSelect,
   });
@@ -116,7 +113,7 @@ export async function upsertUser(input: {
 
   const normalizedUsername = normalizeString(input.username);
   if (normalizedUsername) {
-    const existingByUsername = await prisma.user.findFirst({
+    const existingByUsername = await prisma.admin.findFirst({
       where: {
         username: {
           equals: normalizedUsername,
@@ -138,14 +135,14 @@ export async function upsertUser(input: {
     username: normalizedUsername ?? undefined,
   };
 
-  const existingByUid = await prisma.user.findUnique({
+  const existingByUid = await prisma.admin.findUnique({
     where: { firebase_uid: input.firebase_uid },
     select: userSelect,
   });
 
   if (existingByUid) {
     if (existingByUid.email && existingByUid.email.toLowerCase() !== email.toLowerCase()) {
-      const emailOwner = await prisma.user.findUnique({
+      const emailOwner = await prisma.admin.findUnique({
         where: { email },
         select: userSelect,
       });
@@ -154,7 +151,7 @@ export async function upsertUser(input: {
       }
     }
 
-    const updated = await prisma.user.update({
+    const updated = await prisma.admin.update({
       where: { firebase_uid: input.firebase_uid },
       data: updateData,
       select: userSelect,
@@ -162,7 +159,7 @@ export async function upsertUser(input: {
     return toDbUser(updated);
   }
 
-  const existingByEmail = await prisma.user.findUnique({
+  const existingByEmail = await prisma.admin.findUnique({
     where: { email },
     select: userSelect,
   });
@@ -172,7 +169,7 @@ export async function upsertUser(input: {
       throw new Error("Email is already taken");
     }
 
-    const updated = await prisma.user.update({
+    const updated = await prisma.admin.update({
       where: { firebase_uid: input.firebase_uid },
       data: updateData,
       select: userSelect,
@@ -180,7 +177,7 @@ export async function upsertUser(input: {
     return toDbUser(updated);
   }
 
-  const user = await prisma.user.create({
+  const user = await prisma.admin.create({
     data: {
       firebase_uid: input.firebase_uid,
       email,
@@ -188,7 +185,6 @@ export async function upsertUser(input: {
       first_name: normalizeString(input.first_name) ?? "",
       last_name: normalizeString(input.last_name) ?? "",
       status: "ACTIVE",
-      role: "USER",
     },
     select: userSelect,
   });
@@ -200,10 +196,11 @@ export async function updateUserAvatar(
   firebaseUid: string,
   avatarKey: string
 ): Promise<DbUser> {
-  const updated = await prisma.user.update({
+  const updated = await prisma.admin.update({
     where: { firebase_uid: firebaseUid },
     data: { avatar_key: avatarKey },
     select: userSelect,
   });
   return toDbUser(updated);
 }
+

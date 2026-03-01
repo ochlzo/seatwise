@@ -1,42 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getQueueStatus } from "@/lib/queue/getQueueStatus";
 import { promoteNextInQueue } from "@/lib/queue/queueLifecycle";
 
 export async function GET(request: NextRequest) {
   try {
-    const { adminAuth } = await import("@/lib/firebaseAdmin");
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
-
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-
-    const user = await prisma.user.findUnique({
-      where: { firebase_uid: decodedToken.uid },
-      select: { user_id: true },
-    });
-
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "User not found" },
-        { status: 404 },
-      );
-    }
-
     const showId = request.nextUrl.searchParams.get("showId");
     const schedId = request.nextUrl.searchParams.get("schedId");
+    const guestId = request.nextUrl.searchParams.get("guestId");
 
-    if (!showId || !schedId) {
+    if (!showId || !schedId || !guestId) {
       return NextResponse.json(
-        { success: false, error: "Missing showId or schedId" },
+        { success: false, error: "Missing showId, schedId, or guestId" },
         { status: 400 },
       );
     }
@@ -79,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     const status = await getQueueStatus({
       showScopeId,
-      userId: user.user_id,
+      userId: guestId,
     });
 
     return NextResponse.json({

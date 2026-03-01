@@ -17,7 +17,7 @@ export async function GET(
     }
 
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const user = await prisma.user.findUnique({
+    const user = await prisma.admin.findUnique({
       where: { firebase_uid: decodedToken.uid },
       select: { user_id: true },
     });
@@ -49,3 +49,4 @@ export async function GET(
     return NextResponse.json({ error: "Failed to load seatmap" }, { status: 500 });
   }
 }
+

@@ -1,54 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { joinQueue } from '@/lib/queue/joinQueue';
 import { promoteNextInQueue } from '@/lib/queue/queueLifecycle';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
     try {
-        // 1. Verify user session
-        const { adminAuth } = await import('@/lib/firebaseAdmin');
-        const cookieStore = await cookies();
-        const sessionCookie = cookieStore.get('session')?.value;
-
-        if (!sessionCookie) {
-            return NextResponse.json(
-                { success: false, error: 'Unauthorized' },
-                { status: 401 }
-            );
-        }
-
-        const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-
-        // 2. Get user from database
-        const user = await prisma.user.findUnique({
-            where: { firebase_uid: decodedToken.uid },
-            select: {
-                user_id: true,
-                first_name: true,
-                last_name: true,
-            },
-        });
-
-        if (!user) {
-            return NextResponse.json(
-                { success: false, error: 'User not found' },
-                { status: 404 }
-            );
-        }
-
-        // 3. Parse request body
+        // 1. Parse request body
         const body = await request.json();
-        const { showId, schedId } = body;
+        const { showId, schedId, guestId, displayName } = body as {
+            showId?: string;
+            schedId?: string;
+            guestId?: string;
+            displayName?: string;
+        };
 
-        if (!showId || !schedId) {
+        if (!showId || !schedId || !guestId) {
             return NextResponse.json(
-                { success: false, error: 'Missing showId or schedId' },
+                { success: false, error: 'Missing showId, schedId, or guestId' },
                 { status: 400 }
             );
         }
 
-        // 4. Verify show and schedule exist
+        // 2. Verify show and schedule exist
         const schedule = await prisma.sched.findFirst({
             where: {
                 sched_id: schedId,
@@ -79,13 +52,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 6. Join the queue
+        // 3. Join the queue
         const showScopeId = `${showId}:${schedId}`;
-        const userName = `${user.first_name} ${user.last_name}`.trim();
+        const userName =
+            typeof displayName === "string" && displayName.trim().length > 0
+                ? displayName.trim()
+                : `Guest ${guestId.slice(0, 8)}`;
 
         const result = await joinQueue({
             showScopeId,
-            userId: user.user_id,
+            userId: guestId,
             userName,
         });
 
@@ -100,7 +76,7 @@ export async function POST(request: NextRequest) {
         const promotedNow =
             promotion.promoted && promotion.activeSession?.ticketId === result.ticket?.ticketId;
 
-        // 7. Return success with ticket data
+        // 4. Return success with ticket data
         return NextResponse.json({
             success: true,
             ticket: result.ticket,

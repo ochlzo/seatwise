@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Clock3, Users, CheckCircle2, AlertTriangle } from "lucide-react";
+import { getOrCreateGuestId } from "@/lib/guest";
 
 type QueueStatusResponse = {
   success: boolean;
@@ -40,6 +41,7 @@ const formatDuration = (ms: number) => {
 
 export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
   const router = useRouter();
+  const guestId = React.useMemo(() => getOrCreateGuestId(), []);
   const [status, setStatus] = React.useState<QueueStatusResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isDeferring, setIsDeferring] = React.useState(false);
@@ -61,6 +63,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       const payload = JSON.stringify({
         showId,
         schedId,
+        guestId,
         ticketId: status.ticketId,
         activeToken: status.activeToken,
       });
@@ -82,14 +85,14 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
         // Best effort termination during navigation.
       }
     },
-    [hasTerminableTicket, schedId, showId, status?.activeToken, status?.ticketId],
+    [guestId, hasTerminableTicket, schedId, showId, status?.activeToken, status?.ticketId],
   );
 
   const fetchStatus = React.useCallback(async () => {
     try {
       setError(null);
       const response = await fetch(
-        `/api/queue/status?showId=${encodeURIComponent(showId)}&schedId=${encodeURIComponent(schedId)}`,
+        `/api/queue/status?showId=${encodeURIComponent(showId)}&schedId=${encodeURIComponent(schedId)}&guestId=${encodeURIComponent(guestId)}`,
         { cache: "no-store" },
       );
       const data = (await response.json()) as QueueStatusResponse;
@@ -102,7 +105,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     } finally {
       setIsLoading(false);
     }
-  }, [showId, schedId]);
+  }, [guestId, showId, schedId]);
 
   React.useEffect(() => {
     void fetchStatus();

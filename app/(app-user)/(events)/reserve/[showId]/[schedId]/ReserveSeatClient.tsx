@@ -12,6 +12,7 @@ import { type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssign
 import { toast } from "@/components/ui/sonner";
 import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
 import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
+import { getOrCreateGuestId } from "@/lib/guest";
 
 type StoredActiveSession = {
   ticketId: string;
@@ -51,7 +52,7 @@ type ReserveSeatClientProps = {
 const EXPIRED_WINDOW_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
 const MAX_SELECTED_SEATS = 10;
 
-type ReservationStep = "seats" | "payment" | "success";
+type ReservationStep = "seats" | "contact" | "payment" | "success";
 
 const formatDuration = (ms: number) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -121,6 +122,7 @@ export function ReserveSeatClient({
   seatStatusById,
 }: ReserveSeatClientProps) {
   const router = useRouter();
+  const guestId = React.useMemo(() => getOrCreateGuestId(), []);
   const showScopeId = `${showId}:${schedId}`;
   const hasHandledExpiryRef = React.useRef(false);
   const hasShownOneMinuteToastRef = React.useRef(false);
@@ -140,6 +142,13 @@ export function ReserveSeatClient({
   const [isRejoining, setIsRejoining] = React.useState(false);
   const [step, setStep] = React.useState<ReservationStep>("seats");
   const [screenshotUrl, setScreenshotUrl] = React.useState<string>("");
+  const [contactDetails, setContactDetails] = React.useState({
+    firstName: "",
+    lastName: "",
+    address: "",
+    email: "",
+    phoneNumber: "",
+  });
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -162,6 +171,7 @@ export function ReserveSeatClient({
           body: JSON.stringify({
             showId,
             schedId,
+            guestId,
             ticketId: stored.ticketId,
             activeToken: stored.activeToken,
           }),
@@ -170,7 +180,7 @@ export function ReserveSeatClient({
         // Best effort cleanup request; UI fallback still handles local session reset.
       }
     },
-    [schedId, showId],
+    [guestId, schedId, showId],
   );
 
   React.useEffect(() => {
@@ -192,6 +202,7 @@ export function ReserveSeatClient({
           body: JSON.stringify({
             showId,
             schedId,
+            guestId,
             ticketId: stored.ticketId,
             activeToken: stored.activeToken,
           }),
@@ -219,7 +230,7 @@ export function ReserveSeatClient({
     };
 
     void verify();
-  }, [schedId, showId, showScopeId]);
+  }, [guestId, schedId, showId, showScopeId]);
 
   React.useEffect(() => {
     if (step === "success" || !expiresAt) return;
@@ -271,6 +282,7 @@ export function ReserveSeatClient({
       const payload = JSON.stringify({
         showId,
         schedId,
+        guestId,
         ticketId: stored.ticketId,
         activeToken: stored.activeToken,
       });
@@ -292,7 +304,7 @@ export function ReserveSeatClient({
         // Best effort termination during navigation.
       }
     },
-    [schedId, showId, showScopeId],
+    [guestId, schedId, showId, showScopeId],
   );
 
   React.useEffect(() => {
@@ -376,6 +388,7 @@ export function ReserveSeatClient({
         body: JSON.stringify({
           showId,
           schedId,
+          guestId,
         }),
       });
 
@@ -417,6 +430,7 @@ export function ReserveSeatClient({
         body: JSON.stringify({
           showId,
           schedId,
+          guestId,
           ticketId: stored.ticketId,
           activeToken: stored.activeToken,
         }),
@@ -438,17 +452,48 @@ export function ReserveSeatClient({
   };
 
   // Step transition: seats → payment
-  const handleProceedToPayment = () => {
+  const handleProceedToContact = () => {
     if (selectedSeatIds.length === 0) {
       setSelectionMessage("Please select at least one seat.");
       return;
     }
+    setSelectionMessage(null);
+    setStep("contact");
+  };
+
+  // Step transition: contact -> payment
+  const handleProceedToPayment = () => {
+    const firstName = contactDetails.firstName.trim();
+    const lastName = contactDetails.lastName.trim();
+    const address = contactDetails.address.trim();
+    const email = contactDetails.email.trim();
+    const phoneNumber = contactDetails.phoneNumber.trim();
+
+    if (!firstName || !lastName || !address || !email || !phoneNumber) {
+      setError("Please complete all contact fields.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Please provide a valid email address.");
+      return;
+    }
+
+    if (!/^[+\d][\d\s\-()]{7,}$/.test(phoneNumber)) {
+      setError("Please provide a valid phone number.");
+      return;
+    }
+
+    setError(null);
     setStep("payment");
   };
 
-  // Step transition: payment → back to seats
   const handleBackToSeats = () => {
     setStep("seats");
+  };
+
+  const handleBackToContact = () => {
+    setStep("contact");
   };
 
   // Callback from GcashUploadPanel when upload completes
@@ -477,10 +522,16 @@ export function ReserveSeatClient({
         body: JSON.stringify({
           showId,
           schedId,
+          guestId,
           ticketId: stored.ticketId,
           activeToken: stored.activeToken,
           seatIds: selectedSeatIds,
           screenshotUrl,
+          firstName: contactDetails.firstName,
+          lastName: contactDetails.lastName,
+          address: contactDetails.address,
+          email: contactDetails.email,
+          phoneNumber: contactDetails.phoneNumber,
         }),
       });
 
@@ -621,6 +672,11 @@ export function ReserveSeatClient({
               </div>
               {!isSuccess && !isLoading && !error && expiresAt && (
                 <div className="flex items-center gap-2">
+                  {step === "contact" && (
+                    <Badge variant="secondary" className="w-fit gap-1 text-sm">
+                      Contact Details
+                    </Badge>
+                  )}
                   {step === "payment" && (
                     <Badge variant="secondary" className="w-fit gap-1 text-sm">
                       <CreditCard className="h-3.5 w-3.5" />
@@ -828,12 +884,12 @@ export function ReserveSeatClient({
                     )}
                   </Button>
                   <Button
-                    onClick={handleProceedToPayment}
+                    onClick={handleProceedToContact}
                     disabled={selectedSeatIds.length === 0 || isLeaving}
                     className="w-full gap-2"
                   >
                     <CreditCard className="h-4 w-4" />
-                    Proceed to Payment
+                    Proceed to Contact Details
                   </Button>
                 </div>
               </div>
@@ -841,6 +897,95 @@ export function ReserveSeatClient({
           )}
 
           {/* ── Payment Step ── */}
+          {!isSuccess && !isLoading && !error && expiresAt && step === "contact" && (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <Card className="border-sidebar-border/70">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={handleBackToContact} className="h-8 w-8">
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <CardTitle className="text-base">Contact Details</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <input
+                      className="h-10 rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
+                      placeholder="First name"
+                      value={contactDetails.firstName}
+                      onChange={(e) =>
+                        setContactDetails((prev) => ({ ...prev, firstName: e.target.value }))
+                      }
+                    />
+                    <input
+                      className="h-10 rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
+                      placeholder="Last name"
+                      value={contactDetails.lastName}
+                      onChange={(e) =>
+                        setContactDetails((prev) => ({ ...prev, lastName: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <input
+                    className="h-10 w-full rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
+                    placeholder="Address"
+                    value={contactDetails.address}
+                    onChange={(e) =>
+                      setContactDetails((prev) => ({ ...prev, address: e.target.value }))
+                    }
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <input
+                      className="h-10 rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
+                      placeholder="Email"
+                      type="email"
+                      value={contactDetails.email}
+                      onChange={(e) =>
+                        setContactDetails((prev) => ({ ...prev, email: e.target.value }))
+                      }
+                    />
+                    <input
+                      className="h-10 rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
+                      placeholder="Phone number"
+                      value={contactDetails.phoneNumber}
+                      onChange={(e) =>
+                        setContactDetails((prev) => ({ ...prev, phoneNumber: e.target.value }))
+                      }
+                    />
+                  </div>
+                  <Button onClick={handleProceedToPayment} className="w-full gap-2">
+                    <CreditCard className="h-4 w-4" />
+                    Continue to Payment
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="border-sidebar-border/70">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Selected Seats</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedSeatIds.map((seatId) => (
+                      <div
+                        key={seatId}
+                        className="inline-flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] font-medium"
+                      >
+                        {seatNumbersById[seatId] ?? seatId}
+                      </div>
+                    ))}
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between text-sm font-semibold">
+                    <span>Total</span>
+                    <span>{formatCurrency(subtotal)}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {!isSuccess && !isLoading && !error && expiresAt && step === "payment" && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               {/* Left: GCash Upload */}
@@ -931,3 +1076,4 @@ export function ReserveSeatClient({
     </div>
   );
 }
+

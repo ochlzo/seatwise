@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/clients/redis";
 import { ably } from "@/lib/clients/ably";
 import type { ActiveSession, QueueMoveEvent } from "@/lib/types/queue";
@@ -24,16 +22,18 @@ const parseJson = <T>(value: unknown): T | null => {
 const parseTerminateBody = async (request: NextRequest): Promise<{
   showId?: string;
   schedId?: string;
+  guestId?: string;
   ticketId?: string;
   activeToken?: string;
 } | null> => {
   try {
-    return (await request.json()) as {
-      showId?: string;
-      schedId?: string;
-      ticketId?: string;
-      activeToken?: string;
-    };
+      return (await request.json()) as {
+        showId?: string;
+        schedId?: string;
+        guestId?: string;
+        ticketId?: string;
+        activeToken?: string;
+      };
   } catch {
     try {
       const text = await request.text();
@@ -41,6 +41,7 @@ const parseTerminateBody = async (request: NextRequest): Promise<{
       return JSON.parse(text) as {
         showId?: string;
         schedId?: string;
+        guestId?: string;
         ticketId?: string;
         activeToken?: string;
       };
@@ -63,31 +64,14 @@ const publishQueueMoveEvent = async (showScopeId: string) => {
 
 export async function POST(request: NextRequest) {
   try {
-    const { adminAuth } = await import("@/lib/firebaseAdmin");
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const user = await prisma.user.findUnique({
-      where: { firebase_uid: decodedToken.uid },
-      select: { user_id: true },
-    });
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
-    }
-
     const body = await parseTerminateBody(request);
     const showId = body?.showId;
     const schedId = body?.schedId;
+    const guestId = body?.guestId;
 
-    if (!showId || !schedId) {
+    if (!showId || !schedId || !guestId) {
       return NextResponse.json(
-        { success: false, error: "Missing showId or schedId" },
+        { success: false, error: "Missing showId, schedId, or guestId" },
         { status: 400 },
       );
     }
@@ -96,7 +80,7 @@ export async function POST(request: NextRequest) {
     const userTicketKey = `seatwise:user_ticket:${showScopeId}`;
     const resolvedTicketId =
       body?.ticketId ||
-      ((await redis.hget(userTicketKey, user.user_id)) as string | null);
+      ((await redis.hget(userTicketKey, guestId)) as string | null);
 
     if (!resolvedTicketId) {
       return NextResponse.json({
@@ -115,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     if (
       activeSession &&
-      activeSession.userId === user.user_id &&
+      activeSession.userId === guestId &&
       (!body?.activeToken || body.activeToken === activeSession.activeToken)
     ) {
       const promotion = await completeActiveSessionAndPromoteNext({
@@ -135,9 +119,9 @@ export async function POST(request: NextRequest) {
 
     const removedFromQueue = await redis.zrem(queueKey, resolvedTicketId);
     await redis.del(activeKey, ticketKey);
-    const currentlyMappedTicketId = (await redis.hget(userTicketKey, user.user_id)) as string | null;
+    const currentlyMappedTicketId = (await redis.hget(userTicketKey, guestId)) as string | null;
     if (currentlyMappedTicketId === resolvedTicketId) {
-      await redis.hdel(userTicketKey, user.user_id);
+      await redis.hdel(userTicketKey, guestId);
     }
 
     if (removedFromQueue > 0) {

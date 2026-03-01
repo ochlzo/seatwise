@@ -1,10 +1,4 @@
-import { AppSidebar } from "@/components/app-sidebar"
-import {
-    SidebarInset,
-    SidebarProvider,
-} from "@/components/ui/sidebar"
-import LoadingPage from "@/app/LoadingPage"
-import { verifySession } from "@/lib/auth/session"
+import LoadingPage from "@/app/LoadingPage";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +7,10 @@ export default async function AppUserLayout({
 }: {
     children: React.ReactNode
 }) {
-    await verifySession();
-
     return (
-        <SidebarProvider className="h-svh overflow-hidden" suppressHydrationWarning>
+        <div className="min-h-svh overflow-x-hidden">
             <LoadingPage />
-            <AppSidebar />
-            <SidebarInset className="overflow-y-auto">
-                {children}
-            </SidebarInset>
-        </SidebarProvider>
-    )
+            {children}
+        </div>
+    );
 }

@@ -14,12 +14,12 @@ export async function GET() {
         }
 
         const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-        const user = await prisma.user.findUnique({
+        const admin = await prisma.admin.findUnique({
             where: { firebase_uid: decoded.uid },
-            select: { role: true },
+            select: { user_id: true },
         });
 
-        if (user?.role !== "ADMIN") {
+        if (!admin) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
@@ -33,15 +33,6 @@ export async function GET() {
                         show_name: true,
                         venue: true,
                         show_image_key: true,
-                    },
-                },
-                user: {
-                    select: {
-                        user_id: true,
-                        first_name: true,
-                        last_name: true,
-                        email: true,
-                        avatar_key: true,
                     },
                 },
                 payment: {
@@ -138,3 +129,4 @@ export async function GET() {
         );
     }
 }
+

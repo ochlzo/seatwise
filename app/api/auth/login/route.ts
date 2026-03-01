@@ -1,26 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { cookies } from "next/headers";
-import { getUserByFirebaseUid, upsertUser, isNewUser, updateUserAvatar, resolveAvatarUrl } from "@/lib/db/Users";
-import { uploadGoogleAvatar } from "@/lib/actions/uploadGoogleAvatar";
-import { assignRandomAvatarAction } from "@/lib/actions/authActions";
+import { prisma } from "@/lib/prisma";
+import { resolveAvatarUrl } from "@/lib/db/Users";
 
 export async function POST(req: NextRequest) {
   try {
-    let idToken, username, reqFirstName, reqLastName;
-    try {
-      ({
-        idToken,
-        username,
-        firstName: reqFirstName,
-        lastName: reqLastName,
-      } = await req.json());
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid request body" },
-        { status: 400 }
-      );
-    }
+    const { idToken } = (await req.json()) as { idToken?: string };
 
     if (!idToken) {
       return NextResponse.json({ error: "Missing token" }, { status: 400 });
@@ -29,23 +15,19 @@ export async function POST(req: NextRequest) {
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
-    // Read existing user so provider logins (e.g. Google) don't overwrite username
-    // with null when no username is supplied.
-    let existingUser: Awaited<ReturnType<typeof getUserByFirebaseUid>> = null;
-    try {
-      existingUser = await getUserByFirebaseUid(uid);
-    } catch {
-      existingUser = null;
-    }
-
-    const email =
-      decoded.email || (existingUser?.email as string | null) || null;
-
-    const expiresIn = 60 * 60 * 24 * 14 * 1000; // 14 days
-    const sessionCookie = await adminAuth.createSessionCookie(idToken, {
-      expiresIn,
+    const admin = await prisma.admin.findUnique({
+      where: { firebase_uid: uid },
     });
 
+    if (!admin) {
+      return NextResponse.json(
+        { error: "Admin account not found. Contact system administrator." },
+        { status: 403 },
+      );
+    }
+
+    const expiresIn = 60 * 60 * 24 * 14 * 1000;
+    const sessionCookie = await adminAuth.createSessionCookie(idToken, { expiresIn });
     const cookieStore = await cookies();
     cookieStore.set("session", sessionCookie, {
       maxAge: expiresIn / 1000,
@@ -55,154 +37,25 @@ export async function POST(req: NextRequest) {
       sameSite: "lax",
     });
 
-    const requestedUsername =
-      typeof username === "string" && username.trim() !== ""
-        ? username.trim()
-        : null;
-    const existingUsername =
-      typeof existingUser?.username === "string" &&
-        existingUser.username.trim() !== ""
-        ? existingUser.username.trim()
-        : null;
-
-    let finalFirstName =
-      typeof reqFirstName === "string" && reqFirstName.trim() !== ""
-        ? reqFirstName.trim()
-        : typeof existingUser?.first_name === "string" &&
-          (existingUser.first_name as string).trim() !== ""
-          ? (existingUser.first_name as string).trim()
-          : null;
-
-    let finalLastName =
-      typeof reqLastName === "string" && reqLastName.trim() !== ""
-        ? reqLastName.trim()
-        : typeof existingUser?.last_name === "string" &&
-          (existingUser.last_name as string).trim() !== ""
-          ? (existingUser.last_name as string).trim()
-          : null;
-
-    if ((!finalFirstName || finalFirstName === "") && decoded.name) {
-      const nameParts = decoded.name.trim().split(/\s+/);
-      if (nameParts.length > 1) {
-        const lastName = nameParts.pop();
-        const firstName = nameParts.join(" ");
-        finalFirstName = firstName || null;
-        if (!finalLastName || finalLastName === "") {
-          finalLastName = lastName || null;
-        }
-      } else {
-        finalFirstName = nameParts[0] || null;
-      }
-    }
-
-    const user = await upsertUser({
-      firebase_uid: uid,
-      email,
-      first_name: finalFirstName,
-      last_name: finalLastName,
-      username: requestedUsername ?? existingUsername,
-    });
-
-    const newlyCreated = isNewUser(
-      user,
-      decoded.firebase?.sign_in_provider as string | undefined
-    );
-
     const firebaseUser = await adminAuth.getUser(uid);
-    const hasPassword = firebaseUser.providerData.some(
-      (p) => p.providerId === "password"
-    );
-
-    // AVATAR ASSIGNMENT LOGIC
-    if (!user.avatarKey) {
-      if (newlyCreated && decoded.picture) {
-        // Priority 1: Google Profile Picture for new users
-        const avatarUrl = await uploadGoogleAvatar(uid, decoded.picture);
-        if (avatarUrl) {
-          user.avatarKey = avatarUrl;
-          await updateUserAvatar(uid, avatarUrl);
-        }
-      }
-
-      // Priority 2: Random assignment if still null (not Google, or Google upload failed)
-      if (!user.avatarKey) {
-        const result = await assignRandomAvatarAction(uid);
-        if (result.success && result.url) {
-          user.avatarKey = result.url;
-        }
-      }
-    }
+    const hasPassword = firebaseUser.providerData.some((p) => p.providerId === "password");
 
     return NextResponse.json({
       user: {
-        uid: user.firebase_uid,
-        email: user.email,
-        displayName: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
-        firstName: user.first_name,
-        lastName: user.last_name,
-        username: user.username,
-        photoURL: resolveAvatarUrl(user.avatarKey, user.username, user.email),
-        role: user.role,
+        uid: admin.firebase_uid,
+        email: admin.email,
+        displayName: `${admin.first_name || ""} ${admin.last_name || ""}`.trim(),
+        firstName: admin.first_name,
+        lastName: admin.last_name,
+        username: admin.username,
+        photoURL: resolveAvatarUrl(admin.avatar_key, admin.username, admin.email),
+        role: "ADMIN",
         hasPassword,
-        isNewUser: newlyCreated,
+        isNewUser: false,
       },
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Authentication failed";
-    const code =
-      typeof err === "object" && err !== null && "code" in err
-        ? String((err as { code?: unknown }).code)
-        : undefined;
-
-    if (process.env.NODE_ENV !== "production") {
-      console.warn("Login error", { message, code });
-    }
-
-    const isServerConfigIssue =
-      message.toLowerCase().includes("missing firebase admin credentials") ||
-      message.toLowerCase().includes("failed to parse private key") ||
-      message.toLowerCase().includes("credential");
-
-    const isTokenIssue =
-      code === "auth/invalid-id-token" ||
-      code === "auth/id-token-expired" ||
-      code === "auth/argument-error" ||
-      message.toLowerCase().includes("id token") ||
-      message.toLowerCase().includes("token used too early") ||
-      message.toLowerCase().includes("incorrect \"aud\"") ||
-      message.toLowerCase().includes("incorrect \"iss\"");
-
-    const status = isServerConfigIssue
-      ? 500
-      : message.includes("Missing email") ||
-          message.includes("Unique constraint failed") ||
-          message.toLowerCase().includes("already taken")
-        ? 400
-        : 401;
-
-    const errorResponse = status === 500
-      ? "Server authentication is not configured correctly"
-      : status === 400
-        ? message.toLowerCase().includes("email")
-          ? "Email is already taken"
-          : message.toLowerCase().includes("username") || message.includes("Unique constraint failed")
-          ? "Username is already taken"
-          : "Missing email"
-        : "Invalid or expired sign-in token. Please try logging in again.";
-
-    return NextResponse.json(
-      {
-        error: errorResponse,
-        ...(process.env.NODE_ENV !== "production"
-          ? {
-            debugCode: code ?? null,
-            debugMessage: message,
-            debugIsTokenIssue: isTokenIssue,
-          }
-          : {}),
-      },
-      { status }
-    );
+    const message = err instanceof Error ? err.message : "Authentication failed";
+    return NextResponse.json({ error: message }, { status: 401 });
   }
 }

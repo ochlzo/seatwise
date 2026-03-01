@@ -21,7 +21,7 @@ export async function verifyAdmin() {
 
     const user = await getUserByFirebaseUid(decodedToken.uid);
 
-    if (!user || user.role !== "ADMIN") {
+    if (!user) {
       redirect("/dashboard");
     }
 

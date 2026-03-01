@@ -34,7 +34,7 @@ export async function GET() {
         lastName: user.last_name as string | null,
         username: user.username as string | null,
         photoURL: resolveAvatarUrl(user.avatarKey, user.username, user.email),
-        role: (user.role as string | null) ?? "USER",
+        role: "ADMIN",
       },
     });
   } catch {

@@ -10,6 +10,7 @@
     "test": "node --experimental-strip-types lib/db/showScheduleGrouping.test.ts",
     "queue:cleanup": "node --experimental-strip-types scripts/cleanup-queue.ts",
     "reservations:clear": "node --experimental-strip-types scripts/clear-reservations.ts",
+    "admin:create-default": "node --experimental-strip-types scripts/create-default-admin.ts",
     "oauth:refresh-token": "node scripts/get-google-refresh-token.mjs",
     "email:test": "node scripts/send-test-gmail.mjs"
   },

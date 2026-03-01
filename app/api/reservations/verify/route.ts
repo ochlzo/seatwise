@@ -15,12 +15,12 @@ export async function POST(request: NextRequest) {
 
         // Verify admin role
         const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-        const user = await prisma.user.findUnique({
+        const admin = await prisma.admin.findUnique({
             where: { firebase_uid: decoded.uid },
-            select: { role: true },
+            select: { user_id: true },
         });
 
-        if (user?.role !== "ADMIN") {
+        if (!admin) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
@@ -85,3 +85,4 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+

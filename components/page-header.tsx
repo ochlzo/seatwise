@@ -48,6 +48,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   const pathname = usePathname();
+  const hasSidebar = pathname.startsWith("/admin") || pathname.startsWith("/seat-builder");
 
   const breadcrumbs = React.useMemo(() => {
     const segments = pathname.split("/").filter(Boolean);
@@ -108,11 +109,15 @@ export function PageHeader({
       )}
     >
       <div className="flex items-center gap-2 px-3 sm:px-4">
-        <SidebarTrigger className="-ml-1" />
-        <Separator
-          orientation="vertical"
-          className="mr-1 sm:mr-2 data-[orientation=vertical]:h-3 sm:data-[orientation=vertical]:h-4"
-        />
+        {hasSidebar && (
+          <>
+            <SidebarTrigger className="-ml-1" />
+            <Separator
+              orientation="vertical"
+              className="mr-1 sm:mr-2 data-[orientation=vertical]:h-3 sm:data-[orientation=vertical]:h-4"
+            />
+          </>
+        )}
         <Breadcrumb className="hidden md:block">
           <BreadcrumbList className="text-xs sm:text-sm">
             {breadcrumbs.map((crumb, index) => {

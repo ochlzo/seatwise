@@ -36,16 +36,14 @@ type PaymentData = {
 
 type ReservationData = {
   reservation_id: string;
-  user_id: string;
+  guest_id: string;
+  first_name: string;
+  last_name: string;
+  address: string;
+  email: string;
+  phone_number: string;
   status: string;
   createdAt: string;
-  user: {
-    user_id: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    avatar_key: string | null;
-  };
   payment: PaymentData | null;
   seatAssignment: {
     seat_assignment_id: string;
@@ -82,7 +80,13 @@ type ShowGroup = {
 
 type UserReservationRow = {
   userId: string;
-  user: ReservationData["user"];
+  user: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone_number: string;
+    address: string;
+  };
   reservations: ReservationData[];
   seatNumbers: string[];
   categories: string[];
@@ -140,7 +144,7 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
   const map = new Map<string, UserReservationRow>();
 
   for (const reservation of reservations) {
-    const key = reservation.user.user_id;
+    const key = `${reservation.email.toLowerCase()}::${reservation.phone_number}`;
     const existing = map.get(key);
 
     const scheduleLabel = `${formatDate(reservation.seatAssignment.sched.sched_date)} ${formatTime(
@@ -150,7 +154,13 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
     if (!existing) {
       map.set(key, {
         userId: key,
-        user: reservation.user,
+        user: {
+          first_name: reservation.first_name,
+          last_name: reservation.last_name,
+          email: reservation.email,
+          phone_number: reservation.phone_number,
+          address: reservation.address,
+        },
         reservations: [reservation],
         seatNumbers: [reservation.seatAssignment.seat.seat_number],
         categories: [reservation.seatAssignment.set.seatCategory.category_name],
@@ -289,9 +299,10 @@ export function ReservationsClient() {
         ...show,
         reservations: show.reservations.filter(
           (r) =>
-            r.user.first_name.toLowerCase().includes(q) ||
-            r.user.last_name.toLowerCase().includes(q) ||
-            r.user.email.toLowerCase().includes(q) ||
+            r.first_name.toLowerCase().includes(q) ||
+            r.last_name.toLowerCase().includes(q) ||
+            r.email.toLowerCase().includes(q) ||
+            r.phone_number.toLowerCase().includes(q) ||
             r.seatAssignment.seat.seat_number.toLowerCase().includes(q) ||
             r.reservation_id.toLowerCase().includes(q),
         ),
@@ -481,6 +492,7 @@ export function ReservationsClient() {
                                     {row.user.first_name} {row.user.last_name}
                                   </p>
                                   <p className="truncate text-xs text-muted-foreground">{row.user.email}</p>
+                                  <p className="truncate text-[11px] text-muted-foreground">{row.user.phone_number}</p>
                                   <div className="flex flex-wrap items-center gap-2 text-xs">
                                     <span className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/60 bg-muted/30 px-2 py-0.5 font-mono text-[11px]">
                                       Seats {row.seatNumbers.join(", ")}

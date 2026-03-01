@@ -44,7 +44,7 @@ async function assertAdmin() {
   const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
   const { prisma } = await import("@/lib/prisma");
   const fetchUser = async () => {
-    return prisma.user.findUnique({
+    return prisma.admin.findUnique({
       where: { firebase_uid: decodedToken.uid },
     });
   };
@@ -61,7 +61,7 @@ async function assertAdmin() {
     }
   }
 
-  if (user?.role !== "ADMIN") {
+  if (!user) {
     throw new Error("Forbidden");
   }
 }
@@ -189,3 +189,5 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
     return { success: false, error: message };
   }
 }
+
+

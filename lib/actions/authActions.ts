@@ -57,7 +57,7 @@ export async function abortSignUpAction() {
 
         // 4. Delete from Prisma Database
         try {
-            await prisma.user.delete({
+            await prisma.admin.delete({
                 where: { firebase_uid: uid }
             });
         } catch (dbError) {
@@ -102,3 +102,4 @@ export async function assignRandomAvatarAction(uid: string) {
         return { success: false, error: "Failed to assign random avatar" };
     }
 }
+

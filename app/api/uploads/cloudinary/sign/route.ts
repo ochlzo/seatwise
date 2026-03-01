@@ -51,11 +51,11 @@ export async function POST(request: NextRequest) {
     const config = PURPOSES[purpose];
 
     if (config.requiresAdmin) {
-      const user = await prisma.user.findUnique({
+      const admin = await prisma.admin.findUnique({
         where: { firebase_uid: uid },
-        select: { role: true },
+        select: { user_id: true },
       });
-      if (user?.role !== "ADMIN") {
+      if (!admin) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
@@ -101,4 +101,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to sign upload" }, { status: 500 });
   }
 }
+
 

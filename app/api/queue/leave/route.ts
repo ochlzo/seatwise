@@ -1,40 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
 
 export async function POST(request: NextRequest) {
   try {
-    const { adminAuth } = await import("@/lib/firebaseAdmin");
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const user = await prisma.user.findUnique({
-      where: { firebase_uid: decodedToken.uid },
-      select: { user_id: true },
-    });
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: "User not found" }, { status: 404 });
-    }
-
     const body = await request.json();
-    const { showId, schedId, ticketId, activeToken } = body as {
+    const { showId, schedId, guestId, ticketId, activeToken } = body as {
       showId?: string;
       schedId?: string;
+      guestId?: string;
       ticketId?: string;
       activeToken?: string;
     };
 
-    if (!showId || !schedId || !ticketId || !activeToken) {
+    if (!showId || !schedId || !guestId || !ticketId || !activeToken) {
       return NextResponse.json(
-        { success: false, error: "Missing showId, schedId, ticketId, or activeToken" },
+        { success: false, error: "Missing showId, schedId, guestId, ticketId, or activeToken" },
         { status: 400 },
       );
     }
@@ -43,7 +24,7 @@ export async function POST(request: NextRequest) {
     const validation = await validateActiveSession({
       showScopeId,
       ticketId,
-      userId: user.user_id,
+      userId: guestId,
       activeToken,
     });
 

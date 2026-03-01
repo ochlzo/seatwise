@@ -108,11 +108,11 @@ export async function updateShowAction(
       sessionCookie,
       true,
     );
-    const user = await prisma.user.findUnique({
+    const user = await prisma.admin.findUnique({
       where: { firebase_uid: decodedToken.uid },
     });
 
-    if (user?.role !== "ADMIN") {
+    if (!user) {
       throw new Error("Forbidden");
     }
 
@@ -460,3 +460,5 @@ export async function updateShowAction(
     return { success: false, error: message };
   }
 }
+
+
