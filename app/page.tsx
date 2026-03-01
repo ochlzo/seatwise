@@ -488,16 +488,16 @@ export default function Home() {
         <p>&copy; 2026 SEATWISE • CHOLO CANDELARIA • SEAN ARMENTA • BUCAL</p>
         <div className="flex gap-8">
           <a
-            href="#"
+            href="/privacy-policy"
             className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
-            Privacy
+            Privacy Policy
           </a>
           <a
-            href="#"
+            href="/terms-of-service"
             className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
-            Terms
+            Terms of Service
           </a>
         </div>
       </footer>
