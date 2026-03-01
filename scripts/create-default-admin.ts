@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { prisma } from "../lib/prisma.ts";
+import { PrismaClient } from "@prisma/client";
 
 function loadDotEnvIfPresent() {
   const envPath = path.resolve(process.cwd(), ".env");
@@ -40,6 +40,7 @@ function loadDotEnvIfPresent() {
 }
 
 loadDotEnvIfPresent();
+const prisma = new PrismaClient();
 
 const DEFAULT_ADMIN_EMAIL = "johnbenedictkandelarya@gmail.com";
 const DEFAULT_ADMIN_PASSWORD = "123456";

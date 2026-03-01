@@ -662,43 +662,45 @@ export function ReserveSeatClient({
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 lg:p-8">
       <Card className="border-0 bg-transparent py-0 shadow-none rounded-none gap-4 sm:border-sidebar-border/70 sm:bg-card sm:py-6 sm:shadow-sm sm:rounded-xl sm:gap-6">
-        <CardHeader className="px-0 sm:px-6">
-          <div className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
-                  {showName || "Validating your queue access token..."}
-                </CardTitle>
-              </div>
-              {!isSuccess && !isLoading && !error && expiresAt && (
-                <div className="flex items-center gap-2">
-                  {step === "contact" && (
-                    <Badge variant="secondary" className="w-fit gap-1 text-sm">
-                      Contact Details
-                    </Badge>
-                  )}
-                  {step === "payment" && (
-                    <Badge variant="secondary" className="w-fit gap-1 text-sm">
-                      <CreditCard className="h-3.5 w-3.5" />
-                      Payment
-                    </Badge>
-                  )}
-                  <Badge
-                    variant="outline"
-                    className={
-                      remaining <= 20_000
-                        ? "w-fit border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300 text-sm"
-                        : "w-fit border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300 text-sm"
-                    }
-                  >
-                    <Clock3 className="mr-1 h-3.5 w-3.5" />
-                    {formatDuration(remaining)} left
-                  </Badge>
+        {!isSuccess && (
+          <CardHeader className="px-0 sm:px-6">
+            <div className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
+                    {showName || "Validating your queue access token..."}
+                  </CardTitle>
                 </div>
-              )}
+                {!isLoading && !error && expiresAt && (
+                  <div className="flex items-center gap-2">
+                    {step === "contact" && (
+                      <Badge variant="secondary" className="w-fit gap-1 text-sm">
+                        Contact Details
+                      </Badge>
+                    )}
+                    {step === "payment" && (
+                      <Badge variant="secondary" className="w-fit gap-1 text-sm">
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Payment
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className={
+                        remaining <= 20_000
+                          ? "w-fit border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300 text-sm"
+                          : "w-fit border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-300 text-sm"
+                      }
+                    >
+                      <Clock3 className="mr-1 h-3.5 w-3.5" />
+                      {formatDuration(remaining)} left
+                    </Badge>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </CardHeader>
+          </CardHeader>
+        )}
         <CardContent className="space-y-4 px-0 sm:px-6">
           {isSuccess && (
             <ReservationSuccessPanel
@@ -706,6 +708,7 @@ export function ReserveSeatClient({
               selectedSeatIds={selectedSeatIds}
               seatNumbersById={seatNumbersById}
               showId={showId}
+              contactEmail={contactDetails.email}
             />
           )}
 

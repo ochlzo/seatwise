@@ -9,6 +9,7 @@ interface ReservationSuccessPanelProps {
     selectedSeatIds: string[];
     seatNumbersById: Record<string, string>;
     showId: string;
+    contactEmail: string;
 }
 
 export function ReservationSuccessPanel({
@@ -16,6 +17,7 @@ export function ReservationSuccessPanel({
     selectedSeatIds,
     seatNumbersById,
     showId,
+    contactEmail,
 }: ReservationSuccessPanelProps) {
     const router = useRouter();
 
@@ -34,6 +36,10 @@ export function ReservationSuccessPanel({
                     <p className="text-muted-foreground text-sm sm:text-base">
                         Your {selectedSeatIds.length > 0 ? selectedSeatIds.length : ""} seat{selectedSeatIds.length !== 1 ? "s" : ""} for{" "}
                         <span className="font-medium text-foreground">{showName}</span> {selectedSeatIds.length === 1 ? "has" : "have"} been successfully reserved.
+                    </p>
+                    <p className="text-muted-foreground text-sm sm:text-base">
+                        A confirmation email was sent to{" "}
+                        <span className="font-medium text-foreground">{contactEmail || "your email"}</span>. We will review your payment, and if verified, we will release your e-ticket via email.
                     </p>
                 </div>
 
