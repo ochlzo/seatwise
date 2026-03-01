@@ -47,5 +47,3 @@ next-env.d.ts
  .codex/
  .windsurf/
  .claude/
-
- scripts/get-google-refresh-token.mjs
