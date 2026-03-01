@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "node --experimental-strip-types lib/db/showScheduleGrouping.test.ts",
     "queue:cleanup": "node --experimental-strip-types scripts/cleanup-queue.ts",
-    "reservations:clear": "node --experimental-strip-types scripts/clear-reservations.ts"
+    "reservations:clear": "node --experimental-strip-types scripts/clear-reservations.ts",
+    "oauth:refresh-token": "node scripts/get-google-refresh-token.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",
