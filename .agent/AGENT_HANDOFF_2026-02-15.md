@@ -283,3 +283,39 @@ Ops / maintenance:
 - `UPSTASH_REDIS_REST_TOKEN`
 - `ABLY_API_KEY`
 - Auth/session cookie + Firebase admin config are required for queue APIs.
+
+## Session updates (2026-03-02)
+Primary files touched:
+- `app/privacy-policy/page.tsx`
+- `app/terms-of-service/page.tsx`
+- `app/page.tsx`
+- `scripts/get-google-refresh-token.mjs`
+- `scripts/send-test-gmail.mjs`
+- `package.json`
+
+Legal/compliance pages:
+- Added public legal routes:
+- `/privacy-policy`
+- `/terms-of-service`
+- Homepage footer links now point to those routes (instead of placeholder `#` links).
+- These routes are intended to satisfy OAuth consent branding checks on production domain.
+
+Google OAuth/Gmail tooling:
+- Added refresh token helper script:
+- `npm run oauth:refresh-token`
+- File: `scripts/get-google-refresh-token.mjs`
+- Starts local callback server, uses `access_type=offline` + `prompt=consent`, exchanges auth code for tokens, and prints refresh token.
+- Added Gmail send test script:
+- `npm run email:test -- [to] [subject] [body]`
+- File: `scripts/send-test-gmail.mjs`
+- Uses OAuth refresh token flow to mint access token, then sends via Gmail API `users.messages.send`.
+
+OAuth callback URI note:
+- App sign-in uses Firebase popup auth (`signInWithPopup`) for Google login, not a custom app-defined `redirect_uri` in code.
+- Expected OAuth callback for Firebase auth domain is:
+- `https://seatwise-5a777.firebaseapp.com/__/auth/handler`
+
+Operational/security notes:
+- GitHub push protection blocked pushes when `.env` secrets were included in commit history.
+- `.env` is ignored but can still be tracked if previously committed; remove from index with `git rm --cached .env` and rewrite offending local commits before push.
+- Rotate any exposed Google OAuth client secrets/refresh tokens that were committed or pasted in logs/chat.
