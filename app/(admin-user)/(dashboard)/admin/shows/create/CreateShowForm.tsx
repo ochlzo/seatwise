@@ -118,7 +118,6 @@ export function CreateShowForm() {
     show_description: "",
     venue: "",
     address: "",
-    gcash_qr_image_key: "",
     gcash_number: "",
     gcash_account_name: "",
     show_status: "DRAFT",
@@ -129,6 +128,10 @@ export function CreateShowForm() {
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
   const [posterUploadError, setPosterUploadError] = React.useState<string | null>(null);
+  const [gcashQrImageBase64, setGcashQrImageBase64] = React.useState("");
+  const [gcashQrPreview, setGcashQrPreview] = React.useState<string | null>(null);
+  const [gcashQrUploadError, setGcashQrUploadError] = React.useState<string | null>(null);
+  const [isGcashQrProcessing, setIsGcashQrProcessing] = React.useState(false);
   const [scheds, setScheds] = React.useState<SchedDraft[]>([]);
   const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
   const [applyToAllDates, setApplyToAllDates] = React.useState(false);
@@ -208,6 +211,33 @@ export function CreateShowForm() {
     setImagePreview(null);
     setPosterUploadError(null);
   }, [imagePreview]);
+
+  const handleGcashQrAccepted = React.useCallback((file: File) => {
+    setGcashQrUploadError(null);
+    setIsGcashQrProcessing(true);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setGcashQrImageBase64(reader.result);
+        setGcashQrPreview(reader.result);
+      } else {
+        setGcashQrUploadError("Failed to read GCash QR image.");
+      }
+      setIsGcashQrProcessing(false);
+    };
+    reader.onerror = () => {
+      setGcashQrUploadError("Failed to read GCash QR image.");
+      setIsGcashQrProcessing(false);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleGcashQrRemove = React.useCallback(() => {
+    setGcashQrImageBase64("");
+    setGcashQrPreview(null);
+    setGcashQrUploadError(null);
+  }, []);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -416,6 +446,9 @@ export function CreateShowForm() {
     if (!formData.show_description.trim()) missing.push("Description");
     if (!formData.venue.trim()) missing.push("Venue");
     if (!formData.address.trim()) missing.push("Address");
+    if (!gcashQrImageBase64.trim()) missing.push("GCash QR image");
+    if (!formData.gcash_number.trim()) missing.push("GCash number");
+    if (!formData.gcash_account_name.trim()) missing.push("GCash account name");
     if (!formData.show_start_date) missing.push("Start date");
     if (!formData.show_end_date) missing.push("End date");
 
@@ -462,7 +495,7 @@ export function CreateShowForm() {
     }
 
     return missing;
-  }, [formData, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets, unassignedSchedCount, incompleteCategorySets]);
+  }, [formData, gcashQrImageBase64, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets, unassignedSchedCount, incompleteCategorySets]);
 
   const isFormValid = React.useMemo(() => {
     // Basic validation: no missing fields
@@ -726,6 +759,9 @@ export function CreateShowForm() {
       !formData.show_description ||
       !formData.venue ||
       !formData.address ||
+      !gcashQrImageBase64.trim() ||
+      !formData.gcash_number.trim() ||
+      !formData.gcash_account_name.trim() ||
       !formData.show_start_date ||
       !formData.show_end_date ||
       !formData.seatmap_id ||
@@ -781,6 +817,7 @@ export function CreateShowForm() {
         };
       }),
       show_image_key: imageUrl,
+      gcash_qr_image_base64: gcashQrImageBase64,
     });
     setIsSaving(false);
 
@@ -964,14 +1001,28 @@ export function CreateShowForm() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="gcash-qr-image-key" className="text-xs font-semibold text-muted-foreground">
-                GCash QR Image Key
+              <Label className="text-xs font-semibold text-muted-foreground">
+                GCash QR Code
               </Label>
-              <Input
-                id="gcash-qr-image-key"
-                value={formData.gcash_qr_image_key}
-                onChange={(e) => setFormData({ ...formData, gcash_qr_image_key: e.target.value })}
-                placeholder="https://res.cloudinary.com/.../gcash-qr.jpg"
+              <ImageUploadDropzone
+                previewUrl={gcashQrPreview}
+                previewAlt="GCash QR code preview"
+                onFileAccepted={handleGcashQrAccepted}
+                onRemove={handleGcashQrRemove}
+                accept={ACCEPTED_POSTER_TYPES}
+                maxSize={MAX_POSTER_FILE_SIZE}
+                disabled={isSaving}
+                isProcessing={isGcashQrProcessing}
+                processingText="Processing GCash QR image..."
+                uploadError={gcashQrUploadError}
+                onFileRejected={setGcashQrUploadError}
+                idleTitle="Upload GCash QR Code"
+                activeTitle="Drop the GCash QR code here"
+                helperText="Drag and drop or click to browse. JPG, PNG, or WEBP (max 5MB)"
+                successMessage={gcashQrImageBase64 ? "GCash QR image ready for submission" : null}
+                emptyHint="Required. This QR code is shown to users during payment."
+                minHeightClassName="min-h-[170px]"
+                previewMaxHeightClassName="max-h-[280px]"
               />
             </div>
             <div className="space-y-2">
@@ -980,17 +1031,19 @@ export function CreateShowForm() {
               </Label>
               <Input
                 id="gcash-number"
+                required
                 value={formData.gcash_number}
                 onChange={(e) => setFormData({ ...formData, gcash_number: e.target.value })}
                 placeholder="09XXXXXXXXX"
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2">
               <Label htmlFor="gcash-account-name" className="text-xs font-semibold text-muted-foreground">
                 GCash Account Name
               </Label>
               <Input
                 id="gcash-account-name"
+                required
                 value={formData.gcash_account_name}
                 onChange={(e) => setFormData({ ...formData, gcash_account_name: e.target.value })}
                 placeholder="Juan Dela Cruz"

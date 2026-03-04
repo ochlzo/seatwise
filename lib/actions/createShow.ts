@@ -17,6 +17,7 @@ type CreateShowPayload = {
   show_end_date: string | Date;
   show_image_key?: string;
   gcash_qr_image_key?: string;
+  gcash_qr_image_base64?: string;
   gcash_number?: string;
   gcash_account_name?: string;
   image_base64?: string;
@@ -121,6 +122,7 @@ export async function createShowAction(data: CreateShowPayload) {
       show_end_date,
       show_image_key,
       gcash_qr_image_key,
+      gcash_qr_image_base64,
       gcash_number,
       gcash_account_name,
       image_base64,
@@ -142,6 +144,15 @@ export async function createShowAction(data: CreateShowPayload) {
     }
     if (!address?.trim()) {
       throw new Error("Address is required.");
+    }
+    if (!gcash_qr_image_key?.trim() && !gcash_qr_image_base64?.trim()) {
+      throw new Error("GCash QR image key is required.");
+    }
+    if (!gcash_number?.trim()) {
+      throw new Error("GCash number is required.");
+    }
+    if (!gcash_account_name?.trim()) {
+      throw new Error("GCash account name is required.");
     }
     if (!show_status) {
       throw new Error("Show status is required.");
@@ -229,6 +240,16 @@ export async function createShowAction(data: CreateShowPayload) {
       finalImageUrl = uploadResponse.secure_url;
     }
 
+    let finalGcashQrImageUrl = gcash_qr_image_key;
+    if (gcash_qr_image_base64) {
+      const cloudinary = (await import("@/lib/cloudinary")).default;
+      const qrUploadResponse = await cloudinary.uploader.upload(gcash_qr_image_base64, {
+        folder: "seatwise/gcash_qr_codes",
+        resource_type: "image",
+      });
+      finalGcashQrImageUrl = qrUploadResponse.secure_url;
+    }
+
     // --- 3. Database Transaction ---
     const schedIdMap = new Map<string, string>(); // client_id -> db_sched_id
 
@@ -252,7 +273,7 @@ export async function createShowAction(data: CreateShowPayload) {
             show_start_date: toDateOnly(show_start_date),
             show_end_date: toDateOnly(show_end_date),
             show_image_key: finalImageUrl,
-            gcash_qr_image_key: gcash_qr_image_key?.trim() || undefined,
+            gcash_qr_image_key: finalGcashQrImageUrl?.trim() || undefined,
             gcash_number: gcash_number?.trim() || undefined,
             gcash_account_name: gcash_account_name?.trim() || undefined,
             seatmap_id: seatmap_id || undefined, // Allow undefined for DRAFT shows
