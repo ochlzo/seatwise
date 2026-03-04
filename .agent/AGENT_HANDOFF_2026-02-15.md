@@ -479,3 +479,25 @@ Reusable upload UI refactor:
 Validation status:
 - Type check passed after refactor: `npx tsc --noEmit`.
 - Existing unrelated baseline test issue remains (`lib/db/showScheduleGrouping` import resolution).
+
+Admin profile/account route move:
+- Added admin-scoped routes:
+- `/admin/profile`
+- `/admin/account`
+- Route files:
+- `app/(admin-user)/(dashboard)/admin/profile/page.tsx`
+- `app/(admin-user)/(dashboard)/admin/account/page.tsx`
+- These currently re-export existing page implementations from:
+- `app/(app-user)/profile/page.tsx`
+- `app/(app-user)/account/page.tsx`
+- Updated navigation targets in user dropdown (`components/nav-user.tsx`):
+- Profile now pushes `/admin/profile`
+- Account now pushes `/admin/account`
+- Updated account page "Edit Details" button to route to `/admin/profile`.
+- Updated header parent resolution for these pages in `components/seatmap/seatmap-page-header.tsx`:
+- `/admin/profile` and `/admin/account` now resolve breadcrumb parent to `Admin Dashboard` (`/admin`).
+- Updated cache invalidation in:
+- `lib/actions/updateProfile.ts`
+- `lib/actions/updateAvatar.ts`
+- Both now revalidate `/admin/profile` (and still revalidate `/profile` for compatibility during transition).
+- Type check after route move passed: `npx tsc --noEmit`.

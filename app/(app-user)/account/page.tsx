@@ -83,7 +83,7 @@ export default function AccountPage() {
             </div>
             <Button
               className="absolute right-6 top-6 h-10"
-              onClick={() => router.push("/profile")}
+              onClick={() => router.push("/admin/profile")}
             >
               Edit Details
             </Button>

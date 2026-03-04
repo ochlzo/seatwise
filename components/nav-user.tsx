@@ -61,17 +61,17 @@ export function NavUser({ user }: { user: User | null }) {
     .slice(0, 2);
 
   const handleProfileClick = () => {
-    if (pathname !== "/profile") {
+    if (pathname !== "/admin/profile") {
       dispatch(setLoading(true));
     }
-    router.push("/profile");
+    router.push("/admin/profile");
   };
 
   const handleAccountClick = () => {
-    if (pathname !== "/account") {
+    if (pathname !== "/admin/account") {
       dispatch(setLoading(true));
     }
-    router.push("/account");
+    router.push("/admin/account");
   };
 
   return (

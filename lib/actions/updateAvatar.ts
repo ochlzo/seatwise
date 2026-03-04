@@ -92,6 +92,7 @@ export async function updateAvatarAction(avatarData: string, isCustom: boolean) 
         await updateUserAvatar(uid, finalAvatarUrl);
 
         // 4. Revalidate path to refresh server components
+        revalidatePath("/admin/profile");
         revalidatePath("/profile");
 
         return { success: true, url: finalAvatarUrl };

@@ -64,6 +64,7 @@ export async function updateProfileAction(data: {
         });
 
         // 5. Revalidate to refresh cache
+        revalidatePath("/admin/profile");
         revalidatePath("/profile");
 
         return { success: true };

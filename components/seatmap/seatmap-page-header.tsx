@@ -33,9 +33,9 @@ export function SeatmapPageHeader({
 }: SeatmapPageHeaderProps) {
   const pathname = usePathname();
   const resolvedParentLabel =
-    pathname === "/account" || pathname === "/profile" ? "Dashboard" : parentLabel;
+    pathname === "/admin/account" || pathname === "/admin/profile" ? "Admin Dashboard" : parentLabel;
   const resolvedParentHref =
-    pathname === "/account" || pathname === "/profile" ? "/dashboard" : parentHref;
+    pathname === "/admin/account" || pathname === "/admin/profile" ? "/admin" : parentHref;
 
   return (
     <header
