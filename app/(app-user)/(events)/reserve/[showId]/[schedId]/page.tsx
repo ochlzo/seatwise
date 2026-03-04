@@ -30,6 +30,9 @@ export default async function ReserveSeatPage({
         select: {
           show_name: true,
           seatmap_id: true,
+          gcash_qr_image_key: true,
+          gcash_number: true,
+          gcash_account_name: true,
         },
       },
       seatAssignments: {
@@ -96,8 +99,11 @@ export default async function ReserveSeatPage({
       <div className="relative flex flex-1 flex-col bg-background">
         <ReserveSeatClient
           showId={showId}
-          schedId={schedId}
+        schedId={schedId}
           seatmapId={schedule.show.seatmap_id}
+        gcashQrImageKey={schedule.show.gcash_qr_image_key}
+        gcashNumber={schedule.show.gcash_number}
+        gcashAccountName={schedule.show.gcash_account_name}
         seatmapCategories={seatmapCategories}
         seatCategoryAssignments={seatCategoryAssignments}
         seatNumbersById={seatNumbersById}

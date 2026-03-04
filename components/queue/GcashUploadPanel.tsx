@@ -19,12 +19,18 @@ type GcashUploadPanelProps = {
     onUploadComplete: (url: string) => void;
     onBack?: () => void;
     disabled?: boolean;
+    qrImageUrl?: string | null;
+    gcashNumber?: string | null;
+    gcashAccountName?: string | null;
 };
 
 export function GcashUploadPanel({
     onUploadComplete,
     onBack,
     disabled = false,
+    qrImageUrl,
+    gcashNumber,
+    gcashAccountName,
 }: GcashUploadPanelProps) {
     const [isQrFullscreenOpen, setIsQrFullscreenOpen] = React.useState(false);
     const [isProcessing, setIsProcessing] = React.useState(false);
@@ -93,40 +99,69 @@ export function GcashUploadPanel({
                         GCash Payment
                     </p>
 
-                    {/* QR Code Image */}
-                    <div className="flex justify-center">
-                        <div className="overflow-hidden rounded-xl border-2 border-blue-200 bg-white shadow-sm dark:border-blue-800">
-                            <img
-                                src="/gcashimage/gcashpayment.jpg"
-                                alt="GCash Payment QR Code"
-                                className="h-auto w-full max-w-[240px] object-contain"
-                            />
+                    <div className="space-y-3">
+                        <div className="grid gap-2 md:grid-cols-2">
+                            <div className="space-y-1">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                                    GCash Number
+                                </p>
+                                <p className="rounded-md border border-blue-100 bg-white/80 px-3 py-2 text-sm font-medium text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
+                                    {gcashNumber?.trim() || "Not configured"}
+                                </p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                                    Account Name
+                                </p>
+                                <p className="rounded-md border border-blue-100 bg-white/80 px-3 py-2 text-sm font-medium text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
+                                    {gcashAccountName?.trim() || "Not configured"}
+                                </p>
+                            </div>
                         </div>
-                    </div>
 
-                    <div className="flex items-center justify-center gap-2">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 gap-1.5 text-[11px]"
-                            onClick={() => setIsQrFullscreenOpen(true)}
-                        >
-                            <Expand className="h-3.5 w-3.5" />
-                            View full screen
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-7 gap-1.5 text-[11px]"
-                            asChild
-                        >
-                            <a href="/gcashimage/gcashpayment.jpg" download="seatwise-gcash-qr.jpg">
-                                <Download className="h-3.5 w-3.5" />
-                                Download
-                            </a>
-                        </Button>
+                        <div className="space-y-2">
+                            <div className="flex justify-center">
+                                <div className="overflow-hidden rounded-xl border-2 border-blue-200 bg-white shadow-sm dark:border-blue-800">
+                                    {qrImageUrl ? (
+                                        <img
+                                            src={qrImageUrl}
+                                            alt="GCash Payment QR Code"
+                                            className="h-auto w-full max-w-[240px] object-contain"
+                                        />
+                                    ) : (
+                                        <div className="flex h-[240px] w-[240px] items-center justify-center px-3 text-center text-xs text-muted-foreground">
+                                            No GCash QR code available for this show.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-center gap-2">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 gap-1.5 text-[11px]"
+                                    onClick={() => setIsQrFullscreenOpen(true)}
+                                    disabled={!qrImageUrl}
+                                >
+                                    <Expand className="h-3.5 w-3.5" />
+                                    View full screen
+                                </Button>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 gap-1.5 text-[11px]"
+                                    asChild
+                                    disabled={!qrImageUrl}
+                                >
+                                    <a href={qrImageUrl ?? "#"} download="seatwise-gcash-qr.jpg">
+                                        <Download className="h-3.5 w-3.5" />
+                                        Download
+                                    </a>
+                                </Button>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Instructions */}
@@ -177,15 +212,19 @@ export function GcashUploadPanel({
                 >
                     <DialogTitle className="sr-only">GCash Payment QR Code</DialogTitle>
                     <div className="flex h-full w-full items-center justify-center p-3 sm:p-6">
-                        <img
-                            src="/gcashimage/gcashpayment.jpg"
-                            alt="GCash Payment QR Code"
-                            className="max-h-full max-w-full object-contain"
-                        />
+                        {qrImageUrl ? (
+                            <img
+                                src={qrImageUrl}
+                                alt="GCash Payment QR Code"
+                                className="max-h-full max-w-full object-contain"
+                            />
+                        ) : (
+                            <p className="text-sm text-white">No GCash QR code available.</p>
+                        )}
                     </div>
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-                        <Button size="sm" variant="secondary" asChild>
-                            <a href="/gcashimage/gcashpayment.jpg" download="seatwise-gcash-qr.jpg">
+                        <Button size="sm" variant="secondary" asChild disabled={!qrImageUrl}>
+                            <a href={qrImageUrl ?? "#"} download="seatwise-gcash-qr.jpg">
                                 <Download className="mr-1.5 h-3.5 w-3.5" />
                                 Download
                             </a>

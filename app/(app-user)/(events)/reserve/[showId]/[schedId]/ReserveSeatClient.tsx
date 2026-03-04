@@ -43,6 +43,9 @@ type ReserveSeatClientProps = {
   showId: string;
   schedId: string;
   seatmapId?: string | null;
+  gcashQrImageKey?: string | null;
+  gcashNumber?: string | null;
+  gcashAccountName?: string | null;
   seatmapCategories: ReserveSeatCategory[];
   seatCategoryAssignments: Record<string, string>;
   seatNumbersById: Record<string, string>;
@@ -116,6 +119,9 @@ export function ReserveSeatClient({
   showId,
   schedId,
   seatmapId,
+  gcashQrImageKey,
+  gcashNumber,
+  gcashAccountName,
   seatmapCategories,
   seatCategoryAssignments,
   seatNumbersById,
@@ -1005,6 +1011,9 @@ export function ReserveSeatClient({
                   <GcashUploadPanel
                     onUploadComplete={handleScreenshotUploaded}
                     disabled={isCompleting}
+                    qrImageUrl={gcashQrImageKey}
+                    gcashNumber={gcashNumber}
+                    gcashAccountName={gcashAccountName}
                   />
                 </CardContent>
               </Card>
