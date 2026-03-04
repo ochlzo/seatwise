@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { differenceInCalendarMonths } from "date-fns";
-import { Plus, Trash2, Save, CalendarDays, CalendarIcon } from "lucide-react";
+import { Plus, Trash2, Save, CalendarDays, CalendarIcon, Upload, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { useDropzone, type FileRejection } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,6 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createShowAction } from "@/lib/actions/createShow";
 import { Calendar } from "@/components/ui/calendar";
-import { FileImagePreview } from "@/components/ui/file-uploader";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -53,6 +53,13 @@ const STATUS_OPTIONS = [
   "UPCOMING",
   "OPEN",
 ];
+
+const MAX_POSTER_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ACCEPTED_POSTER_TYPES: Record<string, string[]> = {
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
+};
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -118,6 +125,7 @@ export function CreateShowForm() {
   });
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+  const [posterUploadError, setPosterUploadError] = React.useState<string | null>(null);
   const [scheds, setScheds] = React.useState<SchedDraft[]>([]);
   const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
   const [applyToAllDates, setApplyToAllDates] = React.useState(false);
@@ -177,6 +185,34 @@ export function CreateShowForm() {
       }
     };
   }, [imagePreview]);
+
+  const onPosterDrop = React.useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
+    if (rejectedFiles.length > 0) {
+      const firstRejection = rejectedFiles[0];
+      const errorMsg = firstRejection.errors.map((e) => e.message).join(", ");
+      setPosterUploadError(errorMsg);
+      return;
+    }
+
+    if (acceptedFiles.length === 0) return;
+
+    const file = acceptedFiles[0];
+    setPosterUploadError(null);
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  }, []);
+
+  const {
+    getRootProps: getPosterRootProps,
+    getInputProps: getPosterInputProps,
+    isDragActive: isPosterDragActive,
+  } = useDropzone({
+    onDrop: onPosterDrop,
+    accept: ACCEPTED_POSTER_TYPES,
+    maxSize: MAX_POSTER_FILE_SIZE,
+    multiple: false,
+    disabled: isSaving,
+  });
 
   React.useEffect(() => {
     let isMounted = true;
@@ -913,50 +949,73 @@ export function CreateShowForm() {
               <Label className="text-xs font-semibold text-muted-foreground">
                 Show Poster
               </Label>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    id="show-image-upload"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      setImageFile(file);
-                      setImagePreview(URL.createObjectURL(file));
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => document.getElementById("show-image-upload")?.click()}
+              <div className="space-y-3">
+                {!imagePreview ? (
+                  <div
+                    {...getPosterRootProps()}
+                    className={cn(
+                      "relative flex min-h-[170px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 text-center transition-all duration-200",
+                      isPosterDragActive
+                        ? "border-blue-500 bg-blue-50/50 dark:bg-blue-950/30"
+                        : "border-sidebar-border/70 bg-muted/20 hover:border-blue-400 hover:bg-muted/40",
+                      isSaving && "pointer-events-none opacity-50",
+                    )}
                   >
-                    Upload Image
-                  </Button>
-                  {imageFile && (
-                    <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-                      {imageFile.name}
-                    </span>
-                  )}
-                </div>
-                {imagePreview && (
-                  <div className="flex items-center gap-2">
-                    <FileImagePreview src={imagePreview} alt="Show preview" className="size-12 md:size-14" />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                      onClick={() => {
-                        setImageFile(null);
-                        setImagePreview(null);
-                      }}
-                    >
-                      Remove
-                    </Button>
+                    <input {...getPosterInputProps()} />
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="rounded-full bg-muted/60 p-3">
+                        <Upload className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">
+                          {isPosterDragActive ? "Drop the poster here" : "Upload Show Poster"}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Drag and drop or click to browse. JPG, PNG, or WEBP (max 5MB)
+                        </p>
+                      </div>
+                    </div>
                   </div>
+                ) : (
+                  <div className="relative rounded-xl border border-sidebar-border/70 bg-muted/10 p-3">
+                    <div className="relative flex items-center justify-center">
+                      <img
+                        src={imagePreview}
+                        alt="Show poster preview"
+                        className="max-h-[280px] rounded-lg object-contain"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute right-1 top-1 h-7 w-7 rounded-full"
+                        onClick={() => {
+                          setImageFile(null);
+                          setImagePreview(null);
+                          setPosterUploadError(null);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {imageFile && (
+                      <div className="mt-2 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-400">
+                        <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="truncate">Poster ready: {imageFile.name}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {posterUploadError && (
+                  <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400">
+                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>{posterUploadError}</span>
+                  </div>
+                )}
+                {!imageFile && !posterUploadError && (
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Add a poster to improve show listing visibility.
+                  </p>
                 )}
               </div>
             </div>
