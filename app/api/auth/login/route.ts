@@ -3,6 +3,7 @@ import { adminAuth } from "@/lib/firebaseAdmin";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { resolveAvatarUrl } from "@/lib/db/Users";
+import { getDefaultAvatarsFromCloudinary } from "@/lib/avatars/defaultAvatars";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
-    const admin = await prisma.admin.findUnique({
+    let admin = await prisma.admin.findUnique({
       where: { firebase_uid: uid },
     });
 
@@ -24,6 +25,20 @@ export async function POST(req: NextRequest) {
         { error: "Admin account not found. Contact system administrator." },
         { status: 403 },
       );
+    }
+
+    // Auto-assign a random default avatar on first login when avatar_key is null.
+    if (!admin.avatar_key) {
+      const defaultAvatars = await getDefaultAvatarsFromCloudinary();
+      const candidates = defaultAvatars.filter((url) => Boolean(url));
+
+      if (candidates.length > 0) {
+        const randomAvatar = candidates[Math.floor(Math.random() * candidates.length)];
+        admin = await prisma.admin.update({
+          where: { user_id: admin.user_id },
+          data: { avatar_key: randomAvatar },
+        });
+      }
     }
 
     const expiresIn = 60 * 60 * 24 * 14 * 1000;
