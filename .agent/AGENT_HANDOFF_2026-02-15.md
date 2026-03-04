@@ -426,16 +426,56 @@ Primary files touched:
 - `app/(admin-user)/(dashboard)/layout.tsx`
 - `app/api/shows/search/route.ts`
 - `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`
+- `app/login/page.tsx`
+- `components/login-form.tsx`
+- `app/api/auth/login/route.ts`
+- `components/ui/image-upload-dropzone.tsx`
+- `components/queue/GcashUploadPanel.tsx`
+- `app/(admin-user)/(dashboard)/admin/shows/create/CreateShowForm.tsx`
 
-Auth redirect enforcement change:
-- Login redirect is now enforced only for `/admin` and `/admin/*` page routes.
-- Removed `/seat-builder` from middleware admin-path protection so it no longer auto-redirects guests to `/login`.
-- Removed global `verifyAdmin()` guard from `app/(admin-user)/layout.tsx`.
-- Removed global `verifyAdmin()` guard from `app/(admin-user)/(dashboard)/layout.tsx`.
-- Net effect: non-admin/non-auth users are no longer forced to `/login` for non-admin pages.
+Routing/auth redirect behavior:
+- Login redirect is now effectively admin-only for page routes:
+- `/admin` and `/admin/*` still redirect unauthenticated users to `/login`.
+- Non-admin routes no longer globally redirect to `/login`.
+- Removed broad `verifyAdmin()` gates from:
+- `app/(admin-user)/layout.tsx`
+- `app/(admin-user)/(dashboard)/layout.tsx`
+- Middleware admin path matching no longer includes `/seat-builder`; it matches `/admin` subtree.
 
-Public dashboard 401 -> login loop fix:
-- `GET /api/shows/search` now allows guest/public access when `visibility=user`.
-- Admin visibility queries (`visibility=admin`, default behavior) still require a valid admin session cookie.
-- In `ShowsClient`, `401` responses now redirect to `/login` only when `mode === "admin"`.
-- User-facing dashboard/event listing flow no longer redirects to `/login` due to unauthorized show-search calls.
+Public dashboard unauthorized redirect loop fix:
+- Root cause observed: `GET /api/shows/search?statusGroup=active&visibility=user` returned `401`, then frontend redirected to `/login`.
+- `app/api/shows/search/route.ts` now allows guest/public access for `visibility=user`.
+- Admin visibility queries remain protected by session verification.
+- `ShowsClient` now redirects to `/login` on `401` only when `mode === "admin"`.
+
+Login page/UI polish:
+- Login container and card max width increased on desktop (`md:max-w-5xl`) while preserving mobile width.
+- Login card received desktop min-height increase for stronger visual presence.
+- Form content alignment adjusted to avoid top-heavy appearance in taller card.
+- Added explicit spacing below login title/description group for cleaner field separation.
+
+Admin avatar auto-assignment on login:
+- In `/api/auth/login`, when an admin has `avatar_key = NULL`, backend now:
+- fetches default avatars from Cloudinary folder `seatwise/avatars/default_avatars`,
+- chooses one at random,
+- persists it to `Admin.avatar_key` before returning user payload.
+- Uses existing helper `lib/avatars/defaultAvatars.ts`.
+
+Reusable upload UI refactor:
+- Added reusable component: `components/ui/image-upload-dropzone.tsx`.
+- Refactored reservation receipt upload UI (`GcashUploadPanel`) to use shared component while preserving:
+- base64 file-read flow,
+- processing overlay,
+- success/error messages,
+- remove/reset behavior.
+- Refactored show poster upload UI in `CreateShowForm` to use the same shared component:
+- drag/drop + click-to-browse,
+- preview with remove,
+- validation error rendering,
+- optional helper text,
+- existing upload-on-save behavior unchanged (`uploadImageToCloudinary` in `handleSave`).
+- Added object URL cleanup in poster flow when replacing/removing previews.
+
+Validation status:
+- Type check passed after refactor: `npx tsc --noEmit`.
+- Existing unrelated baseline test issue remains (`lib/db/showScheduleGrouping` import resolution).
