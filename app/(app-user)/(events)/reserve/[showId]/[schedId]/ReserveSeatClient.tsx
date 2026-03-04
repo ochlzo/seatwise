@@ -998,8 +998,8 @@ export function ReserveSeatClient({
           {!isSuccess && !isLoading && !error && expiresAt && step === "payment" && (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               {/* Left: GCash Upload */}
-              <Card className="border-sidebar-border/70">
-                <CardHeader className="pb-3">
+              <Card className="gap-0 border-sidebar-border/70">
+                <CardHeader className="pb-1 sm:pb-3">
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" onClick={handleBackToSeats} className="h-8 w-8">
                       <ChevronLeft className="h-4 w-4" />
@@ -1007,7 +1007,7 @@ export function ReserveSeatClient({
                     <CardTitle className="text-base">Upload GCash Payment</CardTitle>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-3 pt-0 sm:px-6">
                   <GcashUploadPanel
                     onUploadComplete={handleScreenshotUploaded}
                     disabled={isCompleting}

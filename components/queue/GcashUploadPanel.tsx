@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Expand, Download } from "lucide-react";
+import { Expand, Download, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
@@ -90,36 +90,67 @@ export function GcashUploadPanel({
         onUploadComplete("");
     };
 
+    const handleCopy = React.useCallback(async (label: "GCash Number" | "Account Name", value?: string | null) => {
+        const text = value?.trim();
+        if (!text) {
+            toast.error(`${label} is not available.`);
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(text);
+            toast.success(`${label} copied to clipboard.`);
+        } catch {
+            toast.error(`Failed to copy ${label.toLowerCase()}.`);
+        }
+    }, []);
+
     return (
         <div className="space-y-4">
             {/* GCash Payment QR + Instructions */}
-            <Card className="border-blue-200 bg-blue-50/60 dark:border-blue-900/50 dark:bg-blue-950/20">
-                <CardContent className="space-y-4 px-4 py-4 text-sm">
-                    <p className="font-semibold text-blue-800 dark:text-blue-300 text-center">
-                        GCash Payment
-                    </p>
-
-                    <div className="space-y-3">
-                        <div className="grid gap-2 md:grid-cols-2">
+            <Card className="gap-3 py-0 border-0 bg-transparent shadow-none md:border-blue-200 md:bg-blue-50/60 md:dark:border-blue-900/50 md:dark:bg-blue-950/20">
+                <CardContent className="space-y-3 px-3 pt-0 text-sm md:space-y-4 md:px-6 md:pt-3">
+                    <div className="space-y-2 md:space-y-3">
+                        <div className="grid gap-1.5 md:grid-cols-2 md:gap-2">
                             <div className="space-y-1">
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                                    GCash Number
-                                </p>
-                                <p className="rounded-md border border-blue-100 bg-white/80 px-3 py-2 text-sm font-medium text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
-                                    {gcashNumber?.trim() || "Not configured"}
-                                </p>
+                                <div className="flex items-center justify-between gap-2 rounded-md border border-blue-100 bg-white/80 px-3 py-2 text-sm font-medium text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
+                                    <p className="min-w-0 truncate">
+                                        <span className="font-semibold">GCash Number:</span>{" "}
+                                        <span>{gcashNumber?.trim() || "Not configured"}</span>
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6 shrink-0"
+                                        onClick={() => void handleCopy("GCash Number", gcashNumber)}
+                                        aria-label="Copy GCash number"
+                                    >
+                                        <Copy className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
                             </div>
                             <div className="space-y-1">
-                                <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
-                                    Account Name
-                                </p>
-                                <p className="rounded-md border border-blue-100 bg-white/80 px-3 py-2 text-sm font-medium text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
-                                    {gcashAccountName?.trim() || "Not configured"}
-                                </p>
+                                <div className="flex items-center justify-between gap-2 rounded-md border border-blue-100 bg-white/80 px-3 py-2 text-sm font-medium text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
+                                    <p className="min-w-0 truncate">
+                                        <span className="font-semibold">Account Name:</span>{" "}
+                                        <span>{gcashAccountName?.trim() || "Not configured"}</span>
+                                    </p>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6 shrink-0"
+                                        onClick={() => void handleCopy("Account Name", gcashAccountName)}
+                                        aria-label="Copy account name"
+                                    >
+                                        <Copy className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-1.5 md:space-y-2">
                             <div className="flex justify-center">
                                 <div className="overflow-hidden rounded-xl border-2 border-blue-200 bg-white shadow-sm dark:border-blue-800">
                                     {qrImageUrl ? (
@@ -165,7 +196,7 @@ export function GcashUploadPanel({
                     </div>
 
                     {/* Instructions */}
-                    <ol className="list-decimal space-y-1.5 pl-5 text-blue-700 dark:text-blue-400 text-xs sm:text-sm">
+                    <ol className="list-decimal space-y-1 pl-4 text-blue-700 dark:text-blue-400 text-xs sm:space-y-1.5 sm:pl-5 sm:text-sm">
                         <li>Scan the QR code above using your <strong>GCash app</strong>.</li>
                         <li>Complete the payment for the total amount shown.</li>
                         <li>Take a <strong>screenshot</strong> of the payment confirmation.</li>
