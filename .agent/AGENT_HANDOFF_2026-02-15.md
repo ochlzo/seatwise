@@ -319,3 +319,102 @@ Operational/security notes:
 - GitHub push protection blocked pushes when `.env` secrets were included in commit history.
 - `.env` is ignored but can still be tracked if previously committed; remove from index with `git rm --cached .env` and rewrite offending local commits before push.
 - Rotate any exposed Google OAuth client secrets/refresh tokens that were committed or pasted in logs/chat.
+
+## Session updates (2026-03-02, later)
+Primary files touched:
+- `prisma/schema.prisma`
+- `middleware.ts`
+- `app/(app-user)/layout.tsx`
+- `components/page-header.tsx`
+- `lib/guest.ts`
+- `app/api/queue/join/route.ts`
+- `app/api/queue/status/route.ts`
+- `app/api/queue/active/route.ts`
+- `app/api/queue/leave/route.ts`
+- `app/api/queue/terminate/route.ts`
+- `app/api/queue/complete/route.ts`
+- `app/(app-user)/(events)/queue/[showId]/[schedId]/QueueWaitingClient.tsx`
+- `app/(app-user)/(events)/reserve/[showId]/[schedId]/ReserveSeatClient.tsx`
+- `components/queue/ReserveNowButton.tsx`
+- `components/queue/ReservationSuccessPanel.tsx`
+- `lib/email/sendReservationSubmittedEmail.ts`
+- `components/login-form.tsx`
+- `app/api/auth/login/route.ts`
+- `app/api/auth/me/route.ts`
+- `app/api/auth/admin-email/route.ts`
+- `app/api/reservations/route.ts`
+- `app/api/reservations/verify/route.ts`
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- `app/api/users/route.ts`
+- `app/api/seatmaps/route.ts`
+- `app/api/seatmaps/[seatmapId]/route.ts`
+- `app/api/seatCategories/[seatmapId]/route.ts`
+- `app/api/uploads/cloudinary/sign/route.ts`
+- `lib/db/Users.ts`
+- `lib/auth/admin.ts`
+- `scripts/create-default-admin.ts`
+- `package.json`
+
+Guest-first public flow and routing:
+- App-user layout no longer enforces session auth and no longer renders the app-user sidebar.
+- Middleware now allows public access for guest flow routes (`/dashboard`, event detail, queue, reserve, legal pages).
+- Middleware now returns JSON `401` for unauthorized protected API calls (instead of redirecting API requests to HTML login), to avoid `Unexpected token '<'` JSON parse errors.
+
+Queue identity and API contract migration:
+- Added browser guest identity utility: `lib/guest.ts` (`getOrCreateGuestId()` via `localStorage`).
+- Queue client components now pass `guestId` in all queue calls.
+- Queue API routes were migrated from session-derived `user_id` to guest payloads:
+- `POST /api/queue/join` now expects `{ showId, schedId, guestId, displayName? }`.
+- `GET /api/queue/status` now expects `guestId` query param.
+- `POST /api/queue/active`, `/leave`, `/terminate`, `/complete` now require `guestId`.
+
+Reservation flow and persistence:
+- Reserve flow now includes contact step before payment:
+- `seats -> contact details -> payment -> confirm`.
+- `/api/queue/complete` now:
+- validates queue active session using `guestId`.
+- creates a single reservation per purchase.
+- links all selected seats via `ReservedSeat`.
+- creates one payment record for total amount.
+- returns success without rolling back if email send fails.
+- Reservation success view now:
+- hides the top show-title header card.
+- displays message that confirmation/review notice was sent to entered contact email.
+
+Email integration:
+- Added `lib/email/sendReservationSubmittedEmail.ts`.
+- Uses Google OAuth refresh token env vars to mint access token and call Gmail API `users.messages.send`.
+- Sends "under review / verification" purchase email to reservation contact email after successful reservation transaction.
+
+Admin-only auth migration:
+- Login UI simplified to admin-only email/username + password flow (Google sign-in and signup paths removed from login form).
+- Added `GET /api/auth/admin-email?username=...` helper to resolve username to admin email before Firebase email/password sign-in.
+- `/api/auth/login` now only permits users present in `Admin` table; rejects others with `403`.
+- `/api/auth/me` now returns admin session user shape with admin role value for frontend compatibility.
+
+Schema refactor (breaking, in-progress integration state):
+- Replaced `User` model with `Admin` model.
+- Removed role enum/column usage in runtime checks (admin presence now gates authorization).
+- `Reservation` now stores guest contact fields directly:
+- `guest_id`, `first_name`, `last_name`, `address`, `email`, `phone_number`.
+- `Review` model removed from Prisma schema for guest-first scope.
+
+Admin reservations page/API alignment:
+- Admin reservations API now reads reservation contact details directly from `Reservation` (no reservation-user join).
+- Admin reservations client grouping/searching now uses reservation contact fields (email/phone/name), not `user.user_id`.
+
+Admin bootstrap script:
+- Added script to create/update default first admin in Firebase Auth and Prisma `Admin` table:
+- File: `scripts/create-default-admin.ts`
+- NPM command: `npm run admin:create-default`
+- Default seeded credentials in script:
+- email: `johnbenedictkandelarya@gmail.com`
+- password: `123456`
+- Script now loads `.env` manually (no dotenv dependency) and uses direct `PrismaClient`.
+
+Current known follow-ups:
+- Prisma migration + client generation must be re-run cleanly after stopping any process locking Prisma engine DLL:
+- `npx prisma migrate dev`
+- `npx prisma generate`
+- After migration reset, run `npm run admin:create-default` to seed the first admin.
+- Existing `npm run test` currently fails due unrelated historical test import resolution (`lib/db/showScheduleGrouping` module path issue).
