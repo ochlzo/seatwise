@@ -3,15 +3,18 @@
 import * as React from "react";
 import {
   DndContext,
+  DragOverlay,
   type DragEndEvent,
+  type DragStartEvent,
   PointerSensor,
-  closestCenter,
+  closestCorners,
   useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
 import {
   SortableContext,
+  arrayMove,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -91,7 +94,7 @@ type UserReservationRow = {
   totalAmount: number;
 };
 
-type KanbanStatus = "PENDING" | "CONFIRMED" | "OTHER";
+type KanbanStatus = "PENDING" | "CONFIRMED" | "REJECTED";
 
 type KanbanCard = {
   id: string;
@@ -103,7 +106,7 @@ type KanbanCard = {
 const COLUMNS: Array<{ key: KanbanStatus; title: string; icon: React.ReactNode }> = [
   { key: "PENDING", title: "Pending", icon: <Clock className="h-4 w-4" /> },
   { key: "CONFIRMED", title: "Confirmed", icon: <CheckCircle2 className="h-4 w-4" /> },
-  { key: "OTHER", title: "Other", icon: <XCircle className="h-4 w-4" /> },
+  { key: "REJECTED", title: "Rejected", icon: <XCircle className="h-4 w-4" /> },
 ];
 
 const columnId = (status: KanbanStatus) => `column:${status}`;
@@ -120,7 +123,7 @@ const formatCurrency = (value: string | number) => {
 const getRowStatus = (row: UserReservationRow): KanbanStatus => {
   if (row.pendingReservationIds.length > 0) return "PENDING";
   if (row.reservations.every((reservation) => reservation.status === "CONFIRMED")) return "CONFIRMED";
-  return "OTHER";
+  return "REJECTED";
 };
 
 const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] => {
@@ -181,7 +184,7 @@ type SortableCardProps = {
 };
 
 function SortableCard({ card, isVerifying }: SortableCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: card.id,
     disabled: isVerifying,
     data: { type: "card", column: card.status },
@@ -189,20 +192,23 @@ function SortableCard({ card, isVerifying }: SortableCardProps) {
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging
+      ? "transform 0ms linear"
+      : "transform 220ms cubic-bezier(0.22, 1, 0.36, 1)",
+    willChange: "transform",
   };
 
   return (
     <Card
       ref={setNodeRef}
       style={style}
-      className={`border-sidebar-border/70 ${isDragging ? "opacity-60" : ""} ${isVerifying ? "opacity-70" : ""}`}
+      className={`border-sidebar-border/70 ${isDragging ? "border-dashed bg-muted/60" : ""} ${isVerifying ? "opacity-70" : ""}`}
     >
-      <CardContent className="relative space-y-2 p-4 pr-10">
+      <CardContent className={`relative space-y-2 p-4 pr-10 ${isDragging ? "opacity-0" : ""}`}>
         <button
           type="button"
           aria-label="Drag reservation card"
-          className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+          className="absolute right-3 top-3 inline-flex h-6 w-6 touch-none items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
           disabled={isVerifying}
           {...attributes}
           {...listeners}
@@ -276,6 +282,12 @@ export function ReservationsClient() {
   const [searchQuery, setSearchQuery] = React.useState("");
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
   const [activeDropColumn, setActiveDropColumn] = React.useState<KanbanStatus | null>(null);
+  const [activeDragCardId, setActiveDragCardId] = React.useState<string | null>(null);
+  const [columnOrders, setColumnOrders] = React.useState<Record<KanbanStatus, string[]>>({
+    PENDING: [],
+    CONFIRMED: [],
+    REJECTED: [],
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -351,6 +363,58 @@ export function ReservationsClient() {
     }
   };
 
+  const handleRejectMany = async (reservationIds: string[], rejectKey: string) => {
+    if (reservationIds.length === 0) return;
+
+    setVerifyingId(rejectKey);
+
+    try {
+      for (const reservationId of reservationIds) {
+        const res = await fetch("/api/reservations/reject", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reservationId }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || "Failed to reject");
+        }
+      }
+
+      setShows((prev) =>
+        prev.map((show) => ({
+          ...show,
+          reservations: show.reservations.map((reservation) =>
+            reservationIds.includes(reservation.reservation_id)
+              ? {
+                  ...reservation,
+                  status: "CANCELLED",
+                  payment: reservation.payment
+                    ? {
+                        ...reservation.payment,
+                        status: reservation.payment.status === "PAID" ? "REFUNDED" : "FAILED",
+                        paid_at: reservation.payment.status === "PAID" ? reservation.payment.paid_at : null,
+                      }
+                    : reservation.payment,
+                }
+              : reservation,
+          ),
+        })),
+      );
+
+      toast.success(
+        reservationIds.length === 1
+          ? "Reservation rejected successfully!"
+          : `${reservationIds.length} reservations rejected successfully!`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Rejection failed");
+    } finally {
+      setVerifyingId(null);
+    }
+  };
+
   const filteredShows = React.useMemo(() => {
     if (!searchQuery.trim()) return shows;
 
@@ -396,7 +460,7 @@ export function ReservationsClient() {
     return {
       PENDING: kanbanCards.filter((card) => card.status === "PENDING"),
       CONFIRMED: kanbanCards.filter((card) => card.status === "CONFIRMED"),
-      OTHER: kanbanCards.filter((card) => card.status === "OTHER"),
+      REJECTED: kanbanCards.filter((card) => card.status === "REJECTED"),
     } satisfies Record<KanbanStatus, KanbanCard[]>;
   }, [kanbanCards]);
 
@@ -404,9 +468,36 @@ export function ReservationsClient() {
     return new Map(kanbanCards.map((card) => [card.id, card]));
   }, [kanbanCards]);
 
+  React.useEffect(() => {
+    setColumnOrders((prev) => {
+      const next = { ...prev };
+      (Object.keys(cardsByColumn) as KanbanStatus[]).forEach((status) => {
+        const currentIds = cardsByColumn[status].map((card) => card.id);
+        const previousIds = prev[status].filter((id) => currentIds.includes(id));
+        const appendedIds = currentIds.filter((id) => !previousIds.includes(id));
+        next[status] = [...previousIds, ...appendedIds];
+      });
+      return next;
+    });
+  }, [cardsByColumn]);
+
+  const orderedCardsByColumn = React.useMemo(() => {
+    const ordered = {} as Record<KanbanStatus, KanbanCard[]>;
+
+    (Object.keys(cardsByColumn) as KanbanStatus[]).forEach((status) => {
+      const lookup = new Map(cardsByColumn[status].map((card) => [card.id, card]));
+      ordered[status] = columnOrders[status]
+        .map((id) => lookup.get(id))
+        .filter((card): card is KanbanCard => !!card);
+    });
+
+    return ordered;
+  }, [cardsByColumn, columnOrders]);
+
   const totalReservations = kanbanCards.length;
-  const pendingCount = cardsByColumn.PENDING.length;
-  const confirmedCount = cardsByColumn.CONFIRMED.length;
+  const pendingCount = orderedCardsByColumn.PENDING.length;
+  const confirmedCount = orderedCardsByColumn.CONFIRMED.length;
+  const activeDragCard = activeDragCardId ? cardById.get(activeDragCardId) ?? null : null;
 
   const resolveDropTarget = React.useCallback(
     (overId: string): KanbanStatus | null => {
@@ -433,16 +524,36 @@ export function ReservationsClient() {
       if (!activeCard) return;
 
       const targetStatus = resolveDropTarget(overId);
-      if (!targetStatus || targetStatus === activeCard.status) return;
+      if (!targetStatus) return;
+
+      if (targetStatus === activeCard.status) {
+        const fromIds = columnOrders[targetStatus];
+        const oldIndex = fromIds.indexOf(activeId);
+        const newIndex = fromIds.indexOf(overId);
+
+        if (oldIndex >= 0 && newIndex >= 0 && oldIndex !== newIndex) {
+          setColumnOrders((prev) => ({
+            ...prev,
+            [targetStatus]: arrayMove(prev[targetStatus], oldIndex, newIndex),
+          }));
+        }
+        return;
+      }
 
       if (activeCard.status === "PENDING" && targetStatus === "CONFIRMED") {
         await handleVerifyMany(activeCard.row.pendingReservationIds, `kanban:${activeCard.id}`);
         return;
       }
 
-      toast.info("Only moving Pending cards to Confirmed is currently supported.");
+      if (targetStatus === "REJECTED") {
+        const reservationIds = activeCard.row.reservations.map((reservation) => reservation.reservation_id);
+        await handleRejectMany(reservationIds, `kanban:${activeCard.id}`);
+        return;
+      }
+
+      toast.info("Supported moves: Pending to Confirmed, or any card to Rejected.");
     },
-    [cardById, resolveDropTarget],
+    [cardById, columnOrders, handleRejectMany, handleVerifyMany, resolveDropTarget],
   );
 
   if (isLoading) {
@@ -521,17 +632,26 @@ export function ReservationsClient() {
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
+          collisionDetection={closestCorners}
           onDragOver={(event) => {
             const overId = event.over ? String(event.over.id) : null;
             if (!overId) {
-              setActiveDropColumn(null);
+              setActiveDropColumn((prev) => (prev === null ? prev : null));
               return;
             }
-            setActiveDropColumn(resolveDropTarget(overId));
+            const nextColumn = resolveDropTarget(overId);
+            setActiveDropColumn((prev) => (prev === nextColumn ? prev : nextColumn));
+          }}
+          onDragStart={(event: DragStartEvent) => {
+            setActiveDragCardId(String(event.active.id));
           }}
           onDragEnd={(event) => {
             void onDragEnd(event);
+            setActiveDragCardId(null);
+          }}
+          onDragCancel={() => {
+            setActiveDropColumn(null);
+            setActiveDragCardId(null);
           }}
         >
           <div className="grid gap-4 xl:grid-cols-3">
@@ -541,12 +661,30 @@ export function ReservationsClient() {
                 status={column.key}
                 title={column.title}
                 icon={column.icon}
-                cards={cardsByColumn[column.key]}
+                cards={orderedCardsByColumn[column.key]}
                 isActiveDrop={activeDropColumn === column.key}
                 verifyingId={verifyingId}
               />
             ))}
           </div>
+          <DragOverlay>
+            {activeDragCard ? (
+              <Card className="border-sidebar-border/70 shadow-lg">
+                <CardContent className="space-y-2 p-4 pr-10">
+                  <p className="text-base font-bold leading-tight">{activeDragCard.showName}</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {activeDragCard.row.user.first_name} {activeDragCard.row.user.last_name}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{activeDragCard.row.user.email}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {activeDragCard.row.seatNumbers.length} seat
+                    {activeDragCard.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
+                    {formatCurrency(activeDragCard.row.totalAmount)}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
     </div>
