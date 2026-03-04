@@ -1,26 +1,8 @@
 "use client";
 
 import * as React from "react";
-import {
-  CheckCircle2,
-  Clock,
-  XCircle,
-  Eye,
-  Loader2,
-  ImageIcon,
-  Calendar,
-  MapPin,
-  User,
-  CreditCard,
-  Search,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
+import { CheckCircle2, Clock, CreditCard, Loader2, Search, XCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 type PaymentData = {
@@ -89,30 +71,18 @@ type UserReservationRow = {
   };
   reservations: ReservationData[];
   seatNumbers: string[];
-  categories: string[];
-  scheduleLabels: string[];
   pendingReservationIds: string[];
   latestCreatedAt: string;
   totalAmount: number;
-  screenshotUrl: string | null;
 };
 
-const formatDate = (dateStr: string) => {
-  const date = new Date(dateStr);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
-};
+type KanbanStatus = "PENDING" | "CONFIRMED" | "OTHER";
 
-const formatTime = (timeStr: string) => {
-  const date = new Date(timeStr);
-  return new Intl.DateTimeFormat("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(date);
+type KanbanCard = {
+  id: string;
+  status: KanbanStatus;
+  showName: string;
+  row: UserReservationRow;
 };
 
 const formatCurrency = (value: string | number) => {
@@ -124,20 +94,10 @@ const formatCurrency = (value: string | number) => {
   }).format(parsed);
 };
 
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
-
-const statusConfig: Record<string, { label: string; variant: BadgeVariant }> = {
-  PENDING: { label: "Pending", variant: "outline" },
-  CONFIRMED: { label: "Confirmed", variant: "default" },
-  CANCELLED: { label: "Cancelled", variant: "destructive" },
-  EXPIRED: { label: "Expired", variant: "secondary" },
-};
-
-const paymentStatusConfig: Record<string, { label: string; className: string }> = {
-  PENDING: { label: "Pending", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
-  PAID: { label: "Paid", className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" },
-  FAILED: { label: "Failed", className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" },
-  REFUNDED: { label: "Refunded", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
+const getRowStatus = (row: UserReservationRow): KanbanStatus => {
+  if (row.pendingReservationIds.length > 0) return "PENDING";
+  if (row.reservations.every((reservation) => reservation.status === "CONFIRMED")) return "CONFIRMED";
+  return "OTHER";
 };
 
 const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] => {
@@ -146,10 +106,6 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
   for (const reservation of reservations) {
     const key = `${reservation.email.toLowerCase()}::${reservation.phone_number}`;
     const existing = map.get(key);
-
-    const scheduleLabel = `${formatDate(reservation.seatAssignment.sched.sched_date)} ${formatTime(
-      reservation.seatAssignment.sched.sched_start_time,
-    )}`;
 
     if (!existing) {
       map.set(key, {
@@ -163,31 +119,26 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
         },
         reservations: [reservation],
         seatNumbers: [reservation.seatAssignment.seat.seat_number],
-        categories: [reservation.seatAssignment.set.seatCategory.category_name],
-        scheduleLabels: [scheduleLabel],
         pendingReservationIds: reservation.status === "PENDING" ? [reservation.reservation_id] : [],
         latestCreatedAt: reservation.createdAt,
         totalAmount: reservation.payment?.amount ? parseFloat(reservation.payment.amount) : 0,
-        screenshotUrl: reservation.payment?.screenshot_url ?? null,
       });
       continue;
     }
 
     existing.reservations.push(reservation);
     existing.seatNumbers.push(reservation.seatAssignment.seat.seat_number);
-    existing.categories.push(reservation.seatAssignment.set.seatCategory.category_name);
-    existing.scheduleLabels.push(scheduleLabel);
+
     if (reservation.status === "PENDING") {
       existing.pendingReservationIds.push(reservation.reservation_id);
     }
+
     if (new Date(reservation.createdAt).getTime() > new Date(existing.latestCreatedAt).getTime()) {
       existing.latestCreatedAt = reservation.createdAt;
     }
+
     if (reservation.payment?.amount) {
       existing.totalAmount += parseFloat(reservation.payment.amount);
-    }
-    if (!existing.screenshotUrl && reservation.payment?.screenshot_url) {
-      existing.screenshotUrl = reservation.payment.screenshot_url;
     }
   }
 
@@ -197,11 +148,15 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
       seatNumbers: Array.from(new Set(row.seatNumbers)).sort((a, b) =>
         a.localeCompare(b, undefined, { numeric: true }),
       ),
-      categories: Array.from(new Set(row.categories)),
-      scheduleLabels: Array.from(new Set(row.scheduleLabels)),
     }))
     .sort((a, b) => new Date(b.latestCreatedAt).getTime() - new Date(a.latestCreatedAt).getTime());
 };
+
+const COLUMNS: Array<{ key: KanbanStatus; title: string; icon: React.ReactNode }> = [
+  { key: "PENDING", title: "Pending", icon: <Clock className="h-4 w-4" /> },
+  { key: "CONFIRMED", title: "Confirmed", icon: <CheckCircle2 className="h-4 w-4" /> },
+  { key: "OTHER", title: "Other", icon: <XCircle className="h-4 w-4" /> },
+];
 
 export function ReservationsClient() {
   const [shows, setShows] = React.useState<ShowGroup[]>([]);
@@ -209,20 +164,18 @@ export function ReservationsClient() {
   const [error, setError] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
-  const [screenshotModal, setScreenshotModal] = React.useState<string | null>(null);
-  const [expandedShows, setExpandedShows] = React.useState<Set<string>>(new Set());
+  const [dragOverColumn, setDragOverColumn] = React.useState<KanbanStatus | null>(null);
 
   React.useEffect(() => {
     const fetchReservations = async () => {
       try {
         const res = await fetch("/api/reservations");
         if (!res.ok) throw new Error("Failed to fetch reservations");
+
         const data = await res.json();
         if (!data.success) throw new Error(data.error || "Unknown error");
+
         setShows(data.shows);
-        if (data.shows.length > 0) {
-          setExpandedShows(new Set([data.shows[0].showId]));
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load");
       } finally {
@@ -237,6 +190,7 @@ export function ReservationsClient() {
     if (reservationIds.length === 0) return;
 
     setVerifyingId(verifyKey);
+
     try {
       for (const reservationId of reservationIds) {
         const res = await fetch("/api/reservations/verify", {
@@ -244,6 +198,7 @@ export function ReservationsClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reservationId }),
         });
+
         const data = await res.json();
         if (!res.ok || !data.success) {
           throw new Error(data.error || "Failed to verify");
@@ -253,16 +208,16 @@ export function ReservationsClient() {
       setShows((prev) =>
         prev.map((show) => ({
           ...show,
-          reservations: show.reservations.map((r) =>
-            reservationIds.includes(r.reservation_id)
+          reservations: show.reservations.map((reservation) =>
+            reservationIds.includes(reservation.reservation_id)
               ? {
-                ...r,
-                status: "CONFIRMED",
-                payment: r.payment
-                  ? { ...r.payment, status: "PAID", paid_at: new Date().toISOString() }
-                  : r.payment,
-              }
-              : r,
+                  ...reservation,
+                  status: "CONFIRMED",
+                  payment: reservation.payment
+                    ? { ...reservation.payment, status: "PAID", paid_at: new Date().toISOString() }
+                    : reservation.payment,
+                }
+              : reservation,
           ),
         })),
       );
@@ -279,62 +234,72 @@ export function ReservationsClient() {
     }
   };
 
-  const toggleShowExpand = (showId: string) => {
-    setExpandedShows((prev) => {
-      const next = new Set(prev);
-      if (next.has(showId)) {
-        next.delete(showId);
-      } else {
-        next.add(showId);
-      }
-      return next;
-    });
-  };
-
   const filteredShows = React.useMemo(() => {
     if (!searchQuery.trim()) return shows;
+
     const q = searchQuery.toLowerCase();
+
     return shows
       .map((show) => ({
         ...show,
         reservations: show.reservations.filter(
-          (r) =>
-            r.first_name.toLowerCase().includes(q) ||
-            r.last_name.toLowerCase().includes(q) ||
-            r.email.toLowerCase().includes(q) ||
-            r.phone_number.toLowerCase().includes(q) ||
-            r.seatAssignment.seat.seat_number.toLowerCase().includes(q) ||
-            r.reservation_id.toLowerCase().includes(q),
+          (reservation) =>
+            reservation.first_name.toLowerCase().includes(q) ||
+            reservation.last_name.toLowerCase().includes(q) ||
+            reservation.email.toLowerCase().includes(q) ||
+            reservation.phone_number.toLowerCase().includes(q) ||
+            reservation.seatAssignment.seat.seat_number.toLowerCase().includes(q) ||
+            reservation.reservation_id.toLowerCase().includes(q) ||
+            reservation.seatAssignment.sched.show.show_name.toLowerCase().includes(q),
         ),
       }))
       .filter((show) => show.reservations.length > 0);
   }, [shows, searchQuery]);
 
-  const totalReservations = React.useMemo(
-    () => shows.reduce((sum, s) => sum + buildUserRows(s.reservations).length, 0),
-    [shows],
-  );
-  const pendingCount = React.useMemo(
-    () =>
-      shows.reduce(
-        (sum, s) =>
-          sum + buildUserRows(s.reservations).filter((row) => row.pendingReservationIds.length > 0).length,
-        0,
-      ),
-    [shows],
-  );
-  const confirmedCount = React.useMemo(
-    () =>
-      shows.reduce(
-        (sum, s) =>
-          sum +
-          buildUserRows(s.reservations).filter((row) =>
-            row.reservations.every((r) => r.status === "CONFIRMED"),
-          ).length,
-        0,
-      ),
-    [shows],
-  );
+  const kanbanCards = React.useMemo(() => {
+    const cards: KanbanCard[] = [];
+
+    for (const show of filteredShows) {
+      const rows = buildUserRows(show.reservations);
+
+      for (const row of rows) {
+        cards.push({
+          id: `${show.showId}::${row.userId}`,
+          status: getRowStatus(row),
+          showName: show.showName,
+          row,
+        });
+      }
+    }
+
+    return cards;
+  }, [filteredShows]);
+
+  const cardsByColumn = React.useMemo(() => {
+    return {
+      PENDING: kanbanCards.filter((card) => card.status === "PENDING"),
+      CONFIRMED: kanbanCards.filter((card) => card.status === "CONFIRMED"),
+      OTHER: kanbanCards.filter((card) => card.status === "OTHER"),
+    } satisfies Record<KanbanStatus, KanbanCard[]>;
+  }, [kanbanCards]);
+
+  const totalReservations = kanbanCards.length;
+  const pendingCount = cardsByColumn.PENDING.length;
+  const confirmedCount = cardsByColumn.CONFIRMED.length;
+
+  const onCardDrop = async (cardId: string, target: KanbanStatus) => {
+    const card = kanbanCards.find((item) => item.id === cardId);
+    if (!card) return;
+
+    if (card.status === target) return;
+
+    if (card.status === "PENDING" && target === "CONFIRMED") {
+      await handleVerifyMany(card.row.pendingReservationIds, `kanban:${card.id}`);
+      return;
+    }
+
+    toast.info("Only moving Pending cards to Confirmed is currently supported.");
+  };
 
   if (isLoading) {
     return (
@@ -367,6 +332,7 @@ export function ReservationsClient() {
             </div>
           </CardContent>
         </Card>
+
         <Card>
           <CardContent className="flex items-center gap-4 py-4">
             <div className="rounded-lg bg-amber-100 p-2.5 dark:bg-amber-900/30">
@@ -378,6 +344,7 @@ export function ReservationsClient() {
             </div>
           </CardContent>
         </Card>
+
         <Card>
           <CardContent className="flex items-center gap-4 py-4">
             <div className="rounded-lg bg-green-100 p-2.5 dark:bg-green-900/30">
@@ -395,227 +362,89 @@ export function ReservationsClient() {
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
-          placeholder="Search by name, email, seat number, or reservation ID..."
+          placeholder="Search by name, email, seat number, reservation ID, or show..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full rounded-lg border border-sidebar-border/70 bg-background py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         />
       </div>
 
-      {filteredShows.length === 0 ? (
+      {kanbanCards.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
           <CreditCard className="h-10 w-10" />
-          <p className="text-sm">
-            {searchQuery ? "No reservations match your search." : "No reservations found."}
-          </p>
+          <p className="text-sm">{searchQuery ? "No reservations match your search." : "No reservations found."}</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {filteredShows.map((show) => {
-            const isExpanded = expandedShows.has(show.showId);
-            const rows = buildUserRows(show.reservations);
-            const pendingUsers = rows.filter((row) => row.pendingReservationIds.length > 0).length;
+        <div className="grid gap-4 xl:grid-cols-3">
+          {COLUMNS.map((column) => {
+            const cards = cardsByColumn[column.key];
+            const isDropTarget = dragOverColumn === column.key;
 
             return (
-              <Card key={show.showId} className="overflow-hidden border-sidebar-border/70">
-                <button
-                  type="button"
-                  onClick={() => toggleShowExpand(show.showId)}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-muted/30 sm:px-6"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted/50">
-                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-semibold sm:text-base">{show.showName}</h3>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        <span className="truncate">{show.venue}</span>
-                        <span className="text-muted-foreground/50">.</span>
-                        <span>{rows.length} user{rows.length !== 1 ? "s" : ""}</span>
-                      </div>
-                    </div>
+              <div
+                key={column.key}
+                className={`rounded-xl border border-sidebar-border/70 bg-muted/20 p-3 transition-colors ${isDropTarget ? "bg-muted/50" : ""}`}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragOverColumn(column.key);
+                }}
+                onDragLeave={() => setDragOverColumn(null)}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const cardId = event.dataTransfer.getData("text/plain");
+                  setDragOverColumn(null);
+                  void onCardDrop(cardId, column.key);
+                }}
+              >
+                <div className="mb-3 flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    {column.icon}
+                    {column.title}
                   </div>
-                  <div className="flex flex-shrink-0 items-center gap-2">
-                    {pendingUsers > 0 && (
-                      <Badge
-                        variant="outline"
-                        className="border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                  <span className="rounded-md bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {cards.length}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {cards.map((card) => {
+                    const isVerifying = verifyingId === `kanban:${card.id}`;
+
+                    return (
+                      <Card
+                        key={card.id}
+                        draggable={!isVerifying}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData("text/plain", card.id);
+                          event.dataTransfer.effectAllowed = "move";
+                        }}
+                        className={`cursor-grab border-sidebar-border/70 active:cursor-grabbing ${isVerifying ? "opacity-70" : ""}`}
                       >
-                        {pendingUsers} pending user{pendingUsers !== 1 ? "s" : ""}
-                      </Badge>
-                    )}
-                    {isExpanded ? (
-                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                </button>
-
-                {isExpanded && (
-                  <div className="border-t border-sidebar-border/50">
-                    {rows.map((row, idx) => {
-                      const allConfirmed = row.reservations.every((r) => r.status === "CONFIRMED");
-                      const hasPending = row.pendingReservationIds.length > 0;
-                      const hasCancelledOrExpired = row.reservations.some(
-                        (r) => r.status === "CANCELLED" || r.status === "EXPIRED",
-                      );
-                      const rowStatus = hasPending
-                        ? "PENDING"
-                        : allConfirmed
-                          ? "CONFIRMED"
-                          : hasCancelledOrExpired
-                            ? "CANCELLED"
-                            : "PENDING";
-                      const config = statusConfig[rowStatus] ?? statusConfig.PENDING;
-                      const paymentStatuses = Array.from(
-                        new Set(
-                          row.reservations
-                            .map((r) => r.payment?.status)
-                            .filter((status): status is string => !!status),
-                        ),
-                      );
-
-                      return (
-                        <div key={row.userId}>
-                          {idx > 0 && <Separator />}
-                          <div className="px-4 py-4 sm:px-6">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="flex min-w-0 flex-1 items-start gap-3">
-                                <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted/60">
-                                  <User className="h-4 w-4 text-muted-foreground" />
-                                </div>
-                                <div className="min-w-0 space-y-1">
-                                  <p className="text-sm font-medium">
-                                    {row.user.first_name} {row.user.last_name}
-                                  </p>
-                                  <p className="truncate text-xs text-muted-foreground">{row.user.email}</p>
-                                  <p className="truncate text-[11px] text-muted-foreground">{row.user.phone_number}</p>
-                                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                                    <span className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/60 bg-muted/30 px-2 py-0.5 font-mono text-[11px]">
-                                      Seats {row.seatNumbers.join(", ")}
-                                    </span>
-                                    {row.categories.map((category) => (
-                                      <span
-                                        key={`${row.userId}-${category}`}
-                                        className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/60 bg-muted/30 px-2 py-0.5 text-[11px]"
-                                      >
-                                        {category}
-                                      </span>
-                                    ))}
-                                    <span className="flex max-w-full items-center gap-1 text-muted-foreground">
-                                      <Calendar className="h-3 w-3" />
-                                      <span className="truncate">
-                                        {row.scheduleLabels.length === 1
-                                          ? row.scheduleLabels[0]
-                                          : `${row.scheduleLabels.length} schedule slots`}
-                                      </span>
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-shrink-0 flex-col items-end gap-2">
-                                <div className="flex items-center gap-2">
-                                  <Badge
-                                    variant={
-                                      config.variant as "default" | "secondary" | "destructive" | "outline"
-                                    }
-                                    className="gap-1"
-                                  >
-                                    {rowStatus === "CONFIRMED" && <CheckCircle2 className="h-3 w-3" />}
-                                    {rowStatus === "PENDING" && <Clock className="h-3 w-3" />}
-                                    {rowStatus === "CANCELLED" && <XCircle className="h-3 w-3" />}
-                                    {config.label}
-                                  </Badge>
-                                  {paymentStatuses.map((paymentStatus) => {
-                                    const paymentConfig =
-                                      paymentStatusConfig[paymentStatus] ?? paymentStatusConfig.PENDING;
-                                    return (
-                                      <span
-                                        key={`${row.userId}-${paymentStatus}`}
-                                        className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ${paymentConfig.className}`}
-                                      >
-                                        {paymentConfig.label}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-
-                                {row.totalAmount > 0 && (
-                                  <p className="text-sm font-semibold">{formatCurrency(row.totalAmount)}</p>
-                                )}
-
-                                <div className="flex items-center gap-2">
-                                  {row.screenshotUrl && (
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-7 gap-1.5 text-xs"
-                                      onClick={() => setScreenshotModal(row.screenshotUrl)}
-                                    >
-                                      <Eye className="h-3 w-3" />
-                                      View Receipt
-                                    </Button>
-                                  )}
-
-                                  {row.pendingReservationIds.length > 0 && (
-                                    <Button
-                                      size="sm"
-                                      className="h-7 gap-1.5 text-xs"
-                                      onClick={() =>
-                                        handleVerifyMany(row.pendingReservationIds, `user:${row.userId}`)
-                                      }
-                                      disabled={verifyingId === `user:${row.userId}`}
-                                    >
-                                      {verifyingId === `user:${row.userId}` ? (
-                                        <Loader2 className="h-3 w-3 animate-spin" />
-                                      ) : (
-                                        <CheckCircle2 className="h-3 w-3" />
-                                      )}
-                                      {row.pendingReservationIds.length === 1
-                                        ? "Verify"
-                                        : `Verify ${row.pendingReservationIds.length}`}
-                                    </Button>
-                                  )}
-                                </div>
-
-                                <p className="text-[10px] text-muted-foreground">
-                                  {formatDate(row.latestCreatedAt)}
-                                </p>
-                              </div>
+                        <CardContent className="space-y-2 p-4">
+                          <p className="text-base font-bold leading-tight">{card.showName}</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {card.row.user.first_name} {card.row.user.last_name}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {card.row.seatNumbers.length} seat{card.row.seatNumbers.length !== 1 ? "s" : ""} - {formatCurrency(card.row.totalAmount)}
+                          </p>
+                          {isVerifying && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Updating status...
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </Card>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>
       )}
-
-      <Dialog open={!!screenshotModal} onOpenChange={() => setScreenshotModal(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>GCash Payment Receipt</DialogTitle>
-          </DialogHeader>
-          {screenshotModal && (
-            <div className="flex items-center justify-center p-2">
-              <img
-                src={screenshotModal}
-                alt="GCash payment receipt"
-                className="max-h-[70vh] rounded-lg object-contain"
-              />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
-
