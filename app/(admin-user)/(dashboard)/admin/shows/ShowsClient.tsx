@@ -117,8 +117,10 @@ export default function ShowsPage({
         const response = await fetch(`/api/shows/search?${params.toString()}`);
 
         if (response.status === 401) {
-          // Unauthorized - redirect to login
-          window.location.href = "/login";
+          if (mode === "admin") {
+            // Admin view requires session; guest-facing views should not be forced to login.
+            window.location.href = "/login";
+          }
           return;
         }
 

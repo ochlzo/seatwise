@@ -11,8 +11,7 @@ const PUBLIC_PATHS = new Set<string>([
 const isAdminPath = (pathname: string) => {
   return (
     pathname === "/admin" ||
-    pathname.startsWith("/admin/") ||
-    pathname.startsWith("/seat-builder")
+    pathname.startsWith("/admin/")
   );
 };
 

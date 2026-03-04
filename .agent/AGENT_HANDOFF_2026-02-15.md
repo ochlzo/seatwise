@@ -418,3 +418,24 @@ Current known follow-ups:
 - `npx prisma generate`
 - After migration reset, run `npm run admin:create-default` to seed the first admin.
 - Existing `npm run test` currently fails due unrelated historical test import resolution (`lib/db/showScheduleGrouping` module path issue).
+
+## Session updates (2026-03-04)
+Primary files touched:
+- `middleware.ts`
+- `app/(admin-user)/layout.tsx`
+- `app/(admin-user)/(dashboard)/layout.tsx`
+- `app/api/shows/search/route.ts`
+- `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`
+
+Auth redirect enforcement change:
+- Login redirect is now enforced only for `/admin` and `/admin/*` page routes.
+- Removed `/seat-builder` from middleware admin-path protection so it no longer auto-redirects guests to `/login`.
+- Removed global `verifyAdmin()` guard from `app/(admin-user)/layout.tsx`.
+- Removed global `verifyAdmin()` guard from `app/(admin-user)/(dashboard)/layout.tsx`.
+- Net effect: non-admin/non-auth users are no longer forced to `/login` for non-admin pages.
+
+Public dashboard 401 -> login loop fix:
+- `GET /api/shows/search` now allows guest/public access when `visibility=user`.
+- Admin visibility queries (`visibility=admin`, default behavior) still require a valid admin session cookie.
+- In `ShowsClient`, `401` responses now redirect to `/login` only when `mode === "admin"`.
+- User-facing dashboard/event listing flow no longer redirects to `/login` due to unauthorized show-search calls.

@@ -5,27 +5,6 @@ import { adminAuth } from "@/lib/firebaseAdmin";
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify user session
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
-      return NextResponse.json(
-        { error: "Unauthorized - No session found" },
-        { status: 401 }
-      );
-    }
-
-    try {
-      await adminAuth.verifySessionCookie(sessionCookie, true);
-    } catch {
-      return NextResponse.json(
-        { error: "Unauthorized - Invalid session" },
-        { status: 401 }
-      );
-    }
-
-    // Fetch shows
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get("q") || undefined;
     const status = searchParams.get("status") || undefined;
@@ -35,6 +14,28 @@ export async function GET(request: NextRequest) {
       searchParams.get("visibility") === "user" ? "user" : "admin";
     const sort = searchParams.get("sort") || undefined;
     const seatmapId = searchParams.get("seatmapId") || undefined;
+
+    // Only admin-visibility queries require an authenticated admin session.
+    if (visibility !== "user") {
+      const cookieStore = await cookies();
+      const sessionCookie = cookieStore.get("session")?.value;
+
+      if (!sessionCookie) {
+        return NextResponse.json(
+          { error: "Unauthorized - No session found" },
+          { status: 401 }
+        );
+      }
+
+      try {
+        await adminAuth.verifySessionCookie(sessionCookie, true);
+      } catch {
+        return NextResponse.json(
+          { error: "Unauthorized - Invalid session" },
+          { status: 401 }
+        );
+      }
+    }
 
     const shows = await getShows({
       query,
