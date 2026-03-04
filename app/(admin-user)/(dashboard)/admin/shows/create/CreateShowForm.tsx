@@ -118,6 +118,9 @@ export function CreateShowForm() {
     show_description: "",
     venue: "",
     address: "",
+    gcash_qr_image_key: "",
+    gcash_number: "",
+    gcash_account_name: "",
     show_status: "DRAFT",
     show_start_date: "",
     show_end_date: "",
@@ -958,6 +961,39 @@ export function CreateShowForm() {
                 emptyHint="Optional. Add a poster to improve show listing visibility."
                 minHeightClassName="min-h-[170px]"
                 previewMaxHeightClassName="max-h-[280px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gcash-qr-image-key" className="text-xs font-semibold text-muted-foreground">
+                GCash QR Image Key
+              </Label>
+              <Input
+                id="gcash-qr-image-key"
+                value={formData.gcash_qr_image_key}
+                onChange={(e) => setFormData({ ...formData, gcash_qr_image_key: e.target.value })}
+                placeholder="https://res.cloudinary.com/.../gcash-qr.jpg"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gcash-number" className="text-xs font-semibold text-muted-foreground">
+                GCash Number
+              </Label>
+              <Input
+                id="gcash-number"
+                value={formData.gcash_number}
+                onChange={(e) => setFormData({ ...formData, gcash_number: e.target.value })}
+                placeholder="09XXXXXXXXX"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="gcash-account-name" className="text-xs font-semibold text-muted-foreground">
+                GCash Account Name
+              </Label>
+              <Input
+                id="gcash-account-name"
+                value={formData.gcash_account_name}
+                onChange={(e) => setFormData({ ...formData, gcash_account_name: e.target.value })}
+                placeholder="Juan Dela Cruz"
               />
             </div>
 

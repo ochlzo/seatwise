@@ -32,6 +32,9 @@ model Show {
   show_start_date  DateTime      @db.Date
   show_end_date    DateTime      @db.Date
   show_image_key   String?
+  gcash_qr_image_key String?
+  gcash_number     String?
+  gcash_account_name String?
   seatmap_id       String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt

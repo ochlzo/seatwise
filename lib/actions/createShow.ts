@@ -16,6 +16,9 @@ type CreateShowPayload = {
   show_start_date: string | Date;
   show_end_date: string | Date;
   show_image_key?: string;
+  gcash_qr_image_key?: string;
+  gcash_number?: string;
+  gcash_account_name?: string;
   image_base64?: string;
   seatmap_id?: string; // Optional for DRAFT shows
   scheds?: Array<{
@@ -117,6 +120,9 @@ export async function createShowAction(data: CreateShowPayload) {
       show_start_date,
       show_end_date,
       show_image_key,
+      gcash_qr_image_key,
+      gcash_number,
+      gcash_account_name,
       image_base64,
       seatmap_id,
       scheds = [],
@@ -246,6 +252,9 @@ export async function createShowAction(data: CreateShowPayload) {
             show_start_date: toDateOnly(show_start_date),
             show_end_date: toDateOnly(show_end_date),
             show_image_key: finalImageUrl,
+            gcash_qr_image_key: gcash_qr_image_key?.trim() || undefined,
+            gcash_number: gcash_number?.trim() || undefined,
+            gcash_account_name: gcash_account_name?.trim() || undefined,
             seatmap_id: seatmap_id || undefined, // Allow undefined for DRAFT shows
           },
         });
