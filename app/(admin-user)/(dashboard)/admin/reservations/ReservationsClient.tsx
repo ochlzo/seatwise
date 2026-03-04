@@ -1,7 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { CheckCircle2, Clock, CreditCard, Loader2, Search, XCircle } from "lucide-react";
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  closestCenter,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { CheckCircle2, Clock, CreditCard, GripVertical, Loader2, Search, XCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 
@@ -85,6 +100,14 @@ type KanbanCard = {
   row: UserReservationRow;
 };
 
+const COLUMNS: Array<{ key: KanbanStatus; title: string; icon: React.ReactNode }> = [
+  { key: "PENDING", title: "Pending", icon: <Clock className="h-4 w-4" /> },
+  { key: "CONFIRMED", title: "Confirmed", icon: <CheckCircle2 className="h-4 w-4" /> },
+  { key: "OTHER", title: "Other", icon: <XCircle className="h-4 w-4" /> },
+];
+
+const columnId = (status: KanbanStatus) => `column:${status}`;
+
 const formatCurrency = (value: string | number) => {
   const parsed = typeof value === "string" ? parseFloat(value) : value;
   return new Intl.NumberFormat("en-PH", {
@@ -152,11 +175,99 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
     .sort((a, b) => new Date(b.latestCreatedAt).getTime() - new Date(a.latestCreatedAt).getTime());
 };
 
-const COLUMNS: Array<{ key: KanbanStatus; title: string; icon: React.ReactNode }> = [
-  { key: "PENDING", title: "Pending", icon: <Clock className="h-4 w-4" /> },
-  { key: "CONFIRMED", title: "Confirmed", icon: <CheckCircle2 className="h-4 w-4" /> },
-  { key: "OTHER", title: "Other", icon: <XCircle className="h-4 w-4" /> },
-];
+type SortableCardProps = {
+  card: KanbanCard;
+  isVerifying: boolean;
+};
+
+function SortableCard({ card, isVerifying }: SortableCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: card.id,
+    disabled: isVerifying,
+    data: { type: "card", column: card.status },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className={`border-sidebar-border/70 ${isDragging ? "opacity-60" : ""} ${isVerifying ? "opacity-70" : ""}`}
+    >
+      <CardContent className="relative space-y-2 p-4 pr-10">
+        <button
+          type="button"
+          aria-label="Drag reservation card"
+          className="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+          disabled={isVerifying}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <p className="text-base font-bold leading-tight">{card.showName}</p>
+        <p className="text-sm font-medium text-foreground">
+          {card.row.user.first_name} {card.row.user.last_name}
+        </p>
+        <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+        <p className="text-sm text-muted-foreground">
+          {card.row.seatNumbers.length} seat{card.row.seatNumbers.length !== 1 ? "s" : ""} - {formatCurrency(card.row.totalAmount)}
+        </p>
+        {isVerifying && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Updating status...
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type KanbanColumnProps = {
+  status: KanbanStatus;
+  title: string;
+  icon: React.ReactNode;
+  cards: KanbanCard[];
+  isActiveDrop: boolean;
+  verifyingId: string | null;
+};
+
+function KanbanColumn({ status, title, icon, cards, isActiveDrop, verifyingId }: KanbanColumnProps) {
+  const { setNodeRef } = useDroppable({
+    id: columnId(status),
+    data: { type: "column", column: status },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-xl border border-sidebar-border/70 bg-muted/20 p-3 transition-colors ${isActiveDrop ? "bg-muted/50" : ""}`}
+    >
+      <div className="mb-3 flex items-center justify-between px-1">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          {icon}
+          {title}
+        </div>
+        <span className="rounded-md bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+          {cards.length}
+        </span>
+      </div>
+
+      <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-3">
+          {cards.map((card) => (
+            <SortableCard key={card.id} card={card} isVerifying={verifyingId === `kanban:${card.id}`} />
+          ))}
+        </div>
+      </SortableContext>
+    </div>
+  );
+}
 
 export function ReservationsClient() {
   const [shows, setShows] = React.useState<ShowGroup[]>([]);
@@ -164,7 +275,13 @@ export function ReservationsClient() {
   const [error, setError] = React.useState<string | null>(null);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
-  const [dragOverColumn, setDragOverColumn] = React.useState<KanbanStatus | null>(null);
+  const [activeDropColumn, setActiveDropColumn] = React.useState<KanbanStatus | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+  );
 
   React.useEffect(() => {
     const fetchReservations = async () => {
@@ -283,23 +400,50 @@ export function ReservationsClient() {
     } satisfies Record<KanbanStatus, KanbanCard[]>;
   }, [kanbanCards]);
 
+  const cardById = React.useMemo(() => {
+    return new Map(kanbanCards.map((card) => [card.id, card]));
+  }, [kanbanCards]);
+
   const totalReservations = kanbanCards.length;
   const pendingCount = cardsByColumn.PENDING.length;
   const confirmedCount = cardsByColumn.CONFIRMED.length;
 
-  const onCardDrop = async (cardId: string, target: KanbanStatus) => {
-    const card = kanbanCards.find((item) => item.id === cardId);
-    if (!card) return;
+  const resolveDropTarget = React.useCallback(
+    (overId: string): KanbanStatus | null => {
+      if (overId.startsWith("column:")) {
+        const key = overId.replace("column:", "") as KanbanStatus;
+        return key;
+      }
 
-    if (card.status === target) return;
+      const overCard = cardById.get(overId);
+      return overCard?.status ?? null;
+    },
+    [cardById],
+  );
 
-    if (card.status === "PENDING" && target === "CONFIRMED") {
-      await handleVerifyMany(card.row.pendingReservationIds, `kanban:${card.id}`);
-      return;
-    }
+  const onDragEnd = React.useCallback(
+    async (event: DragEndEvent) => {
+      setActiveDropColumn(null);
 
-    toast.info("Only moving Pending cards to Confirmed is currently supported.");
-  };
+      const activeId = String(event.active.id);
+      const overId = event.over ? String(event.over.id) : null;
+      if (!overId) return;
+
+      const activeCard = cardById.get(activeId);
+      if (!activeCard) return;
+
+      const targetStatus = resolveDropTarget(overId);
+      if (!targetStatus || targetStatus === activeCard.status) return;
+
+      if (activeCard.status === "PENDING" && targetStatus === "CONFIRMED") {
+        await handleVerifyMany(activeCard.row.pendingReservationIds, `kanban:${activeCard.id}`);
+        return;
+      }
+
+      toast.info("Only moving Pending cards to Confirmed is currently supported.");
+    },
+    [cardById, resolveDropTarget],
+  );
 
   if (isLoading) {
     return (
@@ -375,75 +519,35 @@ export function ReservationsClient() {
           <p className="text-sm">{searchQuery ? "No reservations match your search." : "No reservations found."}</p>
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-3">
-          {COLUMNS.map((column) => {
-            const cards = cardsByColumn[column.key];
-            const isDropTarget = dragOverColumn === column.key;
-
-            return (
-              <div
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragOver={(event) => {
+            const overId = event.over ? String(event.over.id) : null;
+            if (!overId) {
+              setActiveDropColumn(null);
+              return;
+            }
+            setActiveDropColumn(resolveDropTarget(overId));
+          }}
+          onDragEnd={(event) => {
+            void onDragEnd(event);
+          }}
+        >
+          <div className="grid gap-4 xl:grid-cols-3">
+            {COLUMNS.map((column) => (
+              <KanbanColumn
                 key={column.key}
-                className={`rounded-xl border border-sidebar-border/70 bg-muted/20 p-3 transition-colors ${isDropTarget ? "bg-muted/50" : ""}`}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragOverColumn(column.key);
-                }}
-                onDragLeave={() => setDragOverColumn(null)}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const cardId = event.dataTransfer.getData("text/plain");
-                  setDragOverColumn(null);
-                  void onCardDrop(cardId, column.key);
-                }}
-              >
-                <div className="mb-3 flex items-center justify-between px-1">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
-                    {column.icon}
-                    {column.title}
-                  </div>
-                  <span className="rounded-md bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                    {cards.length}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {cards.map((card) => {
-                    const isVerifying = verifyingId === `kanban:${card.id}`;
-
-                    return (
-                      <Card
-                        key={card.id}
-                        draggable={!isVerifying}
-                        onDragStart={(event) => {
-                          event.dataTransfer.setData("text/plain", card.id);
-                          event.dataTransfer.effectAllowed = "move";
-                        }}
-                        className={`cursor-grab border-sidebar-border/70 active:cursor-grabbing ${isVerifying ? "opacity-70" : ""}`}
-                      >
-                        <CardContent className="space-y-2 p-4">
-                          <p className="text-base font-bold leading-tight">{card.showName}</p>
-                          <p className="text-sm font-medium text-foreground">
-                            {card.row.user.first_name} {card.row.user.last_name}
-                          </p>
-                          <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {card.row.seatNumbers.length} seat{card.row.seatNumbers.length !== 1 ? "s" : ""} - {formatCurrency(card.row.totalAmount)}
-                          </p>
-                          {isVerifying && (
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Updating status...
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                status={column.key}
+                title={column.title}
+                icon={column.icon}
+                cards={cardsByColumn[column.key]}
+                isActiveDrop={activeDropColumn === column.key}
+                verifyingId={verifyingId}
+              />
+            ))}
+          </div>
+        </DndContext>
       )}
     </div>
   );
