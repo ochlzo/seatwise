@@ -46,7 +46,7 @@ export function ReservationSuccessPanel({
                 {selectedSeatIds.length > 0 && (
                     <div className="w-full rounded-xl border border-sidebar-border bg-sidebar p-5 text-left shadow-sm">
                         <p className="mb-3 text-sm font-semibold text-sidebar-foreground">Reserved Seats</p>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap justify-center gap-2">
                             {selectedSeatIds.map((seatId) => (
                                 <div
                                     key={seatId}

@@ -56,14 +56,6 @@ const data = {
                     url: "/admin/reservations",
                 },
                 {
-                    title: "Settings",
-                    url: "/admin/settings",
-                },
-                {
-                    title: "Users",
-                    url: "/admin/users",
-                },
-                {
                     title: "Admin Access",
                     url: "/admin/access",
                 },
