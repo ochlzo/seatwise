@@ -7,7 +7,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
   PointerSensor,
-  closestCorners,
+  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
@@ -265,7 +265,7 @@ function KanbanColumn({ status, title, icon, cards, isActiveDrop, verifyingId }:
       </div>
 
       <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-3">
+        <div className="min-h-[220px] space-y-3">
           {cards.map((card) => (
             <SortableCard key={card.id} card={card} isVerifying={verifyingId === `kanban:${card.id}`} />
           ))}
@@ -632,7 +632,7 @@ export function ReservationsClient() {
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={pointerWithin}
           onDragOver={(event) => {
             const overId = event.over ? String(event.over.id) : null;
             if (!overId) {
