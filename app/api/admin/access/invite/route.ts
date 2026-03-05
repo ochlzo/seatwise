@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 import { sendAdminInviteEmail } from "@/lib/email/sendAdminInviteEmail";
+import { randomUUID } from "crypto";
+import {
+  INVITE_TTL_HOURS,
+  InviteSession,
+  setInviteSession,
+  signInviteToken,
+} from "@/lib/invite/adminInvite";
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,13 +46,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Inviter not found." }, { status: 403 });
     }
 
+    const existingAdmin = await prisma.admin.findUnique({
+      where: { email },
+      select: { user_id: true },
+    });
+    if (existingAdmin) {
+      return NextResponse.json(
+        { error: "This email already belongs to an admin account." },
+        { status: 409 },
+      );
+    }
+
     const inviterName =
       `${inviter.first_name ?? ""} ${inviter.last_name ?? ""}`.trim() || inviter.email;
+    const inviteId = randomUUID();
+    const expiresAt = Date.now() + INVITE_TTL_HOURS * 60 * 60 * 1000;
+    const inviteSession: InviteSession = {
+      inviteId,
+      email,
+      teamId,
+      teamName: team.name,
+      inviterName,
+      expiresAt,
+      otpVerified: false,
+      consumed: false,
+    };
+    await setInviteSession(inviteSession);
+    const token = signInviteToken({
+      inviteId,
+      email,
+      teamId,
+      exp: Math.floor(expiresAt / 1000),
+    });
+    const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+    const inviteLink = `${appUrl}/login?invite=${encodeURIComponent(token)}`;
 
     await sendAdminInviteEmail({
       to: email,
       teamName: team.name,
       inviterName,
+      inviteLink,
     });
 
     return NextResponse.json({ success: true });

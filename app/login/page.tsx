@@ -1,5 +1,6 @@
 "use client";
 import { LoginForm } from "@/components/login-form";
+import { AdminInviteOnboarding } from "@/components/admin-invite-onboarding";
 import { useAppDispatch } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 import LoadingPage from "../LoadingPage";
@@ -17,6 +18,7 @@ function LoginPageContent() {
   const dispatch = useAppDispatch();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? undefined;
+  const inviteToken = searchParams.get("invite") ?? undefined;
 
   const handleLoginStart = () => {
     dispatch(setLoading(true));
@@ -30,12 +32,16 @@ function LoginPageContent() {
     <div className="bg-muted flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
       <div className="w-full max-w-sm md:max-w-5xl">
         <LoadingPage />
-        <LoginForm
-          imageSrc="/login_image.jpg"
-          onLoginStart={handleLoginStart}
-          onLoginError={handleLoginError}
-          callbackUrl={callbackUrl}
-        />
+        {inviteToken ? (
+          <AdminInviteOnboarding token={inviteToken} />
+        ) : (
+          <LoginForm
+            imageSrc="/login_image.jpg"
+            onLoginStart={handleLoginStart}
+            onLoginError={handleLoginError}
+            callbackUrl={callbackUrl}
+          />
+        )}
       </div>
     </div>
   );

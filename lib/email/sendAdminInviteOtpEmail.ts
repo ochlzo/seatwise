@@ -1,10 +1,9 @@
 import { assertGmailSenderAlignment } from "@/lib/email/gmailSenderGuard";
 
-type AdminInviteEmailPayload = {
+type AdminInviteOtpEmailPayload = {
   to: string;
   teamName: string;
-  inviterName: string;
-  inviteLink: string;
+  otp: string;
 };
 
 const toBase64Url = (input: string) =>
@@ -42,25 +41,22 @@ const getAccessToken = async () => {
   return data.access_token;
 };
 
-export const sendAdminInviteEmail = async (payload: AdminInviteEmailPayload) => {
+export const sendAdminInviteOtpEmail = async (payload: AdminInviteOtpEmailPayload) => {
   const sender = process.env.GMAIL_SENDER_EMAIL;
-
   if (!sender) {
     throw new Error("Missing GMAIL_SENDER_EMAIL.");
   }
 
   const accessToken = await getAccessToken();
   await assertGmailSenderAlignment(accessToken, sender);
-  const subject = `Seatwise Admin Invitation - ${payload.teamName}`;
+  const subject = `Seatwise Admin Invite OTP - ${payload.teamName}`;
   const body = [
-    `Hi,`,
+    "Hi,",
     "",
-    `${payload.inviterName} invited you to join the "${payload.teamName}" admin team in Seatwise.`,
+    `Your OTP for Seatwise admin invite onboarding is: ${payload.otp}`,
     "",
-    "Complete your admin onboarding here:",
-    payload.inviteLink,
-    "",
-    "This invite link expires in 48 hours and can only be used once.",
+    "This code expires in 10 minutes.",
+    "If you did not request this, ignore this email.",
     "",
     "Thanks,",
     "Seatwise Team",
@@ -89,6 +85,6 @@ export const sendAdminInviteEmail = async (payload: AdminInviteEmailPayload) => 
 
   if (!sendRes.ok) {
     const error = await sendRes.text();
-    throw new Error(`Failed to send admin invite email: ${error}`);
+    throw new Error(`Failed to send admin OTP email: ${error}`);
   }
 };

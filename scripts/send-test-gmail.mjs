@@ -4,6 +4,10 @@ const CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
 const REFRESH_TOKEN = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
 const SENDER_EMAIL = process.env.GMAIL_SENDER_EMAIL;
+const ALLOWED_ALIASES = (process.env.GMAIL_ALLOWED_SENDER_ALIASES || "")
+  .split(",")
+  .map((v) => v.trim().toLowerCase())
+  .filter(Boolean);
 
 const recipientArg = process.argv[2];
 const subjectArg = process.argv[3];
@@ -60,6 +64,19 @@ async function getAccessToken() {
   return tokenJson.access_token;
 }
 
+async function getGmailProfile(accessToken) {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(`Failed to read Gmail profile: ${JSON.stringify(json)}`);
+  }
+  return json;
+}
+
 function toBase64Url(input) {
   return Buffer.from(input)
     .toString("base64")
@@ -108,6 +125,19 @@ async function main() {
   try {
     console.log("Refreshing access token...");
     const accessToken = await getAccessToken();
+    const profile = await getGmailProfile(accessToken);
+    const oauthMailbox = String(profile.emailAddress || "").toLowerCase();
+    const sender = String(SENDER_EMAIL || "").toLowerCase();
+    const senderAligned = sender === oauthMailbox || ALLOWED_ALIASES.includes(sender);
+
+    console.log(`OAuth mailbox: ${oauthMailbox}`);
+    console.log(`Configured sender: ${sender}`);
+    if (!senderAligned) {
+      throw new Error(
+        "Sender is not aligned with OAuth mailbox. Set GMAIL_SENDER_EMAIL to the OAuth account " +
+          "or add it to GMAIL_ALLOWED_SENDER_ALIASES if it is a verified alias.",
+      );
+    }
 
     console.log(`Sending test email to ${recipient}...`);
     const result = await sendEmail(accessToken);
@@ -117,7 +147,17 @@ async function main() {
     console.log(`Thread ID: ${result.threadId}`);
   } catch (error) {
     console.error("Email test failed.");
-    console.error(error instanceof Error ? error.message : error);
+    if (error instanceof Error) {
+      console.error(error.message);
+      if ("cause" in error && error.cause) {
+        console.error("Cause:", error.cause);
+      }
+      if (error.stack) {
+        console.error(error.stack);
+      }
+    } else {
+      console.error(error);
+    }
     process.exit(1);
   }
 }

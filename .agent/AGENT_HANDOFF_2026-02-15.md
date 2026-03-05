@@ -274,3 +274,142 @@ In `prisma/schema.prisma`, `Show` includes:
 - Shows error modal (`Dialog`) with red error icon and explanatory message.
 - Backend data support added in:
 - `lib/db/Shows.ts` (`getShowById` now includes `_count.reservations`).
+
+## Latest Session Updates (2026-03-06)
+
+### Admin Access IA Restructure (Implemented)
+- `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx` now supports:
+- Superadmin root (`/admin/access`): team directory list/table with search.
+- Team click navigates to `/admin/access/[teamId]`.
+- Non-superadmin root: only own team detail + own team admins list (with admin search).
+- Added shared detail UI component:
+- `app/(admin-user)/(dashboard)/admin/access/components/TeamAccessDetail.tsx`
+- Added team detail route:
+- `app/(admin-user)/(dashboard)/admin/access/[teamId]/page.tsx`
+- Added API for single team fetch:
+- `GET /api/admin/access/teams/[teamId]`
+- File: `app/api/admin/access/teams/[teamId]/route.ts`
+
+### Admin Role Endpoint + Team Unlink Rule (Implemented)
+- Added backend-only role mutation endpoint:
+- `PATCH /api/admin/access/admins/[userId]/role`
+- File: `app/api/admin/access/admins/[userId]/role/route.ts`
+- Rules:
+- Only superadmin can call.
+- Promoting to superadmin forces `team_id = null`.
+- Demoting requires explicit valid `teamId`.
+
+### Global Header Badge Update (Implemented)
+- `components/AdminShield.tsx` now shows:
+- `SUPERADMIN` if superadmin.
+- Uppercased team name if not superadmin.
+- `UNASSIGNED` fallback if no team.
+- Auth typing extended in:
+- `lib/features/auth/authSlice.ts`
+- Added optional fields: `isSuperadmin`, `teamId`, `teamName`.
+
+### Admin Team Delete Action + Guard Modal (Implemented)
+- Updated teams table in `AdminAccessClient.tsx`:
+- Replaced placeholder action with real delete button.
+- Added delete confirmation warning modal (`Dialog`).
+- Added backend delete endpoint:
+- `DELETE /api/admin/access/teams/[teamId]`
+- File: `app/api/admin/access/teams/[teamId]/route.ts`
+- Delete safety checks:
+- Blocks if team has existing shows.
+- Blocks if team still has assigned admins.
+
+### Superadmin Create-Show Team Assignment Guard (Implemented)
+- In `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`:
+- Superadmin clicking `New Show` opens modal requiring team assignment.
+- Modal has typeable/searchable team picklist (`Combobox`).
+- Continue routes to `/admin/shows/create?teamId=...`.
+- `app/(admin-user)/(dashboard)/admin/shows/create/page.tsx` reads `teamId` query and passes it to form.
+- `CreateShowForm.tsx` accepts `teamId` prop and forwards `team_id` to server action.
+- `lib/actions/createShow.ts` updated:
+- Superadmin must pass valid `team_id`.
+- Team existence is verified server-side before create.
+- Non-superadmin behavior remains scoped to own `adminContext.teamId`.
+
+### Secure Admin Invite Onboarding (Implemented)
+- Replaced plain login-link invite flow with signed token + Redis state + OTP flow.
+
+#### New shared invite security helper
+- `lib/invite/adminInvite.ts`
+- Provides:
+- HMAC signed token (`ADMIN_INVITE_SIGNING_SECRET`)
+- Redis key helpers/session helpers
+- OTP generation/hash (`ADMIN_OTP_PEPPER`)
+- TTL/cooldown/attempt config constants
+
+#### Invite sender route updated
+- `app/api/admin/access/invite/route.ts`
+- Now:
+- Creates Redis invite session.
+- Generates signed invite token.
+- Sends `/login?invite=<token>` link.
+- Blocks invite when email already belongs to existing Admin.
+
+#### New invite onboarding APIs
+- `POST /api/admin/access/invite/validate`
+- File: `app/api/admin/access/invite/validate/route.ts`
+- `POST /api/admin/access/invite/send-otp`
+- File: `app/api/admin/access/invite/send-otp/route.ts`
+- `POST /api/admin/access/invite/verify-otp`
+- File: `app/api/admin/access/invite/verify-otp/route.ts`
+- `POST /api/admin/access/invite/complete`
+- File: `app/api/admin/access/invite/complete/route.ts`
+
+#### Invite completion behavior
+- Requires validated token + OTP verified session.
+- Creates Firebase Auth user via Admin SDK.
+- Creates Admin DB row with:
+- `team_id` from invite session
+- `is_superadmin=false`
+- On success: deletes invite session/otp/email-lock keys from Redis.
+- On failure: best-effort Firebase rollback and invite state recovery.
+
+#### Login UI integration
+- `app/login/page.tsx` now branches:
+- If `invite` query param exists -> render onboarding UI.
+- Else -> render normal `LoginForm`.
+- New component:
+- `components/admin-invite-onboarding.tsx`
+- Step flow:
+- Invite validation (email locked)
+- Send OTP
+- Verify OTP
+- Complete profile (`firstName`, `lastName`, `username`, `password`)
+- Auto sign-in + call existing `/api/auth/login`
+
+### Email Sending Hardening + Test Script Updates
+- Updated invite email sender:
+- `lib/email/sendAdminInviteEmail.ts`
+- Added `inviteLink` payload and onboarding-focused email body.
+- Added OTP email sender:
+- `lib/email/sendAdminInviteOtpEmail.ts`
+- Added sender alignment guard:
+- `lib/email/gmailSenderGuard.ts`
+- Validates `GMAIL_SENDER_EMAIL` aligns with OAuth mailbox or allowed alias list.
+- New optional env:
+- `GMAIL_ALLOWED_SENDER_ALIASES` (comma-separated).
+- Updated test script:
+- `scripts/send-test-gmail.mjs`
+- Added mailbox/sender alignment diagnostics and richer error output (`cause`/stack).
+
+### Local Env Additions Used By Invite/OTP Flow
+- Added to local `.env`:
+- `ADMIN_INVITE_SIGNING_SECRET`
+- `ADMIN_OTP_PEPPER`
+- `ADMIN_INVITE_TTL_HOURS=48`
+- `ADMIN_OTP_TTL_MINUTES=10`
+- `ADMIN_OTP_MAX_ATTEMPTS=5`
+- `ADMIN_OTP_RESEND_COOLDOWN_SECONDS=60`
+- `ADMIN_OTP_MAX_RESENDS=5`
+- Note: these are local environment values and must be mirrored in deployment env config.
+
+### Security Note Recorded
+- `app/api/auth/admin-email/route.ts` still exposes username/email enumeration risk:
+- Returns distinguishable results for existing vs non-existing admin usernames.
+- Not fixed in this session; recommended follow-up:
+- generic responses + rate-limiting/throttling + abuse logging.
