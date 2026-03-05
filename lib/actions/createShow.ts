@@ -122,37 +122,6 @@ export async function createShowAction(data: CreateShowPayload) {
     } = data;
 
     // --- 1. Pre-Transaction Validation & Normalization ---
-    if (!show_name?.trim()) {
-      throw new Error("Show name is required.");
-    }
-    if (!show_description?.trim()) {
-      throw new Error("Show description is required.");
-    }
-    if (!venue?.trim()) {
-      throw new Error("Venue is required.");
-    }
-    if (!address?.trim()) {
-      throw new Error("Address is required.");
-    }
-    if (!gcash_qr_image_key?.trim() && !gcash_qr_image_base64?.trim()) {
-      throw new Error("GCash QR image key is required.");
-    }
-    if (!gcash_number?.trim()) {
-      throw new Error("GCash number is required.");
-    }
-    if (!gcash_account_name?.trim()) {
-      throw new Error("GCash account name is required.");
-    }
-    if (!show_status) {
-      throw new Error("Show status is required.");
-    }
-    if (!show_start_date) {
-      throw new Error("Show start date is required.");
-    }
-    if (!show_end_date) {
-      throw new Error("Show end date is required.");
-    }
-
     // Normalize category sets (merging legacy 'categories' prop if needed)
     const normalizedCategorySets =
       category_sets.length > 0
@@ -170,6 +139,48 @@ export async function createShowAction(data: CreateShowPayload) {
           ],
           seat_assignments: undefined,
         }));
+
+    const hasDateRange = !!show_start_date && !!show_end_date;
+    const dateRangeInvalid = hasDateRange
+      ? toDateOnly(show_start_date).getTime() > toDateOnly(show_end_date).getTime()
+      : false;
+    const requiresSeatmap = show_status === "UPCOMING" || show_status === "OPEN";
+
+    const fieldErrors = {
+      show_name: !show_name?.trim(),
+      show_description: !show_description?.trim(),
+      venue: !venue?.trim(),
+      address: !address?.trim(),
+      show_status: !show_status,
+      show_start_date: !show_start_date || dateRangeInvalid,
+      show_end_date: !show_end_date || dateRangeInvalid,
+      gcash_qr_image_key: !gcash_qr_image_key?.trim() && !gcash_qr_image_base64?.trim(),
+      gcash_number: !gcash_number?.trim(),
+      gcash_account_name: !gcash_account_name?.trim(),
+      seatmap_id: requiresSeatmap && !seatmap_id?.trim(),
+    };
+
+    const cardErrors = {
+      schedule: requiresSeatmap && scheds.length === 0,
+      seatmap:
+        (requiresSeatmap && !seatmap_id?.trim()) ||
+        (!!seatmap_id?.trim() && normalizedCategorySets.length === 0),
+      gcash:
+        fieldErrors.gcash_qr_image_key ||
+        fieldErrors.gcash_number ||
+        fieldErrors.gcash_account_name,
+    };
+
+    if (
+      Object.values(fieldErrors).some(Boolean) ||
+      Object.values(cardErrors).some(Boolean)
+    ) {
+      return {
+        success: false,
+        error: "Please complete all required fields.",
+        validation: { fieldErrors, cardErrors },
+      };
+    }
 
     if (normalizedCategorySets.length > 0) {
       // Validate unique set_name

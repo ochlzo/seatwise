@@ -11,7 +11,6 @@ import {
   Loader2,
   Plus,
   Trash2,
-  AlertCircle,
   CalendarDays,
   Play,
   Armchair,
@@ -814,101 +813,73 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       .filter(Boolean) as Array<{ setName: string; missing: number }>;
   }, [categorySets, totalSeatsCount]);
 
-  const missingFields = React.useMemo(() => {
-    const missing: string[] = [];
-    // 1. Basic Fields
-    if (!formData.show_name.trim()) missing.push("Show Name");
-    if (!formData.show_description.trim()) missing.push("Description");
-    if (!formData.venue.trim()) missing.push("Venue");
-    if (!formData.address.trim()) missing.push("Address");
-    if (!gcashQrPreview) missing.push("GCash QR image");
-    if (!formData.gcash_number.trim()) missing.push("GCash number");
-    if (!formData.gcash_account_name.trim()) missing.push("GCash account name");
-    if (!formData.show_start_date) missing.push("Start Date");
-    if (!formData.show_end_date) missing.push("End Date");
+  const validationState = React.useMemo(() => {
+    const dateRangeInvalid =
+      !!formData.show_start_date &&
+      !!formData.show_end_date &&
+      !isDateRangeValid;
 
-    // 2. Schedule Validation
-    if (formData.scheds.length === 0) {
-      missing.push("Schedules");
-    } else if (scheduleCoverage.missingDates.length > 0) {
-      missing.push("Schedules (missing dates)");
-    }
+    const hasInvalidCategory = categorySets.some(
+      (setItem) =>
+        setItem.categories.length === 0 ||
+        setItem.categories.some((category) => {
+          const nameValid = category.category_name.trim().length > 0;
+          const priceValue = String(category.price ?? "").trim();
+          const priceValid =
+            priceValue !== "" &&
+            /^\d{1,4}(\.\d{1,2})?$/.test(priceValue) &&
+            !Number.isNaN(Number(priceValue)) &&
+            Number(priceValue) >= 0;
+          return !nameValid || !priceValid;
+        }),
+    );
 
-    // 3. Seatmap & Assignments Validation (Mandatory for ALL productions)
-    if (!formData.seatmap_id) {
-      missing.push("Seatmap");
-    }
-    if (categorySets.length === 0) {
-      missing.push("Category Sets");
-    }
+    const fieldErrors = {
+      showName: !formData.show_name.trim(),
+      description: !formData.show_description.trim(),
+      venue: !formData.venue.trim(),
+      address: !formData.address.trim(),
+      gcashQr: !gcashQrPreview,
+      gcashNumber: !formData.gcash_number.trim(),
+      gcashAccountName: !formData.gcash_account_name.trim(),
+      startDate: !formData.show_start_date || dateRangeInvalid,
+      endDate: !formData.show_end_date || dateRangeInvalid,
+      seatmap: !formData.seatmap_id,
+    };
 
-    if (formData.seatmap_id) {
-      if (
-        categorySets.length > 0 &&
-        formData.scheds.length > 0 &&
-        unassignedSchedCount > 0
-      ) {
-        missing.push("Assigned Scheds");
-      }
+    const cardErrors = {
+      schedule:
+        formData.scheds.length === 0 || scheduleCoverage.missingDates.length > 0,
+      seatmap:
+        !formData.seatmap_id ||
+        categorySets.length === 0 ||
+        (formData.seatmap_id &&
+          formData.scheds.length > 0 &&
+          unassignedSchedCount > 0) ||
+        hasInvalidCategory ||
+        incompleteCategorySets.length > 0,
+      gcash:
+        fieldErrors.gcashQr ||
+        fieldErrors.gcashNumber ||
+        fieldErrors.gcashAccountName,
+    };
 
-      const hasInvalidCategory = categorySets.some(
-        (setItem) =>
-          setItem.categories.length === 0 || // Flag empty sets
-          setItem.categories.some((category) => {
-            const nameValid = category.category_name.trim().length > 0;
-            const priceValue = String(category.price ?? "").trim();
-            const priceValid =
-              priceValue !== "" &&
-              /^\d{1,4}(\.\d{1,2})?$/.test(priceValue) &&
-              !Number.isNaN(Number(priceValue)) &&
-              Number(priceValue) >= 0;
-            return !nameValid || !priceValid;
-          }),
-      );
-      if (hasInvalidCategory) missing.push("Category name/price/empty set");
+    const hasValidationErrors =
+      Object.values(fieldErrors).some(Boolean) ||
+      Object.values(cardErrors).some(Boolean);
 
-      if (incompleteCategorySets.length > 0) {
-        incompleteCategorySets.forEach((incomplete) => {
-          missing.push(
-            `${incomplete.setName}: ${incomplete.missing} seats unassigned`,
-          );
-        });
-      }
-    }
-
-    if (
-      formData.show_start_date &&
-      formData.show_end_date &&
-      !isDateRangeValid
-    ) {
-      missing.push("Date range (start must be before end)");
-    }
-    return missing;
+    return { fieldErrors, cardErrors, hasValidationErrors };
   }, [
     formData,
     gcashQrPreview,
-    scheduleCoverage,
-    categorySets,
-    unassignedSchedCount,
-    incompleteCategorySets,
     isDateRangeValid,
+    categorySets,
+    scheduleCoverage.missingDates.length,
+    unassignedSchedCount,
+    incompleteCategorySets.length,
   ]);
 
-  const isFormValid = React.useMemo(() => {
-    if (missingFields.length > 0) return false;
-    if (
-      formData.seatmap_id &&
-      formData.scheds.length > 0 &&
-      unassignedSchedCount > 0
-    )
-      return false;
-    return true;
-  }, [
-    missingFields,
-    formData.seatmap_id,
-    formData.scheds.length,
-    unassignedSchedCount,
-  ]);
+  const isFormValid = !validationState.hasValidationErrors;
 
   const handleAddSchedules = () => {
     if (!selectedDates.length) {
@@ -1113,7 +1084,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     onChange={(e) =>
                       setFormData({ ...formData, show_name: e.target.value })
                     }
-                    className="font-medium bg-muted/30 focus-visible:ring-primary/20"
+                    className={cn(
+                      "font-medium bg-muted/30 focus-visible:ring-primary/20",
+                      isEditing &&
+                        validationState.fieldErrors.showName &&
+                        "border-red-500 focus-visible:ring-red-500/30",
+                    )}
                     readOnly={!isEditing}
                   />
                 </div>
@@ -1176,7 +1152,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     })
                   }
                   rows={4}
-                  className="w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/20 font-medium"
+                  className={cn(
+                    "w-full rounded-md border border-input bg-muted/30 px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/20 font-medium",
+                    isEditing &&
+                      validationState.fieldErrors.description &&
+                      "border-red-500 focus-visible:ring-red-500/30",
+                  )}
                   readOnly={!isEditing}
                 />
               </div>
@@ -1195,7 +1176,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     onChange={(e) =>
                       setFormData({ ...formData, venue: e.target.value })
                     }
-                    className="font-medium bg-muted/30"
+                    className={cn(
+                      "font-medium bg-muted/30",
+                      isEditing &&
+                        validationState.fieldErrors.venue &&
+                        "border-red-500 focus-visible:ring-red-500/30",
+                    )}
                     readOnly={!isEditing}
                   />
                 </div>
@@ -1212,7 +1198,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     onChange={(e) =>
                       setFormData({ ...formData, address: e.target.value })
                     }
-                    className="font-medium bg-muted/30"
+                    className={cn(
+                      "font-medium bg-muted/30",
+                      isEditing &&
+                        validationState.fieldErrors.address &&
+                        "border-red-500 focus-visible:ring-red-500/30",
+                    )}
                     readOnly={!isEditing}
                   />
                 </div>
@@ -1226,31 +1217,40 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                   </p>
                 </div>
 
-                <ImageUploadDropzone
-                  previewUrl={gcashQrPreview}
-                  previewAlt="GCash QR code"
-                  onFileAccepted={(file) => {
-                    if (!isEditing) return;
-                    handleGcashQrAccepted(file);
-                  }}
-                  onRemove={() => {
-                    if (!isEditing) return;
-                    handleGcashQrRemove();
-                  }}
-                  accept={ACCEPTED_GCASH_QR_TYPES}
-                  maxSize={MAX_GCASH_QR_FILE_SIZE}
-                  disabled={!isEditing}
-                  isProcessing={isGcashQrProcessing}
-                  processingText="Preparing GCash QR image..."
-                  uploadError={gcashQrUploadError}
-                  onFileRejected={(message) => setGcashQrUploadError(message || null)}
-                  showRemoveButton={isEditing}
-                  idleTitle="Drop GCash QR image here"
-                  activeTitle="Release to set this QR image"
-                  helperText="JPEG, PNG, or WebP up to 5MB"
-                  successMessage={gcashQrImageBase64 ? "GCash QR update ready to save" : null}
-                  emptyHint="This QR image is shown to users during reservation payment."
-                />
+                <div
+                  className={cn(
+                    "rounded-xl",
+                    isEditing &&
+                      validationState.fieldErrors.gcashQr &&
+                      "ring-1 ring-red-500",
+                  )}
+                >
+                  <ImageUploadDropzone
+                    previewUrl={gcashQrPreview}
+                    previewAlt="GCash QR code"
+                    onFileAccepted={(file) => {
+                      if (!isEditing) return;
+                      handleGcashQrAccepted(file);
+                    }}
+                    onRemove={() => {
+                      if (!isEditing) return;
+                      handleGcashQrRemove();
+                    }}
+                    accept={ACCEPTED_GCASH_QR_TYPES}
+                    maxSize={MAX_GCASH_QR_FILE_SIZE}
+                    disabled={!isEditing}
+                    isProcessing={isGcashQrProcessing}
+                    processingText="Preparing GCash QR image..."
+                    uploadError={gcashQrUploadError}
+                    onFileRejected={(message) => setGcashQrUploadError(message || null)}
+                    showRemoveButton={isEditing}
+                    idleTitle="Drop GCash QR image here"
+                    activeTitle="Release to set this QR image"
+                    helperText="JPEG, PNG, or WebP up to 5MB"
+                    successMessage={gcashQrImageBase64 ? "GCash QR update ready to save" : null}
+                    emptyHint="This QR image is shown to users during reservation payment."
+                  />
+                </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
@@ -1266,7 +1266,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       onChange={(e) =>
                         setFormData({ ...formData, gcash_number: e.target.value })
                       }
-                      className="font-medium bg-muted/30"
+                      className={cn(
+                        "font-medium bg-muted/30",
+                        isEditing &&
+                          validationState.fieldErrors.gcashNumber &&
+                          "border-red-500 focus-visible:ring-red-500/30",
+                      )}
                       readOnly={!isEditing}
                     />
                   </div>
@@ -1283,7 +1288,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       onChange={(e) =>
                         setFormData({ ...formData, gcash_account_name: e.target.value })
                       }
-                      className="font-medium bg-muted/30"
+                      className={cn(
+                        "font-medium bg-muted/30",
+                        isEditing &&
+                          validationState.fieldErrors.gcashAccountName &&
+                          "border-red-500 focus-visible:ring-red-500/30",
+                      )}
                       readOnly={!isEditing}
                     />
                   </div>
@@ -1303,6 +1313,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           className={cn(
                             "w-full justify-start text-left font-medium bg-muted/30",
                             !showStartDate && "text-muted-foreground",
+                            isEditing &&
+                              validationState.fieldErrors.startDate &&
+                              "border-red-500",
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
@@ -1359,6 +1372,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           className={cn(
                             "w-full justify-start text-left font-medium bg-muted/30",
                             !showEndDate && "text-muted-foreground",
+                            isEditing &&
+                              validationState.fieldErrors.endDate &&
+                              "border-red-500",
                           )}
                         >
                           <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
@@ -1411,7 +1427,14 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
           </Card>
 
           {/* 3. Performance Schedule Section */}
-          <Card className="border-sidebar-border shadow-sm">
+          <Card
+            className={cn(
+              "border-sidebar-border shadow-sm",
+              isEditing &&
+                validationState.cardErrors.schedule &&
+                "border-red-500/70",
+            )}
+          >
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-lg md:text-xl font-semibold">
@@ -1858,6 +1881,11 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       placeholder="Select a seatmap"
                       value={seatmapQuery}
                       onChange={(event) => setSeatmapQuery(event.target.value)}
+                      className={cn(
+                        isEditing &&
+                          validationState.fieldErrors.seatmap &&
+                          "border-red-500 focus-visible:ring-red-500/30",
+                      )}
                     />
                     <ComboboxContent>
                       <ComboboxList>
@@ -1876,15 +1904,20 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     </ComboboxContent>
                   </Combobox>
                 ) : (
-                  <Input
+                    <Input
                     id="seatmap"
                     value={
                       seatmaps.find((s) => s.seatmap_id === formData.seatmap_id)
                         ?.seatmap_name || "Unassigned"
                     }
                     readOnly
-                    className="font-medium bg-muted/30"
-                  />
+                      className={cn(
+                        "font-medium bg-muted/30",
+                        isEditing &&
+                          validationState.fieldErrors.seatmap &&
+                          "border-red-500 focus-visible:ring-red-500/30",
+                      )}
+                    />
                 )}
               </div>
 
@@ -2010,6 +2043,21 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                   : undefined
                               }
                             />
+                            {isEditing && (
+                              <div className="mt-2 hidden md:flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                                <span>Use</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <img src="/shift.svg" alt="Shift key" className="h-4.5 w-4.5 object-contain" />
+                                  <span>Shift</span>
+                                </span>
+                                <span>or</span>
+                                <span className="inline-flex items-center gap-1">
+                                  <img src="/control.svg" alt="Control key" className="h-4.5 w-4.5 object-contain" />
+                                  <span>Ctrl</span>
+                                </span>
+                                <span>to multi-select.</span>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -2469,19 +2517,6 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
 
           {allowEdit && isEditing ? (
             <div className="grid gap-3">
-              {!isFormValid && !isSaving && (
-                <div className="flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-destructive animate-in fade-in slide-in-from-top-2">
-                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-bold uppercase tracking-wider">
-                      Required Details Missing
-                    </p>
-                    <p className="text-xs font-medium leading-relaxed">
-                      {missingFields.join(", ")}
-                    </p>
-                  </div>
-                </div>
-              )}
               <Button
                 onClick={handleSave}
                 disabled={isSaving || !isFormValid}

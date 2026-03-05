@@ -195,6 +195,20 @@ export function SeatmapPreview({
     marqueeStartRef.current = null;
   }, [nodes, dimensions]);
 
+  const hasUnassignedSeat = React.useMemo(() => {
+    const seats = Object.values(nodes).filter(
+      (node): node is SeatmapSeatNode => node.type === "seat",
+    );
+
+    if (seats.length === 0) return false;
+
+    return seats.some((seat) => {
+      const categoryId = seatCategories[seat.id];
+      if (!categoryId) return true;
+      return !categories.some((category) => category.category_id === categoryId);
+    });
+  }, [nodes, seatCategories, categories]);
+
   const handleWheel = (e: { evt: WheelEvent; target: { getStage: () => KonvaStage | null } }) => {
     e.evt.preventDefault();
     const stage = e.target.getStage();
@@ -351,52 +365,50 @@ export function SeatmapPreview({
     >
       <div className={cn(
         "absolute z-10 flex flex-col gap-2 bg-white dark:bg-zinc-900 shadow-lg border border-zinc-200 dark:border-zinc-800",
-        "left-4 top-4 p-2 rounded-lg",
-        "sm:left-4 sm:top-4 left-2 top-2 sm:p-2 p-1.5 sm:rounded-lg rounded-md",
-        "sm:gap-2 gap-1.5"
+        "left-2 top-2 p-1 rounded-md gap-1"
       )}>
         <Button
           variant={mode === "select" ? "default" : "ghost"}
           size="icon"
           onClick={() => setMode("select")}
           title="Select Mode"
-          className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+          className="h-7 w-7"
         >
-          <MousePointer2 className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+          <MousePointer2 className="h-3.5 w-3.5" />
         </Button>
         <Button
           variant={mode === "pan" ? "default" : "ghost"}
           size="icon"
           onClick={() => setMode("pan")}
           title="Pan Mode"
-          className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+          className="h-7 w-7"
         >
-          <Move className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+          <Move className="h-3.5 w-3.5" />
         </Button>
-        <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 sm:my-1 my-0.5" />
+        <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 my-0.5" />
         <Button
           variant={zoomLocked ? "default" : "ghost"}
           size="icon"
           onClick={() => setZoomLocked((prev) => !prev)}
           title={zoomLocked ? "Unlock Zoom" : "Lock Zoom"}
-          className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+          className="h-7 w-7"
         >
           {zoomLocked ? (
-            <Lock className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+            <Lock className="h-3.5 w-3.5" />
           ) : (
-            <Unlock className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+            <Unlock className="h-3.5 w-3.5" />
           )}
         </Button>
-        <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 sm:my-1 my-0.5" />
+        <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 my-0.5" />
         <Button
           type="button"
           size="icon"
           variant="ghost"
-          className="h-9 w-9 sm:h-9 sm:w-9 h-8 w-8"
+          className="h-7 w-7"
           onClick={() => setViewport(calculateFitViewport(nodes, dimensions))}
           title="Reset View"
         >
-          <LocateFixed className="h-4 w-4 sm:h-4 sm:w-4 h-3.5 w-3.5" />
+          <LocateFixed className="h-3.5 w-3.5" />
         </Button>
       </div>
       {showReservationOverlay && (
@@ -432,15 +444,13 @@ export function SeatmapPreview({
               })}
             </div>
           )}
-          <div className="grid grid-cols-1 gap-1 text-[9px]">
-            <div className="inline-flex items-center gap-1">
-              <img src="/seat-selected.svg" alt="Selected seat" className="h-3 w-3 object-contain" />
-              <span>Selected</span>
-            </div>
-            <div className="inline-flex items-center gap-1">
-              <img src="/seat-taken.svg" alt="Taken seat" className="h-3 w-3 object-contain" />
-              <span>Taken</span>
-            </div>
+        </div>
+      )}
+      {!showReservationOverlay && hasUnassignedSeat && (
+        <div className="pointer-events-none absolute bottom-2 left-2 z-10 text-[10px] text-zinc-700 dark:text-zinc-200">
+          <div className="inline-flex items-center gap-1">
+            <img src="/seat-error.svg" alt="Unassigned seat" className="h-3 w-3 object-contain" />
+            <span>Unassigned</span>
           </div>
         </div>
       )}
@@ -547,6 +557,7 @@ function SeatNodes({
   const [blueImage] = useImage("/vip-seat-3.svg");
   const [burgundyImage] = useImage("/vip-seat-4.svg");
   const [greenImage] = useImage("/vip-seat-5.svg");
+  const [errorImage] = useImage("/seat-error.svg");
   const [takenImage] = useImage("/seat-taken.svg");
   const [selectedImage] = useImage("/seat-selected.svg");
 
@@ -587,6 +598,7 @@ function SeatNodes({
           console.warn(`SeatNodes: Found assignment ${categoryId} for seat ${seat.id} but no matching category in list`, categories);
         }
 
+        const isCategoryUnassigned = !categoryId || !category;
         const colorCode = category?.color_code ?? "NO_COLOR";
         const textColor = isUnavailable
           ? "#000000"
@@ -598,6 +610,8 @@ function SeatNodes({
             ? selectedImage
             : isUnavailable
               ? takenImage
+              : isCategoryUnassigned
+                ? errorImage
               : colorCode === "GOLD"
             ? goldImage
             : colorCode === "PINK"

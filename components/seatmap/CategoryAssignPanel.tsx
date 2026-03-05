@@ -111,10 +111,10 @@ export function CategoryAssignPanel({
                     {!isReadOnly && (
                         <button
                             type="button"
-                            className="flex items-center gap-2 rounded-md border border-zinc-200 px-2 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50"
+                            className="flex items-center gap-2 rounded-md border border-red-200 px-2 py-1.5 text-[11px] font-medium text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/20"
                             onClick={() => onClear?.(selectedSeatIds)}
                         >
-                            <span className="h-2.5 w-2.5 rounded-full border border-zinc-300 bg-transparent" />
+                            <span className="h-2.5 w-2.5 rounded-full border border-red-300 bg-red-500/20 dark:border-red-700 dark:bg-red-500/30" />
                             <span>Clear</span>
                         </button>
                     )}
