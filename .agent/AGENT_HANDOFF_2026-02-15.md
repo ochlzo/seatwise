@@ -168,3 +168,109 @@ In `prisma/schema.prisma`, `Show` includes:
 ## Validation Status
 - Latest schema/API/UI changes were type-checked with:
 - `npx tsc --noEmit` (pass)
+
+## Recent Session Changes (Kanban -> Show Status Guard)
+
+### Admin Reservations Kanban
+- Stage header/color styling updated in:
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- Stage colors include:
+- `PENDING` = yellow (header text forced white)
+- `REJECTED` = red
+- Dark-mode divider/line visibility improved.
+- Added subtle stage tint on Kanban columns.
+- Added light/pale card tinting for grouped-show visual separation.
+- Drag/drop "stick/proximity" behavior adjusted to use dragged card position instead of mouse pointer position.
+
+### Reservation Verify/Reject Behavior
+- Confirmed/rejected flows continue to use reservation admin endpoints:
+- `POST /api/reservations/verify`
+- `POST /api/reservations/reject`
+- Team ownership checks enforced (superadmin bypass).
+
+### Reservation Expiration
+- No auto-expiration/timeout logic was added for long-pending reservations in this session.
+
+### Payment Method/Status Model Adjustments
+- `PaymentMethod` enum reduced to:
+- `GCASH`
+- `WALK_IN`
+- Removed other payment method enum values and aligned app usage.
+- Rejection flow behavior reviewed: reservation status transitions to rejected/cancelled path while payment handling remains server-route controlled.
+
+### Show Status Enum Adjustments
+- `ShowStatus.POSTPONED` removed from:
+- `prisma/schema.prisma`
+- Admin form options:
+- `app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm.tsx`
+- Dashboard filtering/listing updated to include `ON_GOING` in status lists/filters.
+
+### Show Detail: GCash Config + Editable QR
+- `ShowDetailForm.tsx` expanded to edit:
+- `gcash_qr_image_key`
+- `gcash_number`
+- `gcash_account_name`
+- QR replacement now overwrites existing Cloudinary asset (instead of always creating new one) via server action updates in:
+- `lib/actions/updateShow.ts`
+
+### Image Uploader UX
+- Delete affordance changed from "X" to trash icon.
+- Visibility behavior enforced:
+- Desktop: delete icon visible on hover
+- Mobile: delete icon always visible
+- In `ShowDetailForm.tsx`, delete icon hidden when `isEditing=false`; normal behavior when `isEditing=true`.
+
+### Validation UX (No Error Lists)
+- Shifted from aggregated error list to direct element highlighting (red borders).
+- Field-level highlighting prioritized; parent container highlighting removed except schedule-card cases.
+- Applied in:
+- `app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm.tsx`
+- `app/(admin-user)/(dashboard)/admin/shows/create/CreateShowForm.tsx`
+- Server-side validation payloads aligned in:
+- `lib/actions/createShow.ts`
+
+### Schedule Validation Improvements (Create Show)
+- In `CreateShowForm.tsx`:
+- Schedules card is flagged when:
+- date(s) in show range have no schedules
+- overlapping schedule times exist
+- Red warning text is rendered where the old "No schedules yet..." helper text appears.
+
+### Seatmap Preview/Assignment UX
+- Unassigned/error seat visualization:
+- Use `public/seat-error.svg` when seat is unassigned or has no category.
+- Added "Unassigned" legend behavior in seatmap preview:
+- Only in SeatmapPreview context (not reservation room overlay)
+- Only shown when at least one unassigned seat exists
+- Desktop-only visibility
+- Final position: bottom-right of canvas, no card container
+- Category assignment side panel overlay anchored to top-right of canvas.
+- Control bar size reduced.
+- "Clear" option in category selection panel styled red.
+
+### Seatmap Editing Guide
+- Added desktop-only helper under SeatmapPreview (no card container):
+- "Use Shift or Ctrl to multiselect"
+- Uses `public/shift.svg` and `public/control.svg`
+- Icon size increased slightly after initial addition.
+- Applied to both:
+- `ShowDetailForm.tsx`
+- `CreateShowForm.tsx`
+
+### Show Status Change Confirmation Modals
+- Added status-change confirmation modals (warning style, yellow icon) using:
+- `components/ui/dialog.tsx`
+- Implemented in:
+- `CreateShowForm.tsx`
+- `ShowDetailForm.tsx`
+- Triggered when selecting:
+- `UPCOMING`: pre-launch, visible but booking disabled
+- `OPEN`: launch and enable booking
+- Messaging updated for consistency and clarity.
+
+### Show Detail: Block Status Change If Reservations Exist
+- Added hard guard in `ShowDetailForm.tsx`:
+- If show already has reservation records, status change is blocked.
+- Shows error modal (`Dialog`) with red error icon and explanatory message.
+- Backend data support added in:
+- `lib/db/Shows.ts` (`getShowById` now includes `_count.reservations`).

@@ -88,6 +88,11 @@ export async function getShowById(showId: string) {
   return prisma.show.findUnique({
     where: { show_id: showId },
     include: {
+      _count: {
+        select: {
+          reservations: true,
+        },
+      },
       scheds: {
         include: {
           seatAssignments: {

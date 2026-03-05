@@ -15,6 +15,7 @@ import {
   Play,
   Armchair,
   AlertTriangle,
+  AlertCircle,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { differenceInCalendarMonths } from "date-fns";
@@ -258,6 +259,9 @@ type ShowDetail = {
       };
     }>;
   }>;
+  _count?: {
+    reservations: number;
+  };
 };
 
 interface ShowDetailFormProps {
@@ -288,6 +292,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const [isEditing, setIsEditing] = React.useState(false);
   const [isStatusConfirmOpen, setIsStatusConfirmOpen] = React.useState(false);
   const [pendingStatus, setPendingStatus] = React.useState<ShowStatus | null>(null);
+  const [isStatusBlockedOpen, setIsStatusBlockedOpen] = React.useState(false);
 
   // Schedule Editor State
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
@@ -892,8 +897,15 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     return "";
   }, [pendingStatus]);
 
+  const reservationCount = show._count?.reservations ?? 0;
+  const hasExistingReservations = reservationCount > 0;
+
   const handleStatusSelection = React.useCallback((nextStatus: ShowStatus) => {
     if (nextStatus === formData.show_status) return;
+    if (hasExistingReservations) {
+      setIsStatusBlockedOpen(true);
+      return;
+    }
 
     if (nextStatus === "UPCOMING" || nextStatus === "OPEN") {
       setPendingStatus(nextStatus);
@@ -905,7 +917,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       ...prev,
       show_status: nextStatus,
     }));
-  }, [formData.show_status]);
+  }, [formData.show_status, hasExistingReservations]);
 
   const handleConfirmStatusChange = React.useCallback(() => {
     if (!pendingStatus) return;
@@ -2765,6 +2777,23 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
               Cancel
             </Button>
             <Button onClick={handleConfirmStatusChange}>Confirm</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isStatusBlockedOpen} onOpenChange={setIsStatusBlockedOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+            </div>
+            <DialogTitle>Status change not allowed</DialogTitle>
+            <DialogDescription>
+              This show already has reservation records ({reservationCount}). Status changes are locked to protect existing customer bookings.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setIsStatusBlockedOpen(false)}>OK</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
