@@ -8,6 +8,7 @@ import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
 import { getCurrentAdminContext } from "@/lib/auth/adminContext";
 
 type CreateShowPayload = {
+  team_id?: string;
   show_name: string;
   show_description: string;
   venue: string;
@@ -93,13 +94,26 @@ const toTime = (timeValue: string | Date) => {
 export async function createShowAction(data: CreateShowPayload) {
   try {
     const adminContext = await getCurrentAdminContext();
-    if (!adminContext.teamId) {
-      if (adminContext.isSuperadmin) {
-        throw new Error("Superadmin must be assigned to a team before creating a show.");
+    const requestedTeamId = data.team_id?.trim();
+    let adminTeamId: string;
+
+    if (adminContext.isSuperadmin) {
+      if (!requestedTeamId) {
+        throw new Error("Please assign this show to a team before creating it.");
       }
+      const team = await prisma.team.findUnique({
+        where: { team_id: requestedTeamId },
+        select: { team_id: true },
+      });
+      if (!team) {
+        throw new Error("Selected team was not found.");
+      }
+      adminTeamId = requestedTeamId;
+    } else if (!adminContext.teamId) {
       throw new Error("Admin team is not assigned. Contact a superadmin.");
+    } else {
+      adminTeamId = adminContext.teamId;
     }
-    const adminTeamId = adminContext.teamId;
 
     const {
       show_name,

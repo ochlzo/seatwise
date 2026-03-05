@@ -9,6 +9,9 @@ export interface User {
   photoURL: string | null;
   role: "USER" | "ADMIN" | null;
   username: string | null;
+  isSuperadmin?: boolean;
+  teamId?: string | null;
+  teamName?: string | null;
   hasPassword?: boolean;
   isNewUser?: boolean;
 }

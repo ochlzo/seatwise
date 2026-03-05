@@ -110,7 +110,11 @@ const COLOR_OPTIONS: Array<{ value: CategoryDraft["color_code"]; label: string; 
   { value: "GREEN", label: "Green", swatch: "#046307" },
 ];
 
-export function CreateShowForm() {
+type CreateShowFormProps = {
+  teamId?: string | null;
+};
+
+export function CreateShowForm({ teamId }: CreateShowFormProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = React.useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
@@ -858,6 +862,7 @@ export function CreateShowForm() {
     // @ts-expect-error server action typing isn't compatible with direct client invocation
     const result = await createShowAction({
       ...formData,
+      team_id: teamId || undefined,
       seatmap_id: formData.seatmap_id,
       scheds: validScheds.map((sched) => ({
         client_id: sched.id,

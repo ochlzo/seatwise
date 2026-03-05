@@ -1,15 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  ShieldCheck,
-  Users,
-  MailPlus,
-  Loader2,
-  Plus,
-  Pencil,
-} from "lucide-react";
+import { ShieldCheck, Loader2, Plus, Search } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -17,28 +11,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-
-type TeamAdmin = {
-  user_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  username: string | null;
-  status: "ACTIVE" | "INACTIVE";
-  is_superadmin: boolean;
-  createdAt: string;
-};
-
-type Team = {
-  team_id: string;
-  name: string;
-  admins: TeamAdmin[];
-};
+import { TeamAccessDetail, type Team } from "./components/TeamAccessDetail";
 
 type AccessResponse = {
   success: boolean;
@@ -50,57 +27,76 @@ type AccessResponse = {
   teams: Team[];
 };
 
-const fullName = (admin: TeamAdmin) =>
-  `${admin.first_name ?? ""} ${admin.last_name ?? ""}`.trim() || admin.email;
+type TeamDetailResponse = {
+  success: boolean;
+  currentAdmin: {
+    teamId: string | null;
+    teamName: string | null;
+    isSuperadmin: boolean;
+  };
+  team: Team;
+};
 
-export function AdminAccessClient() {
+type AdminAccessClientProps = {
+  teamId?: string;
+};
+
+export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
+  const router = useRouter();
   const [isLoading, setIsLoading] = React.useState(true);
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [isSuperadmin, setIsSuperadmin] = React.useState(false);
   const [currentTeamId, setCurrentTeamId] = React.useState<string | null>(null);
   const [createName, setCreateName] = React.useState("");
   const [isCreating, setIsCreating] = React.useState(false);
-  const [renameDraft, setRenameDraft] = React.useState<Record<string, string>>(
-    {},
-  );
-  const [renamingTeamId, setRenamingTeamId] = React.useState<string | null>(
-    null,
-  );
-  const [inviteEmail, setInviteEmail] = React.useState<Record<string, string>>(
-    {},
-  );
-  const [invitingTeamId, setInvitingTeamId] = React.useState<string | null>(
-    null,
-  );
+  const [renameDraft, setRenameDraft] = React.useState<Record<string, string>>({});
+  const [renamingTeamId, setRenamingTeamId] = React.useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = React.useState<Record<string, string>>({});
+  const [invitingTeamId, setInvitingTeamId] = React.useState<string | null>(null);
+  const [teamSearchQuery, setTeamSearchQuery] = React.useState("");
+  const [adminSearchQuery, setAdminSearchQuery] = React.useState("");
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/admin/access/teams");
-      const data = (await res.json()) as AccessResponse | { error?: string };
+      const endpoint = teamId
+        ? `/api/admin/access/teams/${teamId}`
+        : "/api/admin/access/teams";
+      const res = await fetch(endpoint);
+      const data = (await res.json()) as
+        | AccessResponse
+        | TeamDetailResponse
+        | { error?: string };
+
       if (!res.ok || !("success" in data) || !data.success) {
         throw new Error(
-          ("error" in data && data.error) ||
-            "Failed to load admin access data.",
+          ("error" in data && data.error) || "Failed to load admin access data.",
         );
       }
 
-      setTeams(data.teams);
+      if ("team" in data) {
+        setTeams([data.team]);
+        setRenameDraft({ [data.team.team_id]: data.team.name });
+      } else {
+        setTeams(data.teams);
+        setRenameDraft(
+          Object.fromEntries(data.teams.map((team) => [team.team_id, team.name])),
+        );
+      }
+
       setIsSuperadmin(data.currentAdmin.isSuperadmin);
       setCurrentTeamId(data.currentAdmin.teamId);
-      setRenameDraft(
-        Object.fromEntries(data.teams.map((team) => [team.team_id, team.name])),
-      );
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to load admin access data.",
-      );
+      const message =
+        error instanceof Error ? error.message : "Failed to load admin access data.";
+      toast.error(message);
+      if (teamId) {
+        router.replace("/admin/access");
+      }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [router, teamId]);
 
   React.useEffect(() => {
     void loadData();
@@ -129,24 +125,22 @@ export function AdminAccessClient() {
       toast.success("Team created.");
       await loadData();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to create team.",
-      );
+      toast.error(error instanceof Error ? error.message : "Failed to create team.");
     } finally {
       setIsCreating(false);
     }
   };
 
-  const renameTeam = async (teamId: string) => {
-    const name = (renameDraft[teamId] ?? "").trim();
+  const renameTeam = async (targetTeamId: string) => {
+    const name = (renameDraft[targetTeamId] ?? "").trim();
     if (!name) {
       toast.error("Team name is required.");
       return;
     }
 
-    setRenamingTeamId(teamId);
+    setRenamingTeamId(targetTeamId);
     try {
-      const res = await fetch(`/api/admin/access/teams/${teamId}`, {
+      const res = await fetch(`/api/admin/access/teams/${targetTeamId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -159,43 +153,55 @@ export function AdminAccessClient() {
       toast.success("Team updated.");
       await loadData();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update team.",
-      );
+      toast.error(error instanceof Error ? error.message : "Failed to update team.");
     } finally {
       setRenamingTeamId(null);
     }
   };
 
-  const sendInvite = async (teamId: string) => {
-    const email = (inviteEmail[teamId] ?? "").trim();
+  const sendInvite = async (targetTeamId: string) => {
+    const email = (inviteEmail[targetTeamId] ?? "").trim();
     if (!email) {
       toast.error("Invite email is required.");
       return;
     }
 
-    setInvitingTeamId(teamId);
+    setInvitingTeamId(targetTeamId);
     try {
       const res = await fetch("/api/admin/access/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teamId, email }),
+        body: JSON.stringify({ teamId: targetTeamId, email }),
       });
       const data = (await res.json()) as { success?: boolean; error?: string };
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Failed to send invite.");
       }
 
-      setInviteEmail((prev) => ({ ...prev, [teamId]: "" }));
+      setInviteEmail((prev) => ({ ...prev, [targetTeamId]: "" }));
       toast.success("Invite email sent.");
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to send invite.",
-      );
+      toast.error(error instanceof Error ? error.message : "Failed to send invite.");
     } finally {
       setInvitingTeamId(null);
     }
   };
+
+  const selectedTeam = React.useMemo(() => {
+    if (teamId) {
+      return teams.find((team) => team.team_id === teamId) ?? null;
+    }
+    if (!isSuperadmin) {
+      return teams.find((team) => team.team_id === currentTeamId) ?? teams[0] ?? null;
+    }
+    return null;
+  }, [currentTeamId, isSuperadmin, teamId, teams]);
+
+  const filteredTeams = React.useMemo(() => {
+    const query = teamSearchQuery.trim().toLowerCase();
+    if (!query) return teams;
+    return teams.filter((team) => team.name.toLowerCase().includes(query));
+  }, [teamSearchQuery, teams]);
 
   if (isLoading) {
     return (
@@ -222,7 +228,7 @@ export function AdminAccessClient() {
       </div>
       <Separator className="md:hidden" />
 
-      {isSuperadmin && (
+      {isSuperadmin && !teamId && (
         <Card className="border-0 bg-transparent py-0 shadow-none md:border md:bg-card md:py-6 md:shadow-sm">
           <CardHeader className="px-0 md:px-6">
             <CardTitle className="text-base md:text-lg">Create Team</CardTitle>
@@ -257,182 +263,103 @@ export function AdminAccessClient() {
         </Card>
       )}
 
-      <div className="grid gap-2 md:gap-4">
-        {teams.map((team) => {
-          const canManageThisTeam =
-            isSuperadmin || team.team_id === currentTeamId;
-          const currentRenameValue = renameDraft[team.team_id] ?? team.name;
-          const currentInviteValue = inviteEmail[team.team_id] ?? "";
-
-          return (
-            <div key={team.team_id} className="space-y-2 md:space-y-3">
-              <Card className="border-0 bg-transparent py-0 shadow-none md:border md:bg-card md:py-6 md:shadow-sm">
-                <CardHeader className="px-0 md:px-6">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                        <Users className="h-4 w-4 md:h-5 md:w-5" />
-                        {team.name}
-                      </CardTitle>
-                      <CardDescription>
-                        {team.admins.length} admin member(s)
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                {canManageThisTeam && (
-                  <CardContent className="space-y-3 px-0 md:space-y-4 md:px-6">
-                    <div className="space-y-2">
-                      <Label htmlFor={`rename-${team.team_id}`}>
-                        Team name
-                      </Label>
-                      <div className="flex items-end gap-2">
-                        <Input
-                          id={`rename-${team.team_id}`}
-                          value={currentRenameValue}
-                          onChange={(event) =>
-                            setRenameDraft((prev) => ({
-                              ...prev,
-                              [team.team_id]: event.target.value,
-                            }))
-                          }
-                          className="h-8 text-sm md:h-9 md:text-base"
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={() => renameTeam(team.team_id)}
-                          disabled={renamingTeamId === team.team_id}
-                          className="h-8 w-28 gap-2 justify-center px-2 text-xs md:h-9 md:w-36 md:text-sm"
-                        >
-                          {renamingTeamId === team.team_id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Pencil className="h-4 w-4" />
-                          )}
-                          Rename Team
-                        </Button>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="space-y-2">
-                      <Label htmlFor={`invite-${team.team_id}`}>
-                        Invite admin by email
-                      </Label>
-                      <div className="flex items-end gap-2">
-                        <Input
-                          id={`invite-${team.team_id}`}
-                          type="email"
-                          placeholder="admin@email.com"
-                          value={currentInviteValue}
-                          onChange={(event) =>
-                            setInviteEmail((prev) => ({
-                              ...prev,
-                              [team.team_id]: event.target.value,
-                            }))
-                          }
-                          className="h-8 text-sm md:h-9 md:text-base"
-                        />
-                        <Button
-                          onClick={() => sendInvite(team.team_id)}
-                          disabled={invitingTeamId === team.team_id}
-                          className="h-8 w-28 gap-2 justify-center px-2 text-xs md:h-9 md:w-36 md:text-sm"
-                        >
-                          {invitingTeamId === team.team_id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <MailPlus className="h-4 w-4" />
-                          )}
-                          Send Invite
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-
-              <Card className="mt-4 gap-4 py-1 shadow-sm md:mt-2 md:py-4">
-                <CardHeader className="gap-0 px-3 pb-0 pt-2 md:px-6 md:pb-0">
-                  <CardTitle className="text-sm">Team admins</CardTitle>
-                </CardHeader>
-                <CardContent className="px-3 pb-2 pt-0 md:px-6 md:pt-0">
-                  {team.admins.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No admins in this team yet.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="space-y-1 md:hidden">
-                        {team.admins.map((admin) => (
-                          <div
-                            key={admin.user_id}
-                            className="relative flex flex-col gap-1 rounded-lg border border-sidebar-border/60 p-2 pr-24 sm:flex-row sm:items-center sm:justify-between sm:pr-3"
-                          >
-                            <div>
-                              <p className="text-xs font-semibold">{fullName(admin)}</p>
-                              <p className="text-[11px] text-muted-foreground">{admin.email}</p>
-                              {admin.username && (
-                                <p className="text-[11px] text-muted-foreground">
-                                  @{admin.username}
-                                </p>
-                              )}
-                            </div>
-                            <div className="absolute right-2 top-2 flex flex-col items-end gap-1 sm:static sm:flex-row sm:items-center sm:gap-2">
-                              <Badge
-                                variant={admin.status === "ACTIVE" ? "default" : "outline"}
-                              >
-                                {admin.status}
-                              </Badge>
-                              {admin.is_superadmin && (
-                                <Badge variant="outline">Superadmin</Badge>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="hidden overflow-x-auto md:block">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground">
-                              <th className="py-2 pr-4 font-medium">Name</th>
-                              <th className="py-2 pr-4 font-medium">Username</th>
-                              <th className="py-2 pr-4 font-medium">Email</th>
-                              <th className="py-2 pr-0 font-medium">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {team.admins.map((admin) => (
-                              <tr
-                                key={admin.user_id}
-                                className="border-b border-sidebar-border/40 last:border-0"
-                              >
-                                <td className="py-2 pr-4 font-medium">{fullName(admin)}</td>
-                                <td className="py-2 pr-4 text-muted-foreground">
-                                  {admin.username ? `@${admin.username}` : "—"}
-                                </td>
-                                <td className="py-2 pr-4 text-muted-foreground">
-                                  {admin.email}
-                                </td>
-                                <td className="py-2 pr-0">
-                                  <Badge
-                                    variant={admin.status === "ACTIVE" ? "default" : "outline"}
-                                  >
-                                    {admin.status}
-                                  </Badge>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+      {isSuperadmin && !teamId ? (
+        <Card className="border-0 bg-transparent py-0 shadow-none md:border md:bg-card md:py-3 md:shadow-sm">
+          <CardHeader className="px-0 pb-3 md:px-6">
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-base md:text-lg">Teams</CardTitle>
+              <div className="relative w-full max-w-xs">
+                <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={teamSearchQuery}
+                  onChange={(event) => setTeamSearchQuery(event.target.value)}
+                  placeholder="Search team..."
+                  className="h-8 pl-8 text-xs md:text-sm"
+                />
+              </div>
             </div>
-          );
-        })}
-      </div>
+          </CardHeader>
+          <CardContent className="px-0 md:px-6">
+            {filteredTeams.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No teams match your search.</p>
+            ) : (
+              <>
+                <div className="space-y-2 md:hidden">
+                  {filteredTeams.map((team) => (
+                    <button
+                      key={team.team_id}
+                      type="button"
+                      onClick={() => router.push(`/admin/access/${team.team_id}`)}
+                      className="w-full rounded-lg border border-sidebar-border/60 p-3 text-left transition hover:bg-muted/40"
+                    >
+                      <p className="text-sm font-semibold">{team.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {team.admins.length} admin member(s)
+                      </p>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground">
+                        <th className="py-2 pr-4 font-medium">Team</th>
+                        <th className="py-2 pr-4 font-medium">Admins</th>
+                        <th className="py-2 pr-0 font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTeams.map((team) => (
+                        <tr
+                          key={team.team_id}
+                          className="cursor-pointer border-b border-sidebar-border/40 last:border-0 hover:bg-muted/30"
+                          onClick={() => router.push(`/admin/access/${team.team_id}`)}
+                        >
+                          <td className="py-2 pr-4 font-medium">{team.name}</td>
+                          <td className="py-2 pr-4 text-muted-foreground">{team.admins.length}</td>
+                          <td className="py-2 pr-0 text-xs text-primary">View team</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : selectedTeam ? (
+        <TeamAccessDetail
+          team={selectedTeam}
+          canManage={isSuperadmin || selectedTeam.team_id === currentTeamId}
+          renameValue={renameDraft[selectedTeam.team_id] ?? selectedTeam.name}
+          inviteValue={inviteEmail[selectedTeam.team_id] ?? ""}
+          adminSearchQuery={adminSearchQuery}
+          renamingTeamId={renamingTeamId}
+          invitingTeamId={invitingTeamId}
+          onRenameChange={(value) =>
+            setRenameDraft((prev) => ({
+              ...prev,
+              [selectedTeam.team_id]: value,
+            }))
+          }
+          onInviteChange={(value) =>
+            setInviteEmail((prev) => ({
+              ...prev,
+              [selectedTeam.team_id]: value,
+            }))
+          }
+          onAdminSearchChange={setAdminSearchQuery}
+          onRename={() => renameTeam(selectedTeam.team_id)}
+          onInvite={() => sendInvite(selectedTeam.team_id)}
+        />
+      ) : (
+        <Card>
+          <CardContent className="py-8">
+            <p className="text-sm text-muted-foreground">No team data available.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

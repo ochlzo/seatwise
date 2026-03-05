@@ -3,7 +3,14 @@ import AdminShield from "@/components/AdminShield";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { CreateShowForm } from "./CreateShowForm";
 
-export default function CreateShowPage() {
+export default async function CreateShowPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ teamId?: string }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const teamId = resolvedSearchParams?.teamId ?? null;
+
   return (
     <>
       <PageHeader
@@ -22,7 +29,7 @@ export default function CreateShowPage() {
             Add a new show and set its schedule.
           </p>
         </div>
-        <CreateShowForm />
+        <CreateShowForm teamId={teamId} />
       </div>
     </>
   );

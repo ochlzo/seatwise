@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { ShowFilters } from "./ShowFilters";
 import AdminShield from "@/components/AdminShield";
@@ -18,9 +19,26 @@ import { Calendar, MapPin, Ticket, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
-import { useAppDispatch } from "@/lib/hooks";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
+import type { RootState } from "@/lib/store";
 
 const STATUS_COLORS: Record<string, string> = {
   UPCOMING: "#3B82F6",
@@ -60,6 +78,11 @@ type Show = {
   }>;
 };
 
+type TeamOption = {
+  team_id: string;
+  name: string;
+};
+
 type ShowsClientProps = {
   mode?: "admin" | "user";
   basePath?: string;
@@ -88,10 +111,17 @@ export default function ShowsPage({
   statusFilterValues,
 }: ShowsClientProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const dispatch = useAppDispatch();
+  const user = useAppSelector((state: RootState) => state.auth.user);
   const [shows, setShows] = React.useState<Show[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [isAssignTeamDialogOpen, setIsAssignTeamDialogOpen] = React.useState(false);
+  const [isLoadingTeams, setIsLoadingTeams] = React.useState(false);
+  const [teamSearchQuery, setTeamSearchQuery] = React.useState("");
+  const [selectedTeamId, setSelectedTeamId] = React.useState("");
+  const [teams, setTeams] = React.useState<TeamOption[]>([]);
 
   React.useEffect(() => {
     const fetchShows = async () => {
@@ -151,12 +181,64 @@ export default function ShowsPage({
     searchQuery.trim();
 
   const isAdmin = mode === "admin";
+  const isSuperadmin = Boolean(isAdmin && user?.isSuperadmin);
   const createPath = `${basePath}/create`;
   const detailPathBase = detailBasePath ?? basePath;
 
   const handleShowClick = React.useCallback(() => {
     dispatch(setLoading(true));
   }, [dispatch]);
+
+  const loadTeams = React.useCallback(async () => {
+    setIsLoadingTeams(true);
+    try {
+      const response = await fetch("/api/admin/access/teams");
+      const data = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+        teams?: TeamOption[];
+      };
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to load teams.");
+      }
+
+      setTeams((data.teams ?? []).map((team) => ({
+        team_id: team.team_id,
+        name: team.name,
+      })));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load teams.");
+    } finally {
+      setIsLoadingTeams(false);
+    }
+  }, []);
+
+  const handleCreateShowClick = React.useCallback(async () => {
+    if (!isSuperadmin) {
+      router.push(createPath);
+      return;
+    }
+
+    if (teams.length === 0) {
+      await loadTeams();
+    }
+    setSelectedTeamId("");
+    setTeamSearchQuery("");
+    setIsAssignTeamDialogOpen(true);
+  }, [createPath, isSuperadmin, loadTeams, router, teams.length]);
+
+  const handleConfirmTeamAssignment = React.useCallback(() => {
+    if (!selectedTeamId) return;
+    router.push(`${createPath}?teamId=${selectedTeamId}`);
+    setIsAssignTeamDialogOpen(false);
+  }, [createPath, router, selectedTeamId]);
+
+  const filteredTeams = React.useMemo(() => {
+    const query = teamSearchQuery.trim().toLowerCase();
+    if (!query) return teams;
+    return teams.filter((team) => team.name.toLowerCase().includes(query));
+  }, [teamSearchQuery, teams]);
 
   return (
     <>
@@ -198,13 +280,11 @@ export default function ShowsPage({
             </div>
             {isAdmin && (
               <Button
-                asChild
                 className="w-full md:w-auto font-semibold shadow-md shadow-primary/10"
+                onClick={handleCreateShowClick}
               >
-                <Link href={createPath}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Show
-                </Link>
+                <Plus className="mr-2 h-4 w-4" />
+                New Show
               </Button>
             )}
             {showFilters && (
@@ -443,6 +523,62 @@ export default function ShowsPage({
           </div>
         )}
       </div>
+
+      <Dialog open={isAssignTeamDialogOpen} onOpenChange={setIsAssignTeamDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign show to a team</DialogTitle>
+            <DialogDescription>
+              Superadmins must assign a team before creating a show.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Combobox
+              value={selectedTeamId}
+              onValueChange={(value) => {
+                const nextValue = value ?? "";
+                setSelectedTeamId(nextValue);
+                const selected = teams.find((team) => team.team_id === nextValue);
+                setTeamSearchQuery(selected?.name ?? "");
+              }}
+            >
+              <ComboboxInput
+                aria-label="Search team"
+                placeholder="Search or select a team"
+                value={teamSearchQuery}
+                onChange={(event) => {
+                  setTeamSearchQuery(event.target.value);
+                  setSelectedTeamId("");
+                }}
+              />
+              <ComboboxContent>
+                <ComboboxList>
+                  {isLoadingTeams ? (
+                    <ComboboxItem value="loading" disabled>
+                      Loading teams...
+                    </ComboboxItem>
+                  ) : (
+                    filteredTeams.map((team) => (
+                      <ComboboxItem key={team.team_id} value={team.team_id}>
+                        {team.name}
+                      </ComboboxItem>
+                    ))
+                  )}
+                  {!isLoadingTeams && <ComboboxEmpty>No teams found.</ComboboxEmpty>}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAssignTeamDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmTeamAssignment} disabled={!selectedTeamId}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
