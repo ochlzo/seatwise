@@ -18,6 +18,13 @@ export async function POST(req: NextRequest) {
 
     let admin = await prisma.admin.findUnique({
       where: { firebase_uid: uid },
+      include: {
+        team: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
 
     if (!admin) {
@@ -37,6 +44,13 @@ export async function POST(req: NextRequest) {
         admin = await prisma.admin.update({
           where: { user_id: admin.user_id },
           data: { avatar_key: randomAvatar },
+          include: {
+            team: {
+              select: {
+                name: true,
+              },
+            },
+          },
         });
       }
     }
@@ -65,6 +79,9 @@ export async function POST(req: NextRequest) {
         username: admin.username,
         photoURL: resolveAvatarUrl(admin.avatar_key, admin.username, admin.email),
         role: "ADMIN",
+        isSuperadmin: admin.is_superadmin,
+        teamId: admin.team_id,
+        teamName: admin.team?.name ?? null,
         hasPassword,
         isNewUser: false,
       },

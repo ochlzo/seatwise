@@ -1,30 +1,27 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { adminAuth } from "@/lib/firebaseAdmin";
+import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 
 // GET /api/reservations — Admin-only: fetch all reservations grouped by show
 export async function GET() {
     try {
-        const cookieStore = await cookies();
-        const sessionCookie = cookieStore.get("session")?.value;
-
-        if (!sessionCookie) {
+        let adminContext;
+        try {
+            adminContext = await getCurrentAdminContext();
+        } catch (error) {
+            if (error instanceof AdminContextError) {
+                return NextResponse.json({ error: error.message }, { status: error.status });
+            }
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-        const admin = await prisma.admin.findUnique({
-            where: { firebase_uid: decoded.uid },
-            select: { user_id: true },
-        });
-
-        if (!admin) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-        }
+        const where = adminContext.isSuperadmin
+            ? undefined
+            : { show: { team_id: adminContext.teamId ?? "__NO_TEAM__" } };
 
         // Fetch all reservations with related data
         const reservations = await prisma.reservation.findMany({
+            where,
             orderBy: { createdAt: "desc" },
             include: {
                 show: {
@@ -33,6 +30,7 @@ export async function GET() {
                         show_name: true,
                         venue: true,
                         show_image_key: true,
+                        team_id: true,
                     },
                 },
                 payment: {

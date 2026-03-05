@@ -1,27 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { adminAuth } from "@/lib/firebaseAdmin";
+import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 
 // POST /api/reservations/verify — Admin-only: verify a reservation + payment
 export async function POST(request: NextRequest) {
     try {
-        const cookieStore = await cookies();
-        const sessionCookie = cookieStore.get("session")?.value;
-
-        if (!sessionCookie) {
+        let adminContext;
+        try {
+            adminContext = await getCurrentAdminContext();
+        } catch (error) {
+            if (error instanceof AdminContextError) {
+                return NextResponse.json({ error: error.message }, { status: error.status });
+            }
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
-        // Verify admin role
-        const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-        const admin = await prisma.admin.findUnique({
-            where: { firebase_uid: decoded.uid },
-            select: { user_id: true },
-        });
-
-        if (!admin) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
         const body = await request.json();
@@ -37,7 +28,10 @@ export async function POST(request: NextRequest) {
         // Look up the reservation and its payment
         const reservation = await prisma.reservation.findUnique({
             where: { reservation_id: reservationId },
-            include: { payment: true },
+            include: {
+                payment: true,
+                show: { select: { team_id: true } },
+            },
         });
 
         if (!reservation) {
@@ -45,6 +39,13 @@ export async function POST(request: NextRequest) {
                 { error: "Reservation not found" },
                 { status: 404 },
             );
+        }
+
+        if (
+            !adminContext.isSuperadmin &&
+            reservation.show.team_id !== adminContext.teamId
+        ) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
         if (reservation.status === "CONFIRMED") {

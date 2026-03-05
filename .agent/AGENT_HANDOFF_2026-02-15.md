@@ -14,6 +14,8 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Queue page: `app/(app-user)/(events)/queue/[showId]/[schedId]/page.tsx`
 - Reserve page: `app/(app-user)/(events)/reserve/[showId]/[schedId]/page.tsx`
 - Admin show creation: `app/(admin-user)/(dashboard)/admin/shows/create/CreateShowForm.tsx`
+- Admin reservations: `app/(admin-user)/(dashboard)/admin/reservations/page.tsx`
+- Admin access: `app/(admin-user)/(dashboard)/admin/access/page.tsx`
 - Seat builder: `app/(admin-user)/seat-builder/page.tsx`
 
 ## Auth and Routing (Current)
@@ -28,6 +30,79 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - `/admin/profile`
 - `/admin/account`
 - User dropdown navigation points to these admin routes.
+
+## Team Tenancy + Superadmin (New)
+- Added team-scoped admin tenancy in Prisma:
+- `Team` model (`team_id`, `name`, timestamps)
+- `Admin.team_id String?`
+- `Admin.is_superadmin Boolean @default(false)`
+- `Show.team_id String` (required)
+- Reservation scope is derived through `Reservation -> Show.team_id` (no direct reservation team field).
+- New shared auth helper:
+- `lib/auth/adminContext.ts`
+- `getCurrentAdminContext()` returns `{ userId, firebaseUid, teamId, teamName, isSuperadmin }`
+- Throws typed `401/403` errors via `AdminContextError`.
+
+## Migrations Added (Team Tenancy)
+- `prisma/migrations/20260305110000_add_team_tenancy/migration.sql`
+- Creates `Team`, adds `Admin.team_id`, `Admin.is_superadmin`, `Show.team_id`
+- Seeds `default-team`
+- Backfills existing `Admin` and `Show` rows to `default-team`
+- Adds FKs/indexes.
+- `prisma/migrations/20260305111000_enforce_show_team_required/migration.sql`
+- Enforces `Show.team_id NOT NULL`.
+
+## Show + Reservation Team Scoping (New)
+- Show creation now writes team:
+- `lib/actions/createShow.ts`
+- Uses `getCurrentAdminContext()` and sets `show.team_id` from admin team.
+- Non-superadmin with no team is blocked.
+- Admin show listing now scoped by team unless superadmin:
+- `lib/db/Shows.ts`
+- `app/api/shows/search/route.ts`
+- Admin reservations list now scoped by team unless superadmin:
+- `app/api/reservations/route.ts`
+- Admin reservation mutations (`verify`, `reject`) now enforce team ownership:
+- `app/api/reservations/verify/route.ts`
+- `app/api/reservations/reject/route.ts`
+- Cross-team action returns `403` unless superadmin.
+
+## Auth Payload Enrichment (New)
+- `GET /api/auth/me` and `POST /api/auth/login` now include:
+- `isSuperadmin`
+- `teamId`
+- `teamName`
+- Related user mapping updated in:
+- `lib/db/Users.ts`
+
+## Admin Access Feature (New)
+- New page and client:
+- `app/(admin-user)/(dashboard)/admin/access/page.tsx`
+- `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx`
+- New APIs:
+- `GET/POST /api/admin/access/teams`
+- `PATCH /api/admin/access/teams/[teamId]`
+- `POST /api/admin/access/invite`
+- Permissions:
+- Superadmin can create teams, rename/manage any team, invite for any team, view all teams/admins.
+- Regular admin can rename/manage own team, invite only to own team, view only own team.
+
+## Admin Invite Behavior (Current)
+- Invite endpoint currently sends email only via Gmail API.
+- Email sender helper:
+- `lib/email/sendAdminInviteEmail.ts`
+- It does **not** currently:
+- create an `Admin` record,
+- persist invite token/state/expiry,
+- provide acceptance/join-link flow,
+- auto-assign invited account to team from an invite record.
+
+## Admin Access UI Notes (Current)
+- Mobile and desktop are intentionally different in `AdminAccessClient.tsx`:
+- Mobile keeps compact stacked cards and tighter spacing.
+- Desktop (`md+`) uses a table for Team Admins with columns:
+- `Name`, `Username`, `Email`, `Status`.
+- Team Admin status badges are positioned top-right on mobile row cards.
 
 ## Queue/Reservation Flow (Current)
 - Queue endpoints:
@@ -57,9 +132,6 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - `GCash Number: ...`
 - `Account Name: ...`
 - Each line includes copy-to-clipboard action with toast feedback.
-- Mobile/desktop spacing was recently tuned in:
-- `ReserveSeatClient.tsx`
-- `GcashUploadPanel.tsx`
 
 ## Show Model: GCash Fields
 In `prisma/schema.prisma`, `Show` includes:
@@ -94,5 +166,5 @@ In `prisma/schema.prisma`, `Show` includes:
 - `npx prisma migrate dev`
 
 ## Validation Status
-- Latest UI/action changes were type-checked with:
+- Latest schema/API/UI changes were type-checked with:
 - `npx tsc --noEmit` (pass)

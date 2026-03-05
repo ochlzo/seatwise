@@ -1,26 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { adminAuth } from "@/lib/firebaseAdmin";
+import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 
 // POST /api/reservations/reject - Admin-only: reject a reservation and release seats
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
+    let adminContext;
+    try {
+      adminContext = await getCurrentAdminContext();
+    } catch (error) {
+      if (error instanceof AdminContextError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const decoded = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const admin = await prisma.admin.findUnique({
-      where: { firebase_uid: decoded.uid },
-      select: { user_id: true },
-    });
-
-    if (!admin) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -33,6 +25,7 @@ export async function POST(request: NextRequest) {
     const reservation = await prisma.reservation.findUnique({
       where: { reservation_id: reservationId },
       include: {
+        show: { select: { team_id: true } },
         payment: true,
         reservedSeats: {
           select: { seat_assignment_id: true },
@@ -42,6 +35,10 @@ export async function POST(request: NextRequest) {
 
     if (!reservation) {
       return NextResponse.json({ error: "Reservation not found" }, { status: 404 });
+    }
+
+    if (!adminContext.isSuperadmin && reservation.show.team_id !== adminContext.teamId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     if (reservation.status === "CANCELLED") {
@@ -89,4 +86,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

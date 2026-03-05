@@ -1,0 +1,2 @@
+ALTER TABLE "Show"
+ALTER COLUMN "team_id" SET NOT NULL;

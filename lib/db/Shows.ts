@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma, ShowStatus } from "@prisma/client";
 
+type AdminScope = {
+  teamId: string | null;
+  isSuperadmin: boolean;
+};
+
 export async function getShows(params?: {
   status?: string;
   statusGroup?: "active";
@@ -8,6 +13,7 @@ export async function getShows(params?: {
   sort?: string;
   seatmapId?: string;
   query?: string;
+  adminScope?: AdminScope;
 }) {
   const where: Prisma.ShowWhereInput = {};
   if (params?.status && params.status !== "ALL") {
@@ -27,6 +33,18 @@ export async function getShows(params?: {
       }
     } else {
       where.show_status = { notIn: hiddenStatuses };
+    }
+  }
+  if (params?.visibility !== "user") {
+    const adminScope = params?.adminScope;
+    if (!adminScope) {
+      throw new Error("Missing admin scope for admin show query.");
+    }
+    if (!adminScope.isSuperadmin) {
+      if (!adminScope.teamId) {
+        return [];
+      }
+      where.team_id = adminScope.teamId;
     }
   }
   if (params?.seatmapId) {

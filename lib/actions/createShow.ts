@@ -1,11 +1,11 @@
 "use server";
 
 import "server-only";
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { ColorCodes, ShowStatus } from "@prisma/client";
 import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
+import { getCurrentAdminContext } from "@/lib/auth/adminContext";
 
 type CreateShowPayload = {
   show_name: string;
@@ -92,25 +92,14 @@ const toTime = (timeValue: string | Date) => {
 
 export async function createShowAction(data: CreateShowPayload) {
   try {
-    const { adminAuth } = await import("@/lib/firebaseAdmin");
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get("session")?.value;
-
-    if (!sessionCookie) {
-      throw new Error("Unauthorized");
+    const adminContext = await getCurrentAdminContext();
+    if (!adminContext.teamId) {
+      if (adminContext.isSuperadmin) {
+        throw new Error("Superadmin must be assigned to a team before creating a show.");
+      }
+      throw new Error("Admin team is not assigned. Contact a superadmin.");
     }
-
-    const decodedToken = await adminAuth.verifySessionCookie(
-      sessionCookie,
-      true,
-    );
-    const user = await prisma.admin.findUnique({
-      where: { firebase_uid: decodedToken.uid },
-    });
-
-    if (!user) {
-      throw new Error("Forbidden");
-    }
+    const adminTeamId = adminContext.teamId;
 
     const {
       show_name,
@@ -276,6 +265,7 @@ export async function createShowAction(data: CreateShowPayload) {
             gcash_qr_image_key: finalGcashQrImageUrl?.trim() || undefined,
             gcash_number: gcash_number?.trim() || undefined,
             gcash_account_name: gcash_account_name?.trim() || undefined,
+            team_id: adminTeamId,
             seatmap_id: seatmap_id || undefined, // Allow undefined for DRAFT shows
           },
         });

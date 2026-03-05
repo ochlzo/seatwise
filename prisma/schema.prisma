@@ -17,9 +17,14 @@ model Admin {
   first_name   String
   last_name    String
   status       AdminStatus
+  team_id      String?
+  is_superadmin Boolean      @default(false)
   avatar_key   String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
+  team         Team?         @relation(fields: [team_id], references: [team_id])
+
+  @@index([team_id])
 }
 
 model Show {
@@ -35,6 +40,7 @@ model Show {
   gcash_qr_image_key String?
   gcash_number     String?
   gcash_account_name String?
+  team_id          String
   seatmap_id       String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
@@ -42,6 +48,18 @@ model Show {
   reservations     Reservation[]
   scheds           Sched[]
   seatmap          Seatmap?      @relation(fields: [seatmap_id], references: [seatmap_id])
+  team             Team          @relation(fields: [team_id], references: [team_id])
+
+  @@index([team_id])
+}
+
+model Team {
+  team_id    String   @id
+  name       String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  admins     Admin[]
+  shows      Show[]
 }
 
 model Sched {

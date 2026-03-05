@@ -35,6 +35,9 @@ export async function GET() {
         username: user.username as string | null,
         photoURL: resolveAvatarUrl(user.avatarKey, user.username, user.email),
         role: "ADMIN",
+        isSuperadmin: user.isSuperadmin,
+        teamId: user.teamId,
+        teamName: user.teamName,
       },
     });
   } catch {

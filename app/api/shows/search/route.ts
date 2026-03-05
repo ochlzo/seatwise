@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getShows } from "@/lib/db/Shows";
-import { cookies } from "next/headers";
-import { adminAuth } from "@/lib/firebaseAdmin";
+import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,21 +14,25 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get("sort") || undefined;
     const seatmapId = searchParams.get("seatmapId") || undefined;
 
-    // Only admin-visibility queries require an authenticated admin session.
+    let adminScope:
+      | {
+          teamId: string | null;
+          isSuperadmin: boolean;
+        }
+      | undefined;
+
+    // Only admin-visibility queries require an authenticated admin session + scope.
     if (visibility !== "user") {
-      const cookieStore = await cookies();
-      const sessionCookie = cookieStore.get("session")?.value;
-
-      if (!sessionCookie) {
-        return NextResponse.json(
-          { error: "Unauthorized - No session found" },
-          { status: 401 }
-        );
-      }
-
       try {
-        await adminAuth.verifySessionCookie(sessionCookie, true);
-      } catch {
+        const context = await getCurrentAdminContext();
+        adminScope = {
+          teamId: context.teamId,
+          isSuperadmin: context.isSuperadmin,
+        };
+      } catch (error) {
+        if (error instanceof AdminContextError) {
+          return NextResponse.json({ error: error.message }, { status: error.status });
+        }
         return NextResponse.json(
           { error: "Unauthorized - Invalid session" },
           { status: 401 }
@@ -44,6 +47,7 @@ export async function GET(request: NextRequest) {
       visibility,
       sort,
       seatmapId,
+      adminScope,
     });
 
     return NextResponse.json({ shows });

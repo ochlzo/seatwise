@@ -9,6 +9,9 @@ export type DbUser = {
   username: string | null;
   status: string | null;
   avatarKey: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  isSuperadmin: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -53,6 +56,13 @@ const userSelect = {
   username: true,
   status: true,
   avatar_key: true,
+  team_id: true,
+  is_superadmin: true,
+  team: {
+    select: {
+      name: true,
+    },
+  },
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -74,6 +84,9 @@ function toDbUser(user: UserRecord): DbUser {
     username: user.username ?? null,
     status: user.status ?? null,
     avatarKey: user.avatar_key ?? null,
+    teamId: user.team_id ?? null,
+    teamName: user.team?.name ?? null,
+    isSuperadmin: user.is_superadmin,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
