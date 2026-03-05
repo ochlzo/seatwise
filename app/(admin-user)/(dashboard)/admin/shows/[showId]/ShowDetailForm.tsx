@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Play,
   Armchair,
+  AlertTriangle,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { differenceInCalendarMonths } from "date-fns";
@@ -285,6 +286,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const router = useRouter();
   const [isSaving, setIsSaving] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
+  const [isStatusConfirmOpen, setIsStatusConfirmOpen] = React.useState(false);
+  const [pendingStatus, setPendingStatus] = React.useState<ShowStatus | null>(null);
 
   // Schedule Editor State
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
@@ -879,6 +882,41 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     incompleteCategorySets.length,
   ]);
 
+  const statusConfirmMessage = React.useMemo(() => {
+    if (pendingStatus === "UPCOMING") {
+      return "Setting this show to UPCOMING will pre-launch it. Customers can view show details, but booking reservations will stay disabled until the status is set to OPEN.";
+    }
+    if (pendingStatus === "OPEN") {
+      return "Setting this show to OPEN will launch it and enable customers to book reservations.";
+    }
+    return "";
+  }, [pendingStatus]);
+
+  const handleStatusSelection = React.useCallback((nextStatus: ShowStatus) => {
+    if (nextStatus === formData.show_status) return;
+
+    if (nextStatus === "UPCOMING" || nextStatus === "OPEN") {
+      setPendingStatus(nextStatus);
+      setIsStatusConfirmOpen(true);
+      return;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      show_status: nextStatus,
+    }));
+  }, [formData.show_status]);
+
+  const handleConfirmStatusChange = React.useCallback(() => {
+    if (!pendingStatus) return;
+    setFormData((prev) => ({
+      ...prev,
+      show_status: pendingStatus,
+    }));
+    setIsStatusConfirmOpen(false);
+    setPendingStatus(null);
+  }, [pendingStatus]);
+
   const isFormValid = !validationState.hasValidationErrors;
 
   const handleAddSchedules = () => {
@@ -1103,12 +1141,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                   {isEditing ? (
                     <Select
                       value={formData.show_status}
-                      onValueChange={(value) =>
-                        setFormData({
-                          ...formData,
-                          show_status: value as ShowStatus,
-                        })
-                      }
+                      onValueChange={(value) => handleStatusSelection(value as ShowStatus)}
                     >
                       <SelectTrigger
                         id="status"
@@ -2006,7 +2039,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                               }
                             />
                             <CategoryAssignPanel
-                              className="absolute right-3 top-14 z-10"
+                              className="absolute right-3 top-3 z-10"
                               selectedSeatIds={selectedSeatIds}
                               categories={setCategories}
                               seatCategories={currentAssignments}
@@ -2711,6 +2744,30 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog
+        open={isStatusConfirmOpen}
+        onOpenChange={(open) => {
+          setIsStatusConfirmOpen(open);
+          if (!open) setPendingStatus(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+            </div>
+            <DialogTitle>Confirm status change</DialogTitle>
+            <DialogDescription>{statusConfirmMessage}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsStatusConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmStatusChange}>Confirm</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

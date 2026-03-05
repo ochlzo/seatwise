@@ -447,7 +447,7 @@ export function SeatmapPreview({
         </div>
       )}
       {!showReservationOverlay && hasUnassignedSeat && (
-        <div className="pointer-events-none absolute bottom-2 left-2 z-10 text-[10px] text-zinc-700 dark:text-zinc-200">
+        <div className="pointer-events-none absolute bottom-2 right-2 z-10 hidden md:block text-[10px] text-zinc-700 dark:text-zinc-200">
           <div className="inline-flex items-center gap-1">
             <img src="/seat-error.svg" alt="Unassigned seat" className="h-3 w-3 object-contain" />
             <span>Unassigned</span>

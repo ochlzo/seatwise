@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { differenceInCalendarMonths } from "date-fns";
-import { Plus, Trash2, Save, CalendarDays, CalendarIcon } from "lucide-react";
+import { Plus, Trash2, Save, CalendarDays, CalendarIcon, AlertTriangle } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -53,6 +53,7 @@ const STATUS_OPTIONS = [
   "UPCOMING",
   "OPEN",
 ];
+type ShowStatusOption = (typeof STATUS_OPTIONS)[number];
 
 const MAX_POSTER_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_POSTER_TYPES: Record<string, string[]> = {
@@ -113,6 +114,8 @@ export function CreateShowForm() {
   const router = useRouter();
   const [isSaving, setIsSaving] = React.useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
+  const [isStatusConfirmOpen, setIsStatusConfirmOpen] = React.useState(false);
+  const [pendingStatus, setPendingStatus] = React.useState<ShowStatusOption | null>(null);
   const [formData, setFormData] = React.useState({
     show_name: "",
     show_description: "",
@@ -377,6 +380,39 @@ export function CreateShowForm() {
     }
     return { hasSchedules: scheds.length > 0, missingDates };
   }, [scheds, showStartDate, showEndDate, toManilaDateKey]);
+  const overlappingScheduleDateKeys = React.useMemo(() => {
+    const byDate = new Map<string, Array<{ start: number; end: number }>>();
+
+    const toMinutes = (time: string) => {
+      const [h, m] = time.split(":").map((part) => Number.parseInt(part, 10));
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+      return h * 60 + m;
+    };
+
+    for (const sched of scheds) {
+      const start = toMinutes(sched.sched_start_time);
+      const end = toMinutes(sched.sched_end_time);
+      if (start === null || end === null) continue;
+      if (end <= start) continue;
+      const list = byDate.get(sched.sched_date) ?? [];
+      list.push({ start, end });
+      byDate.set(sched.sched_date, list);
+    }
+
+    const overlapping = new Set<string>();
+    byDate.forEach((ranges, dateKey) => {
+      const sorted = [...ranges].sort((a, b) => a.start - b.start);
+      for (let i = 1; i < sorted.length; i += 1) {
+        if (sorted[i].start < sorted[i - 1].end) {
+          overlapping.add(dateKey);
+          break;
+        }
+      }
+    });
+
+    return Array.from(overlapping).sort((a, b) => a.localeCompare(b));
+  }, [scheds]);
+  const hasOverlappingSchedules = overlappingScheduleDateKeys.length > 0;
   const getAvailableScheds = React.useCallback((setId: string) => {
     const used = new Set<string>();
     categorySets.forEach((setItem) => {
@@ -438,76 +474,128 @@ export function CreateShowForm() {
       .filter(Boolean) as Array<{ setName: string; missing: number }>;
   }, [categorySets, totalSeatsCount]);
 
-  const missingFields = React.useMemo(() => {
-    const missing: string[] = [];
+  const validationState = React.useMemo(() => {
     const requiresSeatmap = formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
+    const dateRangeInvalid =
+      !!formData.show_start_date && !!formData.show_end_date && !isDateRangeValid;
 
-    if (!formData.show_name.trim()) missing.push("Show name");
-    if (!formData.show_description.trim()) missing.push("Description");
-    if (!formData.venue.trim()) missing.push("Venue");
-    if (!formData.address.trim()) missing.push("Address");
-    if (!gcashQrImageBase64.trim()) missing.push("GCash QR image");
-    if (!formData.gcash_number.trim()) missing.push("GCash number");
-    if (!formData.gcash_account_name.trim()) missing.push("GCash account name");
-    if (!formData.show_start_date) missing.push("Start date");
-    if (!formData.show_end_date) missing.push("End date");
+    const hasInvalidCategory = categorySets.some((setItem) =>
+      setItem.categories.some((category) => {
+        const nameValid = category.category_name.trim().length > 0;
+        const priceValue = String(category.price ?? "").trim();
+        const priceValid =
+          priceValue !== "" &&
+          /^\d{1,4}(\.\d{1,2})?$/.test(priceValue) &&
+          !Number.isNaN(Number(priceValue)) &&
+          Number(priceValue) >= 0;
+        return !nameValid || !priceValid;
+      }),
+    );
 
-    // Validation for Seatmap/Categories/Schedules
-    if (!formData.seatmap_id) {
-      if (requiresSeatmap) missing.push("Seatmap");
-    } else {
-      // If a seatmap is selected, validate its associated data regardless of status
-      if (scheds.length === 0) {
-        if (requiresSeatmap) missing.push("Schedules");
-      } else if (showStartDate && showEndDate && scheduleCoverage.missingDates.length > 0) {
-        missing.push("Schedules (missing dates)");
-      } else if (categorySets.length > 0 && scheds.length > 0 && unassignedSchedCount > 0) {
-        missing.push("Assigned Scheds");
-      }
+    const fieldErrors = {
+      showName: !formData.show_name.trim(),
+      description: !formData.show_description.trim(),
+      venue: !formData.venue.trim(),
+      address: !formData.address.trim(),
+      gcashQr: !gcashQrImageBase64.trim(),
+      gcashNumber: !formData.gcash_number.trim(),
+      gcashAccountName: !formData.gcash_account_name.trim(),
+      startDate: !formData.show_start_date || dateRangeInvalid,
+      endDate: !formData.show_end_date || dateRangeInvalid,
+      seatmap: requiresSeatmap && !formData.seatmap_id,
+    };
 
-      const hasInvalidCategory = categorySets.some((setItem) =>
-        setItem.categories.some((category) => {
-          const nameValid = category.category_name.trim().length > 0;
-          const priceValue = String(category.price ?? "").trim();
-          const priceValid =
-            priceValue !== "" &&
-            /^\d{1,4}(\.\d{1,2})?$/.test(priceValue) &&
-            !Number.isNaN(Number(priceValue)) &&
-            Number(priceValue) >= 0;
-          return !nameValid || !priceValid;
-        })
-      );
-      if (hasInvalidCategory) {
-        missing.push("Category name/price");
-      }
+    const seatmapDetailsError =
+      !!formData.seatmap_id &&
+      (categorySets.length === 0 ||
+        (scheds.length > 0 && unassignedSchedCount > 0) ||
+        hasInvalidCategory ||
+        incompleteCategorySets.length > 0);
 
-      // Check if EACH category set has ALL seats assigned
-      if (incompleteCategorySets.length > 0) {
-        incompleteCategorySets.forEach((incomplete) => {
-          missing.push(`${incomplete.setName}: ${incomplete.missing} seats unassigned`);
-        });
-      }
+    const cardErrors = {
+      schedule:
+        scheduleCoverage.missingDates.length > 0 || hasOverlappingSchedules,
+      seatmap: seatmapDetailsError,
+    };
+
+    const hasValidationErrors =
+      Object.values(fieldErrors).some(Boolean) ||
+      Object.values(cardErrors).some(Boolean);
+
+    return { fieldErrors, cardErrors, hasValidationErrors };
+  }, [
+    formData,
+    gcashQrImageBase64,
+    isDateRangeValid,
+    categorySets,
+    scheds.length,
+    unassignedSchedCount,
+    incompleteCategorySets.length,
+    scheduleCoverage.missingDates.length,
+    hasOverlappingSchedules,
+  ]);
+
+  const scheduleIssueMessage = React.useMemo(() => {
+    if (scheduleCoverage.missingDates.length > 0) {
+      const labels = scheduleCoverage.missingDates
+        .slice(0, 3)
+        .map((dateKey) => formatDateLabel(dateKey));
+      const suffix =
+        scheduleCoverage.missingDates.length > 3
+          ? ` +${scheduleCoverage.missingDates.length - 3} more`
+          : "";
+      return `Missing schedules for: ${labels.join(", ")}${suffix}.`;
     }
-    // For DRAFT shows: schedules are optional, no seatmap/category validation required
 
-    if (formData.show_start_date && formData.show_end_date && !isDateRangeValid) {
-      missing.push("Date range (start must be before end)");
+    if (hasOverlappingSchedules) {
+      const labels = overlappingScheduleDateKeys
+        .slice(0, 3)
+        .map((dateKey) => formatDateLabel(dateKey));
+      const suffix =
+        overlappingScheduleDateKeys.length > 3
+          ? ` +${overlappingScheduleDateKeys.length - 3} more`
+          : "";
+      return `Overlapping schedule times detected on: ${labels.join(", ")}${suffix}.`;
     }
 
-    return missing;
-  }, [formData, gcashQrImageBase64, isDateRangeValid, scheds.length, scheduleCoverage.missingDates.length, showStartDate, showEndDate, categorySets, unassignedSchedCount, incompleteCategorySets]);
+    return null;
+  }, [
+    scheduleCoverage.missingDates,
+    hasOverlappingSchedules,
+    overlappingScheduleDateKeys,
+    formatDateLabel,
+  ]);
 
-  const isFormValid = React.useMemo(() => {
-    // Basic validation: no missing fields
-    if (missingFields.length > 0) return false;
+  const isFormValid = !validationState.hasValidationErrors;
 
-    // For non-draft shows or when a seatmap is partially filled, ensure schedules are assigned
-    if (formData.seatmap_id && scheds.length > 0 && unassignedSchedCount > 0) {
-      return false;
+  const statusConfirmMessage = React.useMemo(() => {
+    if (pendingStatus === "UPCOMING") {
+      return "Setting this show to UPCOMING will pre-launch it. Customers can view show details, but booking reservations will stay disabled until the status is set to OPEN.";
+    }
+    if (pendingStatus === "OPEN") {
+      return "Setting this show to OPEN will launch it and enable customers to book reservations.";
+    }
+    return "";
+  }, [pendingStatus]);
+
+  const handleStatusSelection = React.useCallback((nextStatus: string) => {
+    if (nextStatus === formData.show_status) return;
+
+    if (nextStatus === "UPCOMING" || nextStatus === "OPEN") {
+      setPendingStatus(nextStatus as ShowStatusOption);
+      setIsStatusConfirmOpen(true);
+      return;
     }
 
-    return true;
-  }, [missingFields.length, formData.seatmap_id, scheds.length, unassignedSchedCount]);
+    setFormData((prev) => ({ ...prev, show_status: nextStatus }));
+  }, [formData.show_status]);
+
+  const handleConfirmStatusChange = React.useCallback(() => {
+    if (!pendingStatus) return;
+    setFormData((prev) => ({ ...prev, show_status: pendingStatus }));
+    setIsStatusConfirmOpen(false);
+    setPendingStatus(null);
+  }, [pendingStatus]);
 
   const getDatesInRange = React.useCallback(() => {
     if (!showStartDate || !showEndDate) return [];
@@ -754,22 +842,7 @@ export function CreateShowForm() {
   };
 
   const handleSave = async () => {
-    if (
-      !formData.show_name ||
-      !formData.show_description ||
-      !formData.venue ||
-      !formData.address ||
-      !gcashQrImageBase64.trim() ||
-      !formData.gcash_number.trim() ||
-      !formData.gcash_account_name.trim() ||
-      !formData.show_start_date ||
-      !formData.show_end_date ||
-      !formData.seatmap_id ||
-      categorySets.length === 0
-    ) {
-      toast.error("Please fill out all required fields (including Seatmap and Category Sets).");
-      return;
-    }
+    if (!isFormValid) return;
 
     const validScheds = scheds.filter(
       (s) => s.sched_date && s.sched_start_time && s.sched_end_time
@@ -850,6 +923,10 @@ export function CreateShowForm() {
                 id="show-name"
                 value={formData.show_name}
                 onChange={(e) => setFormData({ ...formData, show_name: e.target.value })}
+                className={cn(
+                  validationState.fieldErrors.showName &&
+                    "border-red-500 focus-visible:ring-red-500/30",
+                )}
               />
             </div>
             <div className="space-y-2">
@@ -859,7 +936,7 @@ export function CreateShowForm() {
                 </Label>
                 <Select
                   value={formData.show_status}
-                  onValueChange={(value) => setFormData({ ...formData, show_status: value })}
+                  onValueChange={handleStatusSelection}
                 >
                   <SelectTrigger id="show-status" className="h-9 w-full">
                     <SelectValue placeholder="Select status" />
@@ -882,7 +959,11 @@ export function CreateShowForm() {
                 id="show-description"
                 value={formData.show_description}
                 onChange={(e) => setFormData({ ...formData, show_description: e.target.value })}
-                className="min-h-[96px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                className={cn(
+                  "min-h-[96px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+                  validationState.fieldErrors.description &&
+                    "border-red-500 focus-visible:ring-red-500/30",
+                )}
               />
             </div>
             <div className="space-y-2">
@@ -893,6 +974,10 @@ export function CreateShowForm() {
                 id="show-venue"
                 value={formData.venue}
                 onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
+                className={cn(
+                  validationState.fieldErrors.venue &&
+                    "border-red-500 focus-visible:ring-red-500/30",
+                )}
               />
             </div>
             <div className="space-y-2">
@@ -903,6 +988,10 @@ export function CreateShowForm() {
                 id="show-address"
                 value={formData.address}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className={cn(
+                  validationState.fieldErrors.address &&
+                    "border-red-500 focus-visible:ring-red-500/30",
+                )}
               />
             </div>
 
@@ -916,7 +1005,8 @@ export function CreateShowForm() {
                     variant={"outline"}
                     className={cn(
                       "h-9 w-full justify-start text-left font-medium",
-                      !showStartDate && "text-muted-foreground"
+                      !showStartDate && "text-muted-foreground",
+                      validationState.fieldErrors.startDate && "border-red-500"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
@@ -955,7 +1045,8 @@ export function CreateShowForm() {
                     variant={"outline"}
                     className={cn(
                       "h-9 w-full justify-start text-left font-medium",
-                      !showEndDate && "text-muted-foreground"
+                      !showEndDate && "text-muted-foreground",
+                      validationState.fieldErrors.endDate && "border-red-500"
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
@@ -1000,7 +1091,13 @@ export function CreateShowForm() {
                 previewMaxHeightClassName="max-h-[280px]"
               />
             </div>
-            <div className="space-y-2">
+            <div
+              className={cn(
+                "space-y-2",
+                validationState.fieldErrors.gcashQr &&
+                  "rounded-md ring-1 ring-red-500 p-1",
+              )}
+            >
               <Label className="text-xs font-semibold text-muted-foreground">
                 GCash QR Code
               </Label>
@@ -1035,6 +1132,10 @@ export function CreateShowForm() {
                 value={formData.gcash_number}
                 onChange={(e) => setFormData({ ...formData, gcash_number: e.target.value })}
                 placeholder="09XXXXXXXXX"
+                className={cn(
+                  validationState.fieldErrors.gcashNumber &&
+                    "border-red-500 focus-visible:ring-red-500/30",
+                )}
               />
             </div>
             <div className="space-y-2">
@@ -1047,6 +1148,10 @@ export function CreateShowForm() {
                 value={formData.gcash_account_name}
                 onChange={(e) => setFormData({ ...formData, gcash_account_name: e.target.value })}
                 placeholder="Juan Dela Cruz"
+                className={cn(
+                  validationState.fieldErrors.gcashAccountName &&
+                    "border-red-500 focus-visible:ring-red-500/30",
+                )}
               />
             </div>
 
@@ -1056,7 +1161,12 @@ export function CreateShowForm() {
 
       <div className="h-px bg-border/60 md:hidden" />
 
-      <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
+      <Card
+        className={cn(
+          "border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg",
+          validationState.cardErrors.schedule && "md:border-red-500/70",
+        )}
+      >
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div>
             <CardTitle className="text-lg md:text-xl font-semibold">
@@ -1076,9 +1186,9 @@ export function CreateShowForm() {
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          {scheds.length === 0 && (
-            <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
-              No schedules yet. Add at least one if you want predefined showtimes.
+          {scheduleIssueMessage && (
+            <div className="rounded-lg border border-red-300 px-4 py-6 text-sm text-red-600 dark:border-red-900/60 dark:text-red-400">
+              {scheduleIssueMessage}
             </div>
           )}
           {groupedScheds.map((group) => (
@@ -1157,14 +1267,18 @@ export function CreateShowForm() {
                   }
                 }}
               >
-                <ComboboxInput
-                  id="seatmap"
-                  placeholder={isLoadingSeatmaps ? "Loading seatmaps..." : "Select a seatmap"}
-                  disabled={isLoadingSeatmaps}
-                  required
-                  value={seatmapQuery}
-                  onChange={(event) => setSeatmapQuery(event.target.value)}
-                />
+              <ComboboxInput
+                id="seatmap"
+                placeholder={isLoadingSeatmaps ? "Loading seatmaps..." : "Select a seatmap"}
+                disabled={isLoadingSeatmaps}
+                required
+                value={seatmapQuery}
+                onChange={(event) => setSeatmapQuery(event.target.value)}
+                className={cn(
+                  validationState.fieldErrors.seatmap &&
+                    "border-red-500 focus-visible:ring-red-500/30",
+                )}
+              />
                 <ComboboxContent>
                   <ComboboxList>
                     {isLoadingSeatmaps ? (
@@ -1253,7 +1367,7 @@ export function CreateShowForm() {
                       }
                     />
                     <CategoryAssignPanel
-                      className="absolute right-3 top-14 z-10"
+                      className="absolute right-3 top-3 z-10"
                       selectedSeatIds={selectedSeatIds}
                       categories={setCategories}
                       seatCategories={currentAssignments}
@@ -1276,6 +1390,19 @@ export function CreateShowForm() {
                         });
                       }}
                     />
+                    <div className="mt-2 hidden md:flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                      <span>Use</span>
+                      <span className="inline-flex items-center gap-1">
+                        <img src="/shift.svg" alt="Shift key" className="h-4.5 w-4.5 object-contain" />
+                        <span>Shift</span>
+                      </span>
+                      <span>or</span>
+                      <span className="inline-flex items-center gap-1">
+                        <img src="/control.svg" alt="Control key" className="h-4.5 w-4.5 object-contain" />
+                        <span>Ctrl</span>
+                      </span>
+                      <span>to multi-select.</span>
+                    </div>
                   </div>
                 );
               })()}
@@ -1283,7 +1410,13 @@ export function CreateShowForm() {
           )}
 
 
-          <div className="space-y-4">
+          <div
+            className={cn(
+              "space-y-4",
+              validationState.cardErrors.seatmap &&
+                "rounded-lg border border-red-500/70 p-3",
+            )}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">Category Sets</p>
@@ -1684,13 +1817,36 @@ export function CreateShowForm() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={isStatusConfirmOpen}
+        onOpenChange={(open) => {
+          setIsStatusConfirmOpen(open);
+          if (!open) setPendingStatus(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+            </div>
+            <DialogTitle>Confirm status change</DialogTitle>
+            <DialogDescription>
+              {statusConfirmMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsStatusConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmStatusChange}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex justify-end">
         <div className="flex flex-col items-end gap-2">
-          {!isFormValid && !isSaving && (
-            <p className="text-xs text-red-600">
-              Missing: {missingFields.join(", ")}
-            </p>
-          )}
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
