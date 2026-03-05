@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ShieldCheck, Loader2, Plus, Search } from "lucide-react";
+import { ShieldCheck, Loader2, Plus, Search, Trash2, AlertTriangle } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -15,6 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TeamAccessDetail, type Team } from "./components/TeamAccessDetail";
 
 type AccessResponse = {
@@ -55,6 +63,8 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
   const [invitingTeamId, setInvitingTeamId] = React.useState<string | null>(null);
   const [teamSearchQuery, setTeamSearchQuery] = React.useState("");
   const [adminSearchQuery, setAdminSearchQuery] = React.useState("");
+  const [deleteTargetTeam, setDeleteTargetTeam] = React.useState<Team | null>(null);
+  const [isDeletingTeam, setIsDeletingTeam] = React.useState(false);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -184,6 +194,29 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
       toast.error(error instanceof Error ? error.message : "Failed to send invite.");
     } finally {
       setInvitingTeamId(null);
+    }
+  };
+
+  const deleteTeam = async () => {
+    if (!deleteTargetTeam) return;
+
+    setIsDeletingTeam(true);
+    try {
+      const res = await fetch(`/api/admin/access/teams/${deleteTargetTeam.team_id}`, {
+        method: "DELETE",
+      });
+      const data = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to delete team.");
+      }
+
+      toast.success("Team deleted.");
+      setDeleteTargetTeam(null);
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete team.");
+    } finally {
+      setIsDeletingTeam(false);
     }
   };
 
@@ -318,7 +351,21 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
                         >
                           <td className="py-2 pr-4 font-medium">{team.name}</td>
                           <td className="py-2 pr-4 text-muted-foreground">{team.admins.length}</td>
-                          <td className="py-2 pr-0 text-xs text-primary">View team</td>
+                          <td className="py-2 pr-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 gap-1 text-destructive hover:bg-destructive/10"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDeleteTargetTeam(team);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -360,6 +407,53 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={Boolean(deleteTargetTeam)}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingTeam) {
+            setDeleteTargetTeam(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            </div>
+            <DialogTitle>Delete team?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete{" "}
+              <span className="font-semibold text-foreground">
+                {deleteTargetTeam?.name}
+              </span>
+              . This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTargetTeam(null)}
+              disabled={isDeletingTeam}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={deleteTeam}
+              disabled={isDeletingTeam}
+              className="gap-2"
+            >
+              {isDeletingTeam ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              Delete Team
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
