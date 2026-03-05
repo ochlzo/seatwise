@@ -19,10 +19,10 @@ export async function getShows(params?: {
   if (params?.status && params.status !== "ALL") {
     where.show_status = params.status as never;
   } else if (params?.statusGroup === "active") {
-    where.show_status = { in: ["UPCOMING", "OPEN"] };
+    where.show_status = { in: ["UPCOMING", "OPEN", "ON_GOING"] };
   }
   if (params?.visibility === "user") {
-    const hiddenStatuses: ShowStatus[] = ["DRAFT", "CANCELLED", "POSTPONED"];
+    const hiddenStatuses: ShowStatus[] = ["DRAFT", "CANCELLED"];
     if (where.show_status) {
       const statusValue =
         typeof where.show_status === "string"

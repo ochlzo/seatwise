@@ -2,12 +2,12 @@
 
 import * as React from "react";
 import {
+  closestCenter,
   DndContext,
   DragOverlay,
   type DragEndEvent,
   type DragStartEvent,
   PointerSensor,
-  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
@@ -103,10 +103,38 @@ type KanbanCard = {
   row: UserReservationRow;
 };
 
-const COLUMNS: Array<{ key: KanbanStatus; title: string; icon: React.ReactNode }> = [
-  { key: "PENDING", title: "Pending", icon: <Clock className="h-4 w-4" /> },
-  { key: "CONFIRMED", title: "Confirmed", icon: <CheckCircle2 className="h-4 w-4" /> },
-  { key: "REJECTED", title: "Rejected", icon: <XCircle className="h-4 w-4" /> },
+const COLUMNS: Array<{
+  key: KanbanStatus;
+  title: string;
+  icon: React.ReactNode;
+  stageClassName: string;
+  stageCountClassName: string;
+  stageSurfaceClassName: string;
+}> = [
+  {
+    key: "PENDING",
+    title: "Pending",
+    icon: <Clock className="h-4 w-4" />,
+    stageClassName: "bg-amber-400 text-white",
+    stageCountClassName: "bg-white/20 text-white",
+    stageSurfaceClassName: "bg-amber-50/80 dark:bg-amber-500/10",
+  },
+  {
+    key: "CONFIRMED",
+    title: "Confirmed",
+    icon: <CheckCircle2 className="h-4 w-4" />,
+    stageClassName: "bg-emerald-500 text-white",
+    stageCountClassName: "bg-white/20 text-white",
+    stageSurfaceClassName: "bg-emerald-50/80 dark:bg-emerald-500/10",
+  },
+  {
+    key: "REJECTED",
+    title: "Rejected",
+    icon: <XCircle className="h-4 w-4" />,
+    stageClassName: "bg-red-500 text-white",
+    stageCountClassName: "bg-white/20 text-white",
+    stageSurfaceClassName: "bg-red-50/80 dark:bg-red-500/10",
+  },
 ];
 
 const columnId = (status: KanbanStatus) => `column:${status}`;
@@ -202,7 +230,7 @@ function SortableCard({ card, isVerifying }: SortableCardProps) {
     <Card
       ref={setNodeRef}
       style={style}
-      className={`border-sidebar-border/70 ${isDragging ? "border-dashed bg-muted/60" : ""} ${isVerifying ? "opacity-70" : ""}`}
+      className={`border-sidebar-border/70 dark:border-white/20 ${isDragging ? "border-dashed bg-muted/60" : ""} ${isVerifying ? "opacity-70" : ""}`}
     >
       <CardContent className={`relative space-y-2 p-4 pr-10 ${isDragging ? "opacity-0" : ""}`}>
         <button
@@ -241,9 +269,22 @@ type KanbanColumnProps = {
   cards: KanbanCard[];
   isActiveDrop: boolean;
   verifyingId: string | null;
+  stageClassName: string;
+  stageCountClassName: string;
+  stageSurfaceClassName: string;
 };
 
-function KanbanColumn({ status, title, icon, cards, isActiveDrop, verifyingId }: KanbanColumnProps) {
+function KanbanColumn({
+  status,
+  title,
+  icon,
+  cards,
+  isActiveDrop,
+  verifyingId,
+  stageClassName,
+  stageCountClassName,
+  stageSurfaceClassName,
+}: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: columnId(status),
     data: { type: "column", column: status },
@@ -252,20 +293,20 @@ function KanbanColumn({ status, title, icon, cards, isActiveDrop, verifyingId }:
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-xl border border-sidebar-border/70 bg-muted/20 p-3 transition-colors ${isActiveDrop ? "bg-muted/50" : ""}`}
+      className={`overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-white/20 ${stageSurfaceClassName} transition-colors ${isActiveDrop ? "bg-muted/50" : ""}`}
     >
-      <div className="mb-3 flex items-center justify-between px-1">
+      <div className={`flex items-center justify-between px-3 py-2 ${stageClassName}`}>
         <div className="flex items-center gap-2 text-sm font-semibold">
           {icon}
           {title}
         </div>
-        <span className="rounded-md bg-background px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${stageCountClassName}`}>
           {cards.length}
         </span>
       </div>
 
       <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
-        <div className="min-h-[220px] space-y-3">
+        <div className="min-h-[220px] space-y-3 p-3">
           {cards.map((card) => (
             <SortableCard key={card.id} card={card} isVerifying={verifyingId === `kanban:${card.id}`} />
           ))}
@@ -620,7 +661,7 @@ export function ReservationsClient() {
           placeholder="Search by name, email, seat number, reservation ID, or show..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-lg border border-sidebar-border/70 bg-background py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          className="w-full rounded-lg border border-sidebar-border/70 dark:border-white/20 bg-background py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         />
       </div>
 
@@ -632,7 +673,7 @@ export function ReservationsClient() {
       ) : (
         <DndContext
           sensors={sensors}
-          collisionDetection={pointerWithin}
+          collisionDetection={closestCenter}
           onDragOver={(event) => {
             const overId = event.over ? String(event.over.id) : null;
             if (!overId) {
@@ -661,6 +702,9 @@ export function ReservationsClient() {
                 status={column.key}
                 title={column.title}
                 icon={column.icon}
+                stageClassName={column.stageClassName}
+                stageCountClassName={column.stageCountClassName}
+                stageSurfaceClassName={column.stageSurfaceClassName}
                 cards={orderedCardsByColumn[column.key]}
                 isActiveDrop={activeDropColumn === column.key}
                 verifyingId={verifyingId}
@@ -669,7 +713,7 @@ export function ReservationsClient() {
           </div>
           <DragOverlay>
             {activeDragCard ? (
-              <Card className="border-sidebar-border/70 shadow-lg">
+              <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
                 <CardContent className="space-y-2 p-4 pr-10">
                   <p className="text-base font-bold leading-tight">{activeDragCard.showName}</p>
                   <p className="text-sm font-medium text-foreground">

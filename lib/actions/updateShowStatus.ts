@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { initializeQueueChannel } from '@/lib/queue/initializeQueue';
-import { closeQueueChannel, pauseQueueChannel } from '@/lib/queue/closeQueue';
+import { closeQueueChannel } from '@/lib/queue/closeQueue';
 import type { ShowStatus } from '@prisma/client';
 
 /**
@@ -55,11 +55,6 @@ export async function updateShowStatus(showId: string, newStatus: ShowStatus) {
                     queueResults.push(result);
                 }
 
-                // Pause queue when status changes to POSTPONED
-                else if (newStatus === 'POSTPONED' && oldStatus === 'OPEN') {
-                    const result = await pauseQueueChannel(showScopeId);
-                    queueResults.push(result);
-                }
             } catch (queueError) {
                 console.error(
                     `Queue operation failed for ${showScopeId}:`,

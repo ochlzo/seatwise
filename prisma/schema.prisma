@@ -253,7 +253,6 @@ enum ShowStatus {
   CLOSED
   ON_GOING
   CANCELLED
-  POSTPONED
 }
 
 enum SeatmapStatus {
@@ -283,11 +282,8 @@ enum ReservationStatus {
 }
 
 enum PaymentMethod {
-  CASH
   GCASH
-  MAYA
-  CREDIT_CARD
-  BANK_TRANSFER
+  WALK_IN
 }
 
 enum PaymentStatus {

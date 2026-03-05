@@ -21,8 +21,7 @@ const statuses = [
     { label: "On Going", value: "ON_GOING" },
     { label: "Closed", value: "CLOSED" },
     { label: "Cancelled", value: "CANCELLED" },
-    { label: "Postponed", value: "POSTPONED" },
-];
+  ];
 
 const sorts = [
     { label: "Newest First", value: "newest" },

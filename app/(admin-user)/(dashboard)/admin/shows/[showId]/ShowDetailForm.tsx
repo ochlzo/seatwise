@@ -77,7 +77,6 @@ const STATUS_COLORS: Record<string, string> = {
   CLOSED: "#6B7280",
   ON_GOING: "#F59E0B",
   CANCELLED: "#EF4444",
-  POSTPONED: "#A855F7",
 };
 
 const COLOR_OPTIONS: Array<{
