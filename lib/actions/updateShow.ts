@@ -82,12 +82,44 @@ type UpdateShowPayload = {
   show_description: string;
   venue: string;
   address: string;
+  gcash_qr_image_key?: string | null;
+  gcash_qr_image_base64?: string;
+  gcash_number?: string;
+  gcash_account_name?: string;
   show_status: ShowStatus;
   show_start_date: string | Date;
   show_end_date: string | Date;
   seatmap_id?: string | null;
   scheds?: UpdateShowSched[];
   category_sets?: UpdateCategorySet[];
+};
+
+const getCloudinaryPublicIdFromUrl = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    const uploadMarker = "/upload/";
+    const uploadIndex = parsed.pathname.indexOf(uploadMarker);
+    if (uploadIndex === -1) return null;
+
+    const pathAfterUpload = parsed.pathname
+      .slice(uploadIndex + uploadMarker.length)
+      .split("/")
+      .filter(Boolean);
+
+    if (pathAfterUpload.length === 0) return null;
+
+    if (pathAfterUpload[0].startsWith("v")) {
+      pathAfterUpload.shift();
+    }
+
+    const lastSegment = pathAfterUpload.pop();
+    if (!lastSegment) return null;
+
+    const filenameWithoutExt = lastSegment.replace(/\.[^/.]+$/, "");
+    return [...pathAfterUpload, filenameWithoutExt].join("/");
+  } catch {
+    return null;
+  }
 };
 
 export async function updateShowAction(
@@ -121,6 +153,10 @@ export async function updateShowAction(
       show_description,
       venue,
       address,
+      gcash_qr_image_key,
+      gcash_qr_image_base64,
+      gcash_number,
+      gcash_account_name,
       show_status,
       show_start_date,
       show_end_date,
@@ -141,6 +177,12 @@ export async function updateShowAction(
     if (!address?.trim()) {
       throw new Error("Address is required.");
     }
+    if (!gcash_number?.trim()) {
+      throw new Error("GCash number is required.");
+    }
+    if (!gcash_account_name?.trim()) {
+      throw new Error("GCash account name is required.");
+    }
     if (!show_status) {
       throw new Error("Show status is required.");
     }
@@ -154,11 +196,39 @@ export async function updateShowAction(
     // Get current show status for queue lifecycle management
     const currentShow = await prisma.show.findUnique({
       where: { show_id: showId },
-      select: { show_status: true },
+      select: { show_status: true, gcash_qr_image_key: true },
     });
 
     const oldStatus = currentShow?.show_status;
     const newStatus = show_status;
+
+    let finalGcashQrImageUrl =
+      gcash_qr_image_key?.trim() || currentShow?.gcash_qr_image_key || undefined;
+
+    if (gcash_qr_image_base64?.trim()) {
+      const cloudinary = (await import("@/lib/cloudinary")).default;
+      const existingPublicId = currentShow?.gcash_qr_image_key
+        ? getCloudinaryPublicIdFromUrl(currentShow.gcash_qr_image_key)
+        : null;
+
+      const qrUploadResponse = existingPublicId
+        ? await cloudinary.uploader.upload(gcash_qr_image_base64, {
+            public_id: existingPublicId,
+            overwrite: true,
+            invalidate: true,
+            resource_type: "image",
+          })
+        : await cloudinary.uploader.upload(gcash_qr_image_base64, {
+            folder: "seatwise/gcash_qr_codes",
+            resource_type: "image",
+          });
+
+      finalGcashQrImageUrl = qrUploadResponse.secure_url;
+    }
+
+    if (!finalGcashQrImageUrl?.trim()) {
+      throw new Error("GCash QR image is required.");
+    }
 
     // Transaction to update show, schedules, and category sets
     const schedIdMap = new Map<string, string>(); // temp_id -> db_sched_id
@@ -176,6 +246,9 @@ export async function updateShowAction(
             show_status,
             show_start_date: toDateOnly(show_start_date),
             show_end_date: toDateOnly(show_end_date),
+            gcash_qr_image_key: finalGcashQrImageUrl?.trim() || undefined,
+            gcash_number: gcash_number?.trim() || undefined,
+            gcash_account_name: gcash_account_name?.trim() || undefined,
             seatmap_id: seatmap_id || undefined,
           },
         });

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useDropzone, type Accept, type FileRejection } from "react-dropzone";
-import { Upload, X, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Upload, Trash2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +25,7 @@ type ImageUploadDropzoneProps = {
   emptyHint?: string;
   minHeightClassName?: string;
   previewMaxHeightClassName?: string;
+  showRemoveButton?: boolean;
 };
 
 export function ImageUploadDropzone({
@@ -46,6 +47,7 @@ export function ImageUploadDropzone({
   emptyHint,
   minHeightClassName = "min-h-[170px]",
   previewMaxHeightClassName = "max-h-[300px]",
+  showRemoveButton = true,
 }: ImageUploadDropzoneProps) {
   const [localRejectionError, setLocalRejectionError] = React.useState<string | null>(null);
 
@@ -104,7 +106,7 @@ export function ImageUploadDropzone({
           </div>
         </div>
       ) : (
-        <div className="relative rounded-xl border border-sidebar-border/70 bg-muted/10 p-3">
+        <div className="group relative rounded-xl border border-sidebar-border/70 bg-muted/10 p-3">
           {isProcessing && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-xl bg-background/80 backdrop-blur-sm">
               <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
@@ -114,15 +116,15 @@ export function ImageUploadDropzone({
 
           <div className="relative flex items-center justify-center">
             <img src={previewUrl} alt={previewAlt} className={cn("rounded-lg object-contain", previewMaxHeightClassName)} />
-            {!isProcessing && (
+            {!isProcessing && showRemoveButton && (
               <Button
                 type="button"
                 variant="destructive"
                 size="icon"
-                className="absolute right-1 top-1 h-7 w-7 rounded-full"
+                className="absolute right-1 top-1 h-7 w-7 rounded-full opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100"
                 onClick={onRemove}
               >
-                <X className="h-4 w-4" />
+                <Trash2 className="h-4 w-4" />
               </Button>
             )}
           </div>

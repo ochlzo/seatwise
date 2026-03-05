@@ -69,6 +69,7 @@ import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
 import type { SeatmapState } from "@/lib/seatmap/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { groupSchedulesByCommonalities } from "@/lib/db/showScheduleGrouping";
+import { ImageUploadDropzone } from "@/components/ui/image-upload-dropzone";
 
 const STATUS_COLORS: Record<string, string> = {
   UPCOMING: "#3B82F6",
@@ -77,6 +78,13 @@ const STATUS_COLORS: Record<string, string> = {
   CLOSED: "#6B7280",
   ON_GOING: "#F59E0B",
   CANCELLED: "#EF4444",
+};
+
+const MAX_GCASH_QR_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const ACCEPTED_GCASH_QR_TYPES: Record<string, string[]> = {
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/png": [".png"],
+  "image/webp": [".webp"],
 };
 
 const COLOR_OPTIONS: Array<{
@@ -193,6 +201,9 @@ type ShowDetail = {
   show_description: string;
   venue: string;
   address: string;
+  gcash_qr_image_key?: string | null;
+  gcash_number?: string | null;
+  gcash_account_name?: string | null;
   show_status: ShowStatus;
   show_start_date: string | Date;
   show_end_date: string | Date;
@@ -292,6 +303,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     null,
   );
   const [activeSetId, setActiveSetId] = React.useState<string | null>(null);
+  const [gcashQrImageBase64, setGcashQrImageBase64] = React.useState("");
+  const [gcashQrPreview, setGcashQrPreview] = React.useState<string | null>(
+    show.gcash_qr_image_key || null,
+  );
+  const [gcashQrUploadError, setGcashQrUploadError] = React.useState<string | null>(null);
+  const [isGcashQrProcessing, setIsGcashQrProcessing] = React.useState(false);
 
   const filteredSeatmaps = React.useMemo(() => {
     const query = seatmapQuery.trim().toLowerCase();
@@ -306,6 +323,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     show_description: string;
     venue: string;
     address: string;
+    gcash_number: string;
+    gcash_account_name: string;
     show_status: ShowStatus;
     show_start_date: string;
     show_end_date: string;
@@ -316,6 +335,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     show_description: show.show_description,
     venue: show.venue,
     address: show.address,
+    gcash_number: show.gcash_number || "",
+    gcash_account_name: show.gcash_account_name || "",
     show_status: show.show_status,
     show_start_date: toManilaDateKey(new Date(show.show_start_date)),
     show_end_date: toManilaDateKey(new Date(show.show_end_date)),
@@ -346,6 +367,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       show_description: show.show_description,
       venue: show.venue,
       address: show.address,
+      gcash_number: show.gcash_number || "",
+      gcash_account_name: show.gcash_account_name || "",
       show_status: show.show_status,
       show_start_date: toManilaDateKey(new Date(show.show_start_date)),
       show_end_date: toManilaDateKey(new Date(show.show_end_date)),
@@ -369,7 +392,38 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
         client_id: s.sched_id || uuidv4(),
       })),
     });
+    setGcashQrImageBase64("");
+    setGcashQrPreview(show.gcash_qr_image_key || null);
+    setGcashQrUploadError(null);
+    setIsGcashQrProcessing(false);
   }, [show]);
+
+  const handleGcashQrAccepted = React.useCallback((file: File) => {
+    setGcashQrUploadError(null);
+    setIsGcashQrProcessing(true);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setGcashQrImageBase64(reader.result);
+        setGcashQrPreview(reader.result);
+      } else {
+        setGcashQrUploadError("Failed to read GCash QR image.");
+      }
+      setIsGcashQrProcessing(false);
+    };
+    reader.onerror = () => {
+      setGcashQrUploadError("Failed to read GCash QR image.");
+      setIsGcashQrProcessing(false);
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleGcashQrRemove = React.useCallback(() => {
+    setGcashQrImageBase64("");
+    setGcashQrPreview(null);
+    setGcashQrUploadError(null);
+  }, []);
 
   const showStartDate = React.useMemo(
     () =>
@@ -767,6 +821,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     if (!formData.show_description.trim()) missing.push("Description");
     if (!formData.venue.trim()) missing.push("Venue");
     if (!formData.address.trim()) missing.push("Address");
+    if (!gcashQrPreview) missing.push("GCash QR image");
+    if (!formData.gcash_number.trim()) missing.push("GCash number");
+    if (!formData.gcash_account_name.trim()) missing.push("GCash account name");
     if (!formData.show_start_date) missing.push("Start Date");
     if (!formData.show_end_date) missing.push("End Date");
 
@@ -829,6 +886,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     return missing;
   }, [
     formData,
+    gcashQrPreview,
     scheduleCoverage,
     categorySets,
     unassignedSchedCount,
@@ -897,6 +955,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
         show_description: formData.show_description,
         venue: formData.venue,
         address: formData.address,
+        gcash_qr_image_key: gcashQrImageBase64 ? null : gcashQrPreview,
+        gcash_qr_image_base64: gcashQrImageBase64 || undefined,
+        gcash_number: formData.gcash_number,
+        gcash_account_name: formData.gcash_account_name,
         show_status: formData.show_status,
         show_start_date: formData.show_start_date,
         show_end_date: formData.show_end_date,
@@ -1153,6 +1215,78 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     className="font-medium bg-muted/30"
                     readOnly={!isEditing}
                   />
+                </div>
+              </div>
+
+              <div className="space-y-4 rounded-xl border border-sidebar-border/60 bg-muted/20 p-4">
+                <div>
+                  <p className="text-sm font-semibold">GCash Configuration</p>
+                  <p className="text-xs text-muted-foreground">
+                    Update payment QR and account details used in reservations.
+                  </p>
+                </div>
+
+                <ImageUploadDropzone
+                  previewUrl={gcashQrPreview}
+                  previewAlt="GCash QR code"
+                  onFileAccepted={(file) => {
+                    if (!isEditing) return;
+                    handleGcashQrAccepted(file);
+                  }}
+                  onRemove={() => {
+                    if (!isEditing) return;
+                    handleGcashQrRemove();
+                  }}
+                  accept={ACCEPTED_GCASH_QR_TYPES}
+                  maxSize={MAX_GCASH_QR_FILE_SIZE}
+                  disabled={!isEditing}
+                  isProcessing={isGcashQrProcessing}
+                  processingText="Preparing GCash QR image..."
+                  uploadError={gcashQrUploadError}
+                  onFileRejected={(message) => setGcashQrUploadError(message || null)}
+                  showRemoveButton={isEditing}
+                  idleTitle="Drop GCash QR image here"
+                  activeTitle="Release to set this QR image"
+                  helperText="JPEG, PNG, or WebP up to 5MB"
+                  successMessage={gcashQrImageBase64 ? "GCash QR update ready to save" : null}
+                  emptyHint="This QR image is shown to users during reservation payment."
+                />
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="gcash-number"
+                      className="text-xs font-semibold text-muted-foreground"
+                    >
+                      GCash Number
+                    </Label>
+                    <Input
+                      id="gcash-number"
+                      value={formData.gcash_number}
+                      onChange={(e) =>
+                        setFormData({ ...formData, gcash_number: e.target.value })
+                      }
+                      className="font-medium bg-muted/30"
+                      readOnly={!isEditing}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="gcash-account-name"
+                      className="text-xs font-semibold text-muted-foreground"
+                    >
+                      GCash Account Name
+                    </Label>
+                    <Input
+                      id="gcash-account-name"
+                      value={formData.gcash_account_name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, gcash_account_name: e.target.value })
+                      }
+                      className="font-medium bg-muted/30"
+                      readOnly={!isEditing}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2369,6 +2503,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     show_description: show.show_description,
                     venue: show.venue,
                     address: show.address,
+                    gcash_number: show.gcash_number || "",
+                    gcash_account_name: show.gcash_account_name || "",
                     show_status: show.show_status,
                     show_start_date: toManilaDateKey(
                       new Date(show.show_start_date),
@@ -2397,6 +2533,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       client_id: s.sched_id || uuidv4(),
                     })),
                   });
+                  setGcashQrImageBase64("");
+                  setGcashQrPreview(show.gcash_qr_image_key || null);
+                  setGcashQrUploadError(null);
+                  setIsGcashQrProcessing(false);
                   resetCategorySets();
                   setSelectedDates([]);
                   setSelectedSeatIds([]);
