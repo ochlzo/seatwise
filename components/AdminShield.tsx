@@ -7,9 +7,10 @@ import { ShieldCheck } from "lucide-react";
 export default function AdminShield() {
     const user = useAppSelector((state: RootState) => state.auth.user);
     const isAdmin = user?.role === "ADMIN";
+    const teamLabel = user?.teamName || user?.teamId;
     const badgeLabel = user?.isSuperadmin
         ? "SUPERADMIN"
-        : user?.teamName?.toUpperCase() || "UNASSIGNED";
+        : teamLabel?.toUpperCase() || "UNASSIGNED";
 
     if (!isAdmin) return null;
 

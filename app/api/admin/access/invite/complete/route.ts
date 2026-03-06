@@ -3,10 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { redis } from "@/lib/clients/redis";
 import {
+  clearInviteClaim,
   getInviteSession,
+  INVITE_CLAIM_COOKIE,
   inviteEmailLockKey,
+  inviteClaimKey,
   inviteOtpKey,
   inviteSessionKey,
+  parseInviteClaimCookie,
   setInviteSession,
   verifyInviteToken,
 } from "@/lib/invite/adminInvite";
@@ -20,6 +24,8 @@ type CompleteBody = {
 };
 
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+const INVITE_UNAVAILABLE_ERROR = "Invite link is invalid or unavailable.";
+const COMPLETE_FAILED_ERROR = "Unable to complete onboarding with the provided details.";
 
 export async function POST(request: NextRequest) {
   let createdUid: string | null = null;
@@ -35,7 +41,7 @@ export async function POST(request: NextRequest) {
     const password = body.password ?? "";
 
     if (!token || !firstName || !lastName || !username || !password) {
-      return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+      return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 400 });
     }
     if (username.length < 2 || username.length > 20) {
       return NextResponse.json({ error: "Username must be 2-20 characters." }, { status: 400 });
@@ -49,18 +55,28 @@ export async function POST(request: NextRequest) {
 
     const payload = verifyInviteToken(token);
     inviteIdForCleanup = payload.inviteId;
+
+    const claimCookie = parseInviteClaimCookie(request.cookies.get(INVITE_CLAIM_COOKIE)?.value);
+    if (!claimCookie || claimCookie.inviteId !== payload.inviteId) {
+      return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 403 });
+    }
+    const currentClaim = await redis.get(inviteClaimKey(payload.inviteId));
+    if (typeof currentClaim !== "string" || currentClaim !== claimCookie.claimId) {
+      return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 403 });
+    }
+
     const session = await getInviteSession(payload.inviteId);
     if (!session) {
-      return NextResponse.json({ error: "Invite session not found or expired." }, { status: 410 });
+      return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 410 });
     }
     if (session.consumed) {
-      return NextResponse.json({ error: "Invite already consumed." }, { status: 410 });
+      return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 410 });
     }
     if (!session.otpVerified) {
-      return NextResponse.json({ error: "OTP verification is required first." }, { status: 400 });
+      return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 400 });
     }
     if (session.email !== payload.email || session.teamId !== payload.teamId) {
-      return NextResponse.json({ error: "Invite does not match session." }, { status: 400 });
+      return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
     }
 
     const team = await prisma.team.findUnique({
@@ -68,14 +84,14 @@ export async function POST(request: NextRequest) {
       select: { team_id: true },
     });
     if (!team) {
-      return NextResponse.json({ error: "Assigned team no longer exists." }, { status: 404 });
+      return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 404 });
     }
 
     lockKey = inviteEmailLockKey(session.email);
     const lock = await redis.set(lockKey, "1", { nx: true, ex: 120 });
     if (!lock) {
       return NextResponse.json(
-        { error: "Invite is currently being processed. Try again." },
+        { error: COMPLETE_FAILED_ERROR },
         { status: 409 },
       );
     }
@@ -86,7 +102,7 @@ export async function POST(request: NextRequest) {
     });
     if (existingByEmail) {
       return NextResponse.json(
-        { error: "This email already belongs to an admin account." },
+        { error: COMPLETE_FAILED_ERROR },
         { status: 409 },
       );
     }
@@ -100,7 +116,7 @@ export async function POST(request: NextRequest) {
       select: { user_id: true },
     });
     if (existingByUsername) {
-      return NextResponse.json({ error: "Username is already taken." }, { status: 409 });
+      return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 409 });
     }
 
     await setInviteSession({
@@ -132,9 +148,21 @@ export async function POST(request: NextRequest) {
       redis.del(inviteSessionKey(session.inviteId)),
       redis.del(inviteOtpKey(session.inviteId)),
       lockKey ? redis.del(lockKey) : Promise.resolve(0),
+      clearInviteClaim(session.inviteId),
     ]);
 
-    return NextResponse.json({ success: true, email: session.email });
+    const response = NextResponse.json({ success: true, email: session.email });
+    response.cookies.set({
+      name: INVITE_CLAIM_COOKIE,
+      value: "",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 0,
+    });
+
+    return response;
   } catch (error) {
     let rollbackSucceeded = false;
     if (createdUid) {
@@ -159,7 +187,6 @@ export async function POST(request: NextRequest) {
       await redis.del(lockKey);
     }
 
-    const message = error instanceof Error ? error.message : "Failed to complete invite onboarding.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 400 });
   }
 }

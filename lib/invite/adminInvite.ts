@@ -28,6 +28,10 @@ export type InviteOtpState = {
   expiresAt: number;
 };
 
+type InviteClaimValidationResult =
+  | { ok: true }
+  | { ok: false; reason: "missing_claim" | "claim_mismatch" | "claim_taken" };
+
 const INVITE_SECRET = process.env.ADMIN_INVITE_SIGNING_SECRET;
 const OTP_PEPPER = process.env.ADMIN_OTP_PEPPER;
 
@@ -38,17 +42,52 @@ if (!OTP_PEPPER) {
   throw new Error("ADMIN_OTP_PEPPER is not configured.");
 }
 
-export const INVITE_TTL_HOURS = Number(process.env.ADMIN_INVITE_TTL_HOURS ?? "48");
-export const OTP_TTL_MINUTES = Number(process.env.ADMIN_OTP_TTL_MINUTES ?? "10");
-export const OTP_MAX_ATTEMPTS = Number(process.env.ADMIN_OTP_MAX_ATTEMPTS ?? "5");
-export const OTP_RESEND_COOLDOWN_SECONDS = Number(
-  process.env.ADMIN_OTP_RESEND_COOLDOWN_SECONDS ?? "60",
+const readIntEnv = (
+  name: string,
+  fallback: number,
+  options: { min: number; max: number },
+) => {
+  const raw = process.env[name];
+  if (!raw || raw.trim() === "") return fallback;
+
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < options.min || parsed > options.max) {
+    throw new Error(
+      `${name} must be an integer between ${options.min} and ${options.max}. Received: ${raw}`,
+    );
+  }
+  return parsed;
+};
+
+export const INVITE_TTL_HOURS = readIntEnv("ADMIN_INVITE_TTL_HOURS", 48, {
+  min: 1,
+  max: 168,
+});
+export const OTP_TTL_MINUTES = readIntEnv("ADMIN_OTP_TTL_MINUTES", 10, {
+  min: 1,
+  max: 30,
+});
+export const OTP_MAX_ATTEMPTS = readIntEnv("ADMIN_OTP_MAX_ATTEMPTS", 5, {
+  min: 1,
+  max: 20,
+});
+export const OTP_RESEND_COOLDOWN_SECONDS = readIntEnv(
+  "ADMIN_OTP_RESEND_COOLDOWN_SECONDS",
+  60,
+  { min: 5, max: 300 },
 );
-export const OTP_MAX_RESENDS = Number(process.env.ADMIN_OTP_MAX_RESENDS ?? "5");
+export const OTP_MAX_RESENDS = readIntEnv("ADMIN_OTP_MAX_RESENDS", 5, {
+  min: 1,
+  max: 20,
+});
 
 export const inviteSessionKey = (inviteId: string) => `admin_invite:session:${inviteId}`;
 export const inviteOtpKey = (inviteId: string) => `admin_invite:otp:${inviteId}`;
 export const inviteEmailLockKey = (email: string) => `admin_invite:email_lock:${email}`;
+export const inviteClaimKey = (inviteId: string) => `admin_invite:claim:${inviteId}`;
+export const inviteOtpLockKey = (inviteId: string) => `admin_invite:otp_lock:${inviteId}`;
+
+export const INVITE_CLAIM_COOKIE = "admin_invite_claim";
 
 const toBase64Url = (value: Buffer | string) =>
   Buffer.from(value)
@@ -134,3 +173,70 @@ export const setInviteOtpState = async (inviteId: string, state: InviteOtpState)
   await redis.set(inviteOtpKey(inviteId), JSON.stringify(state), { ex: ttlSeconds });
 };
 
+export const parseInviteClaimCookie = (value: string | undefined | null) => {
+  if (!value) return null;
+  const [inviteId, claimId] = value.split(".");
+  if (!inviteId || !claimId) return null;
+  return { inviteId, claimId };
+};
+
+export const ensureInviteClaim = async (
+  inviteId: string,
+  expiresAt: number,
+  currentCookieValue?: string | null,
+): Promise<InviteClaimValidationResult & { claimCookieValue?: string }> => {
+  const parsed = parseInviteClaimCookie(currentCookieValue);
+  const ttlSeconds = Math.max(1, Math.floor((expiresAt - Date.now()) / 1000));
+
+  if (parsed?.inviteId === inviteId) {
+    const existingClaim = await redis.get(inviteClaimKey(inviteId));
+    if (typeof existingClaim === "string" && existingClaim === parsed.claimId) {
+      return { ok: true, claimCookieValue: `${inviteId}.${parsed.claimId}` };
+    }
+  }
+
+  const newClaimId = crypto.randomUUID();
+  const setResult = await redis.set(inviteClaimKey(inviteId), newClaimId, {
+    nx: true,
+    ex: ttlSeconds,
+  });
+  if (setResult) {
+    return { ok: true, claimCookieValue: `${inviteId}.${newClaimId}` };
+  }
+
+  if (!parsed) {
+    return { ok: false, reason: "missing_claim" };
+  }
+
+  return { ok: false, reason: "claim_taken" };
+};
+
+export const clearInviteClaim = async (inviteId: string) => {
+  await redis.del(inviteClaimKey(inviteId));
+};
+
+export const withInviteOtpLock = async <T>(
+  inviteId: string,
+  fn: () => Promise<T>,
+): Promise<T | null> => {
+  const lockId = crypto.randomUUID();
+  const key = inviteOtpLockKey(inviteId);
+  const acquired = await redis.set(key, lockId, { nx: true, ex: 30 });
+
+  if (!acquired) {
+    return null;
+  }
+
+  try {
+    return await fn();
+  } finally {
+    try {
+      const currentLock = await redis.get(key);
+      if (typeof currentLock === "string" && currentLock === lockId) {
+        await redis.del(key);
+      }
+    } catch {
+      // Best-effort lock release; key is short-lived.
+    }
+  }
+};

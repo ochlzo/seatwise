@@ -132,6 +132,9 @@ export function useEmailPass() {
         photoURL: serverUser?.photoURL || firebaseUser.photoURL,
         role: serverUser?.role || "USER",
         username: serverUser?.username || username,
+        isSuperadmin: serverUser?.isSuperadmin ?? false,
+        teamId: serverUser?.teamId ?? null,
+        teamName: serverUser?.teamName ?? null,
         hasPassword: true,
         isNewUser: serverUser?.isNewUser ?? true,
       };
@@ -177,6 +180,9 @@ export function useEmailPass() {
         photoURL: serverUser?.photoURL || firebaseUser.photoURL,
         role: serverUser?.role || "USER",
         username: serverUser?.username || null,
+        isSuperadmin: serverUser?.isSuperadmin ?? false,
+        teamId: serverUser?.teamId ?? null,
+        teamName: serverUser?.teamName ?? null,
         hasPassword: serverUser?.hasPassword ?? true,
         isNewUser: serverUser?.isNewUser ?? false,
       };

@@ -51,10 +51,7 @@ export async function POST(request: NextRequest) {
       select: { user_id: true },
     });
     if (existingAdmin) {
-      return NextResponse.json(
-        { error: "This email already belongs to an admin account." },
-        { status: 409 },
-      );
+      return NextResponse.json({ success: true });
     }
 
     const inviterName =
