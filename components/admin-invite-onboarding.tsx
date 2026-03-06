@@ -20,7 +20,8 @@ import {
 type InviteInfo = {
   inviteId: string;
   email: string;
-  teamName: string;
+  teamName: string | null;
+  targetRole: "TEAM_ADMIN" | "SUPERADMIN";
   expiresAt: number;
   otpVerified: boolean;
 };
@@ -201,16 +202,18 @@ export function AdminInviteOnboarding({ token }: Props) {
           <div className="space-y-4">
             <h2 className="text-xl font-semibold">Invite link unavailable</h2>
             <p className="text-sm text-red-500">{error}</p>
-            <Button onClick={() => router.push("/login")} variant="outline">
-              Back to login
-            </Button>
           </div>
         ) : invite ? (
           <form className="space-y-4" onSubmit={handleComplete}>
             <div>
               <h2 className="text-xl font-semibold">Admin Invite Onboarding</h2>
               <p className="text-sm text-muted-foreground">
-                Team: <span className="font-semibold">{invite.teamName}</span>
+                Access:
+                <span className="font-semibold ml-1">
+                  {invite.targetRole === "SUPERADMIN"
+                    ? "Superadmin"
+                    : invite.teamName ?? "Team Admin"}
+                </span>
               </p>
             </div>
 
@@ -310,4 +313,3 @@ export function AdminInviteOnboarding({ token }: Props) {
     </Card>
   );
 }
-

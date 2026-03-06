@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { redis } from "@/lib/clients/redis";
 import {
+  doesInviteMatchSession,
   getInviteOtpState,
   getInviteSession,
   hashOtp,
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     if (session.consumed) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 410 });
     }
-    if (session.email !== payload.email || session.teamId !== payload.teamId) {
+    if (!doesInviteMatchSession(payload, session)) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
     }
 

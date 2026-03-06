@@ -63,6 +63,8 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
   const [invitingTeamId, setInvitingTeamId] = React.useState<string | null>(null);
   const [teamSearchQuery, setTeamSearchQuery] = React.useState("");
   const [adminSearchQuery, setAdminSearchQuery] = React.useState("");
+  const [superadminInviteEmail, setSuperadminInviteEmail] = React.useState("");
+  const [isInvitingSuperadmin, setIsInvitingSuperadmin] = React.useState(false);
   const [deleteTargetTeam, setDeleteTargetTeam] = React.useState<Team | null>(null);
   const [isDeletingTeam, setIsDeletingTeam] = React.useState(false);
 
@@ -220,6 +222,45 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
     }
   };
 
+  const sendSuperadminInvite = async () => {
+    const email = superadminInviteEmail.trim();
+    if (!email) {
+      toast.error("Superadmin invite email is required.");
+      return;
+    }
+
+    setIsInvitingSuperadmin(true);
+    try {
+      const res = await fetch("/api/admin/access/invite/superadmin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        promotedExistingAdmin?: boolean;
+      };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to process superadmin invite.");
+      }
+
+      setSuperadminInviteEmail("");
+      if (data.promotedExistingAdmin) {
+        toast.success("Existing admin promoted to superadmin and detached from team.");
+        await loadData();
+      } else {
+        toast.success("Superadmin invite email sent.");
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to process superadmin invite.",
+      );
+    } finally {
+      setIsInvitingSuperadmin(false);
+    }
+  };
+
   const selectedTeam = React.useMemo(() => {
     if (teamId) {
       return teams.find((team) => team.team_id === teamId) ?? null;
@@ -260,6 +301,44 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
         </div>
       </div>
       <Separator className="md:hidden" />
+
+      {isSuperadmin && !teamId && (
+        <Card className="border-0 bg-transparent py-0 shadow-none md:border md:bg-card md:py-6 md:shadow-sm">
+          <CardHeader className="px-0 md:px-6">
+            <CardTitle className="text-base md:text-lg">Invite Superadmin</CardTitle>
+            <CardDescription>
+              Invite a platform-level superadmin. Existing team admins with this email are promoted and unassigned from teams.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-0 md:px-6">
+            <div className="flex items-end gap-2">
+              <div className="w-full space-y-2">
+                <Label htmlFor="superadmin-invite-email">Superadmin email</Label>
+                <Input
+                  id="superadmin-invite-email"
+                  type="email"
+                  value={superadminInviteEmail}
+                  onChange={(event) => setSuperadminInviteEmail(event.target.value)}
+                  placeholder="superadmin@email.com"
+                  className="h-8 text-sm md:h-9 md:text-base"
+                />
+              </div>
+              <Button
+                onClick={sendSuperadminInvite}
+                disabled={isInvitingSuperadmin}
+                className="h-8 gap-2 px-3 text-xs md:h-9 md:text-sm"
+              >
+                {isInvitingSuperadmin ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                Invite Superadmin
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isSuperadmin && !teamId && (
         <Card className="border-0 bg-transparent py-0 shadow-none md:border md:bg-card md:py-6 md:shadow-sm">

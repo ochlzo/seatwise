@@ -2,9 +2,10 @@ import { assertGmailSenderAlignment } from "@/lib/email/gmailSenderGuard";
 
 type AdminInviteEmailPayload = {
   to: string;
-  teamName: string;
+  teamName: string | null;
   inviterName: string;
   inviteLink: string;
+  targetRole: "TEAM_ADMIN" | "SUPERADMIN";
 };
 
 const toBase64Url = (input: string) =>
@@ -51,11 +52,19 @@ export const sendAdminInviteEmail = async (payload: AdminInviteEmailPayload) => 
 
   const accessToken = await getAccessToken();
   await assertGmailSenderAlignment(accessToken, sender);
-  const subject = `Seatwise Admin Invitation - ${payload.teamName}`;
+  const contextLabel =
+    payload.targetRole === "SUPERADMIN"
+      ? "Seatwise Superadmin Access"
+      : payload.teamName ?? "Seatwise Team";
+  const subject = `Seatwise Admin Invitation - ${contextLabel}`;
+  const inviteLine =
+    payload.targetRole === "SUPERADMIN"
+      ? `${payload.inviterName} invited you to join Seatwise as a SUPERADMIN.`
+      : `${payload.inviterName} invited you to join the "${payload.teamName}" admin team in Seatwise.`;
   const body = [
     `Hi,`,
     "",
-    `${payload.inviterName} invited you to join the "${payload.teamName}" admin team in Seatwise.`,
+    inviteLine,
     "",
     "Complete your admin onboarding here:",
     payload.inviteLink,

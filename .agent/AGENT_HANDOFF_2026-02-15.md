@@ -1,4 +1,4 @@
-# Seatwise Agent Handoff (Current State, 2026-03-05)
+# Seatwise Agent Handoff (Current State, 2026-03-06)
 
 ## Purpose
 This handoff is intentionally trimmed to active behavior only. Legacy/rolled-back notes were removed.
@@ -88,14 +88,15 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Regular admin can rename/manage own team, invite only to own team, view only own team.
 
 ## Admin Invite Behavior (Current)
-- Invite endpoint currently sends email only via Gmail API.
-- Email sender helper:
+- Invite flow is now token/session-based with OTP onboarding and completion APIs.
+- Shared helper and key logic:
+- `lib/invite/adminInvite.ts`
+- Invite email sender:
 - `lib/email/sendAdminInviteEmail.ts`
-- It does **not** currently:
-- create an `Admin` record,
-- persist invite token/state/expiry,
-- provide acceptance/join-link flow,
-- auto-assign invited account to team from an invite record.
+- Team-admin invite sender route:
+- `POST /api/admin/access/invite`
+- Existing admin email behavior on team invite:
+- Returns success without sending a new invite (non-enumerating response).
 
 ## Admin Access UI Notes (Current)
 - Mobile and desktop are intentionally different in `AdminAccessClient.tsx`:
@@ -303,10 +304,13 @@ In `prisma/schema.prisma`, `Show` includes:
 - `components/AdminShield.tsx` now shows:
 - `SUPERADMIN` if superadmin.
 - Uppercased team name if not superadmin.
+- Falls back to uppercased `teamId` when `teamName` is unavailable.
 - `UNASSIGNED` fallback if no team.
 - Auth typing extended in:
 - `lib/features/auth/authSlice.ts`
 - Added optional fields: `isSuperadmin`, `teamId`, `teamName`.
+- Login auth mapping was aligned to preserve these fields in Redux state:
+- `hooks/useEmail&Pass.ts`
 
 ### Admin Team Delete Action + Guard Modal (Implemented)
 - Updated teams table in `AdminAccessClient.tsx`:
@@ -348,7 +352,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Creates Redis invite session.
 - Generates signed invite token.
 - Sends `/login?invite=<token>` link.
-- Blocks invite when email already belongs to existing Admin.
+- If email already belongs to an existing Admin, returns success without sending a duplicate invite.
 
 #### New invite onboarding APIs
 - `POST /api/admin/access/invite/validate`
@@ -364,8 +368,8 @@ In `prisma/schema.prisma`, `Show` includes:
 - Requires validated token + OTP verified session.
 - Creates Firebase Auth user via Admin SDK.
 - Creates Admin DB row with:
-- `team_id` from invite session
-- `is_superadmin=false`
+- For `TEAM_ADMIN` invites: `team_id` from invite session and `is_superadmin=false`
+- For `SUPERADMIN` invites: `team_id=null` and `is_superadmin=true`
 - On success: deletes invite session/otp/email-lock keys from Redis.
 - On failure: best-effort Firebase rollback and invite state recovery.
 
@@ -381,6 +385,43 @@ In `prisma/schema.prisma`, `Show` includes:
 - Verify OTP
 - Complete profile (`firstName`, `lastName`, `username`, `password`)
 - Auto sign-in + call existing `/api/auth/login`
+- Invite-unavailable state no longer shows a "Back to login" button.
+
+### Invite Security Hardening (Implemented)
+- Claim-bound invite flow added:
+- On validate, invite claim cookie is issued and bound to Redis claim key.
+- OTP send/verify/complete require matching claimant context.
+- Added in:
+- `lib/invite/adminInvite.ts`
+- `app/api/admin/access/invite/validate/route.ts`
+- `app/api/admin/access/invite/send-otp/route.ts`
+- `app/api/admin/access/invite/verify-otp/route.ts`
+- `app/api/admin/access/invite/complete/route.ts`
+- OTP state mutation race-window reduced:
+- Added per-invite short Redis lock wrapper used by send-otp and verify-otp.
+- External error responses were generalized in invite onboarding routes to reduce state leakage/enumeration.
+- Security config parsing hardened:
+- Invite/OTP TTL and limits now require bounded integer env values in `lib/invite/adminInvite.ts`.
+
+### Superadmin Invite Flow (Implemented)
+- Added dedicated endpoint:
+- `POST /api/admin/access/invite/superadmin`
+- File: `app/api/admin/access/invite/superadmin/route.ts`
+- Permissions:
+- Only existing superadmin can call this route.
+- Behavior:
+- If target email is an existing Admin record, user is promoted immediately:
+- `is_superadmin=true`
+- `team_id=null`
+- If target email is not an existing Admin record, creates a secure onboarding invite with role target `SUPERADMIN`.
+- Shared invite payload/session now includes role target:
+- `targetRole = TEAM_ADMIN | SUPERADMIN`
+- Role-aware checks enforced through invite routes via `doesInviteMatchSession()`.
+
+### Admin Access UI Polishing (Implemented)
+- Superadmin root page (`/admin/access`) now includes a dedicated "Invite Superadmin" card.
+- Superadmin invite card was positioned above "Create Team" card.
+- File: `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx`
 
 ### Email Sending Hardening + Test Script Updates
 - Updated invite email sender:

@@ -5,15 +5,17 @@ import { redis } from "@/lib/clients/redis";
 export type InviteTokenPayload = {
   inviteId: string;
   email: string;
-  teamId: string;
+  teamId: string | null;
+  targetRole: "TEAM_ADMIN" | "SUPERADMIN";
   exp: number;
 };
 
 export type InviteSession = {
   inviteId: string;
   email: string;
-  teamId: string;
-  teamName: string;
+  teamId: string | null;
+  teamName: string | null;
+  targetRole: "TEAM_ADMIN" | "SUPERADMIN";
   inviterName: string;
   expiresAt: number;
   otpVerified: boolean;
@@ -128,8 +130,23 @@ export const verifyInviteToken = (token: string): InviteTokenPayload => {
     throw new Error("Invalid invite token signature.");
   }
 
-  const payload = JSON.parse(fromBase64Url(encodedPayload).toString("utf8")) as InviteTokenPayload;
-  if (!payload.inviteId || !payload.email || !payload.teamId || !payload.exp) {
+  const parsed = JSON.parse(fromBase64Url(encodedPayload).toString("utf8")) as Partial<InviteTokenPayload>;
+  const targetRole =
+    parsed.targetRole === "SUPERADMIN" || parsed.targetRole === "TEAM_ADMIN"
+      ? parsed.targetRole
+      : "TEAM_ADMIN";
+  const payload: InviteTokenPayload = {
+    inviteId: parsed.inviteId ?? "",
+    email: parsed.email ?? "",
+    teamId: parsed.teamId ?? null,
+    targetRole,
+    exp: Number(parsed.exp ?? 0),
+  };
+
+  if (!payload.inviteId || !payload.email || !payload.exp) {
+    throw new Error("Invite token payload is invalid.");
+  }
+  if (payload.targetRole === "TEAM_ADMIN" && !payload.teamId) {
     throw new Error("Invite token payload is invalid.");
   }
   if (Date.now() >= payload.exp * 1000) {
@@ -171,6 +188,17 @@ export const getInviteOtpState = async (inviteId: string): Promise<InviteOtpStat
 export const setInviteOtpState = async (inviteId: string, state: InviteOtpState) => {
   const ttlSeconds = Math.max(1, Math.floor((state.expiresAt - Date.now()) / 1000));
   await redis.set(inviteOtpKey(inviteId), JSON.stringify(state), { ex: ttlSeconds });
+};
+
+export const doesInviteMatchSession = (payload: InviteTokenPayload, session: InviteSession) => {
+  if (payload.email !== session.email) return false;
+  if (payload.targetRole !== session.targetRole) return false;
+
+  if (payload.targetRole === "TEAM_ADMIN") {
+    return Boolean(payload.teamId && payload.teamId === session.teamId);
+  }
+
+  return session.teamId === null;
 };
 
 export const parseInviteClaimCookie = (value: string | undefined | null) => {

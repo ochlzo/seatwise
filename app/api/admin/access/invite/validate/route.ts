@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  doesInviteMatchSession,
   ensureInviteClaim,
   getInviteSession,
   INVITE_CLAIM_COOKIE,
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (session.consumed) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 410 });
     }
-    if (session.email !== payload.email || session.teamId !== payload.teamId) {
+    if (!doesInviteMatchSession(payload, session)) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
     }
     if (Date.now() >= session.expiresAt) {
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
         inviteId: session.inviteId,
         email: session.email,
         teamName: session.teamName,
+        targetRole: session.targetRole,
         expiresAt: session.expiresAt,
         otpVerified: session.otpVerified,
       },

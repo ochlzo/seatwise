@@ -4,6 +4,7 @@ import { adminAuth } from "@/lib/firebaseAdmin";
 import { redis } from "@/lib/clients/redis";
 import {
   clearInviteClaim,
+  doesInviteMatchSession,
   getInviteSession,
   INVITE_CLAIM_COOKIE,
   inviteEmailLockKey,
@@ -75,16 +76,17 @@ export async function POST(request: NextRequest) {
     if (!session.otpVerified) {
       return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 400 });
     }
-    if (session.email !== payload.email || session.teamId !== payload.teamId) {
+    if (!doesInviteMatchSession(payload, session)) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
     }
-
-    const team = await prisma.team.findUnique({
-      where: { team_id: session.teamId },
-      select: { team_id: true },
-    });
-    if (!team) {
-      return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 404 });
+    if (session.targetRole === "TEAM_ADMIN") {
+      const team = await prisma.team.findUnique({
+        where: { team_id: session.teamId! },
+        select: { team_id: true },
+      });
+      if (!team) {
+        return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 404 });
+      }
     }
 
     lockKey = inviteEmailLockKey(session.email);
@@ -139,8 +141,8 @@ export async function POST(request: NextRequest) {
         first_name: firstName,
         last_name: lastName,
         status: "ACTIVE",
-        team_id: session.teamId,
-        is_superadmin: false,
+        team_id: session.targetRole === "SUPERADMIN" ? null : session.teamId,
+        is_superadmin: session.targetRole === "SUPERADMIN",
       },
     });
 

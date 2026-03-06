@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendAdminInviteOtpEmail } from "@/lib/email/sendAdminInviteOtpEmail";
 import {
+  doesInviteMatchSession,
   generateOtp,
   getInviteOtpState,
   getInviteSession,
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     if (session.consumed) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 410 });
     }
-    if (session.email !== payload.email || session.teamId !== payload.teamId) {
+    if (!doesInviteMatchSession(payload, session)) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
     }
 
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
 
       await sendAdminInviteOtpEmail({
         to: session.email,
-        teamName: session.teamName,
+        teamName: session.teamName ?? "Seatwise",
         otp,
       });
 
