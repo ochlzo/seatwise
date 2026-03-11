@@ -8,7 +8,14 @@ import {
   TriangleAlertIcon,
 } from "lucide-react"
 import { useTheme } from "next-themes"
-import { Toaster as Sonner, toast, type ToasterProps } from "sonner"
+import { Toaster as Sonner, toast as sonnerToast, type ToasterProps } from "sonner"
+
+const toast = {
+  success: sonnerToast.success,
+  error: sonnerToast.error,
+  warning: sonnerToast.warning,
+  notification: sonnerToast.info,
+}
 
 const Toaster = ({ position = "top-center", ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
@@ -27,6 +34,9 @@ const Toaster = ({ position = "top-center", ...props }: ToasterProps) => {
       }}
       toastOptions={{
         classNames: {
+          success: "!border-emerald-600/80 !bg-emerald-600 !text-white",
+          info: "!border-border !bg-popover !text-popover-foreground",
+          warning: "!border-amber-500/80 !bg-amber-500 !text-black",
           error: "!border-red-600/80 !bg-red-600 !text-white",
         },
       }}

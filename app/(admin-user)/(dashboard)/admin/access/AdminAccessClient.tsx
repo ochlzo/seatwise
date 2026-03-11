@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { ShieldCheck, Loader2, Plus, Search, Trash2, AlertTriangle } from "lucide-react";
 import {
   Card,
@@ -536,3 +536,4 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
     </div>
   );
 }
+

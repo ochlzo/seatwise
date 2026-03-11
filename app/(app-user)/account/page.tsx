@@ -25,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/lib/firebaseClient";
 import { ThemeSwithcer } from "@/components/theme-swithcer"
@@ -264,3 +264,4 @@ export default function AccountPage() {
     </>
   );
 }
+

@@ -23,7 +23,7 @@ import {
 import { cn, formatBytes } from "@/lib/utils";
 import { deleteSeatmapsAction, updateSeatmapStatusAction } from "@/lib/actions/seatmapActions";
 import type { Prisma } from "@prisma/client";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { SeatmapPreviewModal } from "./SeatmapPreviewModal";
 
 type SeatmapRow = {
@@ -283,3 +283,4 @@ export function SeatmapTable({ seatmaps }: SeatmapTableProps) {
     </div>
   );
 }
+

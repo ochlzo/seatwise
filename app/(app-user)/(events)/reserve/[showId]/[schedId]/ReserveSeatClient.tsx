@@ -261,13 +261,13 @@ export function ReserveSeatClient({
     if (remainingMs <= 20_000 && !hasShownTwentySecondToastRef.current) {
       hasShownTwentySecondToastRef.current = true;
       hasShownOneMinuteToastRef.current = true;
-      toast("Hurry! 20 seconds left!");
+      toast.notification("Hurry! 20 seconds left!");
       return;
     }
 
     if (remainingMs <= 60_000 && !hasShownOneMinuteToastRef.current) {
       hasShownOneMinuteToastRef.current = true;
-      toast("1 minute left");
+      toast.notification("1 minute left");
     }
   }, [error, expiresAt, isLoading, now]);
 
@@ -1088,4 +1088,6 @@ export function ReserveSeatClient({
     </div>
   );
 }
+
+
 

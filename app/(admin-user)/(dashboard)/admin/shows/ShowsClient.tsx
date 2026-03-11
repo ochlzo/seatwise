@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { PageHeader } from "@/components/page-header";
 import { ShowFilters } from "./ShowFilters";
 import AdminShield from "@/components/AdminShield";
@@ -582,3 +582,4 @@ export default function ShowsPage({
     </>
   );
 }
+

@@ -457,4 +457,61 @@ In `prisma/schema.prisma`, `Show` includes:
 - Result:
 - Eliminates the public admin username/email enumeration path previously noted in handoff.
 
+## Post-Handoff Updates (After Last Handoff Edit)
+
+### Admin Dashboard Welcome Popup Removal (Implemented)
+- Removed the `/admin` welcome popup mount from:
+- `app/(admin-user)/(dashboard)/admin/page.tsx`
+- Deleted the unused popup component file:
+- `components/welcome-admin-dialog.tsx`
+- Result:
+- `/admin` now loads directly without the "Welcome Admin" dialog.
+
+### Toaster Standardization + Styling (Implemented)
+- Standardized app toast usage around the shared wrapper:
+- `components/ui/sonner.tsx`
+- Wrapper now exposes semantic variants for app use:
+- `toast.error`
+- `toast.success`
+- `toast.notification`
+- `toast.warning`
+- Global toast color mapping now uses:
+- error = red
+- success = green
+- notification = default surface
+- warning = yellow
+- Updated direct `sonner` imports across app code to use the shared wrapper.
+
+### Reservations Kanban: Invalid Move Messaging (Implemented)
+- In `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`:
+- Moving a `REJECTED` card to `CONFIRMED` now shows:
+- `Cannot move 'Rejected' payments to 'Confirmed'.`
+- Existing generic invalid-move guidance remains for unsupported drag targets.
+
+### Reservations Search Fix + Debounce (Implemented)
+- Fixed `/admin/reservations` search crash in:
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- Root cause:
+- Search filter referenced `reservation.seatAssignment.sched.show.show_name`, but that nested `sched.show` object is not present in the API response shape used by the page.
+- Updated search to use grouped show data already available on the client:
+- `show.showName`
+- `show.venue`
+- Added debounced search input handling:
+- `searchInput` updates immediately
+- `searchQuery` applies after a short delay (250ms)
+- Empty-state message now keys off the raw input state.
+
+### Reservations Kanban: Stage-Change Confirmation Modal (Implemented)
+- Added confirmation modal before executing allowed drag/drop stage changes in:
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- Covered transitions:
+- `PENDING -> CONFIRMED`
+- `any card -> REJECTED`
+- Modal behavior:
+- explicit `Cancel` / `Move to ...` actions only
+- outside click does not dismiss
+- blur/pointer outside does not dismiss
+- escape key does not dismiss
+- Result:
+- Allowed moves now require explicit admin confirmation before reservation mutation routes run.
 

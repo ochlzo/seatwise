@@ -18,7 +18,7 @@ import type { Node as KonvaNode } from "konva/lib/Node";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import {
   setViewport,
   setMode,
@@ -1326,3 +1326,4 @@ export default function SeatmapCanvas() {
     </div>
   );
 }
+

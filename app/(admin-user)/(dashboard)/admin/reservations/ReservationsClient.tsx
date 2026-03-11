@@ -20,8 +20,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { CheckCircle2, Clock, CreditCard, GripVertical, Loader2, Search, XCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "@/components/ui/sonner";
 
 type PaymentData = {
   payment_id: string;
@@ -101,6 +103,11 @@ type KanbanCard = {
   status: KanbanStatus;
   showName: string;
   row: UserReservationRow;
+};
+
+type PendingMove = {
+  cardId: string;
+  targetStatus: "CONFIRMED" | "REJECTED";
 };
 
 const COLUMNS: Array<{
@@ -320,8 +327,10 @@ export function ReservationsClient() {
   const [shows, setShows] = React.useState<ShowGroup[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [searchInput, setSearchInput] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
+  const [pendingMove, setPendingMove] = React.useState<PendingMove | null>(null);
   const [activeDropColumn, setActiveDropColumn] = React.useState<KanbanStatus | null>(null);
   const [activeDragCardId, setActiveDragCardId] = React.useState<string | null>(null);
   const [columnOrders, setColumnOrders] = React.useState<Record<KanbanStatus, string[]>>({
@@ -335,6 +344,14 @@ export function ReservationsClient() {
       activationConstraint: { distance: 6 },
     }),
   );
+
+  React.useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
 
   React.useEffect(() => {
     const fetchReservations = async () => {
@@ -472,7 +489,8 @@ export function ReservationsClient() {
             reservation.phone_number.toLowerCase().includes(q) ||
             reservation.seatAssignment.seat.seat_number.toLowerCase().includes(q) ||
             reservation.reservation_id.toLowerCase().includes(q) ||
-            reservation.seatAssignment.sched.show.show_name.toLowerCase().includes(q),
+            show.showName.toLowerCase().includes(q) ||
+            show.venue.toLowerCase().includes(q),
         ),
       }))
       .filter((show) => show.reservations.length > 0);
@@ -539,6 +557,7 @@ export function ReservationsClient() {
   const pendingCount = orderedCardsByColumn.PENDING.length;
   const confirmedCount = orderedCardsByColumn.CONFIRMED.length;
   const activeDragCard = activeDragCardId ? cardById.get(activeDragCardId) ?? null : null;
+  const pendingMoveCard = pendingMove ? cardById.get(pendingMove.cardId) ?? null : null;
 
   const resolveDropTarget = React.useCallback(
     (overId: string): KanbanStatus | null => {
@@ -552,6 +571,27 @@ export function ReservationsClient() {
     },
     [cardById],
   );
+
+  const pendingMoveLabel = pendingMove?.targetStatus === "CONFIRMED" ? "Confirmed" : "Rejected";
+
+  const handleConfirmStageMove = React.useCallback(async () => {
+    if (!pendingMove) return;
+
+    const targetCard = cardById.get(pendingMove.cardId);
+    if (!targetCard) {
+      setPendingMove(null);
+      return;
+    }
+
+    if (pendingMove.targetStatus === "CONFIRMED") {
+      await handleVerifyMany(targetCard.row.pendingReservationIds, `kanban:${targetCard.id}`);
+    } else {
+      const reservationIds = targetCard.row.reservations.map((reservation) => reservation.reservation_id);
+      await handleRejectMany(reservationIds, `kanban:${targetCard.id}`);
+    }
+
+    setPendingMove(null);
+  }, [cardById, handleRejectMany, handleVerifyMany, pendingMove]);
 
   const onDragEnd = React.useCallback(
     async (event: DragEndEvent) => {
@@ -582,13 +622,12 @@ export function ReservationsClient() {
       }
 
       if (activeCard.status === "PENDING" && targetStatus === "CONFIRMED") {
-        await handleVerifyMany(activeCard.row.pendingReservationIds, `kanban:${activeCard.id}`);
+        setPendingMove({ cardId: activeCard.id, targetStatus: "CONFIRMED" });
         return;
       }
 
       if (targetStatus === "REJECTED") {
-        const reservationIds = activeCard.row.reservations.map((reservation) => reservation.reservation_id);
-        await handleRejectMany(reservationIds, `kanban:${activeCard.id}`);
+        setPendingMove({ cardId: activeCard.id, targetStatus: "REJECTED" });
         return;
       }
 
@@ -597,9 +636,9 @@ export function ReservationsClient() {
         return;
       }
 
-      toast.info("Supported moves: Pending to Confirmed, or any card to Rejected.");
+      toast.notification("Supported moves: Pending to Confirmed, or any card to Rejected.");
     },
-    [cardById, columnOrders, handleRejectMany, handleVerifyMany, resolveDropTarget],
+    [cardById, columnOrders, resolveDropTarget],
   );
 
   if (isLoading) {
@@ -620,123 +659,168 @@ export function ReservationsClient() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardContent className="flex items-center gap-4 py-4">
-            <div className="rounded-lg bg-blue-100 p-2.5 dark:bg-blue-900/30">
-              <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{totalReservations}</p>
-              <p className="text-xs text-muted-foreground">Total Users Reserved</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-4 py-4">
-            <div className="rounded-lg bg-amber-100 p-2.5 dark:bg-amber-900/30">
-              <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{pendingCount}</p>
-              <p className="text-xs text-muted-foreground">Pending Users</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-4 py-4">
-            <div className="rounded-lg bg-green-100 p-2.5 dark:bg-green-900/30">
-              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{confirmedCount}</p>
-              <p className="text-xs text-muted-foreground">Confirmed Users</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Search by name, email, seat number, reservation ID, or show..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-lg border border-sidebar-border/70 dark:border-white/20 bg-background py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-        />
-      </div>
-
-      {kanbanCards.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
-          <CreditCard className="h-10 w-10" />
-          <p className="text-sm">{searchQuery ? "No reservations match your search." : "No reservations found."}</p>
-        </div>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragOver={(event) => {
-            const overId = event.over ? String(event.over.id) : null;
-            if (!overId) {
-              setActiveDropColumn((prev) => (prev === null ? prev : null));
-              return;
-            }
-            const nextColumn = resolveDropTarget(overId);
-            setActiveDropColumn((prev) => (prev === nextColumn ? prev : nextColumn));
-          }}
-          onDragStart={(event: DragStartEvent) => {
-            setActiveDragCardId(String(event.active.id));
-          }}
-          onDragEnd={(event) => {
-            void onDragEnd(event);
-            setActiveDragCardId(null);
-          }}
-          onDragCancel={() => {
-            setActiveDropColumn(null);
-            setActiveDragCardId(null);
-          }}
+    <>
+      <Dialog open={!!pendingMove} onOpenChange={() => undefined}>
+        <DialogContent
+          showCloseButton={false}
+          onInteractOutside={(event) => event.preventDefault()}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
         >
-          <div className="grid gap-4 xl:grid-cols-3">
-            {COLUMNS.map((column) => (
-              <KanbanColumn
-                key={column.key}
-                status={column.key}
-                title={column.title}
-                icon={column.icon}
-                stageClassName={column.stageClassName}
-                stageCountClassName={column.stageCountClassName}
-                stageSurfaceClassName={column.stageSurfaceClassName}
-                cards={orderedCardsByColumn[column.key]}
-                isActiveDrop={activeDropColumn === column.key}
-                verifyingId={verifyingId}
-              />
-            ))}
+          <DialogHeader>
+            <DialogTitle>Confirm stage change</DialogTitle>
+            <DialogDescription>
+              {pendingMoveCard
+                ? `Move ${pendingMoveCard.row.user.first_name} ${pendingMoveCard.row.user.last_name} for ${pendingMoveCard.showName} to ${pendingMoveLabel}?`
+                : "Confirm this reservation stage change."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingMove(null)}
+              disabled={!!verifyingId}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                void handleConfirmStageMove();
+              }}
+              disabled={!!verifyingId}
+            >
+              {verifyingId ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                `Move to ${pendingMoveLabel}`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardContent className="flex items-center gap-4 py-4">
+              <div className="rounded-lg bg-blue-100 p-2.5 dark:bg-blue-900/30">
+                <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{totalReservations}</p>
+                <p className="text-xs text-muted-foreground">Total Users Reserved</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex items-center gap-4 py-4">
+              <div className="rounded-lg bg-amber-100 p-2.5 dark:bg-amber-900/30">
+                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{pendingCount}</p>
+                <p className="text-xs text-muted-foreground">Pending Users</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex items-center gap-4 py-4">
+              <div className="rounded-lg bg-green-100 p-2.5 dark:bg-green-900/30">
+                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{confirmedCount}</p>
+                <p className="text-xs text-muted-foreground">Confirmed Users</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search by name, email, seat number, reservation ID, or show..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full rounded-lg border border-sidebar-border/70 dark:border-white/20 bg-background py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+        </div>
+
+        {kanbanCards.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
+            <CreditCard className="h-10 w-10" />
+            <p className="text-sm">{searchInput.trim() ? "No reservations match your search." : "No reservations found."}</p>
           </div>
-          <DragOverlay>
-            {activeDragCard ? (
-              <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
-                <CardContent className="space-y-2 p-4 pr-10">
-                  <p className="text-base font-bold leading-tight">{activeDragCard.showName}</p>
-                  <p className="text-sm font-medium text-foreground">
-                    {activeDragCard.row.user.first_name} {activeDragCard.row.user.last_name}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{activeDragCard.row.user.email}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {activeDragCard.row.seatNumbers.length} seat
-                    {activeDragCard.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
-                    {formatCurrency(activeDragCard.row.totalAmount)}
-                  </p>
-                </CardContent>
-              </Card>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
-      )}
-    </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragOver={(event) => {
+              const overId = event.over ? String(event.over.id) : null;
+              if (!overId) {
+                setActiveDropColumn((prev) => (prev === null ? prev : null));
+                return;
+              }
+              const nextColumn = resolveDropTarget(overId);
+              setActiveDropColumn((prev) => (prev === nextColumn ? prev : nextColumn));
+            }}
+            onDragStart={(event: DragStartEvent) => {
+              setActiveDragCardId(String(event.active.id));
+            }}
+            onDragEnd={(event) => {
+              void onDragEnd(event);
+              setActiveDragCardId(null);
+            }}
+            onDragCancel={() => {
+              setActiveDropColumn(null);
+              setActiveDragCardId(null);
+            }}
+          >
+            <div className="grid gap-4 xl:grid-cols-3">
+              {COLUMNS.map((column) => (
+                <KanbanColumn
+                  key={column.key}
+                  status={column.key}
+                  title={column.title}
+                  icon={column.icon}
+                  stageClassName={column.stageClassName}
+                  stageCountClassName={column.stageCountClassName}
+                  stageSurfaceClassName={column.stageSurfaceClassName}
+                  cards={orderedCardsByColumn[column.key]}
+                  isActiveDrop={activeDropColumn === column.key}
+                  verifyingId={verifyingId}
+                />
+              ))}
+            </div>
+            <DragOverlay>
+              {activeDragCard ? (
+                <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
+                  <CardContent className="space-y-2 p-4 pr-10">
+                    <p className="text-base font-bold leading-tight">{activeDragCard.showName}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {activeDragCard.row.user.first_name} {activeDragCard.row.user.last_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{activeDragCard.row.user.email}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {activeDragCard.row.seatNumbers.length} seat
+                      {activeDragCard.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
+                      {formatCurrency(activeDragCard.row.totalAmount)}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        )}
+      </div>
+    </>
   );
 }
-

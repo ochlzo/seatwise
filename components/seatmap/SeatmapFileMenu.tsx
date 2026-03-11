@@ -4,7 +4,7 @@ import React from "react";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { Button } from "@/components/ui/button";
 import { Download, Upload, Save, FileCode, FileImage, ChevronDown } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { loadSeatmap, fitView, markSeatmapDirty, markSeatmapSaved } from "@/lib/features/seatmap/seatmapSlice";
 import { UploadProgress } from "@/components/ui/upload-progress";
 import { saveSeatmapTemplateAction } from "@/lib/actions/saveSeatmapTemplate";
@@ -485,3 +485,4 @@ export function SeatmapFileMenu() {
         </>
     );
 }
+

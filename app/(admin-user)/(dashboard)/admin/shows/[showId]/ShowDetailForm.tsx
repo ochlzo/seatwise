@@ -61,7 +61,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { updateShowAction } from "@/lib/actions/updateShow";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { useRouter } from "next/navigation";
 import type { ShowStatus } from "@prisma/client";
 import Image from "next/image";
@@ -2800,3 +2800,4 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     </div>
   );
 }
+

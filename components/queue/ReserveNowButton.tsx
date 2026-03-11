@@ -15,7 +15,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { toast } from "@/components/ui/sonner";
 import { useRouter } from 'next/navigation';
 import { getOrCreateGuestId } from "@/lib/guest";
 
@@ -377,3 +377,4 @@ export function ReserveNowButton({
         </>
     );
 }
+

@@ -14,7 +14,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import LoadingPage from "@/app/LoadingPage";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { loadSeatmap, setTitle, markSeatmapSaved } from "@/lib/features/seatmap/seatmapSlice";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 // Dynamically import Konva component to avoid SSR issues
 const SeatmapCanvas = dynamic(
@@ -178,3 +178,4 @@ export default function Page() {
         </SidebarProvider>
     );
 }
+
