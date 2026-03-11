@@ -515,3 +515,25 @@ In `prisma/schema.prisma`, `Show` includes:
 - Result:
 - Allowed moves now require explicit admin confirmation before reservation mutation routes run.
 
+
+
+### Reservations Kanban: Stage Rules + Preview UX (Updated This Session)
+- File updated:
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- Allowed drag/drop transitions are now limited to:
+- `PENDING -> CONFIRMED`
+- `PENDING -> REJECTED`
+- Explicitly blocked transitions now include:
+- `CONFIRMED -> REJECTED`
+- `REJECTED -> CONFIRMED`
+- Invalid move feedback now uses warning toasts aligned to the shared toast wrapper.
+- Stage-change confirmation dialog was restyled as a warning modal with:
+- warning icon
+- destructive confirm button
+- irreversible-action copy (`This action cannot be undone or changed.`)
+- Cross-column drag is intentionally not sortable.
+- When dragging a pending card over an allowed destination column, a sticky gray preview/shadow is shown only at the top of that destination list.
+- On drop to an allowed destination, the card stays visually in the destination column while the confirmation modal is open.
+- On confirm, the moved card is always inserted at the very top of the destination column.
+- On cancel, the card now animates back toward the source column using a rollback ghost animation.
+- Rollback animation duration is currently `360ms`.

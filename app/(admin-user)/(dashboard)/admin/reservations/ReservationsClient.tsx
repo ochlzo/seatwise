@@ -19,10 +19,33 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { AlertTriangle, CheckCircle2, Clock, CreditCard, GripVertical, Loader2, Search, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  GripVertical,
+  Loader2,
+  Search,
+  XCircle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
 
 type PaymentData = {
@@ -182,11 +205,16 @@ const formatCurrency = (value: string | number) => {
 
 const getRowStatus = (row: UserReservationRow): KanbanStatus => {
   if (row.pendingReservationIds.length > 0) return "PENDING";
-  if (row.reservations.every((reservation) => reservation.status === "CONFIRMED")) return "CONFIRMED";
+  if (
+    row.reservations.every((reservation) => reservation.status === "CONFIRMED")
+  )
+    return "CONFIRMED";
   return "REJECTED";
 };
 
-const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] => {
+const buildUserRows = (
+  reservations: ReservationData[],
+): UserReservationRow[] => {
   const map = new Map<string, UserReservationRow>();
 
   for (const reservation of reservations) {
@@ -205,9 +233,12 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
         },
         reservations: [reservation],
         seatNumbers: [reservation.seatAssignment.seat.seat_number],
-        pendingReservationIds: reservation.status === "PENDING" ? [reservation.reservation_id] : [],
+        pendingReservationIds:
+          reservation.status === "PENDING" ? [reservation.reservation_id] : [],
         latestCreatedAt: reservation.createdAt,
-        totalAmount: reservation.payment?.amount ? parseFloat(reservation.payment.amount) : 0,
+        totalAmount: reservation.payment?.amount
+          ? parseFloat(reservation.payment.amount)
+          : 0,
       });
       continue;
     }
@@ -219,7 +250,10 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
       existing.pendingReservationIds.push(reservation.reservation_id);
     }
 
-    if (new Date(reservation.createdAt).getTime() > new Date(existing.latestCreatedAt).getTime()) {
+    if (
+      new Date(reservation.createdAt).getTime() >
+      new Date(existing.latestCreatedAt).getTime()
+    ) {
       existing.latestCreatedAt = reservation.createdAt;
     }
 
@@ -235,7 +269,11 @@ const buildUserRows = (reservations: ReservationData[]): UserReservationRow[] =>
         a.localeCompare(b, undefined, { numeric: true }),
       ),
     }))
-    .sort((a, b) => new Date(b.latestCreatedAt).getTime() - new Date(a.latestCreatedAt).getTime());
+    .sort(
+      (a, b) =>
+        new Date(b.latestCreatedAt).getTime() -
+        new Date(a.latestCreatedAt).getTime(),
+    );
 };
 
 type SortableCardProps = {
@@ -244,11 +282,12 @@ type SortableCardProps = {
 };
 
 function SortableCard({ card, isVerifying }: SortableCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
-    id: card.id,
-    disabled: isVerifying,
-    data: { type: "card", column: card.status },
-  });
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useSortable({
+      id: card.id,
+      disabled: isVerifying,
+      data: { type: "card", column: card.status },
+    });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -264,7 +303,9 @@ function SortableCard({ card, isVerifying }: SortableCardProps) {
       style={style}
       className={`border-sidebar-border/70 dark:border-white/20 ${isDragging ? "border-dashed bg-muted/60" : ""} ${isVerifying ? "opacity-70" : ""}`}
     >
-      <CardContent className={`relative space-y-2 p-4 pr-10 ${isDragging ? "opacity-0" : ""}`}>
+      <CardContent
+        className={`relative space-y-2 p-4 pr-10 ${isDragging ? "opacity-0" : ""}`}
+      >
         <button
           type="button"
           aria-label="Drag reservation card"
@@ -281,7 +322,9 @@ function SortableCard({ card, isVerifying }: SortableCardProps) {
         </p>
         <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
         <p className="text-sm text-muted-foreground">
-          {card.row.seatNumbers.length} seat{card.row.seatNumbers.length !== 1 ? "s" : ""} - {formatCurrency(card.row.totalAmount)}
+          {card.row.seatNumbers.length} seat
+          {card.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
+          {formatCurrency(card.row.totalAmount)}
         </p>
         {isVerifying && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -316,7 +359,9 @@ function PreviewPlaceholderCard({
         </p>
         <p className="text-sm">{card.row.user.email}</p>
         <p className="text-sm">
-          {card.row.seatNumbers.length} seat{card.row.seatNumbers.length !== 1 ? "s" : ""} - {formatCurrency(card.row.totalAmount)}
+          {card.row.seatNumbers.length} seat
+          {card.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
+          {formatCurrency(card.row.totalAmount)}
         </p>
       </CardContent>
     </Card>
@@ -356,17 +401,24 @@ function KanbanColumn({
       ref={setNodeRef}
       className={`overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-white/20 ${stageSurfaceClassName} transition-colors ${isActiveDrop ? "bg-muted/50" : ""}`}
     >
-      <div className={`flex items-center justify-between px-3 py-2 ${stageClassName}`}>
+      <div
+        className={`flex items-center justify-between px-3 py-2 ${stageClassName}`}
+      >
         <div className="flex items-center gap-2 text-sm font-semibold">
           {icon}
           {title}
         </div>
-        <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${stageCountClassName}`}>
+        <span
+          className={`rounded-md px-2 py-0.5 text-xs font-medium ${stageCountClassName}`}
+        >
           {cards.length}
         </span>
       </div>
 
-      <SortableContext items={cards.filter((card) => !card.isPreview).map((card) => card.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext
+        items={cards.filter((card) => !card.isPreview).map((card) => card.id)}
+        strategy={verticalListSortingStrategy}
+      >
         <div className="min-h-[220px] space-y-3 p-3">
           {cards.map((card) =>
             card.isPreview ? (
@@ -374,10 +426,18 @@ function KanbanColumn({
                 key={card.id}
                 card={card}
                 previewId={card.id.startsWith("preview:") ? card.id : undefined}
-                rollbackAnchorId={card.id.startsWith("rollback:") ? card.id.replace("rollback:", "") : undefined}
+                rollbackAnchorId={
+                  card.id.startsWith("rollback:")
+                    ? card.id.replace("rollback:", "")
+                    : undefined
+                }
               />
             ) : (
-              <SortableCard key={card.id} card={card} isVerifying={verifyingId === `kanban:${card.id}`} />
+              <SortableCard
+                key={card.id}
+                card={card}
+                isVerifying={verifyingId === `kanban:${card.id}`}
+              />
             ),
           )}
         </div>
@@ -392,14 +452,26 @@ export function ReservationsClient() {
   const [error, setError] = React.useState<string | null>(null);
   const [searchInput, setSearchInput] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedShowId, setSelectedShowId] = React.useState("all");
   const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
-  const [pendingMove, setPendingMove] = React.useState<PendingMove | null>(null);
-  const [activeDropColumn, setActiveDropColumn] = React.useState<KanbanStatus | null>(null);
-  const [activeDragCardId, setActiveDragCardId] = React.useState<string | null>(null);
-  const [previewColumn, setPreviewColumn] = React.useState<KanbanStatus | null>(null);
-  const [rollbackPreview, setRollbackPreview] = React.useState<RollbackPreview | null>(null);
-  const [rollbackGhost, setRollbackGhost] = React.useState<RollbackGhost | null>(null);
-  const [columnOrders, setColumnOrders] = React.useState<Record<KanbanStatus, string[]>>({
+  const [pendingMove, setPendingMove] = React.useState<PendingMove | null>(
+    null,
+  );
+  const [activeDropColumn, setActiveDropColumn] =
+    React.useState<KanbanStatus | null>(null);
+  const [activeDragCardId, setActiveDragCardId] = React.useState<string | null>(
+    null,
+  );
+  const [previewColumn, setPreviewColumn] = React.useState<KanbanStatus | null>(
+    null,
+  );
+  const [rollbackPreview, setRollbackPreview] =
+    React.useState<RollbackPreview | null>(null);
+  const [rollbackGhost, setRollbackGhost] =
+    React.useState<RollbackGhost | null>(null);
+  const [columnOrders, setColumnOrders] = React.useState<
+    Record<KanbanStatus, string[]>
+  >({
     PENDING: [],
     CONFIRMED: [],
     REJECTED: [],
@@ -449,7 +521,10 @@ export function ReservationsClient() {
     void fetchReservations();
   }, []);
 
-  const handleVerifyMany = async (reservationIds: string[], verifyKey: string) => {
+  const handleVerifyMany = async (
+    reservationIds: string[],
+    verifyKey: string,
+  ) => {
     if (reservationIds.length === 0) return false;
 
     setVerifyingId(verifyKey);
@@ -477,7 +552,11 @@ export function ReservationsClient() {
                   ...reservation,
                   status: "CONFIRMED",
                   payment: reservation.payment
-                    ? { ...reservation.payment, status: "PAID", paid_at: new Date().toISOString() }
+                    ? {
+                        ...reservation.payment,
+                        status: "PAID",
+                        paid_at: new Date().toISOString(),
+                      }
                     : reservation.payment,
                 }
               : reservation,
@@ -499,7 +578,10 @@ export function ReservationsClient() {
     }
   };
 
-  const handleRejectMany = async (reservationIds: string[], rejectKey: string) => {
+  const handleRejectMany = async (
+    reservationIds: string[],
+    rejectKey: string,
+  ) => {
     if (reservationIds.length === 0) return false;
 
     setVerifyingId(rejectKey);
@@ -529,8 +611,14 @@ export function ReservationsClient() {
                   payment: reservation.payment
                     ? {
                         ...reservation.payment,
-                        status: reservation.payment.status === "PAID" ? "REFUNDED" : "FAILED",
-                        paid_at: reservation.payment.status === "PAID" ? reservation.payment.paid_at : null,
+                        status:
+                          reservation.payment.status === "PAID"
+                            ? "REFUNDED"
+                            : "FAILED",
+                        paid_at:
+                          reservation.payment.status === "PAID"
+                            ? reservation.payment.paid_at
+                            : null,
                       }
                     : reservation.payment,
                 }
@@ -553,12 +641,25 @@ export function ReservationsClient() {
     }
   };
 
+  const showFilterOptions = React.useMemo(
+    () =>
+      [...shows]
+        .sort((a, b) => a.showName.localeCompare(b.showName))
+        .map((show) => ({ id: show.showId, label: show.showName })),
+    [shows],
+  );
+
   const filteredShows = React.useMemo(() => {
-    if (!searchQuery.trim()) return shows;
+    const scopedShows =
+      selectedShowId === "all"
+        ? shows
+        : shows.filter((show) => show.showId === selectedShowId);
+
+    if (!searchQuery.trim()) return scopedShows;
 
     const q = searchQuery.toLowerCase();
 
-    return shows
+    return scopedShows
       .map((show) => ({
         ...show,
         reservations: show.reservations.filter(
@@ -567,14 +668,16 @@ export function ReservationsClient() {
             reservation.last_name.toLowerCase().includes(q) ||
             reservation.email.toLowerCase().includes(q) ||
             reservation.phone_number.toLowerCase().includes(q) ||
-            reservation.seatAssignment.seat.seat_number.toLowerCase().includes(q) ||
+            reservation.seatAssignment.seat.seat_number
+              .toLowerCase()
+              .includes(q) ||
             reservation.reservation_id.toLowerCase().includes(q) ||
             show.showName.toLowerCase().includes(q) ||
             show.venue.toLowerCase().includes(q),
         ),
       }))
       .filter((show) => show.reservations.length > 0);
-  }, [shows, searchQuery]);
+  }, [searchQuery, selectedShowId, shows]);
 
   const kanbanCards = React.useMemo(() => {
     const cards: KanbanCard[] = [];
@@ -612,8 +715,12 @@ export function ReservationsClient() {
       const next = { ...prev };
       (Object.keys(cardsByColumn) as KanbanStatus[]).forEach((status) => {
         const currentIds = cardsByColumn[status].map((card) => card.id);
-        const previousIds = prev[status].filter((id) => currentIds.includes(id));
-        const appendedIds = currentIds.filter((id) => !previousIds.includes(id));
+        const previousIds = prev[status].filter((id) =>
+          currentIds.includes(id),
+        );
+        const appendedIds = currentIds.filter(
+          (id) => !previousIds.includes(id),
+        );
         next[status] = [...previousIds, ...appendedIds];
       });
       return next;
@@ -624,7 +731,9 @@ export function ReservationsClient() {
     const ordered = {} as Record<KanbanStatus, KanbanCard[]>;
 
     (Object.keys(cardsByColumn) as KanbanStatus[]).forEach((status) => {
-      const lookup = new Map(cardsByColumn[status].map((card) => [card.id, card]));
+      const lookup = new Map(
+        cardsByColumn[status].map((card) => [card.id, card]),
+      );
       ordered[status] = columnOrders[status]
         .map((id) => lookup.get(id))
         .filter((card): card is KanbanCard => !!card);
@@ -633,9 +742,15 @@ export function ReservationsClient() {
     return ordered;
   }, [cardsByColumn, columnOrders]);
 
-  const activeDragCard = activeDragCardId ? cardById.get(activeDragCardId) ?? null : null;
-  const pendingMoveCard = pendingMove ? cardById.get(pendingMove.cardId) ?? null : null;
-  const rollbackPreviewCard = rollbackPreview ? cardById.get(rollbackPreview.cardId) ?? null : null;
+  const activeDragCard = activeDragCardId
+    ? (cardById.get(activeDragCardId) ?? null)
+    : null;
+  const pendingMoveCard = pendingMove
+    ? (cardById.get(pendingMove.cardId) ?? null)
+    : null;
+  const rollbackPreviewCard = rollbackPreview
+    ? (cardById.get(rollbackPreview.cardId) ?? null)
+    : null;
   const previewCardSource = activeDragCard ?? pendingMoveCard;
 
   React.useEffect(() => {
@@ -645,7 +760,9 @@ export function ReservationsClient() {
 
     const fromRect = rollbackPreview.fromRect;
     const frameId = window.requestAnimationFrame(() => {
-      const anchor = document.querySelector(`[data-rollback-anchor="${rollbackPreview.cardId}"]`);
+      const anchor = document.querySelector(
+        `[data-rollback-anchor="${rollbackPreview.cardId}"]`,
+      );
       if (!(anchor instanceof HTMLElement)) {
         setRollbackPreview(null);
         return;
@@ -667,7 +784,9 @@ export function ReservationsClient() {
       });
 
       window.requestAnimationFrame(() => {
-        setRollbackGhost((prev) => (prev ? { ...prev, isAnimating: true } : prev));
+        setRollbackGhost((prev) =>
+          prev ? { ...prev, isAnimating: true } : prev,
+        );
       });
 
       rollbackTimeoutRef.current = window.setTimeout(() => {
@@ -687,10 +806,14 @@ export function ReservationsClient() {
       REJECTED: [...orderedCardsByColumn.REJECTED],
     } satisfies Record<KanbanStatus, DisplayCard[]>;
 
-    if (previewCardSource && previewColumn && previewColumn !== previewCardSource.status) {
-      display[previewCardSource.status] = display[previewCardSource.status].filter(
-        (card) => card.id !== previewCardSource.id,
-      );
+    if (
+      previewCardSource &&
+      previewColumn &&
+      previewColumn !== previewCardSource.status
+    ) {
+      display[previewCardSource.status] = display[
+        previewCardSource.status
+      ].filter((card) => card.id !== previewCardSource.id);
 
       const previewCard: DisplayCard = {
         ...previewCardSource,
@@ -705,7 +828,9 @@ export function ReservationsClient() {
 
     if (rollbackPreview && rollbackPreviewCard) {
       const sourceCards = [...display[rollbackPreview.sourceStatus]];
-      const sourceIndex = sourceCards.findIndex((card) => card.id === rollbackPreview.cardId);
+      const sourceIndex = sourceCards.findIndex(
+        (card) => card.id === rollbackPreview.cardId,
+      );
 
       if (sourceIndex !== -1) {
         sourceCards.splice(sourceIndex, 1);
@@ -723,7 +848,13 @@ export function ReservationsClient() {
     }
 
     return display;
-  }, [orderedCardsByColumn, previewCardSource, previewColumn, rollbackPreview, rollbackPreviewCard]);
+  }, [
+    orderedCardsByColumn,
+    previewCardSource,
+    previewColumn,
+    rollbackPreview,
+    rollbackPreviewCard,
+  ]);
 
   const totalReservations = kanbanCards.length;
   const pendingCount = orderedCardsByColumn.PENDING.length;
@@ -742,7 +873,8 @@ export function ReservationsClient() {
     [cardById],
   );
 
-  const pendingMoveLabel = pendingMove?.targetStatus === "CONFIRMED" ? "Confirmed" : "Rejected";
+  const pendingMoveLabel =
+    pendingMove?.targetStatus === "CONFIRMED" ? "Confirmed" : "Rejected";
 
   const clearRollbackPreview = React.useCallback(() => {
     if (rollbackTimeoutRef.current !== null) {
@@ -753,19 +885,28 @@ export function ReservationsClient() {
     setRollbackPreview(null);
   }, []);
 
-  const startRollbackPreview = React.useCallback((card: KanbanCard, fromRect: RollbackRect | null) => {
-    if (rollbackTimeoutRef.current !== null) {
-      window.clearTimeout(rollbackTimeoutRef.current);
-      rollbackTimeoutRef.current = null;
-    }
+  const startRollbackPreview = React.useCallback(
+    (card: KanbanCard, fromRect: RollbackRect | null) => {
+      if (rollbackTimeoutRef.current !== null) {
+        window.clearTimeout(rollbackTimeoutRef.current);
+        rollbackTimeoutRef.current = null;
+      }
 
-    setRollbackGhost(null);
-    setRollbackPreview({ cardId: card.id, sourceStatus: card.status, fromRect });
-  }, []);
+      setRollbackGhost(null);
+      setRollbackPreview({
+        cardId: card.id,
+        sourceStatus: card.status,
+        fromRect,
+      });
+    },
+    [],
+  );
 
   const handleCancelPendingMove = React.useCallback(() => {
     if (pendingMoveCard) {
-      const previewElement = document.querySelector(`[data-preview-id="preview:${pendingMoveCard.id}"]`);
+      const previewElement = document.querySelector(
+        `[data-preview-id="preview:${pendingMoveCard.id}"]`,
+      );
       const fromRect =
         previewElement instanceof HTMLElement
           ? {
@@ -798,9 +939,14 @@ export function ReservationsClient() {
 
     const didSucceed =
       pendingMove.targetStatus === "CONFIRMED"
-        ? await handleVerifyMany(targetCard.row.pendingReservationIds, `kanban:${targetCard.id}`)
+        ? await handleVerifyMany(
+            targetCard.row.pendingReservationIds,
+            `kanban:${targetCard.id}`,
+          )
         : await handleRejectMany(
-            targetCard.row.reservations.map((reservation) => reservation.reservation_id),
+            targetCard.row.reservations.map(
+              (reservation) => reservation.reservation_id,
+            ),
             `kanban:${targetCard.id}`,
           );
 
@@ -827,7 +973,13 @@ export function ReservationsClient() {
     setPendingMove(null);
     setPreviewColumn(null);
     clearRollbackPreview();
-  }, [cardById, clearRollbackPreview, handleRejectMany, handleVerifyMany, pendingMove]);
+  }, [
+    cardById,
+    clearRollbackPreview,
+    handleRejectMany,
+    handleVerifyMany,
+    pendingMove,
+  ]);
 
   const onDragEnd = React.useCallback(
     async (event: DragEndEvent) => {
@@ -879,7 +1031,9 @@ export function ReservationsClient() {
         return;
       }
 
-      toast.warning("Allowed moves: Pending to Confirmed, or Pending to Rejected.");
+      toast.warning(
+        "Allowed moves: Pending to Confirmed, or Pending to Rejected.",
+      );
     },
     [cardById, clearRollbackPreview, columnOrders, resolveDropTarget],
   );
@@ -955,24 +1109,14 @@ export function ReservationsClient() {
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
             <CardContent className="flex items-center gap-4 py-4">
-              <div className="rounded-lg bg-blue-100 p-2.5 dark:bg-blue-900/30">
-                <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{totalReservations}</p>
-                <p className="text-xs text-muted-foreground">Total Users Reserved</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="flex items-center gap-4 py-4">
               <div className="rounded-lg bg-amber-100 p-2.5 dark:bg-amber-900/30">
                 <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold">{pendingCount}</p>
-                <p className="text-xs text-muted-foreground">Pending Users</p>
+                <p className="text-xs text-muted-foreground">
+                  Pending Reservations
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -984,27 +1128,63 @@ export function ReservationsClient() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{confirmedCount}</p>
-                <p className="text-xs text-muted-foreground">Confirmed Users</p>
+                <p className="text-xs text-muted-foreground">
+                  Confirmed Reservations
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="flex items-center gap-4 py-4">
+              <div className="rounded-lg bg-blue-100 p-2.5 dark:bg-blue-900/30">
+                <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{totalReservations}</p>
+                <p className="text-xs text-muted-foreground">
+                  Total Customers Reserved
+                </p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search by name, email, seat number, reservation ID, or show..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full rounded-lg border border-sidebar-border/70 dark:border-white/20 bg-background py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-          />
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search by name, email, seat number, reservation ID, or show..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full rounded-lg border border-sidebar-border/70 dark:border-white/20 bg-background py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            />
+          </div>
+
+          <Select value={selectedShowId} onValueChange={setSelectedShowId}>
+            <SelectTrigger className="w-full border-sidebar-border/70 dark:border-white/20 bg-background">
+              <SelectValue placeholder="Filter by show" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Shows</SelectItem>
+              {showFilterOptions.map((show) => (
+                <SelectItem key={show.id} value={show.id}>
+                  {show.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {kanbanCards.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-muted-foreground">
             <CreditCard className="h-10 w-10" />
-            <p className="text-sm">{searchInput.trim() ? "No reservations match your search." : "No reservations found."}</p>
+            <p className="text-sm">
+              {searchInput.trim()
+                ? "No reservations match your search."
+                : "No reservations found."}
+            </p>
           </div>
         ) : (
           <DndContext
@@ -1019,7 +1199,9 @@ export function ReservationsClient() {
               }
 
               const nextColumn = resolveDropTarget(overId);
-              setActiveDropColumn((prev) => (prev === nextColumn ? prev : nextColumn));
+              setActiveDropColumn((prev) =>
+                prev === nextColumn ? prev : nextColumn,
+              );
 
               const activeId = String(event.active.id);
               const activeCard = cardById.get(activeId);
@@ -1068,15 +1250,21 @@ export function ReservationsClient() {
               {activeDragCard ? (
                 <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
                   <CardContent className="space-y-2 p-4 pr-10">
-                    <p className="text-base font-bold leading-tight">{activeDragCard.showName}</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {activeDragCard.row.user.first_name} {activeDragCard.row.user.last_name}
+                    <p className="text-base font-bold leading-tight">
+                      {activeDragCard.showName}
                     </p>
-                    <p className="text-sm text-muted-foreground">{activeDragCard.row.user.email}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {activeDragCard.row.user.first_name}{" "}
+                      {activeDragCard.row.user.last_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {activeDragCard.row.user.email}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {activeDragCard.row.seatNumbers.length} seat
-                      {activeDragCard.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
-                      {formatCurrency(activeDragCard.row.totalAmount)}
+                      {activeDragCard.row.seatNumbers.length !== 1
+                        ? "s"
+                        : ""} - {formatCurrency(activeDragCard.row.totalAmount)}
                     </p>
                   </CardContent>
                 </Card>
@@ -1097,15 +1285,22 @@ export function ReservationsClient() {
               >
                 <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
                   <CardContent className="space-y-2 p-4 pr-10">
-                    <p className="text-base font-bold leading-tight">{rollbackGhost.card.showName}</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {rollbackGhost.card.row.user.first_name} {rollbackGhost.card.row.user.last_name}
+                    <p className="text-base font-bold leading-tight">
+                      {rollbackGhost.card.showName}
                     </p>
-                    <p className="text-sm text-muted-foreground">{rollbackGhost.card.row.user.email}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {rollbackGhost.card.row.user.first_name}{" "}
+                      {rollbackGhost.card.row.user.last_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {rollbackGhost.card.row.user.email}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {rollbackGhost.card.row.seatNumbers.length} seat
-                      {rollbackGhost.card.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
-                      {formatCurrency(rollbackGhost.card.row.totalAmount)}
+                      {rollbackGhost.card.row.seatNumbers.length !== 1
+                        ? "s"
+                        : ""}{" "}
+                      - {formatCurrency(rollbackGhost.card.row.totalAmount)}
                     </p>
                   </CardContent>
                 </Card>
