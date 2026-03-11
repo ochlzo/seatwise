@@ -112,13 +112,6 @@ type DisplayCard = KanbanCard & {
 type PendingMove = {
   cardId: string;
   targetStatus: "CONFIRMED" | "REJECTED";
-  targetIndex: number;
-};
-
-type DragPreview = {
-  sourceStatus: KanbanStatus;
-  targetStatus: KanbanStatus;
-  targetIndex: number;
 };
 
 const COLUMNS: Array<{
@@ -365,7 +358,7 @@ export function ReservationsClient() {
   const [pendingMove, setPendingMove] = React.useState<PendingMove | null>(null);
   const [activeDropColumn, setActiveDropColumn] = React.useState<KanbanStatus | null>(null);
   const [activeDragCardId, setActiveDragCardId] = React.useState<string | null>(null);
-  const [dragPreview, setDragPreview] = React.useState<DragPreview | null>(null);
+  const [previewColumn, setPreviewColumn] = React.useState<KanbanStatus | null>(null);
   const [columnOrders, setColumnOrders] = React.useState<Record<KanbanStatus, string[]>>({
     PENDING: [],
     CONFIRMED: [],
@@ -591,6 +584,8 @@ export function ReservationsClient() {
   }, [cardsByColumn, columnOrders]);
 
   const activeDragCard = activeDragCardId ? cardById.get(activeDragCardId) ?? null : null;
+  const pendingMoveCard = pendingMove ? cardById.get(pendingMove.cardId) ?? null : null;
+  const previewCardSource = activeDragCard ?? pendingMoveCard;
 
   const displayCardsByColumn = React.useMemo(() => {
     const display = {
@@ -599,31 +594,28 @@ export function ReservationsClient() {
       REJECTED: [...orderedCardsByColumn.REJECTED],
     } satisfies Record<KanbanStatus, DisplayCard[]>;
 
-    if (!activeDragCard || !dragPreview || dragPreview.sourceStatus === dragPreview.targetStatus) {
+    if (!previewCardSource || !previewColumn || previewColumn === previewCardSource.status) {
       return display;
     }
 
-    display[dragPreview.sourceStatus] = display[dragPreview.sourceStatus].filter((card) => card.id !== activeDragCard.id);
+    display[previewCardSource.status] = display[previewCardSource.status].filter(
+      (card) => card.id !== previewCardSource.id,
+    );
 
     const previewCard: DisplayCard = {
-      ...activeDragCard,
-      id: `preview:${activeDragCard.id}`,
-      status: dragPreview.targetStatus,
+      ...previewCardSource,
+      id: `preview:${previewCardSource.id}`,
+      status: previewColumn,
       isPreview: true,
     };
 
-    const nextTarget = [...display[dragPreview.targetStatus]];
-    const insertIndex = Math.max(0, Math.min(dragPreview.targetIndex, nextTarget.length));
-    nextTarget.splice(insertIndex, 0, previewCard);
-    display[dragPreview.targetStatus] = nextTarget;
-
+    display[previewColumn] = [previewCard, ...display[previewColumn]];
     return display;
-  }, [activeDragCard, dragPreview, orderedCardsByColumn]);
+  }, [orderedCardsByColumn, previewCardSource, previewColumn]);
 
   const totalReservations = kanbanCards.length;
   const pendingCount = orderedCardsByColumn.PENDING.length;
   const confirmedCount = orderedCardsByColumn.CONFIRMED.length;
-  const pendingMoveCard = pendingMove ? cardById.get(pendingMove.cardId) ?? null : null;
 
   const resolveDropTarget = React.useCallback(
     (overId: string): KanbanStatus | null => {
@@ -640,32 +632,13 @@ export function ReservationsClient() {
 
   const pendingMoveLabel = pendingMove?.targetStatus === "CONFIRMED" ? "Confirmed" : "Rejected";
 
-  const getTargetIndex = React.useCallback(
-    (targetStatus: KanbanStatus, overId: string, overTop?: number, overHeight?: number, dragTop?: number) => {
-      const targetCards = orderedCardsByColumn[targetStatus];
-
-      if (overId.startsWith("column:")) {
-        return targetCards.length;
-      }
-
-      const overIndex = targetCards.findIndex((card) => card.id === overId);
-      if (overIndex === -1) {
-        return targetCards.length;
-      }
-
-      const overMidpoint = overTop !== undefined && overHeight !== undefined ? overTop + overHeight / 2 : undefined;
-      const insertAfter = overMidpoint !== undefined && dragTop !== undefined ? dragTop > overMidpoint : false;
-      return overIndex + (insertAfter ? 1 : 0);
-    },
-    [orderedCardsByColumn],
-  );
-
   const handleConfirmStageMove = React.useCallback(async () => {
     if (!pendingMove) return;
 
     const targetCard = cardById.get(pendingMove.cardId);
     if (!targetCard) {
       setPendingMove(null);
+      setPreviewColumn(null);
       return;
     }
 
@@ -686,23 +659,23 @@ export function ReservationsClient() {
         };
 
         const targetIds = [...next[pendingMove.targetStatus]];
-        const insertIndex = Math.max(0, Math.min(pendingMove.targetIndex, targetIds.length));
-        targetIds.splice(insertIndex, 0, targetCard.id);
+        targetIds.unshift(targetCard.id);
         next[pendingMove.targetStatus] = targetIds;
 
         return next;
       });
       setPendingMove(null);
+      setPreviewColumn(null);
       return;
     }
 
     setPendingMove(null);
+    setPreviewColumn(null);
   }, [cardById, handleRejectMany, handleVerifyMany, pendingMove]);
 
   const onDragEnd = React.useCallback(
     async (event: DragEndEvent) => {
       setActiveDropColumn(null);
-      setDragPreview(null);
 
       const activeId = String(event.active.id);
       const overId = event.over ? String(event.over.id) : null;
@@ -725,18 +698,17 @@ export function ReservationsClient() {
             [targetStatus]: arrayMove(prev[targetStatus], oldIndex, newIndex),
           }));
         }
+        setPreviewColumn(null);
         return;
       }
 
-      const previewTargetIndex = dragPreview?.targetStatus === targetStatus ? dragPreview.targetIndex : orderedCardsByColumn[targetStatus].length;
-
       if (activeCard.status === "PENDING" && targetStatus === "CONFIRMED") {
-        setPendingMove({ cardId: activeCard.id, targetStatus: "CONFIRMED", targetIndex: previewTargetIndex });
+        setPendingMove({ cardId: activeCard.id, targetStatus: "CONFIRMED" });
         return;
       }
 
       if (activeCard.status === "PENDING" && targetStatus === "REJECTED") {
-        setPendingMove({ cardId: activeCard.id, targetStatus: "REJECTED", targetIndex: previewTargetIndex });
+        setPendingMove({ cardId: activeCard.id, targetStatus: "REJECTED" });
         return;
       }
 
@@ -752,7 +724,7 @@ export function ReservationsClient() {
 
       toast.warning("Allowed moves: Pending to Confirmed, or Pending to Rejected.");
     },
-    [cardById, columnOrders, dragPreview, orderedCardsByColumn, resolveDropTarget],
+    [cardById, columnOrders, resolveDropTarget],
   );
 
   if (isLoading) {
@@ -796,7 +768,10 @@ export function ReservationsClient() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setPendingMove(null)}
+              onClick={() => {
+                setPendingMove(null);
+                setPreviewColumn(null);
+              }}
               disabled={!!verifyingId}
             >
               Cancel
@@ -882,62 +857,30 @@ export function ReservationsClient() {
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragOver={(event) => {
-              const activeId = String(event.active.id);
               const overId = event.over ? String(event.over.id) : null;
-
               if (!overId) {
                 setActiveDropColumn((prev) => (prev === null ? prev : null));
-                setDragPreview(null);
-                return;
-              }
-
-              const activeCard = cardById.get(activeId);
-              if (!activeCard) {
-                setDragPreview(null);
+                setPreviewColumn(null);
                 return;
               }
 
               const nextColumn = resolveDropTarget(overId);
               setActiveDropColumn((prev) => (prev === nextColumn ? prev : nextColumn));
 
-              if (!nextColumn || nextColumn === activeCard.status) {
-                setDragPreview(null);
-                return;
-              }
-
-              const isAllowedPreview =
+              const activeId = String(event.active.id);
+              const activeCard = cardById.get(activeId);
+              const shouldPreview =
+                !!activeCard &&
+                !!nextColumn &&
                 activeCard.status === "PENDING" &&
+                nextColumn !== activeCard.status &&
                 (nextColumn === "CONFIRMED" || nextColumn === "REJECTED");
 
-              if (!isAllowedPreview) {
-                setDragPreview(null);
-                return;
-              }
-
-              const targetIndex = getTargetIndex(
-                nextColumn,
-                overId,
-                event.over?.rect.top,
-                event.over?.rect.height,
-                event.active.rect.current.translated?.top,
-              );
-
-              setDragPreview((prev) =>
-                prev &&
-                prev.sourceStatus === activeCard.status &&
-                prev.targetStatus === nextColumn &&
-                prev.targetIndex === targetIndex
-                  ? prev
-                  : {
-                      sourceStatus: activeCard.status,
-                      targetStatus: nextColumn,
-                      targetIndex,
-                    },
-              );
+              setPreviewColumn(shouldPreview ? nextColumn : null);
             }}
             onDragStart={(event: DragStartEvent) => {
               setActiveDragCardId(String(event.active.id));
-              setDragPreview(null);
+              setPreviewColumn(null);
             }}
             onDragEnd={(event) => {
               void onDragEnd(event);
@@ -946,7 +889,7 @@ export function ReservationsClient() {
             onDragCancel={() => {
               setActiveDropColumn(null);
               setActiveDragCardId(null);
-              setDragPreview(null);
+              setPreviewColumn(null);
             }}
           >
             <div className="grid gap-4 xl:grid-cols-3">
