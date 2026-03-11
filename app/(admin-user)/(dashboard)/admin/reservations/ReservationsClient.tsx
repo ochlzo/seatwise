@@ -346,11 +346,15 @@ function PreviewPlaceholderCard({
   previewId?: string;
   rollbackAnchorId?: string;
 }) {
+  const isRollbackAnchor = Boolean(rollbackAnchorId);
+
   return (
     <Card
       data-preview-id={previewId}
       data-rollback-anchor={rollbackAnchorId}
-      className="border-sidebar-border/70 bg-muted/60 dark:border-white/20 dark:bg-muted/40"
+      className={isRollbackAnchor
+        ? "pointer-events-none border-transparent bg-transparent shadow-none"
+        : "border-sidebar-border/70 bg-muted/60 dark:border-white/20 dark:bg-muted/40"}
     >
       <CardContent className="space-y-2 p-4 pr-10 opacity-0">
         <p className="text-base font-bold leading-tight">{card.showName}</p>
@@ -753,7 +757,7 @@ export function ReservationsClient() {
     : null;
   const previewCardSource = activeDragCard ?? pendingMoveCard;
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!rollbackPreview || !rollbackPreviewCard || !rollbackPreview.fromRect) {
       return;
     }

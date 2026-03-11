@@ -77,7 +77,10 @@ export async function POST(request: NextRequest) {
       targetRole: "TEAM_ADMIN",
       exp: Math.floor(expiresAt / 1000),
     });
-    const appUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+    const appUrl =
+      process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+      request.nextUrl.origin ||
+      "http://localhost:3000";
     const inviteLink = `${appUrl}/login?invite=${encodeURIComponent(token)}`;
 
     await sendAdminInviteEmail({

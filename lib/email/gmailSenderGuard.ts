@@ -18,6 +18,11 @@ export const assertGmailSenderAlignment = async (accessToken: string, sender: st
 
   if (!profileRes.ok) {
     const detail = await profileRes.text();
+    if (detail.includes("ACCESS_TOKEN_SCOPE_INSUFFICIENT") || detail.includes("insufficientPermissions")) {
+      throw new Error(
+        "Failed to validate Gmail sender identity: the configured Google OAuth refresh token is missing a Gmail profile-readable scope. Regenerate GOOGLE_OAUTH_REFRESH_TOKEN with at least gmail.send and gmail.readonly, then update the deployed environment.",
+      );
+    }
     throw new Error(`Failed to validate Gmail sender identity: ${detail}`);
   }
 
@@ -38,4 +43,3 @@ export const assertGmailSenderAlignment = async (accessToken: string, sender: st
     );
   }
 };
-

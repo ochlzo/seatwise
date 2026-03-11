@@ -10,7 +10,10 @@ const REDIRECT_URI =
   process.env.GOOGLE_OAUTH_REDIRECT_URI || "http://localhost:3005/oauth2/callback";
 const SCOPES =
   process.env.GOOGLE_OAUTH_SCOPES ||
-  "https://www.googleapis.com/auth/gmail.send";
+  [
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.readonly",
+  ].join(" ");
 
 if (!CLIENT_ID || !CLIENT_SECRET) {
   console.error(
