@@ -26,8 +26,11 @@ const isAdminApiPath = (pathname: string) => {
   );
 };
 
-const isPublicApiPath = (pathname: string) => {
-  return pathname === "/api/auth/login";
+const isPublicApiPath = (pathname: string, method: string) => {
+  return (
+    pathname === "/api/auth/login" ||
+    (method === "GET" && /^\/api\/seatmaps\/[^/]+$/.test(pathname))
+  );
 };
 
 export function middleware(request: NextRequest) {
@@ -49,7 +52,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (isPublicApiPath(pathname)) {
+  if (isPublicApiPath(pathname, request.method)) {
     return NextResponse.next();
   }
 
