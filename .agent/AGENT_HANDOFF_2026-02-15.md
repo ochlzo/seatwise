@@ -449,8 +449,12 @@ In `prisma/schema.prisma`, `Show` includes:
 - `ADMIN_OTP_MAX_RESENDS=5`
 - Note: these are local environment values and must be mirrored in deployment env config.
 
-### Security Note Recorded
-- `app/api/auth/admin-email/route.ts` still exposes username/email enumeration risk:
-- Returns distinguishable results for existing vs non-existing admin usernames.
-- Not fixed in this session; recommended follow-up:
-- generic responses + rate-limiting/throttling + abuse logging.
+### Admin Login Identifier Hardening (Implemented)
+- Removed public username-to-email lookup endpoint:
+- Deleted `app/api/auth/admin-email/route.ts`
+- `components/login-form.tsx` now uses email-only admin login and password reset.
+- `middleware.ts` no longer exposes `/api/auth/admin-email` as a public API route.
+- Result:
+- Eliminates the public admin username/email enumeration path previously noted in handoff.
+
+

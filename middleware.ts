@@ -27,7 +27,7 @@ const isAdminApiPath = (pathname: string) => {
 };
 
 const isPublicApiPath = (pathname: string) => {
-  return pathname === "/api/auth/login" || pathname === "/api/auth/admin-email";
+  return pathname === "/api/auth/login";
 };
 
 export function middleware(request: NextRequest) {

@@ -49,51 +49,18 @@ export function LoginForm({
       ? callbackUrl
       : "/admin";
 
-  const parseApiResponse = async <T,>(response: Response): Promise<T> => {
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      return (await response.json()) as T;
-    }
-
-    const text = await response.text();
-    throw new Error(
-      text.includes("<!DOCTYPE")
-        ? "Server returned HTML instead of JSON. Check API route/server logs."
-        : text || "Unexpected response format from server.",
-    );
-  };
-
-  const resolveEmailFromIdentifier = async () => {
-    const trimmed = identifier.trim();
-    if (!trimmed) return "";
-    if (trimmed.includes("@")) return trimmed;
-
-    const response = await fetch(
-      `/api/auth/admin-email?username=${encodeURIComponent(trimmed)}`,
-    );
-    const data = await parseApiResponse<{
-      success?: boolean;
-      email?: string;
-      error?: string;
-    }>(response);
-    if (!response.ok || !data.success || !data.email) {
-      throw new Error(data.error || "Admin account not found.");
-    }
-    return data.email;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
+    const trimmedIdentifier = identifier.trim();
 
     if (isForgotPassword) {
       setIsSubmitting(true);
       try {
-        const resolvedEmail = await resolveEmailFromIdentifier();
-        if (!resolvedEmail) {
-          throw new Error("Enter your username or email first.");
+        if (!trimmedIdentifier) {
+          throw new Error("Enter your admin email first.");
         }
-        await resetPassword(resolvedEmail);
+        await resetPassword(trimmedIdentifier);
         setResetEmailSent(true);
       } catch (error) {
         setValidationError(getAuthErrorMessage(error));
@@ -111,8 +78,7 @@ export function LoginForm({
     onLoginStart?.();
     setIsSubmitting(true);
     try {
-      const resolvedEmail = await resolveEmailFromIdentifier();
-      const user = await signInWithEmail(resolvedEmail, password, safeRedirect);
+      const user = await signInWithEmail(trimmedIdentifier, password, safeRedirect);
       dispatch(setUser(user));
     } catch (error) {
       setValidationError(getAuthErrorMessage(error));
@@ -145,18 +111,16 @@ export function LoginForm({
                   <p className="text-muted-foreground text-balance">
                     {isForgotPassword
                       ? "Enter your admin email to receive a reset link."
-                      : "Sign in with your admin credentials."}
+                      : "Sign in with your admin email and password."}
                   </p>
                 </div>
 
                 <Field>
-                  <FieldLabel htmlFor="identifier">
-                    Username or Email
-                  </FieldLabel>
+                  <FieldLabel htmlFor="identifier">Admin Email</FieldLabel>
                   <Input
                     id="identifier"
-                    type="text"
-                    placeholder="admin_username or admin@seatwise.app"
+                    type="email"
+                    placeholder="admin@seatwise.app"
                     required
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}

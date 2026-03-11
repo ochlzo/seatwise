@@ -592,6 +592,11 @@ export function ReservationsClient() {
         return;
       }
 
+      if (activeCard.status === "REJECTED" && targetStatus === "CONFIRMED") {
+        toast.error("Cannot move 'Rejected' payments to 'Confirmed'.");
+        return;
+      }
+
       toast.info("Supported moves: Pending to Confirmed, or any card to Rejected.");
     },
     [cardById, columnOrders, handleRejectMany, handleVerifyMany, resolveDropTarget],
@@ -734,3 +739,4 @@ export function ReservationsClient() {
     </div>
   );
 }
+

@@ -1,12 +1,10 @@
 import { PageHeader } from "@/components/page-header"
 import AdminShield from "@/components/AdminShield"
 import { ThemeSwithcer } from "@/components/theme-swithcer"
-import { WelcomeAdminDialog } from "@/components/welcome-admin-dialog"
 
 export default async function Page() {
     return (
         <>
-            <WelcomeAdminDialog />
             <PageHeader
                 title="Admin Dashboard"
                 rightSlot={
