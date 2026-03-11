@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CheckCircle2, Clock, CreditCard, GripVertical, Loader2, Search, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, CreditCard, GripVertical, Loader2, Search, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -105,9 +105,20 @@ type KanbanCard = {
   row: UserReservationRow;
 };
 
+type DisplayCard = KanbanCard & {
+  isPreview?: boolean;
+};
+
 type PendingMove = {
   cardId: string;
   targetStatus: "CONFIRMED" | "REJECTED";
+  targetIndex: number;
+};
+
+type DragPreview = {
+  sourceStatus: KanbanStatus;
+  targetStatus: KanbanStatus;
+  targetIndex: number;
 };
 
 const COLUMNS: Array<{
@@ -269,11 +280,28 @@ function SortableCard({ card, isVerifying }: SortableCardProps) {
   );
 }
 
+function PreviewPlaceholderCard({ card }: { card: KanbanCard }) {
+  return (
+    <Card className="border-sidebar-border/70 bg-muted/60 dark:border-white/20 dark:bg-muted/40">
+      <CardContent className="space-y-2 p-4 pr-10 opacity-0">
+        <p className="text-base font-bold leading-tight">{card.showName}</p>
+        <p className="text-sm font-medium">
+          {card.row.user.first_name} {card.row.user.last_name}
+        </p>
+        <p className="text-sm">{card.row.user.email}</p>
+        <p className="text-sm">
+          {card.row.seatNumbers.length} seat{card.row.seatNumbers.length !== 1 ? "s" : ""} - {formatCurrency(card.row.totalAmount)}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 type KanbanColumnProps = {
   status: KanbanStatus;
   title: string;
   icon: React.ReactNode;
-  cards: KanbanCard[];
+  cards: DisplayCard[];
   isActiveDrop: boolean;
   verifyingId: string | null;
   stageClassName: string;
@@ -312,11 +340,15 @@ function KanbanColumn({
         </span>
       </div>
 
-      <SortableContext items={cards.map((card) => card.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={cards.filter((card) => !card.isPreview).map((card) => card.id)} strategy={verticalListSortingStrategy}>
         <div className="min-h-[220px] space-y-3 p-3">
-          {cards.map((card) => (
-            <SortableCard key={card.id} card={card} isVerifying={verifyingId === `kanban:${card.id}`} />
-          ))}
+          {cards.map((card) =>
+            card.isPreview ? (
+              <PreviewPlaceholderCard key={card.id} card={card} />
+            ) : (
+              <SortableCard key={card.id} card={card} isVerifying={verifyingId === `kanban:${card.id}`} />
+            ),
+          )}
         </div>
       </SortableContext>
     </div>
@@ -333,6 +365,7 @@ export function ReservationsClient() {
   const [pendingMove, setPendingMove] = React.useState<PendingMove | null>(null);
   const [activeDropColumn, setActiveDropColumn] = React.useState<KanbanStatus | null>(null);
   const [activeDragCardId, setActiveDragCardId] = React.useState<string | null>(null);
+  const [dragPreview, setDragPreview] = React.useState<DragPreview | null>(null);
   const [columnOrders, setColumnOrders] = React.useState<Record<KanbanStatus, string[]>>({
     PENDING: [],
     CONFIRMED: [],
@@ -374,7 +407,7 @@ export function ReservationsClient() {
   }, []);
 
   const handleVerifyMany = async (reservationIds: string[], verifyKey: string) => {
-    if (reservationIds.length === 0) return;
+    if (reservationIds.length === 0) return false;
 
     setVerifyingId(verifyKey);
 
@@ -414,15 +447,17 @@ export function ReservationsClient() {
           ? "Reservation verified successfully!"
           : `${reservationIds.length} reservations verified successfully!`,
       );
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Verification failed");
+      return false;
     } finally {
       setVerifyingId(null);
     }
   };
 
   const handleRejectMany = async (reservationIds: string[], rejectKey: string) => {
-    if (reservationIds.length === 0) return;
+    if (reservationIds.length === 0) return false;
 
     setVerifyingId(rejectKey);
 
@@ -466,8 +501,10 @@ export function ReservationsClient() {
           ? "Reservation rejected successfully!"
           : `${reservationIds.length} reservations rejected successfully!`,
       );
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Rejection failed");
+      return false;
     } finally {
       setVerifyingId(null);
     }
@@ -553,10 +590,39 @@ export function ReservationsClient() {
     return ordered;
   }, [cardsByColumn, columnOrders]);
 
+  const activeDragCard = activeDragCardId ? cardById.get(activeDragCardId) ?? null : null;
+
+  const displayCardsByColumn = React.useMemo(() => {
+    const display = {
+      PENDING: [...orderedCardsByColumn.PENDING],
+      CONFIRMED: [...orderedCardsByColumn.CONFIRMED],
+      REJECTED: [...orderedCardsByColumn.REJECTED],
+    } satisfies Record<KanbanStatus, DisplayCard[]>;
+
+    if (!activeDragCard || !dragPreview || dragPreview.sourceStatus === dragPreview.targetStatus) {
+      return display;
+    }
+
+    display[dragPreview.sourceStatus] = display[dragPreview.sourceStatus].filter((card) => card.id !== activeDragCard.id);
+
+    const previewCard: DisplayCard = {
+      ...activeDragCard,
+      id: `preview:${activeDragCard.id}`,
+      status: dragPreview.targetStatus,
+      isPreview: true,
+    };
+
+    const nextTarget = [...display[dragPreview.targetStatus]];
+    const insertIndex = Math.max(0, Math.min(dragPreview.targetIndex, nextTarget.length));
+    nextTarget.splice(insertIndex, 0, previewCard);
+    display[dragPreview.targetStatus] = nextTarget;
+
+    return display;
+  }, [activeDragCard, dragPreview, orderedCardsByColumn]);
+
   const totalReservations = kanbanCards.length;
   const pendingCount = orderedCardsByColumn.PENDING.length;
   const confirmedCount = orderedCardsByColumn.CONFIRMED.length;
-  const activeDragCard = activeDragCardId ? cardById.get(activeDragCardId) ?? null : null;
   const pendingMoveCard = pendingMove ? cardById.get(pendingMove.cardId) ?? null : null;
 
   const resolveDropTarget = React.useCallback(
@@ -574,6 +640,26 @@ export function ReservationsClient() {
 
   const pendingMoveLabel = pendingMove?.targetStatus === "CONFIRMED" ? "Confirmed" : "Rejected";
 
+  const getTargetIndex = React.useCallback(
+    (targetStatus: KanbanStatus, overId: string, overTop?: number, overHeight?: number, dragTop?: number) => {
+      const targetCards = orderedCardsByColumn[targetStatus];
+
+      if (overId.startsWith("column:")) {
+        return targetCards.length;
+      }
+
+      const overIndex = targetCards.findIndex((card) => card.id === overId);
+      if (overIndex === -1) {
+        return targetCards.length;
+      }
+
+      const overMidpoint = overTop !== undefined && overHeight !== undefined ? overTop + overHeight / 2 : undefined;
+      const insertAfter = overMidpoint !== undefined && dragTop !== undefined ? dragTop > overMidpoint : false;
+      return overIndex + (insertAfter ? 1 : 0);
+    },
+    [orderedCardsByColumn],
+  );
+
   const handleConfirmStageMove = React.useCallback(async () => {
     if (!pendingMove) return;
 
@@ -583,11 +669,31 @@ export function ReservationsClient() {
       return;
     }
 
-    if (pendingMove.targetStatus === "CONFIRMED") {
-      await handleVerifyMany(targetCard.row.pendingReservationIds, `kanban:${targetCard.id}`);
-    } else {
-      const reservationIds = targetCard.row.reservations.map((reservation) => reservation.reservation_id);
-      await handleRejectMany(reservationIds, `kanban:${targetCard.id}`);
+    const didSucceed =
+      pendingMove.targetStatus === "CONFIRMED"
+        ? await handleVerifyMany(targetCard.row.pendingReservationIds, `kanban:${targetCard.id}`)
+        : await handleRejectMany(
+            targetCard.row.reservations.map((reservation) => reservation.reservation_id),
+            `kanban:${targetCard.id}`,
+          );
+
+    if (didSucceed) {
+      setColumnOrders((prev) => {
+        const next = {
+          PENDING: prev.PENDING.filter((id) => id !== targetCard.id),
+          CONFIRMED: prev.CONFIRMED.filter((id) => id !== targetCard.id),
+          REJECTED: prev.REJECTED.filter((id) => id !== targetCard.id),
+        };
+
+        const targetIds = [...next[pendingMove.targetStatus]];
+        const insertIndex = Math.max(0, Math.min(pendingMove.targetIndex, targetIds.length));
+        targetIds.splice(insertIndex, 0, targetCard.id);
+        next[pendingMove.targetStatus] = targetIds;
+
+        return next;
+      });
+      setPendingMove(null);
+      return;
     }
 
     setPendingMove(null);
@@ -596,6 +702,7 @@ export function ReservationsClient() {
   const onDragEnd = React.useCallback(
     async (event: DragEndEvent) => {
       setActiveDropColumn(null);
+      setDragPreview(null);
 
       const activeId = String(event.active.id);
       const overId = event.over ? String(event.over.id) : null;
@@ -621,24 +728,31 @@ export function ReservationsClient() {
         return;
       }
 
+      const previewTargetIndex = dragPreview?.targetStatus === targetStatus ? dragPreview.targetIndex : orderedCardsByColumn[targetStatus].length;
+
       if (activeCard.status === "PENDING" && targetStatus === "CONFIRMED") {
-        setPendingMove({ cardId: activeCard.id, targetStatus: "CONFIRMED" });
+        setPendingMove({ cardId: activeCard.id, targetStatus: "CONFIRMED", targetIndex: previewTargetIndex });
         return;
       }
 
-      if (targetStatus === "REJECTED") {
-        setPendingMove({ cardId: activeCard.id, targetStatus: "REJECTED" });
+      if (activeCard.status === "PENDING" && targetStatus === "REJECTED") {
+        setPendingMove({ cardId: activeCard.id, targetStatus: "REJECTED", targetIndex: previewTargetIndex });
+        return;
+      }
+
+      if (activeCard.status === "CONFIRMED" && targetStatus === "REJECTED") {
+        toast.warning("Confirmed payments cannot be moved to Rejected.");
         return;
       }
 
       if (activeCard.status === "REJECTED" && targetStatus === "CONFIRMED") {
-        toast.error("Cannot move 'Rejected' payments to 'Confirmed'.");
+        toast.warning("Rejected payments cannot be moved to Confirmed.");
         return;
       }
 
-      toast.notification("Supported moves: Pending to Confirmed, or any card to Rejected.");
+      toast.warning("Allowed moves: Pending to Confirmed, or Pending to Rejected.");
     },
-    [cardById, columnOrders, resolveDropTarget],
+    [cardById, columnOrders, dragPreview, orderedCardsByColumn, resolveDropTarget],
   );
 
   if (isLoading) {
@@ -668,11 +782,14 @@ export function ReservationsClient() {
           onEscapeKeyDown={(event) => event.preventDefault()}
         >
           <DialogHeader>
-            <DialogTitle>Confirm stage change</DialogTitle>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <AlertTriangle className="h-5 w-5 text-amber-600" />
+            </div>
+            <DialogTitle>Warning: stage change</DialogTitle>
             <DialogDescription>
               {pendingMoveCard
-                ? `Move ${pendingMoveCard.row.user.first_name} ${pendingMoveCard.row.user.last_name} for ${pendingMoveCard.showName} to ${pendingMoveLabel}?`
-                : "Confirm this reservation stage change."}
+                ? `Move ${pendingMoveCard.row.user.first_name} ${pendingMoveCard.row.user.last_name} for ${pendingMoveCard.showName} to ${pendingMoveLabel}? This action cannot be undone or changed.`
+                : "Confirm this reservation stage change. This action cannot be undone or changed."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -686,6 +803,7 @@ export function ReservationsClient() {
             </Button>
             <Button
               type="button"
+              variant="destructive"
               onClick={() => {
                 void handleConfirmStageMove();
               }}
@@ -764,16 +882,62 @@ export function ReservationsClient() {
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragOver={(event) => {
+              const activeId = String(event.active.id);
               const overId = event.over ? String(event.over.id) : null;
+
               if (!overId) {
                 setActiveDropColumn((prev) => (prev === null ? prev : null));
+                setDragPreview(null);
                 return;
               }
+
+              const activeCard = cardById.get(activeId);
+              if (!activeCard) {
+                setDragPreview(null);
+                return;
+              }
+
               const nextColumn = resolveDropTarget(overId);
               setActiveDropColumn((prev) => (prev === nextColumn ? prev : nextColumn));
+
+              if (!nextColumn || nextColumn === activeCard.status) {
+                setDragPreview(null);
+                return;
+              }
+
+              const isAllowedPreview =
+                activeCard.status === "PENDING" &&
+                (nextColumn === "CONFIRMED" || nextColumn === "REJECTED");
+
+              if (!isAllowedPreview) {
+                setDragPreview(null);
+                return;
+              }
+
+              const targetIndex = getTargetIndex(
+                nextColumn,
+                overId,
+                event.over?.rect.top,
+                event.over?.rect.height,
+                event.active.rect.current.translated?.top,
+              );
+
+              setDragPreview((prev) =>
+                prev &&
+                prev.sourceStatus === activeCard.status &&
+                prev.targetStatus === nextColumn &&
+                prev.targetIndex === targetIndex
+                  ? prev
+                  : {
+                      sourceStatus: activeCard.status,
+                      targetStatus: nextColumn,
+                      targetIndex,
+                    },
+              );
             }}
             onDragStart={(event: DragStartEvent) => {
               setActiveDragCardId(String(event.active.id));
+              setDragPreview(null);
             }}
             onDragEnd={(event) => {
               void onDragEnd(event);
@@ -782,6 +946,7 @@ export function ReservationsClient() {
             onDragCancel={() => {
               setActiveDropColumn(null);
               setActiveDragCardId(null);
+              setDragPreview(null);
             }}
           >
             <div className="grid gap-4 xl:grid-cols-3">
@@ -794,7 +959,7 @@ export function ReservationsClient() {
                   stageClassName={column.stageClassName}
                   stageCountClassName={column.stageCountClassName}
                   stageSurfaceClassName={column.stageSurfaceClassName}
-                  cards={orderedCardsByColumn[column.key]}
+                  cards={displayCardsByColumn[column.key]}
                   isActiveDrop={activeDropColumn === column.key}
                   verifyingId={verifyingId}
                 />
