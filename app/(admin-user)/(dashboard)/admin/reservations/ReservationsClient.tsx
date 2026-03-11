@@ -114,6 +114,26 @@ type PendingMove = {
   targetStatus: "CONFIRMED" | "REJECTED";
 };
 
+type RollbackRect = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+type RollbackPreview = {
+  cardId: string;
+  sourceStatus: KanbanStatus;
+  fromRect: RollbackRect | null;
+};
+
+type RollbackGhost = {
+  card: KanbanCard;
+  fromRect: RollbackRect;
+  toRect: RollbackRect;
+  isAnimating: boolean;
+};
+
 const COLUMNS: Array<{
   key: KanbanStatus;
   title: string;
@@ -149,6 +169,7 @@ const COLUMNS: Array<{
 ];
 
 const columnId = (status: KanbanStatus) => `column:${status}`;
+const ROLLBACK_PREVIEW_MS = 360;
 
 const formatCurrency = (value: string | number) => {
   const parsed = typeof value === "string" ? parseFloat(value) : value;
@@ -273,9 +294,21 @@ function SortableCard({ card, isVerifying }: SortableCardProps) {
   );
 }
 
-function PreviewPlaceholderCard({ card }: { card: KanbanCard }) {
+function PreviewPlaceholderCard({
+  card,
+  previewId,
+  rollbackAnchorId,
+}: {
+  card: KanbanCard;
+  previewId?: string;
+  rollbackAnchorId?: string;
+}) {
   return (
-    <Card className="border-sidebar-border/70 bg-muted/60 dark:border-white/20 dark:bg-muted/40">
+    <Card
+      data-preview-id={previewId}
+      data-rollback-anchor={rollbackAnchorId}
+      className="border-sidebar-border/70 bg-muted/60 dark:border-white/20 dark:bg-muted/40"
+    >
       <CardContent className="space-y-2 p-4 pr-10 opacity-0">
         <p className="text-base font-bold leading-tight">{card.showName}</p>
         <p className="text-sm font-medium">
@@ -337,7 +370,12 @@ function KanbanColumn({
         <div className="min-h-[220px] space-y-3 p-3">
           {cards.map((card) =>
             card.isPreview ? (
-              <PreviewPlaceholderCard key={card.id} card={card} />
+              <PreviewPlaceholderCard
+                key={card.id}
+                card={card}
+                previewId={card.id.startsWith("preview:") ? card.id : undefined}
+                rollbackAnchorId={card.id.startsWith("rollback:") ? card.id.replace("rollback:", "") : undefined}
+              />
             ) : (
               <SortableCard key={card.id} card={card} isVerifying={verifyingId === `kanban:${card.id}`} />
             ),
@@ -359,11 +397,15 @@ export function ReservationsClient() {
   const [activeDropColumn, setActiveDropColumn] = React.useState<KanbanStatus | null>(null);
   const [activeDragCardId, setActiveDragCardId] = React.useState<string | null>(null);
   const [previewColumn, setPreviewColumn] = React.useState<KanbanStatus | null>(null);
+  const [rollbackPreview, setRollbackPreview] = React.useState<RollbackPreview | null>(null);
+  const [rollbackGhost, setRollbackGhost] = React.useState<RollbackGhost | null>(null);
   const [columnOrders, setColumnOrders] = React.useState<Record<KanbanStatus, string[]>>({
     PENDING: [],
     CONFIRMED: [],
     REJECTED: [],
   });
+
+  const rollbackTimeoutRef = React.useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -378,6 +420,14 @@ export function ReservationsClient() {
 
     return () => window.clearTimeout(timeoutId);
   }, [searchInput]);
+
+  React.useEffect(() => {
+    return () => {
+      if (rollbackTimeoutRef.current !== null) {
+        window.clearTimeout(rollbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     const fetchReservations = async () => {
@@ -585,7 +635,50 @@ export function ReservationsClient() {
 
   const activeDragCard = activeDragCardId ? cardById.get(activeDragCardId) ?? null : null;
   const pendingMoveCard = pendingMove ? cardById.get(pendingMove.cardId) ?? null : null;
+  const rollbackPreviewCard = rollbackPreview ? cardById.get(rollbackPreview.cardId) ?? null : null;
   const previewCardSource = activeDragCard ?? pendingMoveCard;
+
+  React.useEffect(() => {
+    if (!rollbackPreview || !rollbackPreviewCard || !rollbackPreview.fromRect) {
+      return;
+    }
+
+    const fromRect = rollbackPreview.fromRect;
+    const frameId = window.requestAnimationFrame(() => {
+      const anchor = document.querySelector(`[data-rollback-anchor="${rollbackPreview.cardId}"]`);
+      if (!(anchor instanceof HTMLElement)) {
+        setRollbackPreview(null);
+        return;
+      }
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const toRect: RollbackRect = {
+        top: anchorRect.top,
+        left: anchorRect.left,
+        width: anchorRect.width,
+        height: anchorRect.height,
+      };
+
+      setRollbackGhost({
+        card: rollbackPreviewCard,
+        fromRect,
+        toRect,
+        isAnimating: false,
+      });
+
+      window.requestAnimationFrame(() => {
+        setRollbackGhost((prev) => (prev ? { ...prev, isAnimating: true } : prev));
+      });
+
+      rollbackTimeoutRef.current = window.setTimeout(() => {
+        setRollbackGhost(null);
+        setRollbackPreview(null);
+        rollbackTimeoutRef.current = null;
+      }, ROLLBACK_PREVIEW_MS);
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [rollbackPreview, rollbackPreviewCard]);
 
   const displayCardsByColumn = React.useMemo(() => {
     const display = {
@@ -594,24 +687,43 @@ export function ReservationsClient() {
       REJECTED: [...orderedCardsByColumn.REJECTED],
     } satisfies Record<KanbanStatus, DisplayCard[]>;
 
-    if (!previewCardSource || !previewColumn || previewColumn === previewCardSource.status) {
+    if (previewCardSource && previewColumn && previewColumn !== previewCardSource.status) {
+      display[previewCardSource.status] = display[previewCardSource.status].filter(
+        (card) => card.id !== previewCardSource.id,
+      );
+
+      const previewCard: DisplayCard = {
+        ...previewCardSource,
+        id: `preview:${previewCardSource.id}`,
+        status: previewColumn,
+        isPreview: true,
+      };
+
+      display[previewColumn] = [previewCard, ...display[previewColumn]];
       return display;
     }
 
-    display[previewCardSource.status] = display[previewCardSource.status].filter(
-      (card) => card.id !== previewCardSource.id,
-    );
+    if (rollbackPreview && rollbackPreviewCard) {
+      const sourceCards = [...display[rollbackPreview.sourceStatus]];
+      const sourceIndex = sourceCards.findIndex((card) => card.id === rollbackPreview.cardId);
 
-    const previewCard: DisplayCard = {
-      ...previewCardSource,
-      id: `preview:${previewCardSource.id}`,
-      status: previewColumn,
-      isPreview: true,
-    };
+      if (sourceIndex !== -1) {
+        sourceCards.splice(sourceIndex, 1);
 
-    display[previewColumn] = [previewCard, ...display[previewColumn]];
+        const rollbackCard: DisplayCard = {
+          ...rollbackPreviewCard,
+          id: `rollback:${rollbackPreviewCard.id}`,
+          status: rollbackPreview.sourceStatus,
+          isPreview: true,
+        };
+
+        sourceCards.splice(sourceIndex, 0, rollbackCard);
+        display[rollbackPreview.sourceStatus] = sourceCards;
+      }
+    }
+
     return display;
-  }, [orderedCardsByColumn, previewCardSource, previewColumn]);
+  }, [orderedCardsByColumn, previewCardSource, previewColumn, rollbackPreview, rollbackPreviewCard]);
 
   const totalReservations = kanbanCards.length;
   const pendingCount = orderedCardsByColumn.PENDING.length;
@@ -632,6 +744,47 @@ export function ReservationsClient() {
 
   const pendingMoveLabel = pendingMove?.targetStatus === "CONFIRMED" ? "Confirmed" : "Rejected";
 
+  const clearRollbackPreview = React.useCallback(() => {
+    if (rollbackTimeoutRef.current !== null) {
+      window.clearTimeout(rollbackTimeoutRef.current);
+      rollbackTimeoutRef.current = null;
+    }
+    setRollbackGhost(null);
+    setRollbackPreview(null);
+  }, []);
+
+  const startRollbackPreview = React.useCallback((card: KanbanCard, fromRect: RollbackRect | null) => {
+    if (rollbackTimeoutRef.current !== null) {
+      window.clearTimeout(rollbackTimeoutRef.current);
+      rollbackTimeoutRef.current = null;
+    }
+
+    setRollbackGhost(null);
+    setRollbackPreview({ cardId: card.id, sourceStatus: card.status, fromRect });
+  }, []);
+
+  const handleCancelPendingMove = React.useCallback(() => {
+    if (pendingMoveCard) {
+      const previewElement = document.querySelector(`[data-preview-id="preview:${pendingMoveCard.id}"]`);
+      const fromRect =
+        previewElement instanceof HTMLElement
+          ? {
+              top: previewElement.getBoundingClientRect().top,
+              left: previewElement.getBoundingClientRect().left,
+              width: previewElement.getBoundingClientRect().width,
+              height: previewElement.getBoundingClientRect().height,
+            }
+          : null;
+
+      startRollbackPreview(pendingMoveCard, fromRect);
+    } else {
+      clearRollbackPreview();
+    }
+
+    setPendingMove(null);
+    setPreviewColumn(null);
+  }, [clearRollbackPreview, pendingMoveCard, startRollbackPreview]);
+
   const handleConfirmStageMove = React.useCallback(async () => {
     if (!pendingMove) return;
 
@@ -639,6 +792,7 @@ export function ReservationsClient() {
     if (!targetCard) {
       setPendingMove(null);
       setPreviewColumn(null);
+      clearRollbackPreview();
       return;
     }
 
@@ -666,12 +820,14 @@ export function ReservationsClient() {
       });
       setPendingMove(null);
       setPreviewColumn(null);
+      clearRollbackPreview();
       return;
     }
 
     setPendingMove(null);
     setPreviewColumn(null);
-  }, [cardById, handleRejectMany, handleVerifyMany, pendingMove]);
+    clearRollbackPreview();
+  }, [cardById, clearRollbackPreview, handleRejectMany, handleVerifyMany, pendingMove]);
 
   const onDragEnd = React.useCallback(
     async (event: DragEndEvent) => {
@@ -699,6 +855,7 @@ export function ReservationsClient() {
           }));
         }
         setPreviewColumn(null);
+        clearRollbackPreview();
         return;
       }
 
@@ -724,7 +881,7 @@ export function ReservationsClient() {
 
       toast.warning("Allowed moves: Pending to Confirmed, or Pending to Rejected.");
     },
-    [cardById, columnOrders, resolveDropTarget],
+    [cardById, clearRollbackPreview, columnOrders, resolveDropTarget],
   );
 
   if (isLoading) {
@@ -768,10 +925,7 @@ export function ReservationsClient() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => {
-                setPendingMove(null);
-                setPreviewColumn(null);
-              }}
+              onClick={handleCancelPendingMove}
               disabled={!!verifyingId}
             >
               Cancel
@@ -879,6 +1033,7 @@ export function ReservationsClient() {
               setPreviewColumn(shouldPreview ? nextColumn : null);
             }}
             onDragStart={(event: DragStartEvent) => {
+              clearRollbackPreview();
               setActiveDragCardId(String(event.active.id));
               setPreviewColumn(null);
             }}
@@ -890,6 +1045,7 @@ export function ReservationsClient() {
               setActiveDropColumn(null);
               setActiveDragCardId(null);
               setPreviewColumn(null);
+              clearRollbackPreview();
             }}
           >
             <div className="grid gap-4 xl:grid-cols-3">
@@ -926,6 +1082,35 @@ export function ReservationsClient() {
                 </Card>
               ) : null}
             </DragOverlay>
+            {rollbackGhost ? (
+              <div
+                className="pointer-events-none fixed z-[60]"
+                style={{
+                  top: rollbackGhost.fromRect.top,
+                  left: rollbackGhost.fromRect.left,
+                  width: rollbackGhost.fromRect.width,
+                  transform: rollbackGhost.isAnimating
+                    ? `translate(${rollbackGhost.toRect.left - rollbackGhost.fromRect.left}px, ${rollbackGhost.toRect.top - rollbackGhost.fromRect.top}px)`
+                    : "translate(0px, 0px)",
+                  transition: `transform ${ROLLBACK_PREVIEW_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+                }}
+              >
+                <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
+                  <CardContent className="space-y-2 p-4 pr-10">
+                    <p className="text-base font-bold leading-tight">{rollbackGhost.card.showName}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {rollbackGhost.card.row.user.first_name} {rollbackGhost.card.row.user.last_name}
+                    </p>
+                    <p className="text-sm text-muted-foreground">{rollbackGhost.card.row.user.email}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {rollbackGhost.card.row.seatNumbers.length} seat
+                      {rollbackGhost.card.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
+                      {formatCurrency(rollbackGhost.card.row.totalAmount)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : null}
           </DndContext>
         )}
       </div>
