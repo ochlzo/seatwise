@@ -26,7 +26,7 @@ type CompleteBody = {
 
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const INVITE_UNAVAILABLE_ERROR = "Invite link is invalid or unavailable.";
-const COMPLETE_FAILED_ERROR = "Unable to complete onboarding with the provided details.";
+const COMPLETE_FAILED_ERROR = "Unable to complete onboarding right now.";
 
 export async function POST(request: NextRequest) {
   let createdUid: string | null = null;
@@ -41,8 +41,20 @@ export async function POST(request: NextRequest) {
     const username = body.username?.trim() ?? "";
     const password = body.password ?? "";
 
-    if (!token || !firstName || !lastName || !username || !password) {
-      return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 400 });
+    if (!token) {
+      return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
+    }
+    if (!firstName) {
+      return NextResponse.json({ error: "First name is required." }, { status: 400 });
+    }
+    if (!lastName) {
+      return NextResponse.json({ error: "Last name is required." }, { status: 400 });
+    }
+    if (!username) {
+      return NextResponse.json({ error: "Username is required." }, { status: 400 });
+    }
+    if (!password) {
+      return NextResponse.json({ error: "Password is required." }, { status: 400 });
     }
     if (username.length < 2 || username.length > 20) {
       return NextResponse.json({ error: "Username must be 2-20 characters." }, { status: 400 });
@@ -74,7 +86,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 410 });
     }
     if (!session.otpVerified) {
-      return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 400 });
+      return NextResponse.json({ error: "Verify the OTP before completing onboarding." }, { status: 400 });
     }
     if (!doesInviteMatchSession(payload, session)) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
@@ -85,7 +97,7 @@ export async function POST(request: NextRequest) {
         select: { team_id: true },
       });
       if (!team) {
-        return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 404 });
+        return NextResponse.json({ error: "Assigned team no longer exists." }, { status: 404 });
       }
     }
 
@@ -93,7 +105,7 @@ export async function POST(request: NextRequest) {
     const lock = await redis.set(lockKey, "1", { nx: true, ex: 120 });
     if (!lock) {
       return NextResponse.json(
-        { error: COMPLETE_FAILED_ERROR },
+        { error: "This invite is already being completed. Please try again." },
         { status: 409 },
       );
     }
@@ -104,7 +116,7 @@ export async function POST(request: NextRequest) {
     });
     if (existingByEmail) {
       return NextResponse.json(
-        { error: COMPLETE_FAILED_ERROR },
+        { error: "An admin account with this email already exists." },
         { status: 409 },
       );
     }
@@ -118,7 +130,7 @@ export async function POST(request: NextRequest) {
       select: { user_id: true },
     });
     if (existingByUsername) {
-      return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 409 });
+      return NextResponse.json({ error: "Username is already taken." }, { status: 409 });
     }
 
     await setInviteSession({

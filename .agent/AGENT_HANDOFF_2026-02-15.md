@@ -537,3 +537,90 @@ In `prisma/schema.prisma`, `Show` includes:
 - On confirm, the moved card is always inserted at the very top of the destination column.
 - On cancel, the card now animates back toward the source column using a rollback ghost animation.
 - Rollback animation duration is currently `360ms`.
+
+## Session Updates (2026-03-12)
+
+### Public Show Seatmap Access Fix (Implemented)
+- Public show detail seatmap preview was failing in deployed environments with `Failed to load seatmap`.
+- Root cause:
+- `components/seatmap/SeatmapPreview.tsx` fetches `GET /api/seatmaps/[seatmapId]`
+- `middleware.ts` and `app/api/seatmaps/[seatmapId]/route.ts` previously treated that endpoint as admin-only.
+- Fix applied:
+- `middleware.ts` now allows unauthenticated `GET /api/seatmaps/[seatmapId]`
+- `app/api/seatmaps/[seatmapId]/route.ts` now allows guest access only when the seatmap is attached to at least one user-visible show.
+- Admin access remains unrestricted for the same endpoint.
+
+### Gmail Invite Flow Diagnostics + Scope Fix Support (Implemented)
+- Investigated production invite-email failures.
+- Determined two distinct failure modes:
+- refresh token missing Gmail profile-readable scope for sender validation
+- sender email mismatch between `GMAIL_SENDER_EMAIL` and OAuth mailbox
+- Updated helper script:
+- `scripts/get-google-refresh-token.mjs`
+- Script now requests both:
+- `https://www.googleapis.com/auth/gmail.send`
+- `https://www.googleapis.com/auth/gmail.readonly`
+- Updated sender-alignment guard:
+- `lib/email/gmailSenderGuard.ts`
+- Missing-scope failures now surface a direct actionable error message instead of raw Gmail API JSON.
+- Current production requirement:
+- `GMAIL_SENDER_EMAIL` must match the OAuth mailbox, or be configured as a verified alias and listed in `GMAIL_ALLOWED_SENDER_ALIASES`.
+
+### Invite Email Link Origin Fix (Implemented)
+- Invite emails in production were sometimes generating `localhost:3000` links.
+- Root cause:
+- invite sender routes hard-fell back to `http://localhost:3000` when `NEXT_PUBLIC_BASE_URL` was unset.
+- Fixed in:
+- `app/api/admin/access/invite/route.ts`
+- `app/api/admin/access/invite/superadmin/route.ts`
+- New origin resolution order:
+- `NEXT_PUBLIC_BASE_URL`
+- `request.nextUrl.origin`
+- `http://localhost:3000` only as local fallback
+- Result:
+- deployed invite emails now use the deployed host even if `NEXT_PUBLIC_BASE_URL` is missing.
+
+### Reservations Kanban: Cancel Rollback Ghost Reliability (Adjusted)
+- File updated:
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- Investigated why the cancel rollback ghost animation only appeared intermittently.
+- Main issue:
+- source rollback anchor was visibly participating in layout before the flying ghost settled, making most cancels read like a local source-card lift instead of a return-flight animation.
+- Adjustments made:
+- rollback anchor placeholder is now visually invisible while still preserving layout space
+- rollback ghost setup now runs in `useLayoutEffect` instead of `useEffect`
+- Result:
+- cancel animation should read more consistently as a card moving back from destination to source.
+
+### Admin Invite Onboarding: Validation UX Upgrade (Implemented)
+- Main file updated:
+- `components/admin-invite-onboarding.tsx`
+- Added direct field-level validation UI for onboarding profile step.
+- Validation rules now enforced in UI:
+- first name must not be empty
+- last name must not be empty
+- username must not be empty
+- username must be 2-20 characters
+- username must be unique
+- password must not be empty
+- password must be at least 8 characters and include letters and numbers
+- Validation UI behavior:
+- invalid fields now show red borders
+- inline field error messages now render directly below inputs
+- removed reliance on generic onboarding failure messaging for field mistakes
+- Added debounced username uniqueness check in new route:
+- `POST /api/admin/access/invite/check-username`
+- File:
+- `app/api/admin/access/invite/check-username/route.ts`
+- Added password visibility toggle with eye icon in onboarding form.
+- Updated completion API:
+- `app/api/admin/access/invite/complete/route.ts`
+- It now returns specific field-relevant error messages for common validation failures instead of the old generic `Unable to complete onboarding with the provided details.` message.
+
+## TODOs
+1. Check and QA the latest onboarding form validation work.
+2. Create a portal view triggered when clicking a payment record on the reservations kanban view.
+3. Send emails to customers when their reservation stage changes.
+4. Create a customizable ticket design builder (drag/drop components like Canva).
+5. Wire in the `walk in` mode on the admin side.
+6. Overall UI polishing.
