@@ -21,12 +21,19 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   AlertTriangle,
+  Armchair,
+  ArrowDownToLine,
+  CalendarCheck,
   CheckCircle2,
   Clock,
   CreditCard,
   GripVertical,
   Loader2,
+  Mail,
+  MapPin,
+  Phone,
   Search,
+  Ticket,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -124,7 +131,9 @@ type KanbanStatus = "PENDING" | "CONFIRMED" | "REJECTED";
 type KanbanCard = {
   id: string;
   status: KanbanStatus;
+  showId: string;
   showName: string;
+  showVenue: string;
   row: UserReservationRow;
 };
 
@@ -135,6 +144,7 @@ type DisplayCard = KanbanCard & {
 type PendingMove = {
   cardId: string;
   targetStatus: "CONFIRMED" | "REJECTED";
+  source: "drag" | "portal";
 };
 
 type RollbackRect = {
@@ -193,6 +203,8 @@ const COLUMNS: Array<{
 
 const columnId = (status: KanbanStatus) => `column:${status}`;
 const ROLLBACK_PREVIEW_MS = 360;
+const PORTAL_TRANSITION_MS = 240;
+const PORTAL_SCROLL_DELAY_MS = 220;
 
 const formatCurrency = (value: string | number) => {
   const parsed = typeof value === "string" ? parseFloat(value) : value;
@@ -201,6 +213,66 @@ const formatCurrency = (value: string | number) => {
     currency: "PHP",
     maximumFractionDigits: 2,
   }).format(parsed);
+};
+
+const formatDate = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+};
+
+const parseTimeValue = (value: string) => {
+  const directDate = new Date(value);
+  if (!Number.isNaN(directDate.getTime())) {
+    return directDate;
+  }
+
+  const match = value.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+
+  const [, hourText, minuteText, secondText] = match;
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = Number(secondText ?? "0");
+
+  if (
+    Number.isNaN(hour) ||
+    Number.isNaN(minute) ||
+    Number.isNaN(second) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59 ||
+    second < 0 ||
+    second > 59
+  ) {
+    return null;
+  }
+
+  const date = new Date("2026-01-01T00:00:00");
+  date.setHours(hour, minute, second, 0);
+  return date;
+};
+
+const formatTimeRange = (start: string, end: string) => {
+  const startDate = parseTimeValue(start);
+  const endDate = parseTimeValue(end);
+
+  if (!startDate || !endDate) {
+    return [start, end].filter(Boolean).join(" - ") || "Time unavailable";
+  }
+
+  const formatter = new Intl.DateTimeFormat("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
 };
 
 const getRowStatus = (row: UserReservationRow): KanbanStatus => {
@@ -279,9 +351,14 @@ const buildUserRows = (
 type SortableCardProps = {
   card: KanbanCard;
   isVerifying: boolean;
+  onOpenDetails: (card: KanbanCard) => void;
 };
 
-function SortableCard({ card, isVerifying }: SortableCardProps) {
+function SortableCard({
+  card,
+  isVerifying,
+  onOpenDetails,
+}: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useSortable({
       id: card.id,
@@ -309,29 +386,56 @@ function SortableCard({ card, isVerifying }: SortableCardProps) {
         <button
           type="button"
           aria-label="Drag reservation card"
-          className="absolute right-3 top-3 inline-flex h-6 w-6 touch-none items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+          className="absolute right-3 top-3 inline-flex h-6 w-6 touch-none items-center justify-center rounded-md text-muted-foreground transition-colors hover:cursor-grab hover:bg-muted hover:text-foreground active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
           disabled={isVerifying}
+          onClick={(event) => event.stopPropagation()}
           {...attributes}
           {...listeners}
         >
           <GripVertical className="h-4 w-4" />
         </button>
-        <p className="text-base font-bold leading-tight">{card.showName}</p>
-        <p className="text-sm font-medium text-foreground">
-          {card.row.user.first_name} {card.row.user.last_name}
-        </p>
-        <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
-        <p className="text-sm text-muted-foreground">
-          {card.row.seatNumbers.length} seat
-          {card.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
-          {formatCurrency(card.row.totalAmount)}
-        </p>
-        {isVerifying && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Updating status...
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => onOpenDetails(card)}
+            className="block w-full cursor-pointer space-y-2 text-left lg:hidden"
+          >
+            <p className="text-base font-bold leading-tight text-foreground">
+              {card.showName}
+            </p>
+            <p className="text-sm font-medium text-foreground">
+              {card.row.user.first_name} {card.row.user.last_name}
+            </p>
+          </button>
+          <div className="group hidden w-fit cursor-pointer space-y-1 lg:block">
+            <button
+              type="button"
+              onClick={() => onOpenDetails(card)}
+              className="block cursor-pointer text-left text-base font-bold leading-tight text-foreground transition-colors group-hover:text-blue-600 group-hover:underline group-hover:underline-offset-4 hover:text-blue-600 hover:underline hover:underline-offset-4"
+            >
+              {card.showName}
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenDetails(card)}
+              className="block cursor-pointer text-left text-sm font-medium text-foreground transition-colors group-hover:text-blue-600 group-hover:underline group-hover:underline-offset-4 hover:text-blue-600 hover:underline hover:underline-offset-4"
+            >
+              {card.row.user.first_name} {card.row.user.last_name}
+            </button>
           </div>
-        )}
+          <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+          <p className="text-sm text-muted-foreground">
+            {card.row.seatNumbers.length} seat
+            {card.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
+            {formatCurrency(card.row.totalAmount)}
+          </p>
+          {isVerifying && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Updating status...
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -382,6 +486,7 @@ type KanbanColumnProps = {
   stageClassName: string;
   stageCountClassName: string;
   stageSurfaceClassName: string;
+  onOpenDetails: (card: KanbanCard) => void;
 };
 
 function KanbanColumn({
@@ -394,6 +499,7 @@ function KanbanColumn({
   stageClassName,
   stageCountClassName,
   stageSurfaceClassName,
+  onOpenDetails,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
     id: columnId(status),
@@ -441,6 +547,7 @@ function KanbanColumn({
                 key={card.id}
                 card={card}
                 isVerifying={verifyingId === `kanban:${card.id}`}
+                onOpenDetails={onOpenDetails}
               />
             ),
           )}
@@ -473,6 +580,13 @@ export function ReservationsClient() {
     React.useState<RollbackPreview | null>(null);
   const [rollbackGhost, setRollbackGhost] =
     React.useState<RollbackGhost | null>(null);
+  const [selectedCardId, setSelectedCardId] = React.useState<string | null>(
+    null,
+  );
+  const [portalCardId, setPortalCardId] = React.useState<string | null>(null);
+  const [isPortalVisible, setIsPortalVisible] = React.useState(false);
+  const [isPortalScrollReady, setIsPortalScrollReady] = React.useState(false);
+  const [isImageExpanded, setIsImageExpanded] = React.useState(false);
   const [columnOrders, setColumnOrders] = React.useState<
     Record<KanbanStatus, string[]>
   >({
@@ -482,6 +596,8 @@ export function ReservationsClient() {
   });
 
   const rollbackTimeoutRef = React.useRef<number | null>(null);
+  const portalTimeoutRef = React.useRef<number | null>(null);
+  const portalScrollTimeoutRef = React.useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -502,8 +618,68 @@ export function ReservationsClient() {
       if (rollbackTimeoutRef.current !== null) {
         window.clearTimeout(rollbackTimeoutRef.current);
       }
+      if (portalTimeoutRef.current !== null) {
+        window.clearTimeout(portalTimeoutRef.current);
+      }
+      if (portalScrollTimeoutRef.current !== null) {
+        window.clearTimeout(portalScrollTimeoutRef.current);
+      }
     };
   }, []);
+
+  React.useEffect(() => {
+    if (selectedCardId) {
+      if (portalTimeoutRef.current !== null) {
+        window.clearTimeout(portalTimeoutRef.current);
+        portalTimeoutRef.current = null;
+      }
+
+      setPortalCardId(selectedCardId);
+      setIsPortalScrollReady(false);
+      const frameId = window.requestAnimationFrame(() => {
+        setIsPortalVisible(true);
+      });
+      portalScrollTimeoutRef.current = window.setTimeout(() => {
+        setIsPortalScrollReady(true);
+        portalScrollTimeoutRef.current = null;
+      }, PORTAL_SCROLL_DELAY_MS);
+
+      return () => {
+        window.cancelAnimationFrame(frameId);
+        if (portalScrollTimeoutRef.current !== null) {
+          window.clearTimeout(portalScrollTimeoutRef.current);
+          portalScrollTimeoutRef.current = null;
+        }
+      };
+    }
+
+    setIsPortalVisible(false);
+    setIsPortalScrollReady(false);
+
+    if (portalCardId) {
+      portalTimeoutRef.current = window.setTimeout(() => {
+        setPortalCardId(null);
+        portalTimeoutRef.current = null;
+      }, PORTAL_TRANSITION_MS);
+    }
+  }, [portalCardId, selectedCardId]);
+
+  React.useEffect(() => {
+    if (!portalCardId) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [portalCardId]);
+
+  React.useEffect(() => {
+    if (!selectedCardId) {
+      setIsImageExpanded(false);
+    }
+  }, [selectedCardId]);
 
   React.useEffect(() => {
     const fetchReservations = async () => {
@@ -693,7 +869,9 @@ export function ReservationsClient() {
         cards.push({
           id: `${show.showId}::${row.userId}`,
           status: getRowStatus(row),
+          showId: show.showId,
           showName: show.showName,
+          showVenue: show.venue,
           row,
         });
       }
@@ -751,6 +929,9 @@ export function ReservationsClient() {
     : null;
   const pendingMoveCard = pendingMove
     ? (cardById.get(pendingMove.cardId) ?? null)
+    : null;
+  const selectedCard = portalCardId
+    ? (cardById.get(portalCardId) ?? null)
     : null;
   const rollbackPreviewCard = rollbackPreview
     ? (cardById.get(rollbackPreview.cardId) ?? null)
@@ -863,6 +1044,13 @@ export function ReservationsClient() {
   const totalReservations = kanbanCards.length;
   const pendingCount = orderedCardsByColumn.PENDING.length;
   const confirmedCount = orderedCardsByColumn.CONFIRMED.length;
+  const primaryPayment =
+    selectedCard?.row.reservations.find(
+      (reservation) => reservation.payment?.screenshot_url,
+    )?.payment ??
+    selectedCard?.row.reservations.find((reservation) => reservation.payment)
+      ?.payment ??
+    null;
 
   const resolveDropTarget = React.useCallback(
     (overId: string): KanbanStatus | null => {
@@ -879,6 +1067,17 @@ export function ReservationsClient() {
 
   const pendingMoveLabel =
     pendingMove?.targetStatus === "CONFIRMED" ? "Confirmed" : "Rejected";
+  const pendingMoveButtonClassName =
+    pendingMove?.targetStatus === "CONFIRMED"
+      ? "bg-amber-400 text-white hover:bg-amber-500"
+      : undefined;
+  const canConfirmSelectedCard = selectedCard?.status === "PENDING";
+  const selectedCardStatusBadgeClassName =
+    selectedCard?.status === "CONFIRMED"
+      ? "bg-emerald-100 text-emerald-700"
+      : selectedCard?.status === "REJECTED"
+        ? "bg-red-100 text-red-700"
+        : "bg-amber-100 text-amber-700";
 
   const clearRollbackPreview = React.useCallback(() => {
     if (rollbackTimeoutRef.current !== null) {
@@ -907,7 +1106,7 @@ export function ReservationsClient() {
   );
 
   const handleCancelPendingMove = React.useCallback(() => {
-    if (pendingMoveCard) {
+    if (pendingMove?.source === "drag" && pendingMoveCard) {
       const previewElement = document.querySelector(
         `[data-preview-id="preview:${pendingMoveCard.id}"]`,
       );
@@ -928,7 +1127,12 @@ export function ReservationsClient() {
 
     setPendingMove(null);
     setPreviewColumn(null);
-  }, [clearRollbackPreview, pendingMoveCard, startRollbackPreview]);
+  }, [
+    clearRollbackPreview,
+    pendingMove?.source,
+    pendingMoveCard,
+    startRollbackPreview,
+  ]);
 
   const handleConfirmStageMove = React.useCallback(async () => {
     if (!pendingMove) return;
@@ -1016,12 +1220,20 @@ export function ReservationsClient() {
       }
 
       if (activeCard.status === "PENDING" && targetStatus === "CONFIRMED") {
-        setPendingMove({ cardId: activeCard.id, targetStatus: "CONFIRMED" });
+        setPendingMove({
+          cardId: activeCard.id,
+          targetStatus: "CONFIRMED",
+          source: "drag",
+        });
         return;
       }
 
       if (activeCard.status === "PENDING" && targetStatus === "REJECTED") {
-        setPendingMove({ cardId: activeCard.id, targetStatus: "REJECTED" });
+        setPendingMove({
+          cardId: activeCard.id,
+          targetStatus: "REJECTED",
+          source: "drag",
+        });
         return;
       }
 
@@ -1074,9 +1286,29 @@ export function ReservationsClient() {
             </div>
             <DialogTitle>Warning: stage change</DialogTitle>
             <DialogDescription>
-              {pendingMoveCard
-                ? `Move ${pendingMoveCard.row.user.first_name} ${pendingMoveCard.row.user.last_name} for ${pendingMoveCard.showName} to ${pendingMoveLabel}? This action cannot be undone or changed.`
-                : "Confirm this reservation stage change. This action cannot be undone or changed."}
+              {pendingMoveCard ? (
+                <>
+                  Move {pendingMoveCard.row.user.first_name}{" "}
+                  {pendingMoveCard.row.user.last_name} for{" "}
+                  {pendingMoveCard.showName} to {pendingMoveLabel}? This action
+                  cannot be undone or changed.{" "}
+                  <a
+                    href="#"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setPendingMove(null);
+                      setPreviewColumn(null);
+                      clearRollbackPreview();
+                      setSelectedCardId(pendingMoveCard.id);
+                    }}
+                    className="font-medium text-amber-700 underline underline-offset-4 transition-colors hover:text-amber-800"
+                  >
+                    Check payment first?
+                  </a>
+                </>
+              ) : (
+                "Confirm this reservation stage change. This action cannot be undone or changed."
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1090,7 +1322,12 @@ export function ReservationsClient() {
             </Button>
             <Button
               type="button"
-              variant="destructive"
+              variant={
+                pendingMove?.targetStatus === "CONFIRMED"
+                  ? "default"
+                  : "destructive"
+              }
+              className={pendingMoveButtonClassName}
               onClick={() => {
                 void handleConfirmStageMove();
               }}
@@ -1108,6 +1345,310 @@ export function ReservationsClient() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selectedCard ? (
+        <div
+          className={`fixed inset-0 z-[80] bg-background transition-opacity duration-200 ${isPortalVisible ? "opacity-100" : "opacity-0"}`}
+        >
+          <div
+            className={`grid h-full min-h-0 transition-[transform,opacity] duration-300 ease-out lg:grid-cols-[minmax(420px,0.9fr)_minmax(0,1.1fr)] ${isPortalVisible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}
+          >
+            <div
+              className={`min-h-0 border-b border-sidebar-border/70 px-6 py-5 dark:border-white/10 lg:border-b-0 lg:border-r ${isPortalScrollReady ? "overflow-y-auto" : "overflow-hidden"}`}
+            >
+              <div className="mx-auto max-w-2xl space-y-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                      Payment Record
+                    </p>
+                    <div>
+                      <h2 className="text-lg font-semibold tracking-tight sm:text-2xl">
+                        {selectedCard.row.user.first_name}{" "}
+                        {selectedCard.row.user.last_name}
+                      </h2>
+                      <p className="text-xs text-muted-foreground sm:text-sm">
+                        {selectedCard.showName}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCardId(null)}
+                    className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-black px-3 text-xs font-medium text-white shadow-sm sm:h-10 sm:text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {canConfirmSelectedCard ? (
+                  <div className="flex gap-3 border-t border-sidebar-border/70 pt-6 dark:border-white/10 lg:hidden">
+                    <Button
+                      type="button"
+                      className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
+                      onClick={() => {
+                        setPendingMove({
+                          cardId: selectedCard.id,
+                          targetStatus: "CONFIRMED",
+                          source: "portal",
+                        });
+                      }}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="flex-1"
+                      onClick={() => {
+                        setPendingMove({
+                          cardId: selectedCard.id,
+                          targetStatus: "REJECTED",
+                          source: "portal",
+                        });
+                      }}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                ) : null}
+
+                <section className="space-y-3 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
+                    <Mail className="h-3.5 w-3.5" />
+                    Customer Details
+                  </div>
+                  <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Email
+                      </p>
+                      <p className="break-all text-xs font-medium sm:text-sm">
+                        {selectedCard.row.user.email}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Phone
+                      </p>
+                      <p className="text-xs font-medium sm:text-sm">
+                        {selectedCard.row.user.phone_number}
+                      </p>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Address
+                      </p>
+                      <p className="text-xs font-medium sm:text-sm">
+                        {selectedCard.row.user.address}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="space-y-4 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
+                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
+                    <Ticket className="h-3.5 w-3.5" />
+                    Reservation Details
+                  </div>
+
+                  <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Show
+                      </p>
+                      <p className="text-xs font-medium sm:text-sm">{selectedCard.showName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Venue
+                      </p>
+                      <p className="text-xs font-medium sm:text-sm">{selectedCard.showVenue}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Total Amount
+                      </p>
+                      <p className="text-lg font-semibold sm:text-xl">
+                        {formatCurrency(selectedCard.row.totalAmount)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Seats
+                      </p>
+                      <p className="text-xs font-medium sm:text-sm">
+                        {selectedCard.row.seatNumbers.join(", ")}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-sidebar-border/70 border-t border-sidebar-border/70 dark:divide-white/10 dark:border-white/10">
+                    {selectedCard.row.reservations.map((reservation) => (
+                      <div
+                        key={reservation.reservation_id}
+                        className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto]"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground sm:text-sm">
+                            <span className="inline-flex items-center gap-1.5">
+                              <Ticket className="h-3.5 w-3.5" />
+                              Seat {reservation.seatAssignment.seat.seat_number}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <Armchair className="h-3.5 w-3.5" />
+                              {
+                                reservation.seatAssignment.set.seatCategory
+                                  .category_name
+                              }
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <CalendarCheck className="h-3.5 w-3.5" />
+                              {formatDate(
+                                reservation.seatAssignment.sched.sched_date,
+                              )}
+                              ,{" "}
+                              {formatTimeRange(
+                                reservation.seatAssignment.sched.sched_start_time,
+                                reservation.seatAssignment.sched.sched_end_time,
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="sm:text-right">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                            Amount
+                          </p>
+                          <p className="text-xs font-semibold sm:text-sm">
+                            {formatCurrency(
+                              reservation.payment?.amount ??
+                                reservation.seatAssignment.set.seatCategory
+                                  .price,
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div className="min-h-0 bg-muted/20">
+              <div className="flex h-full min-h-0 flex-col">
+                <div
+                  className={`flex-1 ${isPortalScrollReady ? "overflow-y-auto" : "overflow-hidden"}`}
+                >
+                  <div className="flex min-h-full items-center justify-center p-6 lg:p-10 lg:pb-32">
+                    <div className="w-full max-w-4xl space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          Proof Of Payment
+                        </p>
+                        {selectedCard.status !== "PENDING" ? (
+                          <span
+                            className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-xs ${selectedCardStatusBadgeClassName}`}
+                          >
+                            {selectedCard.status === "CONFIRMED"
+                              ? "Confirmed"
+                              : "Rejected"}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="relative flex min-h-[60vh] items-center justify-center overflow-hidden bg-background">
+                        {primaryPayment?.screenshot_url ? (
+                          <>
+                            <img
+                              src={primaryPayment.screenshot_url}
+                              alt={`Payment proof for ${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`}
+                              className="max-h-[85vh] w-full cursor-zoom-in object-contain"
+                              onClick={() => setIsImageExpanded(true)}
+                            />
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-center gap-3 px-6 py-12 text-center text-muted-foreground">
+                            <CreditCard className="h-8 w-8" />
+                            <p className="text-sm">No payment image uploaded.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {canConfirmSelectedCard ? (
+                  <div className="hidden border-t border-sidebar-border/70 bg-background/95 p-4 backdrop-blur-sm dark:border-white/10 lg:sticky lg:bottom-0 lg:block lg:px-10 lg:py-5">
+                    <div className="mx-auto flex w-full max-w-4xl gap-3">
+                      <Button
+                        type="button"
+                        className="flex-1 bg-emerald-600 text-xs text-white hover:bg-emerald-700 sm:text-sm"
+                        onClick={() => {
+                          setPendingMove({
+                            cardId: selectedCard.id,
+                            targetStatus: "CONFIRMED",
+                            source: "portal",
+                          });
+                        }}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="flex-1 text-xs sm:text-sm"
+                        onClick={() => {
+                          setPendingMove({
+                            cardId: selectedCard.id,
+                            targetStatus: "REJECTED",
+                            source: "portal",
+                          });
+                        }}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedCard && primaryPayment?.screenshot_url && isImageExpanded ? (
+        <div
+          className="fixed inset-0 z-[95] bg-black/90"
+          onClick={() => setIsImageExpanded(false)}
+        >
+          <div className="absolute left-4 right-4 top-4 z-10 flex items-center justify-between lg:justify-end lg:gap-2">
+            <a
+              href={primaryPayment.screenshot_url}
+              download
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex h-10 w-10 items-center justify-center text-white/80 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              aria-label="Download proof of payment image"
+            >
+              <ArrowDownToLine className="h-4.5 w-4.5" />
+            </a>
+            <button
+              type="button"
+              onClick={() => setIsImageExpanded(false)}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-white/25 bg-black/45 px-3 text-sm font-medium text-white shadow-sm transition-colors hover:border-white/40 hover:bg-black/65 hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+          <div className="flex h-full w-full items-center justify-center p-4 sm:p-8">
+            <img
+              src={primaryPayment.screenshot_url}
+              alt={`Expanded proof of payment for ${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`}
+              className="max-h-full max-w-full object-contain"
+              onClick={(event) => event.stopPropagation()}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-3">
@@ -1247,6 +1788,7 @@ export function ReservationsClient() {
                   cards={displayCardsByColumn[column.key]}
                   isActiveDrop={activeDropColumn === column.key}
                   verifyingId={verifyingId}
+                  onOpenDetails={(card) => setSelectedCardId(card.id)}
                 />
               ))}
             </div>
@@ -1316,3 +1858,7 @@ export function ReservationsClient() {
     </>
   );
 }
+
+
+
+
