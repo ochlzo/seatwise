@@ -114,13 +114,16 @@ export default function ShowsPage({
   const router = useRouter();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state: RootState) => state.auth.user);
+  const teamDialogPortalContainerRef = React.useRef<HTMLDivElement | null>(null);
   const [shows, setShows] = React.useState<Show[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [isAssignTeamDialogOpen, setIsAssignTeamDialogOpen] = React.useState(false);
   const [isLoadingTeams, setIsLoadingTeams] = React.useState(false);
+  const [isTeamComboboxOpen, setIsTeamComboboxOpen] = React.useState(false);
   const [teamSearchQuery, setTeamSearchQuery] = React.useState("");
   const [selectedTeamId, setSelectedTeamId] = React.useState("");
+  const [selectedTeamName, setSelectedTeamName] = React.useState("");
   const [teams, setTeams] = React.useState<TeamOption[]>([]);
 
   React.useEffect(() => {
@@ -224,7 +227,9 @@ export default function ShowsPage({
       await loadTeams();
     }
     setSelectedTeamId("");
+    setSelectedTeamName("");
     setTeamSearchQuery("");
+    setIsTeamComboboxOpen(false);
     setIsAssignTeamDialogOpen(true);
   }, [createPath, isSuperadmin, loadTeams, router, teams.length]);
 
@@ -236,7 +241,7 @@ export default function ShowsPage({
 
   const filteredTeams = React.useMemo(() => {
     const query = teamSearchQuery.trim().toLowerCase();
-    if (!query) return teams;
+    if (!query) return teams.slice(0, 10);
     return teams.filter((team) => team.name.toLowerCase().includes(query));
   }, [teamSearchQuery, teams]);
 
@@ -525,46 +530,66 @@ export default function ShowsPage({
       </div>
 
       <Dialog open={isAssignTeamDialogOpen} onOpenChange={setIsAssignTeamDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="overflow-visible sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Assign show to a team</DialogTitle>
             <DialogDescription>
               Superadmins must assign a team before creating a show.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
+          <div className="space-y-2" ref={teamDialogPortalContainerRef}>
             <Combobox
-              value={selectedTeamId}
+              open={isTeamComboboxOpen}
+              onOpenChange={setIsTeamComboboxOpen}
+              openOnInputClick
+              autoHighlight
+              value={selectedTeamName}
               onValueChange={(value) => {
                 const nextValue = value ?? "";
-                setSelectedTeamId(nextValue);
-                const selected = teams.find((team) => team.team_id === nextValue);
+                setSelectedTeamName(nextValue);
+                const selected = teams.find((team) => team.name === nextValue);
+                setSelectedTeamId(selected?.team_id ?? "");
                 setTeamSearchQuery(selected?.name ?? "");
+                setIsTeamComboboxOpen(false);
               }}
             >
               <ComboboxInput
                 aria-label="Search team"
                 placeholder="Search or select a team"
                 value={teamSearchQuery}
+                onFocus={() => setIsTeamComboboxOpen(true)}
                 onChange={(event) => {
                   setTeamSearchQuery(event.target.value);
+                  setSelectedTeamName("");
                   setSelectedTeamId("");
+                  setIsTeamComboboxOpen(true);
                 }}
               />
-              <ComboboxContent>
-                <ComboboxList>
+              <ComboboxContent
+                className="z-[120]"
+                container={teamDialogPortalContainerRef.current}
+                side="bottom"
+                align="start"
+                collisionAvoidance={{
+                  side: "none",
+                  align: "none",
+                  fallbackAxisSide: "none",
+                }}
+              >
+                <ComboboxList className="max-h-80">
                   {isLoadingTeams ? (
                     <ComboboxItem value="loading" disabled>
                       Loading teams...
                     </ComboboxItem>
-                  ) : (
+                  ) : filteredTeams.length > 0 ? (
                     filteredTeams.map((team) => (
-                      <ComboboxItem key={team.team_id} value={team.team_id}>
+                      <ComboboxItem key={team.team_id} value={team.name}>
                         {team.name}
                       </ComboboxItem>
                     ))
+                  ) : (
+                    <ComboboxEmpty>No teams found.</ComboboxEmpty>
                   )}
-                  {!isLoadingTeams && <ComboboxEmpty>No teams found.</ComboboxEmpty>}
                 </ComboboxList>
               </ComboboxContent>
             </Combobox>

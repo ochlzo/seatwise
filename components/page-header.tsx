@@ -9,10 +9,11 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { ArrowLeft } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { StickyHeader } from "@/components/sticky-header";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const segmentMap: Record<string, string> = {
@@ -48,7 +49,13 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const hasSidebar = pathname.startsWith("/admin") || pathname.startsWith("/seat-builder");
+  const segments = pathname.split("/").filter(Boolean);
+  const isPublicShowDetailRoute =
+    !hasSidebar &&
+    segments.length === 1 &&
+    !["dashboard", "account", "profile", "all-events"].includes(segments[0]);
 
   const breadcrumbs = React.useMemo(() => {
     const segments = pathname.split("/").filter(Boolean);
@@ -118,7 +125,18 @@ export function PageHeader({
             />
           </>
         )}
-        <Breadcrumb className="hidden md:block">
+        {isPublicShowDetailRoute ? (
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard")}
+            className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:text-blue-600 lg:hidden"
+            aria-label="Back to dashboard"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+        ) : null}
+        <Breadcrumb className={cn("hidden md:block", isPublicShowDetailRoute && "lg:block")}>
           <BreadcrumbList className="text-xs sm:text-sm">
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1;
@@ -139,7 +157,9 @@ export function PageHeader({
             })}
           </BreadcrumbList>
         </Breadcrumb>
-        <span className="text-xs sm:text-sm font-medium md:hidden">{title}</span>
+        {!isPublicShowDetailRoute ? (
+          <span className="text-xs sm:text-sm font-medium md:hidden">{title}</span>
+        ) : null}
       </div>
       {rightSlot && <div className="ml-auto px-3 sm:px-4 flex items-center gap-2 sm:gap-3">{rightSlot}</div>}
     </StickyHeader>

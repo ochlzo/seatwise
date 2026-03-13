@@ -22,12 +22,17 @@ function ComboboxValue({ ...props }: ComboboxPrimitive.Value.Props) {
 function ComboboxTrigger({
   className,
   children,
+  onMouseDown,
   ...props
 }: ComboboxPrimitive.Trigger.Props) {
   return (
     <ComboboxPrimitive.Trigger
       data-slot="combobox-trigger"
       className={cn("[&_svg:not([class*='size-'])]:size-4", className)}
+      onMouseDown={(event) => {
+        event.preventDefault()
+        onMouseDown?.(event)
+      }}
       {...props}
     >
       {children}
@@ -96,21 +101,26 @@ function ComboboxContent({
   align = "start",
   alignOffset = 0,
   anchor,
+  container,
+  collisionAvoidance,
   ...props
 }: ComboboxPrimitive.Popup.Props &
   Pick<
     ComboboxPrimitive.Positioner.Props,
-    "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
-  >) {
+    "side" | "align" | "sideOffset" | "alignOffset" | "anchor" | "collisionAvoidance"
+  > & {
+    container?: React.ComponentProps<typeof ComboboxPrimitive.Portal>["container"]
+  }) {
   return (
-    <ComboboxPrimitive.Portal>
+    <ComboboxPrimitive.Portal container={container}>
       <ComboboxPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}
         align={align}
         alignOffset={alignOffset}
         anchor={anchor}
-        className="isolate z-50"
+        collisionAvoidance={collisionAvoidance}
+        className="isolate z-[10010]"
       >
         <ComboboxPrimitive.Popup
           data-slot="combobox-content"

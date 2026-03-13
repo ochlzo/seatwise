@@ -247,6 +247,26 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     };
   }, [hasTerminableTicket, router, schedId, showId, status?.status, terminateTicket]);
 
+  React.useEffect(() => {
+    if (!hasTerminableTicket) return;
+
+    const backGuardMessage = "Leaving this page will remove you from the queue.";
+    const guardState = { __seatwiseQueueGuard: true, showId, schedId };
+
+    window.history.pushState(guardState, "", window.location.href);
+
+    const handlePopState = () => {
+      if (allowNavigationRef.current) return;
+      window.alert(backGuardMessage);
+      window.history.pushState(guardState, "", window.location.href);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [hasTerminableTicket, schedId, showId]);
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-4 md:p-8">
       <Card>
