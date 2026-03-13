@@ -617,10 +617,88 @@ In `prisma/schema.prisma`, `Show` includes:
 - `app/api/admin/access/invite/complete/route.ts`
 - It now returns specific field-relevant error messages for common validation failures instead of the old generic `Unable to complete onboarding with the provided details.` message.
 
+## Session Updates (2026-03-13)
+
+### Reservations Kanban: Payment Record Full-Screen Portal (Implemented)
+- Main file updated:
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- Clicking a payment record now opens a full-screen portal view instead of a popup modal.
+- Portal layout:
+- left column = customer details + reservation details
+- right column = proof-of-payment screenshot
+- Minimal styling direction:
+- removed unnecessary card containers inside the portal
+- relies mostly on spacing, separators, and typography
+- Added smooth open/close transition for the portal.
+- Added body scroll lock while portal is open.
+- Delayed portal pane scrolling during transition to avoid scrollbar flash.
+
+### Reservations Kanban: Payment Portal Content/Behavior (Implemented)
+- Portal now shows:
+- customer name, email, phone, address
+- show name and venue
+- total amount
+- reserved seats and per-reservation line items
+- Removed reservation ID display from the reserved-seat breakdown list.
+- Added status badge display in the proof-of-payment header for:
+- `CONFIRMED`
+- `REJECTED`
+- Status badge placement is now on the right side of the `Proof Of Payment` header.
+- Added guarded date/time formatting in the portal:
+- invalid schedule/date values no longer crash the page
+- malformed time values now fall back safely instead of throwing `Invalid time value`
+
+### Reservations Kanban: Payment Screenshot UX (Implemented)
+- Screenshot in the portal now opens into a dedicated full-screen image overlay when clicked.
+- No separate expand button remains in the base portal view.
+- Expanded-image overlay behavior:
+- clicking the screenshot opens fullscreen on both mobile and desktop
+- download icon (`ArrowDownToLine`) added to expanded view
+- mobile: download icon stays upper-left, close stays upper-right
+- desktop: download and close controls align on the right
+- Close button styling in expanded image view was made more obvious.
+
+### Reservations Kanban: Portal Actions + Stage Confirmation Integration (Implemented)
+- Added `Accept` and `Reject` actions inside the full-screen payment portal for pending records.
+- Action styling:
+- `Accept` = green
+- `Reject` = red
+- Portal actions reuse the same stage-change confirmation modal already used by kanban drag/drop.
+- Important behavior:
+- Portal-origin actions no longer close the full-screen portal before showing confirmation.
+- Portal-origin actions no longer trigger the rollback ghost animation.
+- Added source tracking to pending move state:
+- `drag`
+- `portal`
+- `Check payment first?` link added to confirmation modal copy:
+- opens the same full-screen payment portal for the target record
+- closes the confirmation modal before opening the portal
+- Confirmation modal confirm button styling updated:
+- `Move to Confirmed` uses yellow styling
+- rejected action remains destructive/red
+
+### Reservations Kanban: Click Targets + Responsive Interaction (Implemented)
+- Large screens:
+- only the show name and customer name trigger the full-screen payment portal
+- both lines share grouped hover styling
+- hovering either line applies link-like styling to both
+- pointer cursor now appears over both trigger lines
+- Mobile and medium screens:
+- the card content area opens the full-screen payment portal
+- desktop text-only trigger behavior is preserved
+- Drag handle cursor behavior improved:
+- hover = `grab`
+- active drag = `grabbing`
+
+### Reservations Kanban: Portal Action Placement + Mobile Typography (Implemented)
+- Desktop:
+- portal `Accept` / `Reject` actions are fixed under the proof-of-payment area and do not scroll away
+- Mobile:
+- portal `Accept` / `Reject` actions stay near the top below the header area, inline, and fill available width evenly
+- Portal typography was reduced on mobile for a denser/smaller presentation without changing desktop sizing.
+
 ## TODOs
-1. Check and QA the latest onboarding form validation work.
-2. Create a portal view triggered when clicking a payment record on the reservations kanban view.
-3. Send emails to customers when their reservation stage changes.
-4. Create a customizable ticket design builder (drag/drop components like Canva).
-5. Wire in the `walk in` mode on the admin side.
-6. Overall UI polishing.
+1. Send emails to customers when their reservation stage changes.
+2. Create a customizable ticket design builder (drag/drop components like Canva).
+3. Wire in the `walk in` mode on the admin side.
+4. Overall UI polishing.
