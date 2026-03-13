@@ -16,6 +16,7 @@ const normalize = (value: unknown) => (typeof value === "string" ? value.trim() 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_PHONE_REGEX = /^09\d{9}$/;
 const RESERVATION_NUMBER_MAX_ATTEMPTS = 50;
+const RESERVATION_TRANSACTION_TIMEOUT_MS = 15_000;
 
 const generateReservationNumber = () =>
   Math.floor(Math.random() * 10_000)
@@ -126,6 +127,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const assignments = await prisma.seatAssignment.findMany({
+      where: {
+        sched_id: schedId,
+        seat_id: { in: seatIds },
+      },
+      include: {
+        seat: { select: { seat_number: true } },
+        set: {
+          select: {
+            seatCategory: { select: { price: true } },
+          },
+        },
+      },
+    });
+
+    if (assignments.length !== seatIds.length) {
+      return NextResponse.json(
+        { success: false, error: "Some selected seats are unavailable." },
+        { status: 400 },
+      );
+    }
+
+    const seatAssignmentIds = assignments.map((item) => item.seat_assignment_id);
+    const seatNumbers = assignments.map((item) => item.seat.seat_number);
+    const totalAmount = assignments.reduce(
+      (sum, item) => sum + Number(item.set.seatCategory.price),
+      0,
+    );
+
     let reservation:
       | {
           reservationId: string;
@@ -144,34 +174,17 @@ export async function POST(request: NextRequest) {
 
       try {
         reservation = await prisma.$transaction(async (tx) => {
-          const assignments = await tx.seatAssignment.findMany({
+          const reservedSeats = await tx.seatAssignment.updateMany({
             where: {
-              sched_id: schedId,
-              seat_id: { in: seatIds },
+              seat_assignment_id: { in: seatAssignmentIds },
+              seat_status: "OPEN",
             },
-            include: {
-              seat: { select: { seat_number: true } },
-              set: {
-                select: {
-                  seatCategory: { select: { price: true } },
-                },
-              },
-            },
+            data: { seat_status: "RESERVED" },
           });
 
-          if (assignments.length !== seatIds.length) {
-            throw new Error("Some selected seats are unavailable.");
+          if (reservedSeats.count !== seatAssignmentIds.length) {
+            throw new Error("One or more selected seats are already reserved.");
           }
-
-          const notOpen = assignments.find((item) => item.seat_status !== "OPEN");
-          if (notOpen) {
-            throw new Error(`Seat ${notOpen.seat.seat_number} is already reserved.`);
-          }
-
-          const totalAmount = assignments.reduce(
-            (sum, item) => sum + Number(item.set.seatCategory.price),
-            0,
-          );
 
           const created = (await tx.reservation.create({
             data: {
@@ -189,15 +202,10 @@ export async function POST(request: NextRequest) {
           } as any)) as { reservation_id: string; reservation_number: string };
 
           await tx.reservedSeat.createMany({
-            data: assignments.map((item) => ({
+            data: seatAssignmentIds.map((seatAssignmentId) => ({
               reservation_id: created.reservation_id,
-              seat_assignment_id: item.seat_assignment_id,
+              seat_assignment_id: seatAssignmentId,
             })),
-          });
-
-          await tx.seatAssignment.updateMany({
-            where: { seat_assignment_id: { in: assignments.map((item) => item.seat_assignment_id) } },
-            data: { seat_status: "RESERVED" },
           });
 
           await tx.payment.create({
@@ -213,10 +221,10 @@ export async function POST(request: NextRequest) {
           return {
             reservationId: created.reservation_id,
             reservationNumber: created.reservation_number,
-            seatNumbers: assignments.map((item) => item.seat.seat_number),
+            seatNumbers,
             totalAmount,
           };
-        });
+        }, { timeout: RESERVATION_TRANSACTION_TIMEOUT_MS });
         break;
       } catch (error) {
         const isUniqueConflict =
