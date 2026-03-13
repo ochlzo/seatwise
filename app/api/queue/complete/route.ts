@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import cloudinary from "@/lib/cloudinary";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
 import { sendReservationSubmittedEmail } from "@/lib/email/sendReservationSubmittedEmail";
@@ -15,6 +16,7 @@ const formatCurrency = (value: number) =>
 const normalize = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_PHONE_REGEX = /^09\d{9}$/;
+const DATA_URL_IMAGE_REGEX = /^data:image\/[a-zA-Z0-9.+-]+;base64,/;
 const RESERVATION_NUMBER_MAX_ATTEMPTS = 50;
 const RESERVATION_TRANSACTION_TIMEOUT_MS = 15_000;
 
@@ -66,6 +68,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: "Please select at least one seat." },
         { status: 400 },
+      );
+    }
+
+    if (!screenshotUrl || !DATA_URL_IMAGE_REGEX.test(screenshotUrl)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid payment screenshot payload." },
+        { status: 400 },
+      );
+    }
+
+    let uploadedScreenshotUrl: string;
+    try {
+      const upload = await cloudinary.uploader.upload(screenshotUrl, {
+        folder: "seatwise/settings/payment_submissions",
+        resource_type: "image",
+      });
+      uploadedScreenshotUrl = upload.secure_url;
+    } catch (error) {
+      console.error("[queue/complete] failed to upload payment screenshot:", error);
+      return NextResponse.json(
+        { success: false, error: "Failed to upload payment screenshot." },
+        { status: 500 },
       );
     }
 
@@ -214,7 +238,7 @@ export async function POST(request: NextRequest) {
               amount: totalAmount,
               method: "GCASH",
               status: "PENDING",
-              screenshot_url: screenshotUrl || null,
+              screenshot_url: uploadedScreenshotUrl,
             },
           });
 
@@ -262,21 +286,17 @@ export async function POST(request: NextRequest) {
       session: validation.session,
     });
 
-    let emailSent = true;
-    try {
-      await sendReservationSubmittedEmail({
-        to: contact.email,
-        customerName: `${contact.firstName} ${contact.lastName}`.trim(),
-        reservationNumber: reservation.reservationNumber,
-        showName: schedule.show.show_name,
-        scheduleLabel: new Date(schedule.sched_date).toLocaleDateString(),
-        seatNumbers: reservation.seatNumbers,
-        totalAmount: formatCurrency(reservation.totalAmount),
-      });
-    } catch (error) {
-      emailSent = false;
+    void sendReservationSubmittedEmail({
+      to: contact.email,
+      customerName: `${contact.firstName} ${contact.lastName}`.trim(),
+      reservationNumber: reservation.reservationNumber,
+      showName: schedule.show.show_name,
+      scheduleLabel: new Date(schedule.sched_date).toLocaleDateString(),
+      seatNumbers: reservation.seatNumbers,
+      totalAmount: formatCurrency(reservation.totalAmount),
+    }).catch((error) => {
       console.error("[queue/complete] failed to send email:", error);
-    }
+    });
 
     return NextResponse.json({
       success: true,
@@ -285,7 +305,7 @@ export async function POST(request: NextRequest) {
       showScopeId,
       showName: schedule.show.show_name,
       reservedCount: reservation.seatNumbers.length,
-      emailSent,
+      emailSent: true,
       promoted: promotion.promoted,
       next: promotion.activeSession
         ? {

@@ -1,7 +1,12 @@
 import { redis } from "@/lib/clients/redis";
 import type { ActiveSession, TicketData } from "@/lib/types/queue";
 
-export type QueueHeartbeatStatus = "waiting" | "active" | "expired" | "closed" | "not_joined";
+export type QueueHeartbeatStatus =
+  | "waiting"
+  | "active"
+  | "expired"
+  | "closed"
+  | "not_joined";
 
 export interface QueueHeartbeatResult {
   success: boolean;
@@ -110,7 +115,10 @@ export async function getQueueStatus({
   }
 
   const avgServiceMsKey = `seatwise:metrics:avg_service_ms:${showScopeId}`;
-  const avgServiceMsRaw = (await redis.get(avgServiceMsKey)) as number | string | null;
+  const avgServiceMsRaw = (await redis.get(avgServiceMsKey)) as
+    | number
+    | string
+    | null;
   const avgServiceMs =
     typeof avgServiceMsRaw === "number"
       ? avgServiceMsRaw
@@ -119,7 +127,9 @@ export async function getQueueStatus({
         : DEFAULT_AVG_SERVICE_MS;
 
   const safeAvgServiceMs =
-    Number.isFinite(avgServiceMs) && avgServiceMs > 0 ? avgServiceMs : DEFAULT_AVG_SERVICE_MS;
+    Number.isFinite(avgServiceMs) && avgServiceMs > 0
+      ? avgServiceMs
+      : DEFAULT_AVG_SERVICE_MS;
   const oneBasedRank = rank + 1;
   const etaMs = oneBasedRank * safeAvgServiceMs;
 
@@ -132,6 +142,6 @@ export async function getQueueStatus({
     rank: oneBasedRank,
     etaMs,
     estimatedWaitMinutes: Math.ceil(etaMs / 60000),
-    message: "Waiting in queue.",
+    message: "Waiting in line.",
   };
 }

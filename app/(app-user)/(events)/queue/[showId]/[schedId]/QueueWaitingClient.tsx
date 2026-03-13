@@ -39,6 +39,13 @@ const formatDuration = (ms: number) => {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 };
 
+const toDisplayRank = (rank?: number) => {
+  if (typeof rank !== "number" || !Number.isFinite(rank)) return null;
+  // Queue API rank is zero-based among waiting users.
+  // Display should account for one active user currently in reservation room.
+  return rank + 2;
+};
+
 export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
   const router = useRouter();
   const guestId = React.useMemo(() => getOrCreateGuestId(), []);
@@ -126,6 +133,11 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   }, []);
 
   React.useEffect(() => {
+    router.prefetch(`/reserve/${showId}/${schedId}`);
+    router.prefetch(`/${showId}`);
+  }, [router, schedId, showId]);
+
+  React.useEffect(() => {
     if (!status || status.status !== "active" || !status.ticketId || !status.activeToken || !status.expiresAt) {
       return;
     }
@@ -155,9 +167,8 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     }
 
     allowNavigationRef.current = true;
-    terminateTicket(false).finally(() => {
-      router.push(`/${showId}`);
-    });
+    void terminateTicket(true);
+    router.push(`/${showId}`);
   };
 
   const proceedToReservation = () => {
@@ -171,15 +182,8 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     setIsDeferring(true);
     setError(null);
     allowNavigationRef.current = true;
-    try {
-      await terminateTicket(false);
-      router.push(`/${showId}`);
-    } catch (err) {
-      allowNavigationRef.current = false;
-      setError(err instanceof Error ? err.message : "Failed to leave queue");
-    } finally {
-      setIsDeferring(false);
-    }
+    void terminateTicket(true);
+    router.push(`/${showId}`);
   };
 
   React.useEffect(() => {
@@ -229,9 +233,8 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       if (!confirmed) return;
 
       allowNavigationRef.current = true;
-      terminateTicket(false).finally(() => {
-        router.push(nextPath);
-      });
+      void terminateTicket(true);
+      router.push(nextPath);
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -285,10 +288,12 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
               )}
 
               {status.status === "waiting" && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">Current rank</div>
-                    <div className="text-2xl font-semibold">#{status.rank ?? "-"}</div>
+                    <div className="text-xs text-muted-foreground">You're in</div>
+                    <div className="text-2xl font-semibold">
+                      {toDisplayRank(status.rank) ? `#${toDisplayRank(status.rank)}` : "-"}
+                    </div>
                   </div>
                   <div className="rounded-md border p-3">
                     <div className="text-xs text-muted-foreground">Estimated wait</div>
@@ -315,7 +320,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
                   <div className="text-xs text-muted-foreground">
                     Use this active window to proceed with seat reservation.
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center justify-start gap-2">
                     <Button onClick={proceedToReservation} className="w-fit" disabled={isDeferring}>
                       Proceed to seat reservation
                     </Button>

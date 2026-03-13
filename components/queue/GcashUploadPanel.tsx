@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ImageUploadDropzone } from "@/components/ui/image-upload-dropzone";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_IMAGE_DIMENSION = 1280;
+const IMAGE_OUTPUT_QUALITY = 0.78;
 const ACCEPTED_TYPES: Record<string, string[]> = {
     "image/jpeg": [".jpg", ".jpeg"],
     "image/png": [".png"],
@@ -38,24 +40,37 @@ export function GcashUploadPanel({
     const [storedAsset, setStoredAsset] = React.useState<string | null>(null);
     const [uploadError, setUploadError] = React.useState<string | null>(null);
 
+    const compressImageToBase64 = React.useCallback(async (file: File) => {
+        const imageBitmap = await createImageBitmap(file);
+        const { width, height } = imageBitmap;
+        const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
+        const targetWidth = Math.max(1, Math.round(width * scale));
+        const targetHeight = Math.max(1, Math.round(height * scale));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+            imageBitmap.close();
+            throw new Error("Failed to process screenshot.");
+        }
+
+        ctx.drawImage(imageBitmap, 0, 0, targetWidth, targetHeight);
+        imageBitmap.close();
+
+        const mimeType = file.type === "image/png" ? "image/png" : "image/jpeg";
+        return canvas.toDataURL(mimeType, IMAGE_OUTPUT_QUALITY);
+    }, []);
+
     const readFileAsBase64 = React.useCallback(
         async (file: File) => {
             setIsProcessing(true);
             setUploadError(null);
 
             try {
-                const base64Asset = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                        if (typeof reader.result === "string") {
-                            resolve(reader.result);
-                            return;
-                        }
-                        reject(new Error("Failed to read screenshot"));
-                    };
-                    reader.onerror = () => reject(new Error("Failed to read screenshot"));
-                    reader.readAsDataURL(file);
-                });
+                const base64Asset = await compressImageToBase64(file);
 
                 setPreviewUrl(base64Asset);
                 setStoredAsset(base64Asset);
@@ -70,7 +85,7 @@ export function GcashUploadPanel({
                 setIsProcessing(false);
             }
         },
-        [onUploadComplete],
+        [compressImageToBase64, onUploadComplete],
     );
 
     const handleFileAccepted = React.useCallback(

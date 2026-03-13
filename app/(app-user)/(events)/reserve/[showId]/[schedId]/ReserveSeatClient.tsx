@@ -378,6 +378,11 @@ export function ReserveSeatClient({
   }, [showScopeId]);
 
   React.useEffect(() => {
+    router.prefetch(`/queue/${showId}/${schedId}`);
+    router.prefetch(`/${showId}`);
+  }, [router, schedId, showId]);
+
+  React.useEffect(() => {
     if (step === "success") return;
 
     const confirmLeaveMessage =
@@ -428,9 +433,8 @@ export function ReserveSeatClient({
       if (!confirmed) return;
 
       allowNavigationRef.current = true;
-      terminateQueueSession(false).finally(() => {
-        router.push(nextPath);
-      });
+      void terminateQueueSession(true);
+      router.push(nextPath);
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -487,43 +491,36 @@ export function ReserveSeatClient({
 
   const handleLeaveReservationRoom = async () => {
     const stored = getStoredSession(showScopeId);
-    if (!stored) {
-      clearStoredSession(showScopeId);
-      router.push(`/${showId}`);
-      return;
-    }
-
     setIsLeaving(true);
-    try {
-      const response = await fetch("/api/queue/leave", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          showId,
-          schedId,
-          guestId,
-          ticketId: stored.ticketId,
-          activeToken: stored.activeToken,
-        }),
+    allowNavigationRef.current = true;
+    clearStoredSession(showScopeId);
+    router.push(`/${showId}`);
+
+    if (stored) {
+      const payload = JSON.stringify({
+        showId,
+        schedId,
+        guestId,
+        ticketId: stored.ticketId,
+        activeToken: stored.activeToken,
       });
 
-      const data = (await response.json()) as {
-        success: boolean;
-        error?: string;
-      };
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Failed to leave reservation room");
+      if (
+        typeof navigator !== "undefined" &&
+        typeof navigator.sendBeacon === "function"
+      ) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon("/api/queue/leave", blob);
+      } else {
+        void fetch("/api/queue/leave", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+          keepalive: true,
+        }).catch(() => {
+          // Best effort leave on navigation.
+        });
       }
-
-      allowNavigationRef.current = true;
-      clearStoredSession(showScopeId);
-      router.push(`/${showId}`);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to leave reservation room",
-      );
-    } finally {
-      setIsLeaving(false);
     }
   };
 
