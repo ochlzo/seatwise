@@ -193,6 +193,7 @@ export function ReserveSeatClient({
   const [step, setStep] = React.useState<ReservationStep>("seats");
   const [screenshotUrl, setScreenshotUrl] = React.useState<string>("");
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = React.useState(false);
+  const [isSubmitDialogOpen, setIsSubmitDialogOpen] = React.useState(false);
   const [contactDetails, setContactDetails] = React.useState({
     firstName: "",
     lastName: "",
@@ -605,6 +606,20 @@ export function ReserveSeatClient({
   const handleConfirmLeaveReservationRoom = async () => {
     setIsLeaveDialogOpen(false);
     await handleLeaveReservationRoom();
+  };
+
+  const handleSubmitDialogChange = (open: boolean) => {
+    setIsSubmitDialogOpen(open);
+  };
+
+  const handleOpenSubmitDialog = () => {
+    if (isLeaving || isCompleting || !screenshotUrl) return;
+    setIsSubmitDialogOpen(true);
+  };
+
+  const handleConfirmSubmitReservation = () => {
+    setIsSubmitDialogOpen(false);
+    void handleConfirmReservation();
   };
 
   const updateContactField = React.useCallback(
@@ -1165,6 +1180,37 @@ export function ReserveSeatClient({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          <Dialog
+            open={isSubmitDialogOpen}
+            onOpenChange={handleSubmitDialogChange}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Submit reservation?</DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm">
+                  Please ensure all details are correct before submitting your
+                  reservation for verification.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex-row justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsSubmitDialogOpen(false)}
+                  className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleConfirmSubmitReservation}
+                  className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                >
+                  Submit
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {!isSuccess &&
             !isLoading &&
@@ -1381,19 +1427,19 @@ export function ReserveSeatClient({
                   </Card>
 
                   <Button
-                    onClick={handleConfirmReservation}
+                    onClick={handleOpenSubmitDialog}
                     disabled={isCompleting || !screenshotUrl || isLeaving}
                     className="w-full gap-2"
                   >
                     {isCompleting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Confirming...
+                        Submitting...
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="h-4 w-4" />
-                        Confirm Reservation
+                        Submit Reservation
                       </>
                     )}
                   </Button>

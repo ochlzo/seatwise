@@ -32,10 +32,10 @@ export function ReservationSuccessPanel({
                     <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12" />
                 </div>
                 <div className="space-y-2">
-                    <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">Reservation Confirmed</h3>
+                    <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">Reservation Submitted</h3>
                     <p className="text-muted-foreground text-sm sm:text-base">
-                        Your {selectedSeatIds.length > 0 ? selectedSeatIds.length : ""} seat{selectedSeatIds.length !== 1 ? "s" : ""} for{" "}
-                        <span className="font-medium text-foreground">{showName}</span> {selectedSeatIds.length === 1 ? "has" : "have"} been successfully reserved.
+                        Your {selectedSeatIds.length > 0 ? selectedSeatIds.length : ""} seat{selectedSeatIds.length !== 1 ? "s" : ""} request for{" "}
+                        <span className="font-medium text-foreground">{showName}</span> has been submitted for verification.
                     </p>
                     <p className="text-muted-foreground text-sm sm:text-base">
                         A confirmation email was sent to{" "}

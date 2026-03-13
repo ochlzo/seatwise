@@ -298,59 +298,24 @@ const getRowStatus = (row: UserReservationRow): KanbanStatus => {
 const buildUserRows = (
   reservations: ReservationData[],
 ): UserReservationRow[] => {
-  const map = new Map<string, UserReservationRow>();
-
-  for (const reservation of reservations) {
-    const key = `${reservation.email.toLowerCase()}::${reservation.phone_number}`;
-    const existing = map.get(key);
-
-    if (!existing) {
-      map.set(key, {
-        userId: key,
-        user: {
-          first_name: reservation.first_name,
-          last_name: reservation.last_name,
-          email: reservation.email,
-          phone_number: reservation.phone_number,
-          address: reservation.address,
-        },
-        reservations: [reservation],
-        seatNumbers: [reservation.seatAssignment.seat.seat_number],
-        pendingReservationIds:
-          reservation.status === "PENDING" ? [reservation.reservation_id] : [],
-        latestCreatedAt: reservation.createdAt,
-        totalAmount: reservation.payment?.amount
-          ? parseFloat(reservation.payment.amount)
-          : 0,
-      });
-      continue;
-    }
-
-    existing.reservations.push(reservation);
-    existing.seatNumbers.push(reservation.seatAssignment.seat.seat_number);
-
-    if (reservation.status === "PENDING") {
-      existing.pendingReservationIds.push(reservation.reservation_id);
-    }
-
-    if (
-      new Date(reservation.createdAt).getTime() >
-      new Date(existing.latestCreatedAt).getTime()
-    ) {
-      existing.latestCreatedAt = reservation.createdAt;
-    }
-
-    if (reservation.payment?.amount) {
-      existing.totalAmount += parseFloat(reservation.payment.amount);
-    }
-  }
-
-  return Array.from(map.values())
-    .map((row) => ({
-      ...row,
-      seatNumbers: Array.from(new Set(row.seatNumbers)).sort((a, b) =>
-        a.localeCompare(b, undefined, { numeric: true }),
-      ),
+  return reservations
+    .map((reservation) => ({
+      userId: reservation.payment?.payment_id ?? reservation.reservation_id,
+      user: {
+        first_name: reservation.first_name,
+        last_name: reservation.last_name,
+        email: reservation.email,
+        phone_number: reservation.phone_number,
+        address: reservation.address,
+      },
+      reservations: [reservation],
+      seatNumbers: [reservation.seatAssignment.seat.seat_number],
+      pendingReservationIds:
+        reservation.status === "PENDING" ? [reservation.reservation_id] : [],
+      latestCreatedAt: reservation.createdAt,
+      totalAmount: reservation.payment?.amount
+        ? parseFloat(reservation.payment.amount)
+        : 0,
     }))
     .sort(
       (a, b) =>

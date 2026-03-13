@@ -4,7 +4,8 @@
       "Bash(python .agent/scripts/session_manager.py status:*)",
       "Bash(find:*)",
       "Bash(npx tsc:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(git -C \"C:\\\\Users\\\\cholo\\\\OneDrive\\\\Desktop\\\\Projects\\\\Project Seatwise\\\\seatwise_v2\" log:*)"
     ]
   }
 }
