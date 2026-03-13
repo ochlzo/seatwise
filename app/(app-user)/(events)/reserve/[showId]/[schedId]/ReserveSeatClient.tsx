@@ -2,12 +2,31 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Clock3, Loader2, Plus, X, CheckCircle2, CreditCard, ChevronLeft } from "lucide-react";
+import {
+  AlertTriangle,
+  Clock3,
+  Loader2,
+  Plus,
+  X,
+  CheckCircle2,
+  CreditCard,
+  ChevronLeft,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Field, FieldError } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
 import { toast } from "@/components/ui/sonner";
 import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
@@ -39,6 +58,14 @@ type ReserveSeatCategory = SeatmapPreviewCategory & {
   price: string;
 };
 
+type ContactFieldErrors = {
+  firstName: string | null;
+  lastName: string | null;
+  address: string | null;
+  email: string | null;
+  phoneNumber: string | null;
+};
+
 type ReserveSeatClientProps = {
   showId: string;
   schedId: string;
@@ -52,8 +79,19 @@ type ReserveSeatClientProps = {
   seatStatusById: Record<string, "OPEN" | "RESERVED">;
 };
 
-const EXPIRED_WINDOW_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
+const EXPIRED_WINDOW_MESSAGE =
+  "Your active reservation window has expired. Rejoin the queue.";
 const MAX_SELECTED_SEATS = 10;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PH_PHONE_REGEX = /^09\d{9}$/;
+
+const EMPTY_CONTACT_ERRORS: ContactFieldErrors = {
+  firstName: null,
+  lastName: null,
+  address: null,
+  email: null,
+  phoneNumber: null,
+};
 
 type ReservationStep = "seats" | "contact" | "payment" | "success";
 
@@ -90,7 +128,11 @@ const getStoredSession = (showScopeId: string): StoredActiveSession | null => {
 
     try {
       const parsed = JSON.parse(raw) as StoredActiveSession;
-      if (parsed.showScopeId === showScopeId && parsed.ticketId && parsed.activeToken) {
+      if (
+        parsed.showScopeId === showScopeId &&
+        parsed.ticketId &&
+        parsed.activeToken
+      ) {
         return parsed;
       }
     } catch {
@@ -144,10 +186,13 @@ export function ReserveSeatClient({
   const [now, setNow] = React.useState<number>(0);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
   const [pendingSeatId, setPendingSeatId] = React.useState<string | null>(null);
-  const [selectionMessage, setSelectionMessage] = React.useState<string | null>(null);
+  const [selectionMessage, setSelectionMessage] = React.useState<string | null>(
+    null,
+  );
   const [isRejoining, setIsRejoining] = React.useState(false);
   const [step, setStep] = React.useState<ReservationStep>("seats");
   const [screenshotUrl, setScreenshotUrl] = React.useState<string>("");
+  const [isLeaveDialogOpen, setIsLeaveDialogOpen] = React.useState(false);
   const [contactDetails, setContactDetails] = React.useState({
     firstName: "",
     lastName: "",
@@ -155,6 +200,8 @@ export function ReserveSeatClient({
     email: "",
     phoneNumber: "",
   });
+  const [contactFieldErrors, setContactFieldErrors] =
+    React.useState<ContactFieldErrors>(EMPTY_CONTACT_ERRORS);
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -230,7 +277,11 @@ export function ReserveSeatClient({
         setExpiresAt(data.session.expiresAt);
         setIsLoading(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to validate active session");
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to validate active session",
+        );
         setIsLoading(false);
       }
     };
@@ -261,13 +312,13 @@ export function ReserveSeatClient({
     if (remainingMs <= 20_000 && !hasShownTwentySecondToastRef.current) {
       hasShownTwentySecondToastRef.current = true;
       hasShownOneMinuteToastRef.current = true;
-      toast.notification("Hurry! 20 seconds left!");
+      toast.error("Hurry! 20 seconds left!");
       return;
     }
 
     if (remainingMs <= 60_000 && !hasShownOneMinuteToastRef.current) {
       hasShownOneMinuteToastRef.current = true;
-      toast.notification("1 minute left");
+      toast.warning("1 minute left");
     }
   }, [error, expiresAt, isLoading, now]);
 
@@ -293,7 +344,11 @@ export function ReserveSeatClient({
         activeToken: stored.activeToken,
       });
 
-      if (preferBeacon && typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      if (
+        preferBeacon &&
+        typeof navigator !== "undefined" &&
+        typeof navigator.sendBeacon === "function"
+      ) {
         const blob = new Blob([payload], { type: "application/json" });
         navigator.sendBeacon("/api/queue/terminate", blob);
         return;
@@ -321,7 +376,8 @@ export function ReserveSeatClient({
   React.useEffect(() => {
     if (step === "success") return;
 
-    const confirmLeaveMessage = "Leaving this page will remove you from the queue. Continue?";
+    const confirmLeaveMessage =
+      "Leaving this page will remove you from the queue. Continue?";
     const reservePath = `/reserve/${showId}/${schedId}`;
     const queuePath = `/queue/${showId}/${schedId}`;
 
@@ -344,7 +400,8 @@ export function ReserveSeatClient({
     const handleDocumentClick = (event: MouseEvent) => {
       if (!shouldGuard()) return;
       if (event.defaultPrevented || event.button !== 0) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
 
       const target = event.target as HTMLElement | null;
       const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
@@ -359,7 +416,8 @@ export function ReserveSeatClient({
       const currentPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
       const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
       if (currentPath === nextPath) return;
-      if (nextUrl.pathname === reservePath || nextUrl.pathname === queuePath) return;
+      if (nextUrl.pathname === reservePath || nextUrl.pathname === queuePath)
+        return;
 
       event.preventDefault();
       const confirmed = window.confirm(confirmLeaveMessage);
@@ -398,7 +456,10 @@ export function ReserveSeatClient({
         }),
       });
 
-      const data = (await response.json()) as { success: boolean; error?: string };
+      const data = (await response.json()) as {
+        success: boolean;
+        error?: string;
+      };
       if (!response.ok || !data.success) {
         const normalizedError = data.error?.toLowerCase() ?? "";
         if (normalizedError.includes("already in the queue")) {
@@ -442,7 +503,10 @@ export function ReserveSeatClient({
         }),
       });
 
-      const data = (await response.json()) as { success: boolean; error?: string };
+      const data = (await response.json()) as {
+        success: boolean;
+        error?: string;
+      };
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Failed to leave reservation room");
       }
@@ -451,7 +515,9 @@ export function ReserveSeatClient({
       clearStoredSession(showScopeId);
       router.push(`/${showId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to leave reservation room");
+      setError(
+        err instanceof Error ? err.message : "Failed to leave reservation room",
+      );
     } finally {
       setIsLeaving(false);
     }
@@ -474,19 +540,43 @@ export function ReserveSeatClient({
     const address = contactDetails.address.trim();
     const email = contactDetails.email.trim();
     const phoneNumber = contactDetails.phoneNumber.trim();
+    const nextErrors: ContactFieldErrors = { ...EMPTY_CONTACT_ERRORS };
+    let hasErrors = false;
 
-    if (!firstName || !lastName || !address || !email || !phoneNumber) {
-      setError("Please complete all contact fields.");
-      return;
+    if (!firstName) {
+      nextErrors.firstName = "First name is required.";
+      hasErrors = true;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError("Please provide a valid email address.");
-      return;
+    if (!lastName) {
+      nextErrors.lastName = "Last name is required.";
+      hasErrors = true;
     }
 
-    if (!/^[+\d][\d\s\-()]{7,}$/.test(phoneNumber)) {
-      setError("Please provide a valid phone number.");
+    if (!address) {
+      nextErrors.address = "Address is required.";
+      hasErrors = true;
+    }
+
+    if (!email) {
+      nextErrors.email = "Email is required.";
+      hasErrors = true;
+    } else if (!EMAIL_REGEX.test(email)) {
+      nextErrors.email = "Please provide a valid email address.";
+      hasErrors = true;
+    }
+
+    if (!phoneNumber) {
+      nextErrors.phoneNumber = "Phone number is required.";
+      hasErrors = true;
+    } else if (!PH_PHONE_REGEX.test(phoneNumber)) {
+      nextErrors.phoneNumber =
+        "Phone number must start with 09 and be 11 digits.";
+      hasErrors = true;
+    }
+
+    setContactFieldErrors(nextErrors);
+    if (hasErrors) {
       return;
     }
 
@@ -501,6 +591,29 @@ export function ReserveSeatClient({
   const handleBackToContact = () => {
     setStep("contact");
   };
+
+  const handleLeaveDialogChange = (open: boolean) => {
+    if (isLeaving) return;
+    setIsLeaveDialogOpen(open);
+  };
+
+  const handleOpenLeaveDialog = () => {
+    if (isLeaving || isCompleting) return;
+    setIsLeaveDialogOpen(true);
+  };
+
+  const handleConfirmLeaveReservationRoom = async () => {
+    setIsLeaveDialogOpen(false);
+    await handleLeaveReservationRoom();
+  };
+
+  const updateContactField = React.useCallback(
+    (field: keyof typeof contactDetails, value: string) => {
+      setContactDetails((prev) => ({ ...prev, [field]: value }));
+      setContactFieldErrors((prev) => ({ ...prev, [field]: null }));
+    },
+    [],
+  );
 
   // Callback from GcashUploadPanel when upload completes
   const handleScreenshotUploaded = React.useCallback((url: string) => {
@@ -541,7 +654,10 @@ export function ReserveSeatClient({
         }),
       });
 
-      const data = (await response.json()) as { success: boolean; error?: string };
+      const data = (await response.json()) as {
+        success: boolean;
+        error?: string;
+      };
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Failed to complete reservation session");
       }
@@ -549,7 +665,11 @@ export function ReserveSeatClient({
       clearStoredSession(showScopeId);
       setStep("success");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to complete reservation session");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to complete reservation session",
+      );
     } finally {
       setIsCompleting(false);
     }
@@ -560,7 +680,10 @@ export function ReserveSeatClient({
   const isSuccess = step === "success";
 
   const categoriesById = React.useMemo(
-    () => new Map(seatmapCategories.map((category) => [category.category_id, category])),
+    () =>
+      new Map(
+        seatmapCategories.map((category) => [category.category_id, category]),
+      ),
     [seatmapCategories],
   );
 
@@ -614,7 +737,9 @@ export function ReserveSeatClient({
     }
 
     if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
-      setSelectionMessage(`You can select up to ${MAX_SELECTED_SEATS} seats only.`);
+      setSelectionMessage(
+        `You can select up to ${MAX_SELECTED_SEATS} seats only.`,
+      );
       return;
     }
 
@@ -630,7 +755,9 @@ export function ReserveSeatClient({
 
       const seatStatus = seatStatusById[clickedSeatId];
       if (seatStatus && seatStatus !== "OPEN") {
-        setSelectionMessage(`${seatNumbersById[clickedSeatId] ?? clickedSeatId} is already taken.`);
+        setSelectionMessage(
+          `${seatNumbersById[clickedSeatId] ?? clickedSeatId} is already taken.`,
+        );
         setPendingSeatId(null);
         return;
       }
@@ -642,7 +769,9 @@ export function ReserveSeatClient({
       }
 
       if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
-        setSelectionMessage(`You can select up to ${MAX_SELECTED_SEATS} seats only.`);
+        setSelectionMessage(
+          `You can select up to ${MAX_SELECTED_SEATS} seats only.`,
+        );
         setPendingSeatId(null);
         return;
       }
@@ -679,13 +808,27 @@ export function ReserveSeatClient({
                 </div>
                 {!isLoading && !error && expiresAt && (
                   <div className="flex items-center gap-2">
+                    {step === "seats" && (
+                      <Badge
+                        variant="secondary"
+                        className="w-fit gap-1 text-sm"
+                      >
+                        Pick a Seat
+                      </Badge>
+                    )}
                     {step === "contact" && (
-                      <Badge variant="secondary" className="w-fit gap-1 text-sm">
+                      <Badge
+                        variant="secondary"
+                        className="w-fit gap-1 text-sm"
+                      >
                         Contact Details
                       </Badge>
                     )}
                     {step === "payment" && (
-                      <Badge variant="secondary" className="w-fit gap-1 text-sm">
+                      <Badge
+                        variant="secondary"
+                        className="w-fit gap-1 text-sm"
+                      >
                         <CreditCard className="h-3.5 w-3.5" />
                         Payment
                       </Badge>
@@ -726,22 +869,61 @@ export function ReserveSeatClient({
           )}
 
           {!isSuccess && !isLoading && error && (
-            <div className={isExpiredWindowError ? "rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20" : ""}>
-              <div className={isExpiredWindowError ? "flex min-h-[50vh] items-center justify-center px-4 py-8" : ""}>
-                <div className={isExpiredWindowError ? "mx-auto flex max-w-lg flex-col items-center gap-4 text-center" : "space-y-3"}>
+            <div
+              className={
+                isExpiredWindowError
+                  ? "rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20"
+                  : ""
+              }
+            >
+              <div
+                className={
+                  isExpiredWindowError
+                    ? "flex min-h-[50vh] items-center justify-center px-4 py-8"
+                    : ""
+                }
+              >
+                <div
+                  className={
+                    isExpiredWindowError
+                      ? "mx-auto flex max-w-lg flex-col items-center gap-4 text-center"
+                      : "space-y-3"
+                  }
+                >
                   <div className="flex items-center gap-2 text-sm text-red-600">
-                    <AlertTriangle className={isExpiredWindowError ? "h-6 w-6" : "h-4 w-4"} />
-                    <span className={isExpiredWindowError ? "text-base font-medium sm:text-lg" : ""}>
-                      {isExpiredWindowError ? "Uh oh! Your time ran out. Rejoin the queue?" : error}
+                    <AlertTriangle
+                      className={isExpiredWindowError ? "h-6 w-6" : "h-4 w-4"}
+                    />
+                    <span
+                      className={
+                        isExpiredWindowError
+                          ? "text-base font-medium sm:text-lg"
+                          : ""
+                      }
+                    >
+                      {isExpiredWindowError
+                        ? "Uh oh! Your time ran out. Rejoin the queue?"
+                        : error}
                     </span>
                   </div>
                   {isExpiredWindowError ? (
                     <div className="flex w-full max-w-xs items-center justify-center gap-3">
-                      <Button onClick={handleRejoinQueue} disabled={isRejoining} className="flex-1">
-                        {isRejoining && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      <Button
+                        onClick={handleRejoinQueue}
+                        disabled={isRejoining}
+                        className="flex-1"
+                      >
+                        {isRejoining && (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        )}
                         Yes
                       </Button>
-                      <Button variant="outline" onClick={handleDeclineRejoin} disabled={isRejoining} className="flex-1">
+                      <Button
+                        variant="outline"
+                        onClick={handleDeclineRejoin}
+                        disabled={isRejoining}
+                        className="flex-1"
+                      >
                         No
                       </Button>
                     </div>
@@ -755,133 +937,178 @@ export function ReserveSeatClient({
             </div>
           )}
 
-          {!isSuccess && !isLoading && !error && expiresAt && step === "seats" && (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-3 px-2 sm:px-3 md:px-4">
-                <SeatmapPreview
-                  seatmapId={seatmapId ?? undefined}
-                  heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
-                  allowMarqueeSelection={false}
-                  selectedSeatIds={previewSelectedSeatIds}
-                  cartSeatIds={selectedSeatIds}
-                  onSelectionChange={handleSeatSelectionChange}
-                  categories={seatmapCategories}
-                  seatCategories={seatCategoryAssignments}
-                  seatStatusById={seatStatusById}
-                  showReservationOverlay
-                />
+          {!isSuccess &&
+            !isLoading &&
+            !error &&
+            expiresAt &&
+            step === "seats" && (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="space-y-3 px-2 sm:px-3 md:px-4">
+                  <SeatmapPreview
+                    seatmapId={seatmapId ?? undefined}
+                    heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
+                    allowMarqueeSelection={false}
+                    selectedSeatIds={previewSelectedSeatIds}
+                    cartSeatIds={selectedSeatIds}
+                    onSelectionChange={handleSeatSelectionChange}
+                    categories={seatmapCategories}
+                    seatCategories={seatCategoryAssignments}
+                    seatStatusById={seatStatusById}
+                    showReservationOverlay
+                  />
 
-                {selectionMessage && (
-                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
-                    {selectionMessage}
-                  </p>
-                )}
+                  {selectionMessage && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                      {selectionMessage}
+                    </p>
+                  )}
 
-                {!seatmapId && (
-                  <p className="text-xs text-muted-foreground">
-                    This schedule does not have an associated seatmap.
-                  </p>
-                )}
-              </div>
+                  {!seatmapId && (
+                    <p className="text-xs text-muted-foreground">
+                      This schedule does not have an associated seatmap.
+                    </p>
+                  )}
+                </div>
 
-              <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-                <Card className="border-sidebar-border/70">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-base">Booking Summary</CardTitle>
-                      <Badge variant="outline" className="w-fit">{selectedSeatIds.length}/{MAX_SELECTED_SEATS}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    {pendingSeatId && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="default"
-                        onClick={handleAddPendingSeat}
-                        disabled={selectedSeatIds.length >= MAX_SELECTED_SEATS}
-                        className="w-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Plus className="mr-1.5 h-4 w-4" />
-                        {`Seat ${pendingSeatLabel}`}
-                      </Button>
-                    )}
-                    <Separator />
-                    {selectedBreakdown.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        No seats selected yet.
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {selectedBreakdown.map((item) => (
-                          <div
-                            key={item.category?.category_id}
-                            className="flex items-center justify-between gap-2 rounded-md border border-sidebar-border/60 px-2.5 py-2"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate text-xs sm:text-sm">{item.category?.name}</p>
-                              <p className="text-[11px] text-muted-foreground">
-                                {item.count} x {formatCurrency(item.unitPrice)}
-                              </p>
-                            </div>
-                            <Badge variant="secondary">{formatCurrency(item.lineTotal)}</Badge>
-                          </div>
-                        ))}
+                <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+                  <Card className="border-sidebar-border/70">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-base">
+                          Booking Summary
+                        </CardTitle>
+                        <Badge variant="outline" className="w-fit">
+                          {selectedSeatIds.length}/{MAX_SELECTED_SEATS}
+                        </Badge>
                       </div>
-                    )}
-
-                    {selectedSeatIds.length > 0 && (
-                      <>
-                        <Separator />
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                      {pendingSeatId && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="default"
+                          onClick={handleAddPendingSeat}
+                          disabled={
+                            selectedSeatIds.length >= MAX_SELECTED_SEATS
+                          }
+                          className="w-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Plus className="mr-1.5 h-4 w-4" />
+                          {`Seat ${pendingSeatLabel}`}
+                        </Button>
+                      )}
+                      <Separator />
+                      {selectedBreakdown.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No seats selected yet.
+                        </p>
+                      ) : (
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-muted-foreground">Selected seats</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              onClick={handleClearSelection}
+                          {selectedBreakdown.map((item) => (
+                            <div
+                              key={item.category?.category_id}
+                              className="flex items-center justify-between gap-2 rounded-md border border-sidebar-border/60 px-2.5 py-2"
                             >
-                              Clear all
-                            </Button>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {selectedSeatIds.map((seatId) => (
-                              <div
-                                key={seatId}
-                                className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px]"
-                              >
-                                <span className="max-w-[120px] truncate">{seatNumbersById[seatId] ?? seatId}</span>
-                                <button
-                                  type="button"
-                                  className="rounded-sm p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                                  onClick={() => handleRemoveSeat(seatId)}
-                                  aria-label={`Remove seat ${seatNumbersById[seatId] ?? seatId}`}
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
+                              <div className="min-w-0">
+                                <p className="truncate text-xs sm:text-sm">
+                                  {item.category?.name}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {item.count} x{" "}
+                                  {formatCurrency(item.unitPrice)}
+                                </p>
                               </div>
-                            ))}
-                          </div>
+                              <Badge variant="secondary">
+                                {formatCurrency(item.lineTotal)}
+                              </Badge>
+                            </div>
+                          ))}
                         </div>
-                      </>
-                    )}
+                      )}
 
-                    <Separator />
-                    <div className="flex items-center justify-between text-sm font-semibold">
-                      <span>Subtotal</span>
-                      <span>{formatCurrency(subtotal)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
+                      {selectedSeatIds.length > 0 && (
+                        <>
+                          <Separator />
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">
+                                Selected seats
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs"
+                                onClick={handleClearSelection}
+                              >
+                                Clear all
+                              </Button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {selectedSeatIds.map((seatId) => (
+                                <div
+                                  key={seatId}
+                                  className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px]"
+                                >
+                                  <span className="max-w-[120px] truncate">
+                                    {seatNumbersById[seatId] ?? seatId}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="rounded-sm p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                    onClick={() => handleRemoveSeat(seatId)}
+                                    aria-label={`Remove seat ${seatNumbersById[seatId] ?? seatId}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
 
-                <div className="space-y-3">
+                      <Separator />
+                      <div className="flex items-center justify-between text-sm font-semibold">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(subtotal)}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="space-y-3">
+                    <Button
+                      onClick={handleProceedToContact}
+                      disabled={selectedSeatIds.length === 0 || isLeaving}
+                      className="w-full gap-2"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Proceed to Contact Details
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleOpenLeaveDialog}
+                      disabled={isLeaving || isCompleting}
+                      className="w-full gap-2 lg:hidden"
+                    >
+                      {isLeaving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Leaving...
+                        </>
+                      ) : (
+                        "Leave Reservation Room"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <div className="hidden lg:flex lg:col-span-2 lg:justify-end">
                   <Button
                     variant="outline"
-                    onClick={handleLeaveReservationRoom}
+                    onClick={handleOpenLeaveDialog}
                     disabled={isLeaving || isCompleting}
-                    className="w-full gap-2"
+                    className="gap-2"
                   >
                     {isLeaving ? (
                       <>
@@ -892,169 +1119,174 @@ export function ReserveSeatClient({
                       "Leave Reservation Room"
                     )}
                   </Button>
-                  <Button
-                    onClick={handleProceedToContact}
-                    disabled={selectedSeatIds.length === 0 || isLeaving}
-                    className="w-full gap-2"
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    Proceed to Contact Details
-                  </Button>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* ── Payment Step ── */}
-          {!isSuccess && !isLoading && !error && expiresAt && step === "contact" && (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <Card className="border-sidebar-border/70">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={handleBackToContact} className="h-8 w-8">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <CardTitle className="text-base">Contact Details</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      className="h-10 rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
-                      placeholder="First name"
-                      value={contactDetails.firstName}
-                      onChange={(e) =>
-                        setContactDetails((prev) => ({ ...prev, firstName: e.target.value }))
-                      }
-                    />
-                    <input
-                      className="h-10 rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
-                      placeholder="Last name"
-                      value={contactDetails.lastName}
-                      onChange={(e) =>
-                        setContactDetails((prev) => ({ ...prev, lastName: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <input
-                    className="h-10 w-full rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
-                    placeholder="Address"
-                    value={contactDetails.address}
-                    onChange={(e) =>
-                      setContactDetails((prev) => ({ ...prev, address: e.target.value }))
-                    }
-                  />
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      className="h-10 rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
-                      placeholder="Email"
-                      type="email"
-                      value={contactDetails.email}
-                      onChange={(e) =>
-                        setContactDetails((prev) => ({ ...prev, email: e.target.value }))
-                      }
-                    />
-                    <input
-                      className="h-10 rounded-md border border-sidebar-border/70 bg-background px-3 text-sm"
-                      placeholder="Phone number"
-                      value={contactDetails.phoneNumber}
-                      onChange={(e) =>
-                        setContactDetails((prev) => ({ ...prev, phoneNumber: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <Button onClick={handleProceedToPayment} className="w-full gap-2">
-                    <CreditCard className="h-4 w-4" />
-                    Continue to Payment
-                  </Button>
-                </CardContent>
-              </Card>
+          <Dialog
+            open={isLeaveDialogOpen}
+            onOpenChange={handleLeaveDialogChange}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Leave reservation room?</DialogTitle>
+                <DialogDescription>
+                  Your active reservation window will be closed and you may lose
+                  your selected seats.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex-row justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsLeaveDialogOpen(false)}
+                  disabled={isLeaving}
+                  className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => void handleConfirmLeaveReservationRoom()}
+                  disabled={isLeaving}
+                  className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                >
+                  {isLeaving ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin sm:mr-2 sm:h-4 sm:w-4" />
+                      Leaving...
+                    </>
+                  ) : (
+                    "Leave"
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-              <Card className="border-sidebar-border/70">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Selected Seats</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedSeatIds.map((seatId) => (
-                      <div
-                        key={seatId}
-                        className="inline-flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] font-medium"
-                      >
-                        {seatNumbersById[seatId] ?? seatId}
-                      </div>
-                    ))}
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between text-sm font-semibold">
-                    <span>Total</span>
-                    <span>{formatCurrency(subtotal)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {!isSuccess && !isLoading && !error && expiresAt && step === "payment" && (
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-              {/* Left: GCash Upload */}
-              <Card className="gap-0 border-sidebar-border/70">
-                <CardHeader className="pb-1 sm:pb-3">
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" onClick={handleBackToSeats} className="h-8 w-8">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <CardTitle className="text-base">Upload GCash Payment</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-3 pt-0 sm:px-6">
-                  <GcashUploadPanel
-                    onUploadComplete={handleScreenshotUploaded}
-                    disabled={isCompleting}
-                    qrImageUrl={gcashQrImageKey}
-                    gcashNumber={gcashNumber}
-                    gcashAccountName={gcashAccountName}
-                  />
-                </CardContent>
-              </Card>
-
-              {/* Right: Order Summary + Confirm */}
-              <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+          {!isSuccess &&
+            !isLoading &&
+            !error &&
+            expiresAt &&
+            step === "contact" && (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="border-sidebar-border/70">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Order Summary</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleBackToSeats}
+                        className="h-8 w-8"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <CardTitle className="text-base">
+                        Contact Details
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field data-invalid={!!contactFieldErrors.firstName}>
+                        <Input
+                          className="h-10 border-sidebar-border/70 bg-background"
+                          placeholder="First name"
+                          aria-invalid={!!contactFieldErrors.firstName}
+                          value={contactDetails.firstName}
+                          onChange={(e) =>
+                            updateContactField("firstName", e.target.value)
+                          }
+                        />
+                        <FieldError>{contactFieldErrors.firstName}</FieldError>
+                      </Field>
+                      <Field data-invalid={!!contactFieldErrors.lastName}>
+                        <Input
+                          className="h-10 border-sidebar-border/70 bg-background"
+                          placeholder="Last name"
+                          aria-invalid={!!contactFieldErrors.lastName}
+                          value={contactDetails.lastName}
+                          onChange={(e) =>
+                            updateContactField("lastName", e.target.value)
+                          }
+                        />
+                        <FieldError>{contactFieldErrors.lastName}</FieldError>
+                      </Field>
+                    </div>
+                    <Field data-invalid={!!contactFieldErrors.address}>
+                      <Input
+                        className="h-10 w-full border-sidebar-border/70 bg-background"
+                        placeholder="Address"
+                        aria-invalid={!!contactFieldErrors.address}
+                        value={contactDetails.address}
+                        onChange={(e) =>
+                          updateContactField("address", e.target.value)
+                        }
+                      />
+                      <FieldError>{contactFieldErrors.address}</FieldError>
+                    </Field>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Field data-invalid={!!contactFieldErrors.email}>
+                        <Input
+                          className="h-10 border-sidebar-border/70 bg-background"
+                          placeholder="Email"
+                          type="email"
+                          inputMode="email"
+                          aria-invalid={!!contactFieldErrors.email}
+                          value={contactDetails.email}
+                          onChange={(e) =>
+                            updateContactField("email", e.target.value)
+                          }
+                        />
+                        <FieldError>{contactFieldErrors.email}</FieldError>
+                      </Field>
+                      <Field data-invalid={!!contactFieldErrors.phoneNumber}>
+                        <Input
+                          className="h-10 border-sidebar-border/70 bg-background"
+                          placeholder="Phone number"
+                          inputMode="numeric"
+                          maxLength={11}
+                          aria-invalid={!!contactFieldErrors.phoneNumber}
+                          value={contactDetails.phoneNumber}
+                          onChange={(e) =>
+                            updateContactField(
+                              "phoneNumber",
+                              e.target.value.replace(/\D/g, "").slice(0, 11),
+                            )
+                          }
+                        />
+                        <FieldError>
+                          {contactFieldErrors.phoneNumber}
+                        </FieldError>
+                      </Field>
+                    </div>
+                    <Button
+                      onClick={handleProceedToPayment}
+                      className="w-full gap-2"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Continue to Payment
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-sidebar-border/70">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Selected Seats</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
-                    {selectedBreakdown.map((item) => (
-                      <div
-                        key={item.category?.category_id}
-                        className="flex items-center justify-between gap-2 rounded-md border border-sidebar-border/60 px-2.5 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-xs sm:text-sm">{item.category?.name}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {item.count} x {formatCurrency(item.unitPrice)}
-                          </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedSeatIds.map((seatId) => (
+                        <div
+                          key={seatId}
+                          className="inline-flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] font-medium"
+                        >
+                          {seatNumbersById[seatId] ?? seatId}
                         </div>
-                        <Badge variant="secondary">{formatCurrency(item.lineTotal)}</Badge>
-                      </div>
-                    ))}
-
-                    <Separator />
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Seats</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {selectedSeatIds.map((seatId) => (
-                          <div
-                            key={seatId}
-                            className="inline-flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] font-medium"
-                          >
-                            {seatNumbersById[seatId] ?? seatId}
-                          </div>
-                        ))}
-                      </div>
+                      ))}
                     </div>
-
                     <Separator />
                     <div className="flex items-center justify-between text-sm font-semibold">
                       <span>Total</span>
@@ -1062,32 +1294,114 @@ export function ReserveSeatClient({
                     </div>
                   </CardContent>
                 </Card>
-
-                <Button
-                  onClick={handleConfirmReservation}
-                  disabled={isCompleting || !screenshotUrl || isLeaving}
-                  className="w-full gap-2"
-                >
-                  {isCompleting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Confirming...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      Confirm Reservation
-                    </>
-                  )}
-                </Button>
               </div>
-            </div>
-          )}
+            )}
+
+          {!isSuccess &&
+            !isLoading &&
+            !error &&
+            expiresAt &&
+            step === "payment" && (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                {/* Left: GCash Upload */}
+                <Card className="gap-0 border-sidebar-border/70">
+                  <CardHeader className="pb-1 sm:pb-3">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleBackToContact}
+                        className="h-8 w-8"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <CardTitle className="text-base">
+                        Upload GCash Payment
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="px-3 pt-0 sm:px-6">
+                    <GcashUploadPanel
+                      onUploadComplete={handleScreenshotUploaded}
+                      disabled={isCompleting}
+                      qrImageUrl={gcashQrImageKey}
+                      gcashNumber={gcashNumber}
+                      gcashAccountName={gcashAccountName}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Right: Order Summary + Confirm */}
+                <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+                  <Card className="border-sidebar-border/70">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Order Summary</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm">
+                      {selectedBreakdown.map((item) => (
+                        <div
+                          key={item.category?.category_id}
+                          className="flex items-center justify-between gap-2 rounded-md border border-sidebar-border/60 px-2.5 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-xs sm:text-sm">
+                              {item.category?.name}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {item.count} x {formatCurrency(item.unitPrice)}
+                            </p>
+                          </div>
+                          <Badge variant="secondary">
+                            {formatCurrency(item.lineTotal)}
+                          </Badge>
+                        </div>
+                      ))}
+
+                      <Separator />
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">Seats</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedSeatIds.map((seatId) => (
+                            <div
+                              key={seatId}
+                              className="inline-flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] font-medium"
+                            >
+                              {seatNumbersById[seatId] ?? seatId}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <Separator />
+                      <div className="flex items-center justify-between text-sm font-semibold">
+                        <span>Total</span>
+                        <span>{formatCurrency(subtotal)}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Button
+                    onClick={handleConfirmReservation}
+                    disabled={isCompleting || !screenshotUrl || isLeaving}
+                    className="w-full gap-2"
+                  >
+                    {isCompleting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Confirming...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Confirm Reservation
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
         </CardContent>
       </Card>
     </div>
   );
 }
-
-
-

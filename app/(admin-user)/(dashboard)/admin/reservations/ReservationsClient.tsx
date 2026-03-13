@@ -147,6 +147,17 @@ type PendingMove = {
   source: "drag" | "portal";
 };
 
+type StageUpdateResponse = {
+  success: boolean;
+  error?: string;
+  email?: {
+    attemptedCount: number;
+    sentCount: number;
+    failedCount: number;
+    sent: boolean;
+  };
+};
+
 type RollbackRect = {
   top: number;
   left: number;
@@ -385,14 +396,18 @@ function SortableCard({
       >
         <button
           type="button"
-          aria-label="Drag reservation card"
-          className="absolute right-3 top-3 inline-flex h-6 w-6 touch-none items-center justify-center rounded-md text-muted-foreground transition-colors hover:cursor-grab hover:bg-muted hover:text-foreground active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+          aria-label={isVerifying ? "Reservation update in progress" : "Drag reservation card"}
+          className={`absolute right-3 top-3 inline-flex h-6 w-6 touch-none items-center justify-center rounded-md text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${isVerifying ? "cursor-wait" : "hover:cursor-grab hover:bg-muted hover:text-foreground active:cursor-grabbing"}`}
           disabled={isVerifying}
           onClick={(event) => event.stopPropagation()}
           {...attributes}
           {...listeners}
         >
-          <GripVertical className="h-4 w-4" />
+          {isVerifying ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <GripVertical className="h-4 w-4" />
+          )}
         </button>
         <div className="space-y-2">
           <button
@@ -432,7 +447,7 @@ function SortableCard({
           {isVerifying && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Updating status...
+              Updating status and sending email...
             </div>
           )}
         </div>
@@ -482,7 +497,7 @@ type KanbanColumnProps = {
   icon: React.ReactNode;
   cards: DisplayCard[];
   isActiveDrop: boolean;
-  verifyingId: string | null;
+  updatingCardIds: Set<string>;
   stageClassName: string;
   stageCountClassName: string;
   stageSurfaceClassName: string;
@@ -495,7 +510,7 @@ function KanbanColumn({
   icon,
   cards,
   isActiveDrop,
-  verifyingId,
+  updatingCardIds,
   stageClassName,
   stageCountClassName,
   stageSurfaceClassName,
@@ -546,7 +561,7 @@ function KanbanColumn({
               <SortableCard
                 key={card.id}
                 card={card}
-                isVerifying={verifyingId === `kanban:${card.id}`}
+                isVerifying={updatingCardIds.has(card.id)}
                 onOpenDetails={onOpenDetails}
               />
             ),
@@ -564,7 +579,9 @@ export function ReservationsClient() {
   const [searchInput, setSearchInput] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedShowId, setSelectedShowId] = React.useState("all");
-  const [verifyingId, setVerifyingId] = React.useState<string | null>(null);
+  const [updatingCardIds, setUpdatingCardIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
   const [pendingMove, setPendingMove] = React.useState<PendingMove | null>(
     null,
   );
@@ -587,6 +604,9 @@ export function ReservationsClient() {
   const [isPortalVisible, setIsPortalVisible] = React.useState(false);
   const [isPortalScrollReady, setIsPortalScrollReady] = React.useState(false);
   const [isImageExpanded, setIsImageExpanded] = React.useState(false);
+  const [optimisticCardStatuses, setOptimisticCardStatuses] = React.useState<
+    Partial<Record<string, KanbanStatus>>
+  >({});
   const [columnOrders, setColumnOrders] = React.useState<
     Record<KanbanStatus, string[]>
   >({
@@ -701,125 +721,107 @@ export function ReservationsClient() {
     void fetchReservations();
   }, []);
 
-  const handleVerifyMany = async (
-    reservationIds: string[],
-    verifyKey: string,
-  ) => {
-    if (reservationIds.length === 0) return false;
+  const handleStageUpdate = React.useCallback(
+    async (
+      card: KanbanCard,
+      reservationIds: string[],
+      targetStatus: "CONFIRMED" | "CANCELLED",
+    ) => {
+      if (reservationIds.length === 0) return false;
 
-    setVerifyingId(verifyKey);
+      setUpdatingCardIds((prev) => {
+        const next = new Set(prev);
+        next.add(card.id);
+        return next;
+      });
 
-    try {
-      for (const reservationId of reservationIds) {
-        const res = await fetch("/api/reservations/verify", {
+      try {
+        const response = await fetch("/api/reservations/stage", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reservationId }),
+          body: JSON.stringify({ reservationIds, targetStatus }),
         });
 
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to verify");
+        const data = (await response.json()) as StageUpdateResponse;
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error ||
+              (targetStatus === "CONFIRMED"
+                ? "Failed to verify reservations"
+                : "Failed to reject reservations"),
+          );
         }
-      }
 
-      setShows((prev) =>
-        prev.map((show) => ({
-          ...show,
-          reservations: show.reservations.map((reservation) =>
-            reservationIds.includes(reservation.reservation_id)
-              ? {
-                  ...reservation,
-                  status: "CONFIRMED",
-                  payment: reservation.payment
-                    ? {
-                        ...reservation.payment,
-                        status: "PAID",
-                        paid_at: new Date().toISOString(),
-                      }
-                    : reservation.payment,
-                }
-              : reservation,
-          ),
-        })),
-      );
+        const paidAt = new Date().toISOString();
+        setShows((prev) =>
+          prev.map((show) => ({
+            ...show,
+            reservations: show.reservations.map((reservation) =>
+              reservationIds.includes(reservation.reservation_id)
+                ? {
+                    ...reservation,
+                    status: targetStatus,
+                    payment: reservation.payment
+                      ? {
+                          ...reservation.payment,
+                          status:
+                            targetStatus === "CONFIRMED"
+                              ? "PAID"
+                              : reservation.payment.status === "PAID"
+                                ? "REFUNDED"
+                                : "FAILED",
+                          paid_at:
+                            targetStatus === "CONFIRMED"
+                              ? paidAt
+                              : reservation.payment.status === "PAID"
+                                ? reservation.payment.paid_at
+                                : null,
+                        }
+                      : reservation.payment,
+                  }
+                : reservation,
+            ),
+          })),
+        );
 
-      toast.success(
-        reservationIds.length === 1
-          ? "Reservation verified successfully!"
-          : `${reservationIds.length} reservations verified successfully!`,
-      );
-      return true;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verification failed");
-      return false;
-    } finally {
-      setVerifyingId(null);
-    }
-  };
+        const actionLabel =
+          targetStatus === "CONFIRMED" ? "confirmed" : "rejected";
+        const emailResult = data.email;
 
-  const handleRejectMany = async (
-    reservationIds: string[],
-    rejectKey: string,
-  ) => {
-    if (reservationIds.length === 0) return false;
+        if (!emailResult || emailResult.sent) {
+          toast.success(
+            reservationIds.length === 1
+              ? `Reservation ${actionLabel} and customer notified.`
+              : `${reservationIds.length} reservations ${actionLabel} and customer notified.`,
+          );
+        } else {
+          toast.warning(
+            reservationIds.length === 1
+              ? `Reservation ${actionLabel}, but the email could not be sent.`
+              : `${reservationIds.length} reservations ${actionLabel}, but ${emailResult.failedCount} email notification${emailResult.failedCount === 1 ? "" : "s"} failed.`,
+          );
+        }
 
-    setVerifyingId(rejectKey);
-
-    try {
-      for (const reservationId of reservationIds) {
-        const res = await fetch("/api/reservations/reject", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reservationId }),
+        return true;
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : targetStatus === "CONFIRMED"
+              ? "Verification failed"
+              : "Rejection failed",
+        );
+        return false;
+      } finally {
+        setUpdatingCardIds((prev) => {
+          const next = new Set(prev);
+          next.delete(card.id);
+          return next;
         });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to reject");
-        }
       }
-
-      setShows((prev) =>
-        prev.map((show) => ({
-          ...show,
-          reservations: show.reservations.map((reservation) =>
-            reservationIds.includes(reservation.reservation_id)
-              ? {
-                  ...reservation,
-                  status: "CANCELLED",
-                  payment: reservation.payment
-                    ? {
-                        ...reservation.payment,
-                        status:
-                          reservation.payment.status === "PAID"
-                            ? "REFUNDED"
-                            : "FAILED",
-                        paid_at:
-                          reservation.payment.status === "PAID"
-                            ? reservation.payment.paid_at
-                            : null,
-                      }
-                    : reservation.payment,
-                }
-              : reservation,
-          ),
-        })),
-      );
-
-      toast.success(
-        reservationIds.length === 1
-          ? "Reservation rejected successfully!"
-          : `${reservationIds.length} reservations rejected successfully!`,
-      );
-      return true;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Rejection failed");
-      return false;
-    } finally {
-      setVerifyingId(null);
-    }
-  };
+    },
+    [],
+  );
 
   const showFilterOptions = React.useMemo(
     () =>
@@ -880,17 +882,28 @@ export function ReservationsClient() {
     return cards;
   }, [filteredShows]);
 
+  const effectiveKanbanCards = React.useMemo(
+    () =>
+      kanbanCards.map((card) => ({
+        ...card,
+        status: optimisticCardStatuses[card.id] ?? card.status,
+      })),
+    [kanbanCards, optimisticCardStatuses],
+  );
+
   const cardsByColumn = React.useMemo(() => {
     return {
-      PENDING: kanbanCards.filter((card) => card.status === "PENDING"),
-      CONFIRMED: kanbanCards.filter((card) => card.status === "CONFIRMED"),
-      REJECTED: kanbanCards.filter((card) => card.status === "REJECTED"),
+      PENDING: effectiveKanbanCards.filter((card) => card.status === "PENDING"),
+      CONFIRMED: effectiveKanbanCards.filter(
+        (card) => card.status === "CONFIRMED",
+      ),
+      REJECTED: effectiveKanbanCards.filter((card) => card.status === "REJECTED"),
     } satisfies Record<KanbanStatus, KanbanCard[]>;
-  }, [kanbanCards]);
+  }, [effectiveKanbanCards]);
 
   const cardById = React.useMemo(() => {
-    return new Map(kanbanCards.map((card) => [card.id, card]));
-  }, [kanbanCards]);
+    return new Map(effectiveKanbanCards.map((card) => [card.id, card]));
+  }, [effectiveKanbanCards]);
 
   React.useEffect(() => {
     setColumnOrders((prev) => {
@@ -1041,7 +1054,7 @@ export function ReservationsClient() {
     rollbackPreviewCard,
   ]);
 
-  const totalReservations = kanbanCards.length;
+  const totalReservations = effectiveKanbanCards.length;
   const pendingCount = orderedCardsByColumn.PENDING.length;
   const confirmedCount = orderedCardsByColumn.CONFIRMED.length;
   const primaryPayment =
@@ -1072,6 +1085,9 @@ export function ReservationsClient() {
       ? "bg-amber-400 text-white hover:bg-amber-500"
       : undefined;
   const canConfirmSelectedCard = selectedCard?.status === "PENDING";
+  const selectedCardIsUpdating = selectedCard
+    ? updatingCardIds.has(selectedCard.id)
+    : false;
   const selectedCardStatusBadgeClassName =
     selectedCard?.status === "CONFIRMED"
       ? "bg-emerald-100 text-emerald-700"
@@ -1137,41 +1153,9 @@ export function ReservationsClient() {
   const handleConfirmStageMove = React.useCallback(async () => {
     if (!pendingMove) return;
 
-    const targetCard = cardById.get(pendingMove.cardId);
+    const move = pendingMove;
+    const targetCard = cardById.get(move.cardId);
     if (!targetCard) {
-      setPendingMove(null);
-      setPreviewColumn(null);
-      clearRollbackPreview();
-      return;
-    }
-
-    const didSucceed =
-      pendingMove.targetStatus === "CONFIRMED"
-        ? await handleVerifyMany(
-            targetCard.row.pendingReservationIds,
-            `kanban:${targetCard.id}`,
-          )
-        : await handleRejectMany(
-            targetCard.row.reservations.map(
-              (reservation) => reservation.reservation_id,
-            ),
-            `kanban:${targetCard.id}`,
-          );
-
-    if (didSucceed) {
-      setColumnOrders((prev) => {
-        const next = {
-          PENDING: prev.PENDING.filter((id) => id !== targetCard.id),
-          CONFIRMED: prev.CONFIRMED.filter((id) => id !== targetCard.id),
-          REJECTED: prev.REJECTED.filter((id) => id !== targetCard.id),
-        };
-
-        const targetIds = [...next[pendingMove.targetStatus]];
-        targetIds.unshift(targetCard.id);
-        next[pendingMove.targetStatus] = targetIds;
-
-        return next;
-      });
       setPendingMove(null);
       setPreviewColumn(null);
       clearRollbackPreview();
@@ -1181,11 +1165,70 @@ export function ReservationsClient() {
     setPendingMove(null);
     setPreviewColumn(null);
     clearRollbackPreview();
+    setOptimisticCardStatuses((prev) => ({
+      ...prev,
+      [targetCard.id]: move.targetStatus,
+    }));
+    setColumnOrders((prev) => {
+      const next = {
+        PENDING: prev.PENDING.filter((id) => id !== targetCard.id),
+        CONFIRMED: prev.CONFIRMED.filter((id) => id !== targetCard.id),
+        REJECTED: prev.REJECTED.filter((id) => id !== targetCard.id),
+      };
+
+      const targetIds = [...next[move.targetStatus]];
+      targetIds.unshift(targetCard.id);
+      next[move.targetStatus] = targetIds;
+
+      return next;
+    });
+
+    const didSucceed =
+      move.targetStatus === "CONFIRMED"
+        ? await handleStageUpdate(
+            targetCard,
+            targetCard.row.pendingReservationIds,
+            "CONFIRMED",
+          )
+        : await handleStageUpdate(
+            targetCard,
+            targetCard.row.reservations.map(
+              (reservation) => reservation.reservation_id,
+            ),
+            "CANCELLED",
+          );
+
+    if (didSucceed) {
+      setOptimisticCardStatuses((prev) => {
+        const next = { ...prev };
+        delete next[targetCard.id];
+        return next;
+      });
+      return;
+    }
+
+    setOptimisticCardStatuses((prev) => {
+      const next = { ...prev };
+      delete next[targetCard.id];
+      return next;
+    });
+    setColumnOrders((prev) => {
+      const next = {
+        PENDING: prev.PENDING.filter((id) => id !== targetCard.id),
+        CONFIRMED: prev.CONFIRMED.filter((id) => id !== targetCard.id),
+        REJECTED: prev.REJECTED.filter((id) => id !== targetCard.id),
+      };
+
+      const sourceIds = [...next[targetCard.status]];
+      sourceIds.unshift(targetCard.id);
+      next[targetCard.status] = sourceIds;
+
+      return next;
+    });
   }, [
     cardById,
     clearRollbackPreview,
-    handleRejectMany,
-    handleVerifyMany,
+    handleStageUpdate,
     pendingMove,
   ]);
 
@@ -1316,7 +1359,6 @@ export function ReservationsClient() {
               type="button"
               variant="outline"
               onClick={handleCancelPendingMove}
-              disabled={!!verifyingId}
             >
               Cancel
             </Button>
@@ -1331,16 +1373,8 @@ export function ReservationsClient() {
               onClick={() => {
                 void handleConfirmStageMove();
               }}
-              disabled={!!verifyingId}
             >
-              {verifyingId ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                `Move to ${pendingMoveLabel}`
-              )}
+              {`Move to ${pendingMoveLabel}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1386,6 +1420,7 @@ export function ReservationsClient() {
                     <Button
                       type="button"
                       className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
+                      disabled={selectedCardIsUpdating}
                       onClick={() => {
                         setPendingMove({
                           cardId: selectedCard.id,
@@ -1394,12 +1429,20 @@ export function ReservationsClient() {
                         });
                       }}
                     >
-                      Accept
+                      {selectedCardIsUpdating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Accept"
+                      )}
                     </Button>
                     <Button
                       type="button"
                       variant="destructive"
                       className="flex-1"
+                      disabled={selectedCardIsUpdating}
                       onClick={() => {
                         setPendingMove({
                           cardId: selectedCard.id,
@@ -1408,7 +1451,14 @@ export function ReservationsClient() {
                         });
                       }}
                     >
-                      Reject
+                      {selectedCardIsUpdating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        "Reject"
+                      )}
                     </Button>
                   </div>
                 ) : null}
@@ -1583,6 +1633,7 @@ export function ReservationsClient() {
                       <Button
                         type="button"
                         className="flex-1 bg-emerald-600 text-xs text-white hover:bg-emerald-700 sm:text-sm"
+                        disabled={selectedCardIsUpdating}
                         onClick={() => {
                           setPendingMove({
                             cardId: selectedCard.id,
@@ -1591,12 +1642,20 @@ export function ReservationsClient() {
                           });
                         }}
                       >
-                        Accept
+                        {selectedCardIsUpdating ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          "Accept"
+                        )}
                       </Button>
                       <Button
                         type="button"
                         variant="destructive"
                         className="flex-1 text-xs sm:text-sm"
+                        disabled={selectedCardIsUpdating}
                         onClick={() => {
                           setPendingMove({
                             cardId: selectedCard.id,
@@ -1605,7 +1664,14 @@ export function ReservationsClient() {
                           });
                         }}
                       >
-                        Reject
+                        {selectedCardIsUpdating ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          "Reject"
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -1787,7 +1853,7 @@ export function ReservationsClient() {
                   stageSurfaceClassName={column.stageSurfaceClassName}
                   cards={displayCardsByColumn[column.key]}
                   isActiveDrop={activeDropColumn === column.key}
-                  verifyingId={verifyingId}
+                  updatingCardIds={updatingCardIds}
                   onOpenDetails={(card) => setSelectedCardId(card.id)}
                 />
               ))}

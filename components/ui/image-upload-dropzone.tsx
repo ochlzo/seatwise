@@ -4,7 +4,7 @@ import * as React from "react";
 import { useDropzone, type Accept, type FileRejection } from "react-dropzone";
 import { Upload, Trash2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 
 type ImageUploadDropzoneProps = {
   previewUrl: string | null;
@@ -51,11 +51,33 @@ export function ImageUploadDropzone({
 }: ImageUploadDropzoneProps) {
   const [localRejectionError, setLocalRejectionError] = React.useState<string | null>(null);
 
+  const formatRejectionMessage = React.useCallback(
+    (rejection: FileRejection) => {
+      const firstError = rejection.errors[0];
+      if (!firstError) return "File upload failed. Please try another file.";
+
+      if (firstError.code === "file-too-large") {
+        return `File is too large. Maximum allowed size is ${formatBytes(maxSize, { decimals: 1 })}.`;
+      }
+
+      if (firstError.code === "file-invalid-type") {
+        return "Unsupported file type. Please upload a JPG, PNG, or WEBP image.";
+      }
+
+      if (firstError.code === "too-many-files") {
+        return "Please upload only one file.";
+      }
+
+      return firstError.message;
+    },
+    [maxSize],
+  );
+
   const onDrop = React.useCallback(
     (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       if (rejectedFiles.length > 0) {
         const firstRejection = rejectedFiles[0];
-        const errorMsg = firstRejection.errors.map((e) => e.message).join(", ");
+        const errorMsg = formatRejectionMessage(firstRejection);
         setLocalRejectionError(errorMsg);
         onFileRejected?.(errorMsg);
         return;
@@ -67,7 +89,7 @@ export function ImageUploadDropzone({
       onFileRejected?.("");
       onFileAccepted(acceptedFiles[0]);
     },
-    [onFileAccepted, onFileRejected],
+    [formatRejectionMessage, onFileAccepted, onFileRejected],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -80,11 +102,17 @@ export function ImageUploadDropzone({
 
   const effectiveError = uploadError || localRejectionError;
 
+  const handleUploadAreaClick = React.useCallback(() => {
+    if (!effectiveError) return;
+    setLocalRejectionError(null);
+    onFileRejected?.("");
+  }, [effectiveError, onFileRejected]);
+
   return (
     <div className="space-y-3">
       {!previewUrl ? (
         <div
-          {...getRootProps()}
+          {...getRootProps({ onClick: handleUploadAreaClick })}
           className={cn(
             "relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 text-center transition-all duration-200",
             minHeightClassName,

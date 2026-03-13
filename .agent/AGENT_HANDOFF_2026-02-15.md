@@ -697,6 +697,56 @@ In `prisma/schema.prisma`, `Show` includes:
 - portal `Accept` / `Reject` actions stay near the top below the header area, inline, and fill available width evenly
 - Portal typography was reduced on mobile for a denser/smaller presentation without changing desktop sizing.
 
+### Reservation Room UX + Validation (Implemented, This Session)
+- Main file updated:
+- `app/(app-user)/(events)/reserve/[showId]/[schedId]/ReserveSeatClient.tsx`
+- Upload/preview overlay cleanup:
+- Removed visible card container shell from the reservation seatmap categories overlay (chips remain visible).
+- Countdown toast behavior/styling:
+- Existing countdown messages are:
+- `1 minute left`
+- `Hurry! 20 seconds left!`
+- Updated toast variants:
+- `1 minute left` now uses warning/yellow.
+- `Hurry! 20 seconds left!` now uses error/red.
+- Step navigation fixes:
+- Contact step back button now correctly returns to seatmap (`seats` step).
+- Payment step back button now correctly returns to contact details (`contact` step).
+- Header step cue:
+- Added `Pick a Seat` capsule beside timer during the seatmap step.
+- Contact-details validation upgrade (onboarding-style field validation):
+- Added field-level invalid state + inline field errors for:
+- first name
+- last name
+- address
+- email
+- phone number
+- All fields are required before proceeding to payment.
+- Email now enforces valid email format.
+- Phone now enforces Philippine mobile format: must start with `09` and be exactly 11 digits.
+- Phone input now accepts digits only and limits input length to 11.
+- Server-side validation aligned in:
+- `app/api/queue/complete/route.ts`
+- Added matching backend regex checks for email and `09` + 11-digit phone.
+- Seat-step action placement changes:
+- Mobile: `Leave Reservation Room` sits directly under `Proceed to Contact Details`, full width.
+- Desktop: `Leave Reservation Room` is anchored at the bottom-right of the full seat-step container (spanning the two-column parent row).
+- Leave confirmation flow:
+- Added confirmation modal before leaving reservation room.
+- Leave action now executes only after explicit confirm.
+- Modal action layout tweak:
+- On mobile, modal buttons are smaller and right-aligned in one row.
+- `Cancel` is on the left, `Leave Reservation Room` on the right.
+
+### Upload Error Messaging UX (Implemented, This Session)
+- Shared uploader file updated:
+- `components/ui/image-upload-dropzone.tsx`
+- Improved non-technical error copy:
+- `file-too-large` now shows readable KB/MB notation (using `formatBytes`) instead of raw byte counts.
+- Added clearer fallback messages for common rejections (invalid type, too many files).
+- Retry UX tweak:
+- Clicking the upload area again now clears the current error message.
+
 ## TODOs
 1. Send emails to customers when their reservation stage changes.
 2. Create a customizable ticket design builder (drag/drop components like Canva).

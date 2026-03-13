@@ -12,6 +12,8 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 const normalize = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PH_PHONE_REGEX = /^09\d{9}$/;
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,8 +82,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email)) {
+    if (!EMAIL_REGEX.test(contact.email)) {
       return NextResponse.json({ success: false, error: "Invalid email address." }, { status: 400 });
+    }
+
+    if (!PH_PHONE_REGEX.test(contact.phoneNumber)) {
+      return NextResponse.json(
+        { success: false, error: "Phone number must start with 09 and be 11 digits." },
+        { status: 400 },
+      );
     }
 
     const schedule = await prisma.sched.findFirst({

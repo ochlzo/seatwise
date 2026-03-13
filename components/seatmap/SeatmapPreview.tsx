@@ -412,7 +412,7 @@ export function SeatmapPreview({
         </Button>
       </div>
       {showReservationOverlay && (
-        <div className="absolute right-2 top-2 z-10 max-w-[48%] rounded-md border border-zinc-200 bg-white/95 p-2 shadow-md backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
+        <div className="absolute right-2 top-2 z-10 max-w-[48%]">
           {categories.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1">
               {categories.map((category) => {
