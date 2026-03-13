@@ -192,6 +192,9 @@ export function ReserveSeatClient({
   const [isRejoining, setIsRejoining] = React.useState(false);
   const [step, setStep] = React.useState<ReservationStep>("seats");
   const [screenshotUrl, setScreenshotUrl] = React.useState<string>("");
+  const [reservationNumber, setReservationNumber] = React.useState<
+    string | null
+  >(null);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = React.useState(false);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = React.useState(false);
   const [contactDetails, setContactDetails] = React.useState({
@@ -672,12 +675,14 @@ export function ReserveSeatClient({
       const data = (await response.json()) as {
         success: boolean;
         error?: string;
+        reservationNumber?: string;
       };
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Failed to complete reservation session");
       }
 
       clearStoredSession(showScopeId);
+      setReservationNumber(data.reservationNumber ?? null);
       setStep("success");
     } catch (err) {
       setError(
@@ -873,6 +878,7 @@ export function ReserveSeatClient({
               seatNumbersById={seatNumbersById}
               showId={showId}
               contactEmail={contactDetails.email}
+              reservationNumber={reservationNumber}
             />
           )}
 

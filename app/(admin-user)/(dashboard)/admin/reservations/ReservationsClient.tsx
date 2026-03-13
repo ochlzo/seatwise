@@ -68,6 +68,7 @@ type PaymentData = {
 
 type ReservationData = {
   reservation_id: string;
+  reservation_number: string;
   guest_id: string;
   first_name: string;
   last_name: string;
@@ -77,7 +78,7 @@ type ReservationData = {
   status: string;
   createdAt: string;
   payment: PaymentData | null;
-  seatAssignment: {
+  seatAssignments: Array<{
     seat_assignment_id: string;
     seat: { seat_number: string };
     sched: {
@@ -99,7 +100,7 @@ type ReservationData = {
         color_code: string;
       };
     };
-  };
+  }>;
 };
 
 type ShowGroup = {
@@ -112,6 +113,7 @@ type ShowGroup = {
 
 type UserReservationRow = {
   userId: string;
+  reservationNumber: string;
   user: {
     first_name: string;
     last_name: string;
@@ -301,6 +303,7 @@ const buildUserRows = (
   return reservations
     .map((reservation) => ({
       userId: reservation.payment?.payment_id ?? reservation.reservation_id,
+      reservationNumber: reservation.reservation_number,
       user: {
         first_name: reservation.first_name,
         last_name: reservation.last_name,
@@ -309,7 +312,13 @@ const buildUserRows = (
         address: reservation.address,
       },
       reservations: [reservation],
-      seatNumbers: [reservation.seatAssignment.seat.seat_number],
+      seatNumbers: Array.from(
+        new Set(
+          reservation.seatAssignments.map(
+            (seatAssignment) => seatAssignment.seat.seat_number,
+          ),
+        ),
+      ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
       pendingReservationIds:
         reservation.status === "PENDING" ? [reservation.reservation_id] : [],
       latestCreatedAt: reservation.createdAt,
@@ -404,6 +413,9 @@ function SortableCard({
             </button>
           </div>
           <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+          <p className="text-xs text-muted-foreground">
+            Reservation No: {card.row.reservationNumber}
+          </p>
           <p className="text-sm text-muted-foreground">
             {card.row.seatNumbers.length} seat
             {card.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
@@ -446,6 +458,7 @@ function PreviewPlaceholderCard({
           {card.row.user.first_name} {card.row.user.last_name}
         </p>
         <p className="text-sm">{card.row.user.email}</p>
+        <p className="text-xs">Reservation No: {card.row.reservationNumber}</p>
         <p className="text-sm">
           {card.row.seatNumbers.length} seat
           {card.row.seatNumbers.length !== 1 ? "s" : ""} -{" "}
@@ -815,10 +828,11 @@ export function ReservationsClient() {
             reservation.last_name.toLowerCase().includes(q) ||
             reservation.email.toLowerCase().includes(q) ||
             reservation.phone_number.toLowerCase().includes(q) ||
-            reservation.seatAssignment.seat.seat_number
-              .toLowerCase()
-              .includes(q) ||
+            reservation.seatAssignments.some((seatAssignment) =>
+              seatAssignment.seat.seat_number.toLowerCase().includes(q),
+            ) ||
             reservation.reservation_id.toLowerCase().includes(q) ||
+            reservation.reservation_number.toLowerCase().includes(q) ||
             show.showName.toLowerCase().includes(q) ||
             show.venue.toLowerCase().includes(q),
         ),
@@ -1482,6 +1496,14 @@ export function ReservationsClient() {
                     </div>
                     <div>
                       <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Reservation No.
+                      </p>
+                      <p className="text-xs font-medium sm:text-sm">
+                        {selectedCard.row.reservationNumber}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
                         Total Amount
                       </p>
                       <p className="text-lg font-semibold sm:text-xl">
@@ -1508,26 +1530,35 @@ export function ReservationsClient() {
                           <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground sm:text-sm">
                             <span className="inline-flex items-center gap-1.5">
                               <Ticket className="h-3.5 w-3.5" />
-                              Seat {reservation.seatAssignment.seat.seat_number}
+                              Reservation No. {reservation.reservation_number}
                             </span>
                             <span className="inline-flex items-center gap-1.5">
                               <Armchair className="h-3.5 w-3.5" />
-                              {
-                                reservation.seatAssignment.set.seatCategory
-                                  .category_name
-                              }
+                              {reservation.seatAssignments[0]?.set.seatCategory.category_name ??
+                                "N/A"}
                             </span>
                             <span className="inline-flex items-center gap-1.5">
                               <CalendarCheck className="h-3.5 w-3.5" />
                               {formatDate(
-                                reservation.seatAssignment.sched.sched_date,
+                                reservation.seatAssignments[0]?.sched.sched_date ?? "",
                               )}
                               ,{" "}
                               {formatTimeRange(
-                                reservation.seatAssignment.sched.sched_start_time,
-                                reservation.seatAssignment.sched.sched_end_time,
+                                reservation.seatAssignments[0]?.sched.sched_start_time ?? "",
+                                reservation.seatAssignments[0]?.sched.sched_end_time ?? "",
                               )}
                             </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {reservation.seatAssignments.map((seatAssignment) => (
+                              <span
+                                key={seatAssignment.seat_assignment_id}
+                                className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] text-foreground"
+                              >
+                                <Ticket className="h-3 w-3" />
+                                Seat {seatAssignment.seat.seat_number}
+                              </span>
+                            ))}
                           </div>
                         </div>
                         <div className="sm:text-right">
@@ -1537,7 +1568,7 @@ export function ReservationsClient() {
                           <p className="text-xs font-semibold sm:text-sm">
                             {formatCurrency(
                               reservation.payment?.amount ??
-                                reservation.seatAssignment.set.seatCategory
+                                reservation.seatAssignments[0]?.set.seatCategory
                                   .price,
                             )}
                           </p>

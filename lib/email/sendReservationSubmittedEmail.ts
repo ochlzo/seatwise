@@ -1,6 +1,7 @@
 type ReservationEmailPayload = {
   to: string;
   customerName: string;
+  reservationNumber: string;
   showName: string;
   scheduleLabel: string;
   seatNumbers: string[];
@@ -55,6 +56,7 @@ export const sendReservationSubmittedEmail = async (payload: ReservationEmailPay
     "",
     "We received your reservation request in Seatwise.",
     "",
+    `Reservation Number: ${payload.reservationNumber}`,
     `Show: ${payload.showName}`,
     `Schedule: ${payload.scheduleLabel}`,
     `Seats: ${payload.seatNumbers.join(", ")}`,

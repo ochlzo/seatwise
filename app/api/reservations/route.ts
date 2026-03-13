@@ -93,11 +93,15 @@ export async function GET() {
 
         const normalizedReservations = reservations
             .map((reservation) => {
-                const primarySeat = reservation.reservedSeats[0]?.seatAssignment;
-                if (!primarySeat) return null;
+                const seatAssignments = reservation.reservedSeats
+                    .map((row) => row.seatAssignment)
+                    .filter(Boolean);
+
+                if (seatAssignments.length === 0) return null;
+
                 return {
                     ...reservation,
-                    seatAssignment: primarySeat,
+                    seatAssignments,
                 };
             })
             .filter((reservation): reservation is NonNullable<typeof reservation> => !!reservation);

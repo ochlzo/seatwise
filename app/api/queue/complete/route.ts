@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
@@ -14,6 +15,12 @@ const formatCurrency = (value: number) =>
 const normalize = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_PHONE_REGEX = /^09\d{9}$/;
+const RESERVATION_NUMBER_MAX_ATTEMPTS = 50;
+
+const generateReservationNumber = () =>
+  Math.floor(Math.random() * 10_000)
+    .toString()
+    .padStart(4, "0");
 
 export async function POST(request: NextRequest) {
   try {
@@ -119,78 +126,128 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const reservation = await prisma.$transaction(async (tx) => {
-      const assignments = await tx.seatAssignment.findMany({
-        where: {
-          sched_id: schedId,
-          seat_id: { in: seatIds },
-        },
-        include: {
-          seat: { select: { seat_number: true } },
-          set: {
-            select: {
-              seatCategory: { select: { price: true } },
+    let reservation:
+      | {
+          reservationId: string;
+          reservationNumber: string;
+          seatNumbers: string[];
+          totalAmount: number;
+        }
+      | null = null;
+
+    for (
+      let attempt = 1;
+      attempt <= RESERVATION_NUMBER_MAX_ATTEMPTS;
+      attempt += 1
+    ) {
+      const reservationNumber = generateReservationNumber();
+
+      try {
+        reservation = await prisma.$transaction(async (tx) => {
+          const assignments = await tx.seatAssignment.findMany({
+            where: {
+              sched_id: schedId,
+              seat_id: { in: seatIds },
             },
-          },
-        },
-      });
+            include: {
+              seat: { select: { seat_number: true } },
+              set: {
+                select: {
+                  seatCategory: { select: { price: true } },
+                },
+              },
+            },
+          });
 
-      if (assignments.length !== seatIds.length) {
-        throw new Error("Some selected seats are unavailable.");
+          if (assignments.length !== seatIds.length) {
+            throw new Error("Some selected seats are unavailable.");
+          }
+
+          const notOpen = assignments.find((item) => item.seat_status !== "OPEN");
+          if (notOpen) {
+            throw new Error(`Seat ${notOpen.seat.seat_number} is already reserved.`);
+          }
+
+          const totalAmount = assignments.reduce(
+            (sum, item) => sum + Number(item.set.seatCategory.price),
+            0,
+          );
+
+          const created = (await tx.reservation.create({
+            data: {
+              reservation_number: reservationNumber,
+              guest_id: guestId,
+              show_id: showId,
+              sched_id: schedId,
+              first_name: contact.firstName,
+              last_name: contact.lastName,
+              address: contact.address,
+              email: contact.email,
+              phone_number: contact.phoneNumber,
+              status: "PENDING",
+            },
+          } as any)) as { reservation_id: string; reservation_number: string };
+
+          await tx.reservedSeat.createMany({
+            data: assignments.map((item) => ({
+              reservation_id: created.reservation_id,
+              seat_assignment_id: item.seat_assignment_id,
+            })),
+          });
+
+          await tx.seatAssignment.updateMany({
+            where: { seat_assignment_id: { in: assignments.map((item) => item.seat_assignment_id) } },
+            data: { seat_status: "RESERVED" },
+          });
+
+          await tx.payment.create({
+            data: {
+              reservation_id: created.reservation_id,
+              amount: totalAmount,
+              method: "GCASH",
+              status: "PENDING",
+              screenshot_url: screenshotUrl || null,
+            },
+          });
+
+          return {
+            reservationId: created.reservation_id,
+            reservationNumber: created.reservation_number,
+            seatNumbers: assignments.map((item) => item.seat.seat_number),
+            totalAmount,
+          };
+        });
+        break;
+      } catch (error) {
+        const isUniqueConflict =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002";
+
+        const conflictTargets = isUniqueConflict
+          ? Array.isArray(error.meta?.target)
+            ? error.meta.target.map(String)
+            : []
+          : [];
+
+        const isReservationNumberConflict =
+          isUniqueConflict &&
+          (conflictTargets.includes("Reservation_show_id_reservation_number_key") ||
+            (conflictTargets.includes("show_id") &&
+              conflictTargets.includes("reservation_number")));
+
+        if (isReservationNumberConflict) {
+          continue;
+        }
+
+        throw error;
       }
+    }
 
-      const notOpen = assignments.find((item) => item.seat_status !== "OPEN");
-      if (notOpen) {
-        throw new Error(`Seat ${notOpen.seat.seat_number} is already reserved.`);
-      }
-
-      const totalAmount = assignments.reduce(
-        (sum, item) => sum + Number(item.set.seatCategory.price),
-        0,
+    if (!reservation) {
+      throw new Error(
+        "Failed to generate a unique reservation number. Please try again.",
       );
-
-      const created = await tx.reservation.create({
-        data: {
-          guest_id: guestId,
-          show_id: showId,
-          sched_id: schedId,
-          first_name: contact.firstName,
-          last_name: contact.lastName,
-          address: contact.address,
-          email: contact.email,
-          phone_number: contact.phoneNumber,
-          status: "PENDING",
-        },
-      });
-
-      await tx.reservedSeat.createMany({
-        data: assignments.map((item) => ({
-          reservation_id: created.reservation_id,
-          seat_assignment_id: item.seat_assignment_id,
-        })),
-      });
-
-      await tx.seatAssignment.updateMany({
-        where: { seat_assignment_id: { in: assignments.map((item) => item.seat_assignment_id) } },
-        data: { seat_status: "RESERVED" },
-      });
-
-      await tx.payment.create({
-        data: {
-          reservation_id: created.reservation_id,
-          amount: totalAmount,
-          method: "GCASH",
-          status: "PENDING",
-          screenshot_url: screenshotUrl || null,
-        },
-      });
-
-      return {
-        reservationId: created.reservation_id,
-        seatNumbers: assignments.map((item) => item.seat.seat_number),
-        totalAmount,
-      };
-    });
+    }
 
     const promotion = await completeActiveSessionAndPromoteNext({
       showScopeId,
@@ -202,6 +259,7 @@ export async function POST(request: NextRequest) {
       await sendReservationSubmittedEmail({
         to: contact.email,
         customerName: `${contact.firstName} ${contact.lastName}`.trim(),
+        reservationNumber: reservation.reservationNumber,
         showName: schedule.show.show_name,
         scheduleLabel: new Date(schedule.sched_date).toLocaleDateString(),
         seatNumbers: reservation.seatNumbers,
@@ -215,6 +273,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       reservationId: reservation.reservationId,
+      reservationNumber: reservation.reservationNumber,
       showScopeId,
       showName: schedule.show.show_name,
       reservedCount: reservation.seatNumbers.length,

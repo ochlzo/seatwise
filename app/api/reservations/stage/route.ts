@@ -187,6 +187,7 @@ export async function POST(request: NextRequest) {
         to: string;
         customerName: string;
         lineItems: Array<{
+          reservationNumber: string;
           showName: string;
           scheduleLabel: string;
           seatNumbers: string[];
@@ -199,6 +200,8 @@ export async function POST(request: NextRequest) {
       const key = reservation.email.trim().toLowerCase();
       const existing = emailGroups.get(key);
       const lineItem = {
+        reservationNumber: (reservation as { reservation_number: string })
+          .reservation_number,
         showName: reservation.show.show_name,
         scheduleLabel: formatScheduleLabel(
           reservation.sched.sched_date,

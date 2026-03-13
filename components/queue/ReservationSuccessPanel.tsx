@@ -10,6 +10,7 @@ interface ReservationSuccessPanelProps {
     seatNumbersById: Record<string, string>;
     showId: string;
     contactEmail: string;
+    reservationNumber: string | null;
 }
 
 export function ReservationSuccessPanel({
@@ -18,6 +19,7 @@ export function ReservationSuccessPanel({
     seatNumbersById,
     showId,
     contactEmail,
+    reservationNumber,
 }: ReservationSuccessPanelProps) {
     const router = useRouter();
 
@@ -33,6 +35,11 @@ export function ReservationSuccessPanel({
                 </div>
                 <div className="space-y-2">
                     <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">Reservation Submitted</h3>
+                    {reservationNumber && (
+                        <p className="text-sm font-semibold text-foreground sm:text-base">
+                            Reservation Number: {reservationNumber}
+                        </p>
+                    )}
                     <p className="text-muted-foreground text-sm sm:text-base">
                         Your {selectedSeatIds.length > 0 ? selectedSeatIds.length : ""} seat{selectedSeatIds.length !== 1 ? "s" : ""} request for{" "}
                         <span className="font-medium text-foreground">{showName}</span> has been submitted for verification.

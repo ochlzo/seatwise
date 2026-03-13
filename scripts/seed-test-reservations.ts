@@ -200,6 +200,10 @@ async function main() {
       [showAId, 0],
       [showBId, 0],
     ]);
+    const reservationNumberByShow = new Map<string, number>([
+      [showAId, 0],
+      [showBId, 0],
+    ]);
 
     for (let i = 0; i < assignments.length; i += 1) {
       const assignment = assignments[i];
@@ -207,6 +211,9 @@ async function main() {
       const { firstName, lastName } = pickName(i);
       const email = `seed-${marker}${TEST_EMAIL_DOMAIN}`;
       const phone = `09${String(100000000 + i).padStart(9, "0")}`;
+      const nextReservationNumber = (
+        reservationNumberByShow.get(assignment.sched.show_id) ?? 0
+      ).toString().padStart(4, "0");
 
       try {
         await prisma.$transaction(async (tx) => {
@@ -232,6 +239,7 @@ async function main() {
               phone_number: phone,
               show_id: assignment.sched.show_id,
               sched_id: assignment.sched.sched_id,
+              reservation_number: nextReservationNumber,
               status: "PENDING",
             },
           });
@@ -259,6 +267,10 @@ async function main() {
         createdByShow.set(
           assignment.sched.show_id,
           (createdByShow.get(assignment.sched.show_id) ?? 0) + 1,
+        );
+        reservationNumberByShow.set(
+          assignment.sched.show_id,
+          (reservationNumberByShow.get(assignment.sched.show_id) ?? 0) + 1,
         );
       } catch {
         skipped += 1;

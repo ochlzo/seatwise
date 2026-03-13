@@ -1,6 +1,7 @@
 import { assertGmailSenderAlignment } from "@/lib/email/gmailSenderGuard";
 
 type ReservationStatusEmailLineItem = {
+  reservationNumber: string;
   showName: string;
   scheduleLabel: string;
   seatNumbers: string[];
@@ -54,6 +55,7 @@ const buildReservationSummary = (lineItems: ReservationStatusEmailLineItem[]) =>
     .map((item, index) =>
       [
         `${index + 1}. ${item.showName}`,
+        `   Reservation No: ${item.reservationNumber}`,
         `   Schedule: ${item.scheduleLabel}`,
         `   Seats: ${item.seatNumbers.join(", ")}`,
         `   Amount: ${item.amount}`,
