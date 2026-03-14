@@ -1,15 +1,18 @@
 # Seatwise Agent Handoff (Current State, 2026-03-06)
 
 ## Purpose
+
 This handoff is intentionally trimmed to active behavior only. Legacy/rolled-back notes were removed.
 
 ## Stack
+
 - Next.js App Router + React + TypeScript
 - Prisma + PostgreSQL (Neon)
 - Queue infra: Upstash Redis + Ably
 - UI: Radix/custom UI components, `next-themes`
 
 ## Core App Areas
+
 - Public show detail: `app/(app-user)/(events)/[showId]/page.tsx`
 - Queue page: `app/(app-user)/(events)/queue/[showId]/[schedId]/page.tsx`
 - Reserve page: `app/(app-user)/(events)/reserve/[showId]/[schedId]/page.tsx`
@@ -19,6 +22,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Seat builder: `app/(admin-user)/seat-builder/page.tsx`
 
 ## Auth and Routing (Current)
+
 - Login redirect is admin-focused:
 - `/admin` and `/admin/*` require admin session and redirect to `/login` when missing.
 - Non-admin pages are not globally forced to login.
@@ -26,12 +30,14 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - `GET /api/shows/search?visibility=user` is accessible for guest-facing pages.
 
 ## Profile/Account Routes
+
 - Admin-scoped routes:
 - `/admin/profile`
 - `/admin/account`
 - User dropdown navigation points to these admin routes.
 
 ## Team Tenancy + Superadmin (New)
+
 - Added team-scoped admin tenancy in Prisma:
 - `Team` model (`team_id`, `name`, timestamps)
 - `Admin.team_id String?`
@@ -44,6 +50,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Throws typed `401/403` errors via `AdminContextError`.
 
 ## Migrations Added (Team Tenancy)
+
 - `prisma/migrations/20260305110000_add_team_tenancy/migration.sql`
 - Creates `Team`, adds `Admin.team_id`, `Admin.is_superadmin`, `Show.team_id`
 - Seeds `default-team`
@@ -53,6 +60,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Enforces `Show.team_id NOT NULL`.
 
 ## Show + Reservation Team Scoping (New)
+
 - Show creation now writes team:
 - `lib/actions/createShow.ts`
 - Uses `getCurrentAdminContext()` and sets `show.team_id` from admin team.
@@ -68,6 +76,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Cross-team action returns `403` unless superadmin.
 
 ## Auth Payload Enrichment (New)
+
 - `GET /api/auth/me` and `POST /api/auth/login` now include:
 - `isSuperadmin`
 - `teamId`
@@ -76,6 +85,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - `lib/db/Users.ts`
 
 ## Admin Access Feature (New)
+
 - New page and client:
 - `app/(admin-user)/(dashboard)/admin/access/page.tsx`
 - `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx`
@@ -88,6 +98,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Regular admin can rename/manage own team, invite only to own team, view only own team.
 
 ## Admin Invite Behavior (Current)
+
 - Invite flow is now token/session-based with OTP onboarding and completion APIs.
 - Shared helper and key logic:
 - `lib/invite/adminInvite.ts`
@@ -99,6 +110,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Returns success without sending a new invite (non-enumerating response).
 
 ## Admin Access UI Notes (Current)
+
 - Mobile and desktop are intentionally different in `AdminAccessClient.tsx`:
 - Mobile keeps compact stacked cards and tighter spacing.
 - Desktop (`md+`) uses a table for Team Admins with columns:
@@ -106,6 +118,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Team Admin status badges are positioned top-right on mobile row cards.
 
 ## Queue/Reservation Flow (Current)
+
 - Queue endpoints:
 - `POST /api/queue/join`
 - `GET /api/queue/status`
@@ -121,6 +134,7 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Reservation complete stores screenshot payload and creates reservation/payment records.
 
 ## Reservation Payment UI/Data (Current)
+
 - Payment panel component: `components/queue/GcashUploadPanel.tsx`
 - Uses show-configured GCash fields from DB:
 - `Show.gcash_qr_image_key`
@@ -135,12 +149,15 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 - Each line includes copy-to-clipboard action with toast feedback.
 
 ## Show Model: GCash Fields
+
 In `prisma/schema.prisma`, `Show` includes:
+
 - `gcash_qr_image_key String?`
 - `gcash_number String?`
 - `gcash_account_name String?`
 
 ## Show Create Flow: Payment Config
+
 - Create form includes:
 - show poster upload
 - GCash QR upload
@@ -154,6 +171,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - saved URL is stored in `Show.gcash_qr_image_key`
 
 ## Reusable Upload UI
+
 - Shared uploader component:
 - `components/ui/image-upload-dropzone.tsx`
 - Used by:
@@ -161,18 +179,21 @@ In `prisma/schema.prisma`, `Show` includes:
 - `app/(admin-user)/(dashboard)/admin/shows/create/CreateShowForm.tsx`
 
 ## Known Operational Note
+
 - Prisma client generation can fail with Windows DLL lock if dev server is running.
 - If needed, stop dev server first, then run:
 - `npx prisma generate`
 - `npx prisma migrate dev`
 
 ## Validation Status
+
 - Latest schema/API/UI changes were type-checked with:
 - `npx tsc --noEmit` (pass)
 
 ## Recent Session Changes (Kanban -> Show Status Guard)
 
 ### Admin Reservations Kanban
+
 - Stage header/color styling updated in:
 - `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
 - Stage colors include:
@@ -184,15 +205,18 @@ In `prisma/schema.prisma`, `Show` includes:
 - Drag/drop "stick/proximity" behavior adjusted to use dragged card position instead of mouse pointer position.
 
 ### Reservation Verify/Reject Behavior
+
 - Confirmed/rejected flows continue to use reservation admin endpoints:
 - `POST /api/reservations/verify`
 - `POST /api/reservations/reject`
 - Team ownership checks enforced (superadmin bypass).
 
 ### Reservation Expiration
+
 - No auto-expiration/timeout logic was added for long-pending reservations in this session.
 
 ### Payment Method/Status Model Adjustments
+
 - `PaymentMethod` enum reduced to:
 - `GCASH`
 - `WALK_IN`
@@ -200,6 +224,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Rejection flow behavior reviewed: reservation status transitions to rejected/cancelled path while payment handling remains server-route controlled.
 
 ### Show Status Enum Adjustments
+
 - `ShowStatus.POSTPONED` removed from:
 - `prisma/schema.prisma`
 - Admin form options:
@@ -207,6 +232,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Dashboard filtering/listing updated to include `ON_GOING` in status lists/filters.
 
 ### Show Detail: GCash Config + Editable QR
+
 - `ShowDetailForm.tsx` expanded to edit:
 - `gcash_qr_image_key`
 - `gcash_number`
@@ -215,6 +241,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `lib/actions/updateShow.ts`
 
 ### Image Uploader UX
+
 - Delete affordance changed from "X" to trash icon.
 - Visibility behavior enforced:
 - Desktop: delete icon visible on hover
@@ -222,6 +249,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - In `ShowDetailForm.tsx`, delete icon hidden when `isEditing=false`; normal behavior when `isEditing=true`.
 
 ### Validation UX (No Error Lists)
+
 - Shifted from aggregated error list to direct element highlighting (red borders).
 - Field-level highlighting prioritized; parent container highlighting removed except schedule-card cases.
 - Applied in:
@@ -231,6 +259,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `lib/actions/createShow.ts`
 
 ### Schedule Validation Improvements (Create Show)
+
 - In `CreateShowForm.tsx`:
 - Schedules card is flagged when:
 - date(s) in show range have no schedules
@@ -238,6 +267,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Red warning text is rendered where the old "No schedules yet..." helper text appears.
 
 ### Seatmap Preview/Assignment UX
+
 - Unassigned/error seat visualization:
 - Use `public/seat-error.svg` when seat is unassigned or has no category.
 - Added "Unassigned" legend behavior in seatmap preview:
@@ -250,6 +280,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - "Clear" option in category selection panel styled red.
 
 ### Seatmap Editing Guide
+
 - Added desktop-only helper under SeatmapPreview (no card container):
 - "Use Shift or Ctrl to multiselect"
 - Uses `public/shift.svg` and `public/control.svg`
@@ -259,6 +290,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `CreateShowForm.tsx`
 
 ### Show Status Change Confirmation Modals
+
 - Added status-change confirmation modals (warning style, yellow icon) using:
 - `components/ui/dialog.tsx`
 - Implemented in:
@@ -270,6 +302,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Messaging updated for consistency and clarity.
 
 ### Show Detail: Block Status Change If Reservations Exist
+
 - Added hard guard in `ShowDetailForm.tsx`:
 - If show already has reservation records, status change is blocked.
 - Shows error modal (`Dialog`) with red error icon and explanatory message.
@@ -279,6 +312,7 @@ In `prisma/schema.prisma`, `Show` includes:
 ## Latest Session Updates (2026-03-06)
 
 ### Admin Access IA Restructure (Implemented)
+
 - `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx` now supports:
 - Superadmin root (`/admin/access`): team directory list/table with search.
 - Team click navigates to `/admin/access/[teamId]`.
@@ -292,6 +326,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - File: `app/api/admin/access/teams/[teamId]/route.ts`
 
 ### Admin Role Endpoint + Team Unlink Rule (Implemented)
+
 - Added backend-only role mutation endpoint:
 - `PATCH /api/admin/access/admins/[userId]/role`
 - File: `app/api/admin/access/admins/[userId]/role/route.ts`
@@ -301,6 +336,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Demoting requires explicit valid `teamId`.
 
 ### Global Header Badge Update (Implemented)
+
 - `components/AdminShield.tsx` now shows:
 - `SUPERADMIN` if superadmin.
 - Uppercased team name if not superadmin.
@@ -313,6 +349,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `hooks/useEmail&Pass.ts`
 
 ### Admin Team Delete Action + Guard Modal (Implemented)
+
 - Updated teams table in `AdminAccessClient.tsx`:
 - Replaced placeholder action with real delete button.
 - Added delete confirmation warning modal (`Dialog`).
@@ -324,6 +361,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Blocks if team still has assigned admins.
 
 ### Superadmin Create-Show Team Assignment Guard (Implemented)
+
 - In `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`:
 - Superadmin clicking `New Show` opens modal requiring team assignment.
 - Modal has typeable/searchable team picklist (`Combobox`).
@@ -336,9 +374,11 @@ In `prisma/schema.prisma`, `Show` includes:
 - Non-superadmin behavior remains scoped to own `adminContext.teamId`.
 
 ### Secure Admin Invite Onboarding (Implemented)
+
 - Replaced plain login-link invite flow with signed token + Redis state + OTP flow.
 
 #### New shared invite security helper
+
 - `lib/invite/adminInvite.ts`
 - Provides:
 - HMAC signed token (`ADMIN_INVITE_SIGNING_SECRET`)
@@ -347,6 +387,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - TTL/cooldown/attempt config constants
 
 #### Invite sender route updated
+
 - `app/api/admin/access/invite/route.ts`
 - Now:
 - Creates Redis invite session.
@@ -355,6 +396,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - If email already belongs to an existing Admin, returns success without sending a duplicate invite.
 
 #### New invite onboarding APIs
+
 - `POST /api/admin/access/invite/validate`
 - File: `app/api/admin/access/invite/validate/route.ts`
 - `POST /api/admin/access/invite/send-otp`
@@ -365,6 +407,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - File: `app/api/admin/access/invite/complete/route.ts`
 
 #### Invite completion behavior
+
 - Requires validated token + OTP verified session.
 - Creates Firebase Auth user via Admin SDK.
 - Creates Admin DB row with:
@@ -374,6 +417,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - On failure: best-effort Firebase rollback and invite state recovery.
 
 #### Login UI integration
+
 - `app/login/page.tsx` now branches:
 - If `invite` query param exists -> render onboarding UI.
 - Else -> render normal `LoginForm`.
@@ -388,6 +432,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Invite-unavailable state no longer shows a "Back to login" button.
 
 ### Invite Security Hardening (Implemented)
+
 - Claim-bound invite flow added:
 - On validate, invite claim cookie is issued and bound to Redis claim key.
 - OTP send/verify/complete require matching claimant context.
@@ -404,6 +449,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Invite/OTP TTL and limits now require bounded integer env values in `lib/invite/adminInvite.ts`.
 
 ### Superadmin Invite Flow (Implemented)
+
 - Added dedicated endpoint:
 - `POST /api/admin/access/invite/superadmin`
 - File: `app/api/admin/access/invite/superadmin/route.ts`
@@ -419,11 +465,13 @@ In `prisma/schema.prisma`, `Show` includes:
 - Role-aware checks enforced through invite routes via `doesInviteMatchSession()`.
 
 ### Admin Access UI Polishing (Implemented)
+
 - Superadmin root page (`/admin/access`) now includes a dedicated "Invite Superadmin" card.
 - Superadmin invite card was positioned above "Create Team" card.
 - File: `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx`
 
 ### Email Sending Hardening + Test Script Updates
+
 - Updated invite email sender:
 - `lib/email/sendAdminInviteEmail.ts`
 - Added `inviteLink` payload and onboarding-focused email body.
@@ -439,6 +487,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Added mailbox/sender alignment diagnostics and richer error output (`cause`/stack).
 
 ### Local Env Additions Used By Invite/OTP Flow
+
 - Added to local `.env`:
 - `ADMIN_INVITE_SIGNING_SECRET`
 - `ADMIN_OTP_PEPPER`
@@ -450,6 +499,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Note: these are local environment values and must be mirrored in deployment env config.
 
 ### Admin Login Identifier Hardening (Implemented)
+
 - Removed public username-to-email lookup endpoint:
 - Deleted `app/api/auth/admin-email/route.ts`
 - `components/login-form.tsx` now uses email-only admin login and password reset.
@@ -460,6 +510,7 @@ In `prisma/schema.prisma`, `Show` includes:
 ## Post-Handoff Updates (After Last Handoff Edit)
 
 ### Admin Dashboard Welcome Popup Removal (Implemented)
+
 - Removed the `/admin` welcome popup mount from:
 - `app/(admin-user)/(dashboard)/admin/page.tsx`
 - Deleted the unused popup component file:
@@ -468,6 +519,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `/admin` now loads directly without the "Welcome Admin" dialog.
 
 ### Toaster Standardization + Styling (Implemented)
+
 - Standardized app toast usage around the shared wrapper:
 - `components/ui/sonner.tsx`
 - Wrapper now exposes semantic variants for app use:
@@ -483,12 +535,14 @@ In `prisma/schema.prisma`, `Show` includes:
 - Updated direct `sonner` imports across app code to use the shared wrapper.
 
 ### Reservations Kanban: Invalid Move Messaging (Implemented)
+
 - In `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`:
 - Moving a `REJECTED` card to `CONFIRMED` now shows:
 - `Cannot move 'Rejected' payments to 'Confirmed'.`
 - Existing generic invalid-move guidance remains for unsupported drag targets.
 
 ### Reservations Search Fix + Debounce (Implemented)
+
 - Fixed `/admin/reservations` search crash in:
 - `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
 - Root cause:
@@ -502,6 +556,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Empty-state message now keys off the raw input state.
 
 ### Reservations Kanban: Stage-Change Confirmation Modal (Implemented)
+
 - Added confirmation modal before executing allowed drag/drop stage changes in:
 - `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
 - Covered transitions:
@@ -515,9 +570,8 @@ In `prisma/schema.prisma`, `Show` includes:
 - Result:
 - Allowed moves now require explicit admin confirmation before reservation mutation routes run.
 
-
-
 ### Reservations Kanban: Stage Rules + Preview UX (Updated This Session)
+
 - File updated:
 - `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
 - Allowed drag/drop transitions are now limited to:
@@ -541,6 +595,7 @@ In `prisma/schema.prisma`, `Show` includes:
 ## Latest Session Updates (2026-03-13 to 2026-03-14)
 
 ### Reservation Number Tracking (Implemented)
+
 - Added `Reservation.reservation_number` as a required 4-digit string unique per show:
 - Prisma schema:
 - `@@unique([show_id, reservation_number])`
@@ -563,6 +618,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
 
 ### Reservation Submission Storage + Performance (Updated)
+
 - Payment submission screenshots are no longer stored as base64 in the database.
 - Current flow:
 - Client keeps screenshot as base64 in local component state until final submit.
@@ -583,6 +639,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - sending reservation-submitted email asynchronously after API response path
 
 ### Reservation Flow UX + Copy Updates (Updated)
+
 - In reservation room payment step:
 - Primary submit button text changed from `Confirm Reservation` to `Submit Reservation`
 - Added lightweight confirmation modal before final submit
@@ -596,6 +653,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `components/queue/ReservationSuccessPanel.tsx`
 
 ### Admin Reservations: Same-Customer Payment Separation + Multi-Seat Fix (Implemented)
+
 - Admin reservations cards are no longer grouped by customer identity (`email + phone`).
 - Each reservation/payment now renders as a separate Kanban card keyed by:
 - `payment_id` fallback `reservation_id`
@@ -610,6 +668,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
 
 ### Queue and Reservation Navigation Responsiveness (Updated)
+
 - Navigation actions were changed to avoid waiting on cleanup requests before route changes.
 - Reserve page updates:
 - leaving reservation room now navigates immediately and sends `/api/queue/leave` in background (`sendBeacon`/keepalive best effort)
@@ -623,6 +682,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `app/(app-user)/(events)/queue/[showId]/[schedId]/QueueWaitingClient.tsx`
 
 ### Queue Waiting UI + Back-Button Guard (Updated)
+
 - Queue waiting rank display changed:
 - label `Current rank` -> `You're in`
 - displayed rank now accounts for one active user already in reservation room (`rank + 2` display logic)
@@ -636,6 +696,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `app/(app-user)/(events)/queue/[showId]/[schedId]/QueueWaitingClient.tsx`
 
 ### Public Show Detail Header (Updated)
+
 - On the public show detail route (`/<showId>`):
 - mobile/tablet header now replaces breadcrumb/title with a back button using `ArrowLeft`
 - back button routes to `/dashboard`
@@ -644,6 +705,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `components/page-header.tsx`
 
 ### Booking-Domain Cleanup Script (Added)
+
 - Added destructive script to clear the booking-related domain tables/models:
 - `scripts/clear-booking-domain.ts`
 - Added npm script:
@@ -662,6 +724,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `show`
 
 ### Team Assignment Modal for Superadmin Create-Show (Polished)
+
 - Existing superadmin create-show team assignment modal in:
 - `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`
 - Current state:
@@ -683,6 +746,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - trigger mouse-down now prevents focus-steal to avoid the `aria-hidden`/focused-descendant warning when used inside inertized dialog structures
 
 ### Misc Operational Notes From This Session
+
 - Prisma client generation still hit Windows DLL lock in local workflow when dev server/process held the engine binary.
 - `npx prisma generate` may fail with `EPERM` until the locking process is stopped.
 - Type checks performed after the above changes:
@@ -691,6 +755,7 @@ In `prisma/schema.prisma`, `Show` includes:
 ## Session Updates (2026-03-12)
 
 ### Public Show Seatmap Access Fix (Implemented)
+
 - Public show detail seatmap preview was failing in deployed environments with `Failed to load seatmap`.
 - Root cause:
 - `components/seatmap/SeatmapPreview.tsx` fetches `GET /api/seatmaps/[seatmapId]`
@@ -701,6 +766,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Admin access remains unrestricted for the same endpoint.
 
 ### Gmail Invite Flow Diagnostics + Scope Fix Support (Implemented)
+
 - Investigated production invite-email failures.
 - Determined two distinct failure modes:
 - refresh token missing Gmail profile-readable scope for sender validation
@@ -717,6 +783,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `GMAIL_SENDER_EMAIL` must match the OAuth mailbox, or be configured as a verified alias and listed in `GMAIL_ALLOWED_SENDER_ALIASES`.
 
 ### Invite Email Link Origin Fix (Implemented)
+
 - Invite emails in production were sometimes generating `localhost:3000` links.
 - Root cause:
 - invite sender routes hard-fell back to `http://localhost:3000` when `NEXT_PUBLIC_BASE_URL` was unset.
@@ -731,6 +798,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - deployed invite emails now use the deployed host even if `NEXT_PUBLIC_BASE_URL` is missing.
 
 ### Reservations Kanban: Cancel Rollback Ghost Reliability (Adjusted)
+
 - File updated:
 - `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
 - Investigated why the cancel rollback ghost animation only appeared intermittently.
@@ -743,6 +811,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - cancel animation should read more consistently as a card moving back from destination to source.
 
 ### Admin Invite Onboarding: Validation UX Upgrade (Implemented)
+
 - Main file updated:
 - `components/admin-invite-onboarding.tsx`
 - Added direct field-level validation UI for onboarding profile step.
@@ -770,6 +839,7 @@ In `prisma/schema.prisma`, `Show` includes:
 ## Session Updates (2026-03-13)
 
 ### Reservations Kanban: Payment Record Full-Screen Portal (Implemented)
+
 - Main file updated:
 - `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
 - Clicking a payment record now opens a full-screen portal view instead of a popup modal.
@@ -784,6 +854,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Delayed portal pane scrolling during transition to avoid scrollbar flash.
 
 ### Reservations Kanban: Payment Portal Content/Behavior (Implemented)
+
 - Portal now shows:
 - customer name, email, phone, address
 - show name and venue
@@ -799,6 +870,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - malformed time values now fall back safely instead of throwing `Invalid time value`
 
 ### Reservations Kanban: Payment Screenshot UX (Implemented)
+
 - Screenshot in the portal now opens into a dedicated full-screen image overlay when clicked.
 - No separate expand button remains in the base portal view.
 - Expanded-image overlay behavior:
@@ -809,6 +881,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Close button styling in expanded image view was made more obvious.
 
 ### Reservations Kanban: Portal Actions + Stage Confirmation Integration (Implemented)
+
 - Added `Accept` and `Reject` actions inside the full-screen payment portal for pending records.
 - Action styling:
 - `Accept` = green
@@ -828,6 +901,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - rejected action remains destructive/red
 
 ### Reservations Kanban: Click Targets + Responsive Interaction (Implemented)
+
 - Large screens:
 - only the show name and customer name trigger the full-screen payment portal
 - both lines share grouped hover styling
@@ -841,6 +915,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - active drag = `grabbing`
 
 ### Reservations Kanban: Portal Action Placement + Mobile Typography (Implemented)
+
 - Desktop:
 - portal `Accept` / `Reject` actions are fixed under the proof-of-payment area and do not scroll away
 - Mobile:
@@ -848,6 +923,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Portal typography was reduced on mobile for a denser/smaller presentation without changing desktop sizing.
 
 ### Reservation Room UX + Validation (Implemented, This Session)
+
 - Main file updated:
 - `app/(app-user)/(events)/reserve/[showId]/[schedId]/ReserveSeatClient.tsx`
 - Upload/preview overlay cleanup:
@@ -889,6 +965,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - `Cancel` is on the left, `Leave Reservation Room` on the right.
 
 ### Upload Error Messaging UX (Implemented, This Session)
+
 - Shared uploader file updated:
 - `components/ui/image-upload-dropzone.tsx`
 - Improved non-technical error copy:
@@ -898,6 +975,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - Clicking the upload area again now clears the current error message.
 
 ### Superadmin Create-Show Team Picker Modal (Updated, This Session)
+
 - Files updated:
 - `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`
 - `components/ui/combobox.tsx`
@@ -919,6 +997,7 @@ In `prisma/schema.prisma`, `Show` includes:
 - shared trigger prevents focus-steal on mouse down to avoid the `aria-hidden` warning seen inside inertized modal structures
 
 ### Create Show Submission Performance (Updated, This Session)
+
 - Files updated:
 - `lib/actions/createShow.ts`
 - `app/(admin-user)/(dashboard)/admin/shows/create/CreateShowForm.tsx`
@@ -938,6 +1017,7 @@ In `prisma/schema.prisma`, `Show` includes:
 ## Session Updates (2026-03-14)
 
 ### Superadmin Create-Show Team Picker Load Timing + Dropdown Loading State (Implemented)
+
 - File updated:
 - `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`
 - Superadmin `New Show` flow now opens the assign-team modal immediately, then fetches teams only after the modal is open.
@@ -945,8 +1025,61 @@ In `prisma/schema.prisma`, `Show` includes:
 - Added `hasLoadedTeams` state so a successful empty-team response is treated as loaded and does not refetch on every dialog render.
 - While the fetch is pending, the combobox dropdown now shows an inline spinner (`Loader2`) beside `Loading teams...` inside the dropdown menu.
 
+### Show Status Guard Narrowing + Queue Redis Cleanup (Implemented)
+
+- Files updated:
+- `lib/shows/showStatusLifecycle.ts`
+- `lib/actions/updateShow.ts`
+- `lib/actions/updateShowStatus.ts`
+- `lib/db/Shows.ts`
+- `app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm.tsx`
+- Closing/cancelling a show is now guarded on the server by blocking reservation stages only:
+- `PENDING`
+- `CONFIRMED`
+- Old blanket "any reservation record blocks status change" behavior was removed.
+- New shared server helper:
+- `assertShowCanMoveToClosedStatus()`
+- Used by both full show update flow and status-only update flow.
+- When a show transitions to `CLOSED` or `CANCELLED`, queue cleanup now runs through shared lifecycle logic for every related schedule scope.
+- Important nuance for full show edits:
+- `updateShowAction` deletes/recreates schedules during save, so queue cleanup now uses both:
+- previous schedule IDs from the existing show
+- newly created schedule IDs from the current save
+- This avoids leaving stale Redis keys behind after a close/cancel save.
+- Queue lifecycle helper now centralizes OPEN / close-like transitions in:
+- `runShowQueueStatusTransition()`
+- Frontend guard still exists, but now matches the backend rule:
+- `ShowDetailForm.tsx` only blocks selecting `CLOSED` or `CANCELLED` when the show has blocking reservations in `PENDING` / `CONFIRMED`
+- `getShowById()` now returns:
+- `blockingReservationCount`
+- This is computed server-side and used for the frontend modal copy / guard.
+
+## Validation Rules
+
+- Always implement validation in both places when a form mutates server state:
+- client-side for immediate UX
+- server-side as the source of truth
+- The backend rule must be authoritative. Frontend validation may guide or pre-block, but server logic must independently enforce the same rule.
+- Do not use broad proxy checks when the real business rule is narrower.
+- Example learned here:
+- do not block show close/cancel just because any reservation exists
+- only block when reservations are in the blocking stages (`PENDING`, `CONFIRMED`)
+- Prefer server-provided derived validation inputs for frontend guards.
+- Example:
+- `blockingReservationCount` is computed in `lib/db/Shows.ts` and passed to the form, rather than re-deriving a looser rule in the client.
+- Validation UI should be field-level or action-level, not generic aggregated error lists, unless the workflow truly needs a summary.
+- Error copy should describe the exact blocking condition in business terms, not implementation terms.
+- If a transition/action has side effects beyond the DB write, validate first, then run side effects after persistence.
+- For this repo, queue/Redis lifecycle cleanup should run after the show status write succeeds.
+- If an edit flow destroys/recreates related records, any cleanup keyed by the old records must still consider the previous identifiers.
+- Example:
+- show close/cancel queue cleanup must include old schedule IDs, not only newly recreated schedule IDs.
+
 ## TODOs
+
 1. Send emails to customers when their reservation stage changes.
 2. Create a customizable ticket design builder (drag/drop components like Canva).
 3. Wire in the `walk in` mode on the admin side.
-4. Overall UI polishing.
+4. The email field in reservation room should have strict checking such as "@gmail.com". and should have confirmation modal ensuring the email and phone number is correct.
+5. add fields in teams model: contact number, email, facebook_account.
+6. Overall UI polishing.

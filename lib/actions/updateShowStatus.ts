@@ -2,9 +2,11 @@
 
 import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { initializeQueueChannel } from '@/lib/queue/initializeQueue';
-import { closeQueueChannel } from '@/lib/queue/closeQueue';
 import type { ShowStatus } from '@prisma/client';
+import {
+    assertShowCanMoveToClosedStatus,
+    runShowQueueStatusTransition,
+} from '@/lib/shows/showStatusLifecycle';
 
 /**
  * Update show status and manage queue lifecycle
@@ -23,6 +25,8 @@ export async function updateShowStatus(showId: string, newStatus: ShowStatus) {
 
         const oldStatus = show.show_status;
 
+        await assertShowCanMoveToClosedStatus(prisma, showId, newStatus);
+
         // Update show status
         const updatedShow = await prisma.show.update({
             where: { show_id: showId },
@@ -30,39 +34,12 @@ export async function updateShowStatus(showId: string, newStatus: ShowStatus) {
             include: { scheds: true },
         });
 
-        // Handle queue lifecycle based on status transition
-        const queueResults = [];
-
-        for (const sched of updatedShow.scheds) {
-            const showScopeId = `${showId}:${sched.sched_id}`;
-
-            try {
-                // Initialize queue when status changes to OPEN
-                if (newStatus === 'OPEN' && oldStatus !== 'OPEN') {
-                    const result = await initializeQueueChannel(showScopeId);
-                    queueResults.push(result);
-                }
-
-                // Close queue when status changes to CLOSED or CANCELLED
-                else if (
-                    (newStatus === 'CLOSED' || newStatus === 'CANCELLED') &&
-                    (oldStatus === 'OPEN' || oldStatus === 'ON_GOING')
-                ) {
-                    const result = await closeQueueChannel(
-                        showScopeId,
-                        newStatus === 'CANCELLED' ? 'cancelled' : 'closed'
-                    );
-                    queueResults.push(result);
-                }
-
-            } catch (queueError) {
-                console.error(
-                    `Queue operation failed for ${showScopeId}:`,
-                    queueError
-                );
-                // Continue with other schedules even if one fails
-            }
-        }
+        const queueResults = await runShowQueueStatusTransition({
+            showId,
+            oldStatus,
+            newStatus,
+            schedIds: updatedShow.scheds.map((sched) => sched.sched_id),
+        });
 
         // Revalidate relevant paths
         revalidatePath('/dashboard/shows');

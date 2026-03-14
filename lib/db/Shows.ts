@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma, ShowStatus } from "@prisma/client";
+import { ReservationStatus, type Prisma, type ShowStatus } from "@prisma/client";
 
 type AdminScope = {
   teamId: string | null;
@@ -85,37 +85,56 @@ export async function getShows(params?: {
 }
 
 export async function getShowById(showId: string) {
-  return prisma.show.findUnique({
-    where: { show_id: showId },
-    include: {
-      _count: {
-        select: {
-          reservations: true,
+  const [show, blockingReservationCount] = await prisma.$transaction([
+    prisma.show.findUnique({
+      where: { show_id: showId },
+      include: {
+        _count: {
+          select: {
+            reservations: true,
+          },
         },
-      },
-      scheds: {
-        include: {
-          seatAssignments: {
-            include: {
-              set: {
-                include: {
-                  seatCategory: true,
+        scheds: {
+          include: {
+            seatAssignments: {
+              include: {
+                set: {
+                  include: {
+                    seatCategory: true,
+                  },
                 },
               },
             },
           },
+          orderBy: { sched_start_time: "asc" },
         },
-        orderBy: { sched_start_time: "asc" },
-      },
-      categorySets: {
-        include: {
-          items: {
-            include: {
-              seatCategory: true,
+        categorySets: {
+          include: {
+            items: {
+              include: {
+                seatCategory: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.reservation.count({
+      where: {
+        show_id: showId,
+        status: {
+          in: [ReservationStatus.PENDING, ReservationStatus.CONFIRMED],
+        },
+      },
+    }),
+  ]);
+
+  if (!show) {
+    return null;
+  }
+
+  return {
+    ...show,
+    blockingReservationCount,
+  };
 }

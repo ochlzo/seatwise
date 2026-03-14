@@ -5,9 +5,11 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { ShowStatus } from "@prisma/client";
-import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
-import { closeQueueChannel } from "@/lib/queue/closeQueue";
 import { validateShowPayload } from "@/lib/actions/showValidation";
+import {
+  assertShowCanMoveToClosedStatus,
+  runShowQueueStatusTransition,
+} from "@/lib/shows/showStatusLifecycle";
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -182,11 +184,21 @@ export async function updateShowAction(
     // Get current show status for queue lifecycle management
     const currentShow = await prisma.show.findUnique({
       where: { show_id: showId },
-      select: { show_status: true, gcash_qr_image_key: true },
+      select: {
+        show_status: true,
+        gcash_qr_image_key: true,
+        scheds: {
+          select: {
+            sched_id: true,
+          },
+        },
+      },
     });
 
     const oldStatus = currentShow?.show_status;
     const newStatus = show_status;
+
+    const previousSchedIds = currentShow?.scheds.map((sched) => sched.sched_id) ?? [];
 
     let finalGcashQrImageUrl =
       gcash_qr_image_key?.trim() || currentShow?.gcash_qr_image_key || undefined;
@@ -242,6 +254,8 @@ export async function updateShowAction(
         validation: payloadValidation.validation,
       };
     }
+
+    await assertShowCanMoveToClosedStatus(prisma, showId, newStatus);
 
     // Transaction to update show, schedules, and category sets
     const schedIdMap = new Map<string, string>(); // temp_id -> db_sched_id
@@ -500,39 +514,12 @@ export async function updateShowAction(
     );
 
     // 🎯 QUEUE LIFECYCLE MANAGEMENT (After database transaction)
-    const queueResults = [];
-    const allSchedIds = Array.from(schedIdMap.values());
-
-    for (const schedId of allSchedIds) {
-      const showScopeId = `${showId}:${schedId}`;
-
-      try {
-        // Initialize queue when status changes to OPEN
-        if (newStatus === 'OPEN' && oldStatus !== 'OPEN') {
-          const result = await initializeQueueChannel(showScopeId);
-          queueResults.push(result);
-        }
-
-        // Close queue when status changes to CLOSED or CANCELLED
-        else if (
-          (newStatus === 'CLOSED' || newStatus === 'CANCELLED') &&
-          (oldStatus === 'OPEN' || oldStatus === 'ON_GOING')
-        ) {
-          const result = await closeQueueChannel(
-            showScopeId,
-            newStatus === 'CANCELLED' ? 'cancelled' : 'closed'
-          );
-          queueResults.push(result);
-        }
-
-      } catch (queueError) {
-        console.error(
-          `Queue operation failed for ${showScopeId}:`,
-          queueError
-        );
-        // Continue with other schedules even if one fails
-      }
-    }
+    const queueResults = await runShowQueueStatusTransition({
+      showId,
+      oldStatus,
+      newStatus,
+      schedIds: [...previousSchedIds, ...Array.from(schedIdMap.values())],
+    });
 
     revalidatePath("/admin/shows");
     revalidatePath(`/admin/shows/${showId}`);

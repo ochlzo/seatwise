@@ -259,6 +259,7 @@ type ShowDetail = {
       };
     }>;
   }>;
+  blockingReservationCount?: number;
   _count?: {
     reservations: number;
   };
@@ -897,12 +898,16 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     return "";
   }, [pendingStatus]);
 
-  const reservationCount = show._count?.reservations ?? 0;
-  const hasExistingReservations = reservationCount > 0;
+  const blockingReservationCount = show.blockingReservationCount ?? 0;
+  const hasBlockingReservations = blockingReservationCount > 0;
 
   const handleStatusSelection = React.useCallback((nextStatus: ShowStatus) => {
     if (nextStatus === formData.show_status) return;
-    if (hasExistingReservations) {
+
+    if (
+      (nextStatus === "CLOSED" || nextStatus === "CANCELLED") &&
+      hasBlockingReservations
+    ) {
       setIsStatusBlockedOpen(true);
       return;
     }
@@ -917,7 +922,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       ...prev,
       show_status: nextStatus,
     }));
-  }, [formData.show_status, hasExistingReservations]);
+  }, [formData.show_status, hasBlockingReservations]);
 
   const handleConfirmStatusChange = React.useCallback(() => {
     if (!pendingStatus) return;
@@ -2789,7 +2794,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
             </div>
             <DialogTitle>Status change not allowed</DialogTitle>
             <DialogDescription>
-              This show already has reservation records ({reservationCount}). Status changes are locked to protect existing customer bookings.
+              This show has {blockingReservationCount} pending or confirmed reservation(s). Resolve those bookings before changing the status to CLOSED or CANCELLED.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
