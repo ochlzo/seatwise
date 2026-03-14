@@ -935,6 +935,16 @@ In `prisma/schema.prisma`, `Show` includes:
 - GCash QR upload still happens server-side inside `createShowAction`
 - large seat-assignment/category-set payloads can still make show creation slow for complex seatmaps
 
+## Session Updates (2026-03-14)
+
+### Superadmin Create-Show Team Picker Load Timing + Dropdown Loading State (Implemented)
+- File updated:
+- `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`
+- Superadmin `New Show` flow now opens the assign-team modal immediately, then fetches teams only after the modal is open.
+- Team loading is no longer awaited before opening the dialog.
+- Added `hasLoadedTeams` state so a successful empty-team response is treated as loaded and does not refetch on every dialog render.
+- While the fetch is pending, the combobox dropdown now shows an inline spinner (`Loader2`) beside `Loading teams...` inside the dropdown menu.
+
 ## TODOs
 1. Send emails to customers when their reservation stage changes.
 2. Create a customizable ticket design builder (drag/drop components like Canva).

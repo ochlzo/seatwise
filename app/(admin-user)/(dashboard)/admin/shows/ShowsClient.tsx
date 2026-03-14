@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, MapPin, Ticket, Plus, Search } from "lucide-react";
+import { Calendar, Loader2, MapPin, Ticket, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
@@ -125,6 +125,7 @@ export default function ShowsPage({
   const [selectedTeamId, setSelectedTeamId] = React.useState("");
   const [selectedTeamName, setSelectedTeamName] = React.useState("");
   const [teams, setTeams] = React.useState<TeamOption[]>([]);
+  const [hasLoadedTeams, setHasLoadedTeams] = React.useState(false);
 
   React.useEffect(() => {
     const fetchShows = async () => {
@@ -210,6 +211,7 @@ export default function ShowsPage({
         team_id: team.team_id,
         name: team.name,
       })));
+      setHasLoadedTeams(true);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to load teams.");
     } finally {
@@ -231,7 +233,15 @@ export default function ShowsPage({
     setTeamSearchQuery("");
     setIsTeamComboboxOpen(false);
     setIsAssignTeamDialogOpen(true);
-  }, [createPath, isSuperadmin, loadTeams, router, teams.length]);
+  }, [createPath, isSuperadmin, router]);
+
+  React.useEffect(() => {
+    if (!isSuperadmin || !isAssignTeamDialogOpen || hasLoadedTeams || isLoadingTeams) {
+      return;
+    }
+
+    void loadTeams();
+  }, [hasLoadedTeams, isAssignTeamDialogOpen, isLoadingTeams, isSuperadmin, loadTeams]);
 
   const handleConfirmTeamAssignment = React.useCallback(() => {
     if (!selectedTeamId) return;
@@ -579,7 +589,10 @@ export default function ShowsPage({
                 <ComboboxList className="max-h-80">
                   {isLoadingTeams ? (
                     <ComboboxItem value="loading" disabled>
-                      Loading teams...
+                      <span className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading teams...
+                      </span>
                     </ComboboxItem>
                   ) : filteredTeams.length > 0 ? (
                     filteredTeams.map((team) => (
