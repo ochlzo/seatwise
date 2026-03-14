@@ -538,6 +538,156 @@ In `prisma/schema.prisma`, `Show` includes:
 - On cancel, the card now animates back toward the source column using a rollback ghost animation.
 - Rollback animation duration is currently `360ms`.
 
+## Latest Session Updates (2026-03-13 to 2026-03-14)
+
+### Reservation Number Tracking (Implemented)
+- Added `Reservation.reservation_number` as a required 4-digit string unique per show:
+- Prisma schema:
+- `@@unique([show_id, reservation_number])`
+- `@@index([reservation_number])`
+- Migration added:
+- `prisma/migrations/20260313120000_add_reservation_number_per_show/migration.sql`
+- Backfill behavior:
+- Existing reservations are assigned unique 4-digit values per `show_id` before `NOT NULL` is enforced.
+- Reservation complete flow now generates random `0000-9999` values with retry on unique conflict in:
+- `app/api/queue/complete/route.ts`
+- Reservation submission response now includes:
+- `reservationNumber`
+- Success UI now shows reservation number in:
+- `components/queue/ReservationSuccessPanel.tsx`
+- Submitted and status-update reservation emails now include reservation number in:
+- `lib/email/sendReservationSubmittedEmail.ts`
+- `lib/email/sendReservationStatusUpdateEmail.ts`
+- Admin reservations API/UI now include and surface reservation number in:
+- `app/api/reservations/route.ts`
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+
+### Reservation Submission Storage + Performance (Updated)
+- Payment submission screenshots are no longer stored as base64 in the database.
+- Current flow:
+- Client keeps screenshot as base64 in local component state until final submit.
+- On final submit, server uploads the image to Cloudinary folder:
+- `seatwise/settings/payment_submissions`
+- `Payment.screenshot_url` stores the Cloudinary `secure_url`.
+- Upload and reservation completion behavior implemented in:
+- `app/api/queue/complete/route.ts`
+- GCash upload panel still stages image locally in:
+- `components/queue/GcashUploadPanel.tsx`
+- Client-side screenshot preprocessing was added:
+- image is compressed/resized before submission payload is stored/sent
+- max dimension currently `1280`
+- output quality currently `0.78`
+- Reservation submit response time was reduced by:
+- moving seat reads/calculations outside the interactive Prisma transaction
+- setting explicit transaction timeout (`15000ms`)
+- sending reservation-submitted email asynchronously after API response path
+
+### Reservation Flow UX + Copy Updates (Updated)
+- In reservation room payment step:
+- Primary submit button text changed from `Confirm Reservation` to `Submit Reservation`
+- Added lightweight confirmation modal before final submit
+- Modal closes immediately after action and does not stay open for loading state
+- Mobile modal footer uses small inline buttons at bottom-right
+- Success state copy updated:
+- `Reservation Confirmed` -> `Reservation Submitted`
+- success message now reflects verification/review instead of final confirmation
+- Files updated:
+- `app/(app-user)/(events)/reserve/[showId]/[schedId]/ReserveSeatClient.tsx`
+- `components/queue/ReservationSuccessPanel.tsx`
+
+### Admin Reservations: Same-Customer Payment Separation + Multi-Seat Fix (Implemented)
+- Admin reservations cards are no longer grouped by customer identity (`email + phone`).
+- Each reservation/payment now renders as a separate Kanban card keyed by:
+- `payment_id` fallback `reservation_id`
+- This prevents same-customer multiple payments from collapsing into one card.
+- File updated:
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- Multi-seat reservation display bug fixed:
+- `/api/reservations` now returns all seat assignments for a reservation instead of only the first seat
+- Kanban seat counts, search, and reservation details modal now reflect all seats reserved under the same reservation
+- Files updated:
+- `app/api/reservations/route.ts`
+- `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+
+### Queue and Reservation Navigation Responsiveness (Updated)
+- Navigation actions were changed to avoid waiting on cleanup requests before route changes.
+- Reserve page updates:
+- leaving reservation room now navigates immediately and sends `/api/queue/leave` in background (`sendBeacon`/keepalive best effort)
+- external guarded navigation from reservation room now sends `/api/queue/terminate` in background and routes immediately
+- queue and show routes are prefetched from reservation room
+- Queue page updates:
+- `Maybe later`, `Back to show`, and guarded leave navigation now route immediately and run `/api/queue/terminate` in background
+- reserve/show routes are prefetched from queue page
+- Files updated:
+- `app/(app-user)/(events)/reserve/[showId]/[schedId]/ReserveSeatClient.tsx`
+- `app/(app-user)/(events)/queue/[showId]/[schedId]/QueueWaitingClient.tsx`
+
+### Queue Waiting UI + Back-Button Guard (Updated)
+- Queue waiting rank display changed:
+- label `Current rank` -> `You're in`
+- displayed rank now accounts for one active user already in reservation room (`rank + 2` display logic)
+- Mobile/tablet queue layout updated:
+- rank and estimated wait cards display inline
+- `Proceed to seat reservation` and `Maybe later` display inline and left-aligned
+- Browser back-button guard added while user has a terminable queue ticket:
+- pressing browser Back triggers `window.alert("Leaving this page will remove you from the queue.")`
+- current history state is immediately pushed again to keep user on queue page
+- File updated:
+- `app/(app-user)/(events)/queue/[showId]/[schedId]/QueueWaitingClient.tsx`
+
+### Public Show Detail Header (Updated)
+- On the public show detail route (`/<showId>`):
+- mobile/tablet header now replaces breadcrumb/title with a back button using `ArrowLeft`
+- back button routes to `/dashboard`
+- desktop keeps normal breadcrumb behavior
+- File updated:
+- `components/page-header.tsx`
+
+### Booking-Domain Cleanup Script (Added)
+- Added destructive script to clear the booking-related domain tables/models:
+- `scripts/clear-booking-domain.ts`
+- Added npm script:
+- `npm run bookings:clear -- --dry-run`
+- `npm run bookings:clear -- --yes`
+- Requested delete scope currently includes:
+- `reservation`
+- `reservedseat` (`reserved_seats`)
+- `categoryset`
+- `categorysetitem`
+- `payment`
+- `sched`
+- `seatassignment`
+- `seatcategory`
+- `set`
+- `show`
+
+### Team Assignment Modal for Superadmin Create-Show (Polished)
+- Existing superadmin create-show team assignment modal in:
+- `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`
+- Current state:
+- still uses `Combobox`
+- team list defaults to first 10 teams when query is empty
+- selecting via combobox sets `team_id` and routes to `/admin/shows/create?teamId=...`
+- dropdown popup is rendered into a container inside the dialog to keep it interactive
+- dropdown is forced to open downward for this modal instance:
+- `side="bottom"`
+- `align="start"`
+- collision avoidance disabled for this instance
+- dropdown list height increased (`max-h-80`)
+- dialog content for this modal allows visible overflow (`overflow-visible`)
+- empty message now only renders when no teams match or no teams exist, not at the bottom of a non-empty list
+- shared combobox wrapper updates in:
+- `components/ui/combobox.tsx`
+- portal `container` prop support added to `ComboboxContent`
+- combobox portal positioner z-index raised above dialog layer (`z-[10010]`)
+- trigger mouse-down now prevents focus-steal to avoid the `aria-hidden`/focused-descendant warning when used inside inertized dialog structures
+
+### Misc Operational Notes From This Session
+- Prisma client generation still hit Windows DLL lock in local workflow when dev server/process held the engine binary.
+- `npx prisma generate` may fail with `EPERM` until the locking process is stopped.
+- Type checks performed after the above changes:
+- `npx tsc --noEmit` (pass)
+
 ## Session Updates (2026-03-12)
 
 ### Public Show Seatmap Access Fix (Implemented)
@@ -746,6 +896,44 @@ In `prisma/schema.prisma`, `Show` includes:
 - Added clearer fallback messages for common rejections (invalid type, too many files).
 - Retry UX tweak:
 - Clicking the upload area again now clears the current error message.
+
+### Superadmin Create-Show Team Picker Modal (Updated, This Session)
+- Files updated:
+- `app/(admin-user)/(dashboard)/admin/shows/ShowsClient.tsx`
+- `components/ui/combobox.tsx`
+- Current team assignment modal behavior:
+- still uses `Combobox` for superadmin team selection before show creation
+- empty query now defaults to showing the first 10 teams
+- typing filters team names from the full loaded team list
+- dropdown is forced to open below the field for this modal instance:
+- `side="bottom"`
+- `align="start"`
+- collision avoidance disabled for that instance
+- dropdown list height increased (`max-h-80`)
+- dialog content now allows visible overflow so the dropdown is not clipped by the modal bounds
+- empty state text (`No teams found.`) now renders only when there are no matching teams or no teams in the DB, not at the bottom of a non-empty list
+- Interactivity/stacking fixes:
+- combobox popup is portaled into a container inside the dialog instead of the document body for this modal use case
+- shared combobox portal now supports custom `container`
+- shared combobox positioner z-index is above dialog layer (`z-[10010]`)
+- shared trigger prevents focus-steal on mouse down to avoid the `aria-hidden` warning seen inside inertized modal structures
+
+### Create Show Submission Performance (Updated, This Session)
+- Files updated:
+- `lib/actions/createShow.ts`
+- `app/(admin-user)/(dashboard)/admin/shows/create/CreateShowForm.tsx`
+- Create-show flow improvements:
+- loading state now starts immediately on submit in `CreateShowForm.tsx`, including the poster upload wait time
+- removed redundant `show.findUnique()` check inside the transaction in favor of handling the unique constraint error (`P2002`) for `show_name`
+- some normalization work is now done before entering the Prisma transaction:
+- normalized category set names
+- flattened unique category set/category key map
+- schedule creation inside the transaction is now parallelized with `Promise.all`
+- queue initialization after commit is now parallelized with `Promise.allSettled` instead of awaiting each schedule queue serially
+- Current remaining latency notes:
+- poster upload is still awaited on the client before `createShowAction`
+- GCash QR upload still happens server-side inside `createShowAction`
+- large seat-assignment/category-set payloads can still make show creation slow for complex seatmaps
 
 ## TODOs
 1. Send emails to customers when their reservation stage changes.

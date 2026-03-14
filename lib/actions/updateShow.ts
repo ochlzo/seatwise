@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import type { ShowStatus } from "@prisma/client";
 import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
 import { closeQueueChannel } from "@/lib/queue/closeQueue";
+import { validateShowPayload } from "@/lib/actions/showValidation";
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -165,33 +166,18 @@ export async function updateShowAction(
       category_sets = [],
     } = data;
 
-    if (!show_name?.trim()) {
-      throw new Error("Show name is required.");
-    }
-    if (!show_description?.trim()) {
-      throw new Error("Show description is required.");
-    }
-    if (!venue?.trim()) {
-      throw new Error("Venue is required.");
-    }
-    if (!address?.trim()) {
-      throw new Error("Address is required.");
-    }
-    if (!gcash_number?.trim()) {
-      throw new Error("GCash number is required.");
-    }
-    if (!gcash_account_name?.trim()) {
-      throw new Error("GCash account name is required.");
-    }
-    if (!show_status) {
-      throw new Error("Show status is required.");
-    }
-    if (!show_start_date) {
-      throw new Error("Show start date is required.");
-    }
-    if (!show_end_date) {
-      throw new Error("Show end date is required.");
-    }
+    const trimmedSeatmapId = seatmap_id?.trim() || null;
+    const seatmap = trimmedSeatmapId
+      ? await prisma.seatmap.findUnique({
+          where: { seatmap_id: trimmedSeatmapId },
+          select: {
+            seatmap_id: true,
+            seats: {
+              select: { seat_id: true },
+            },
+          },
+        })
+      : null;
 
     // Get current show status for queue lifecycle management
     const currentShow = await prisma.show.findUnique({
@@ -230,6 +216,33 @@ export async function updateShowAction(
       throw new Error("GCash QR image is required.");
     }
 
+    const payloadValidation = validateShowPayload({
+      show_name,
+      show_description,
+      venue,
+      address,
+      show_status,
+      show_start_date,
+      show_end_date,
+      gcash_qr_image_key: finalGcashQrImageUrl,
+      gcash_qr_image_base64: undefined,
+      gcash_number,
+      gcash_account_name,
+      seatmap_id: trimmedSeatmapId,
+      scheds,
+      categorySets: category_sets,
+      seatIds: seatmap?.seats.map((seat) => seat.seat_id) ?? [],
+      seatmapExists: Boolean(seatmap),
+    });
+
+    if (payloadValidation.hasValidationErrors) {
+      return {
+        success: false,
+        error: payloadValidation.errorMessage,
+        validation: payloadValidation.validation,
+      };
+    }
+
     // Transaction to update show, schedules, and category sets
     const schedIdMap = new Map<string, string>(); // temp_id -> db_sched_id
 
@@ -249,7 +262,7 @@ export async function updateShowAction(
             gcash_qr_image_key: finalGcashQrImageUrl?.trim() || undefined,
             gcash_number: gcash_number?.trim() || undefined,
             gcash_account_name: gcash_account_name?.trim() || undefined,
-            seatmap_id: seatmap_id || undefined,
+            seatmap_id: trimmedSeatmapId || undefined,
           },
         });
 
@@ -288,7 +301,7 @@ export async function updateShowAction(
         }
 
         // 4. Create category sets if provided
-        if (category_sets.length > 0 && seatmap_id) {
+        if (category_sets.length > 0 && trimmedSeatmapId) {
           const allDbSchedIds = Array.from(schedIdMap.values());
 
           // Create/Reuse Categories
@@ -311,7 +324,7 @@ export async function updateShowAction(
           // Find existing categories that match name, price, AND color
           const existingCategories = await tx.seatCategory.findMany({
             where: {
-              seatmap_id,
+              seatmap_id: trimmedSeatmapId,
               OR: uniqueCategories.map((c) => ({
                 category_name: c.category_name,
                 price: c.price,
@@ -337,7 +350,7 @@ export async function updateShowAction(
                 category_name: c.category_name,
                 price: c.price,
                 color_code: c.color_code,
-                seatmap_id,
+                seatmap_id: trimmedSeatmapId,
               })),
               skipDuplicates: true,
             });
@@ -346,7 +359,7 @@ export async function updateShowAction(
           // Re-fetch all to get IDs for the ones we need
           const allCategories = await tx.seatCategory.findMany({
             where: {
-              seatmap_id,
+              seatmap_id: trimmedSeatmapId,
               OR: uniqueCategories.map((c) => ({
                 category_name: c.category_name,
                 price: c.price,
@@ -443,7 +456,14 @@ export async function updateShowAction(
             for (const [seatId, catName] of Object.entries(
               setItem.seat_assignments,
             )) {
-              const key = `${catName.trim().toLowerCase()}|${Number(setItem.categories.find((c) => c.category_name === catName)?.price || 0).toString()}|${setItem.categories.find((c) => c.category_name === catName)?.color_code}`;
+              const normalizedCategoryName = catName.trim().toLowerCase();
+              const matchedCategory = setItem.categories.find(
+                (category) =>
+                  category.category_name.trim().toLowerCase() === normalizedCategoryName,
+              );
+              if (!matchedCategory) continue;
+
+              const key = `${normalizedCategoryName}|${Number(matchedCategory.price).toString()}|${matchedCategory.color_code}`;
               const seat_category_id = categoryIdLookup.get(key);
               if (!seat_category_id) continue;
 

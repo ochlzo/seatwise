@@ -3,9 +3,10 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import type { ColorCodes, ShowStatus } from "@prisma/client";
+import { Prisma, type ColorCodes, type ShowStatus } from "@prisma/client";
 import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
 import { getCurrentAdminContext } from "@/lib/auth/adminContext";
+import { validateShowPayload } from "@/lib/actions/showValidation";
 
 type CreateShowPayload = {
   team_id?: string;
@@ -154,69 +155,69 @@ export async function createShowAction(data: CreateShowPayload) {
           seat_assignments: undefined,
         }));
 
-    const hasDateRange = !!show_start_date && !!show_end_date;
-    const dateRangeInvalid = hasDateRange
-      ? toDateOnly(show_start_date).getTime() > toDateOnly(show_end_date).getTime()
-      : false;
-    const requiresSeatmap = show_status === "UPCOMING" || show_status === "OPEN";
+    const normalizedSetNames = normalizedCategorySets.map((setItem, index) =>
+      setItem.set_name?.trim() || `Set ${index + 1}`
+    );
+    const flatCategories = normalizedCategorySets.flatMap(
+      (setItem) => setItem.categories
+    );
+    const uniqueCategoryMap = new Map<string, (typeof flatCategories)[number]>();
+    flatCategories.forEach((category) => {
+      const key = `${category.category_name.trim().toLowerCase()}|${Number(category.price).toString()}|${category.color_code}`;
+      if (!uniqueCategoryMap.has(key)) {
+        uniqueCategoryMap.set(key, category);
+      }
+    });
+    const uniqueCategories = Array.from(uniqueCategoryMap.values());
 
-    const fieldErrors = {
-      show_name: !show_name?.trim(),
-      show_description: !show_description?.trim(),
-      venue: !venue?.trim(),
-      address: !address?.trim(),
-      show_status: !show_status,
-      show_start_date: !show_start_date || dateRangeInvalid,
-      show_end_date: !show_end_date || dateRangeInvalid,
-      gcash_qr_image_key: !gcash_qr_image_key?.trim() && !gcash_qr_image_base64?.trim(),
-      gcash_number: !gcash_number?.trim(),
-      gcash_account_name: !gcash_account_name?.trim(),
-      seatmap_id: requiresSeatmap && !seatmap_id?.trim(),
-    };
+    const trimmedSeatmapId = seatmap_id?.trim();
+    const seatmap = trimmedSeatmapId
+      ? await prisma.seatmap.findUnique({
+          where: { seatmap_id: trimmedSeatmapId },
+          select: {
+            seatmap_id: true,
+            seats: {
+              select: { seat_id: true },
+            },
+          },
+        })
+      : null;
 
-    const cardErrors = {
-      schedule: requiresSeatmap && scheds.length === 0,
-      seatmap:
-        (requiresSeatmap && !seatmap_id?.trim()) ||
-        (!!seatmap_id?.trim() && normalizedCategorySets.length === 0),
-      gcash:
-        fieldErrors.gcash_qr_image_key ||
-        fieldErrors.gcash_number ||
-        fieldErrors.gcash_account_name,
-    };
+    const payloadValidation = validateShowPayload({
+      show_name,
+      show_description,
+      venue,
+      address,
+      show_status,
+      show_start_date,
+      show_end_date,
+      gcash_qr_image_key,
+      gcash_qr_image_base64,
+      gcash_number,
+      gcash_account_name,
+      seatmap_id: trimmedSeatmapId,
+      scheds,
+      categorySets: normalizedCategorySets,
+      seatIds: seatmap?.seats.map((seat) => seat.seat_id) ?? [],
+      seatmapExists: Boolean(seatmap),
+    });
 
-    if (
-      Object.values(fieldErrors).some(Boolean) ||
-      Object.values(cardErrors).some(Boolean)
-    ) {
+    if (payloadValidation.hasValidationErrors) {
       return {
         success: false,
-        error: "Please complete all required fields.",
-        validation: { fieldErrors, cardErrors },
+        error: payloadValidation.errorMessage,
+        validation: payloadValidation.validation,
       };
     }
 
     if (normalizedCategorySets.length > 0) {
-      // Validate unique set_name
-      const normalizedNames = normalizedCategorySets.map((s, i) =>
-        (s.set_name?.trim() || `Set ${i + 1}`)
-      );
-      const seenNames = new Set<string>();
-      for (const name of normalizedNames) {
-        const key = name.toLowerCase();
-        if (seenNames.has(key)) {
-          throw new Error(`Duplicate category set name in request: "${name}"`);
-        }
-        seenNames.add(key);
-      }
-
       // Validate schedule coverage and overlaps using client_ids
       // Note: 'scheds' input contains client_ids. 'category_sets' refers to these client_ids.
       const allClientSchedIds = scheds.map((s) => s.client_id);
 
       const clientSchedToSetName = new Map<string, string>();
       normalizedCategorySets.forEach((setItem, i) => {
-        const setName = normalizedNames[i];
+        const setName = normalizedSetNames[i];
         const targetIds = setItem.sched_ids; // These are client_ids from inputs
 
         for (const clientId of targetIds) {
@@ -238,7 +239,7 @@ export async function createShowAction(data: CreateShowPayload) {
           );
         }
       }
-    } else if (scheds.length > 0 && !seatmap_id) {
+    } else if (scheds.length > 0 && !trimmedSeatmapId) {
       // Allow DRAFT shows to have schedules without seatmap/category sets
       // No validation needed here
     }
@@ -269,14 +270,6 @@ export async function createShowAction(data: CreateShowPayload) {
 
     const show = await prisma.$transaction(
       async (tx) => {
-        const existingShow = await tx.show.findUnique({
-          where: { show_name },
-          select: { show_id: true },
-        });
-        if (existingShow) {
-          throw new Error("Show name already exists");
-        }
-
         const created = await tx.show.create({
           data: {
             show_name,
@@ -291,46 +284,40 @@ export async function createShowAction(data: CreateShowPayload) {
             gcash_number: gcash_number?.trim() || undefined,
             gcash_account_name: gcash_account_name?.trim() || undefined,
             team_id: adminTeamId,
-            seatmap_id: seatmap_id || undefined, // Allow undefined for DRAFT shows
+            seatmap_id: trimmedSeatmapId || undefined, // Allow undefined for DRAFT shows
           },
         });
 
         // Create Schedules
-        for (const sched of scheds) {
-          const createdSched = await tx.sched.create({
-            data: {
-              show_id: created.show_id,
-              sched_date: toDateOnly(sched.sched_date),
-              sched_start_time: toTime(sched.sched_start_time),
-              sched_end_time: toTime(sched.sched_end_time),
-            },
-          });
-          schedIdMap.set(sched.client_id, createdSched.sched_id);
-        }
+        const createdScheds = await Promise.all(
+          scheds.map((sched) =>
+            tx.sched.create({
+              data: {
+                show_id: created.show_id,
+                sched_date: toDateOnly(sched.sched_date),
+                sched_start_time: toTime(sched.sched_start_time),
+                sched_end_time: toTime(sched.sched_end_time),
+              },
+            })
+          )
+        );
+        createdScheds.forEach((createdSched, index) => {
+          schedIdMap.set(scheds[index].client_id, createdSched.sched_id);
+        });
 
         if (normalizedCategorySets.length > 0) {
           // Category sets require a seatmap
-          if (!seatmap_id) {
+          if (!trimmedSeatmapId) {
             throw new Error("Cannot create category sets without a seatmap");
           }
 
           const allDbSchedIds = Array.from(schedIdMap.values());
 
           // Create/Reuse Categories
-          const flatCategories = normalizedCategorySets.flatMap((setItem) => setItem.categories);
-          const uniqueCategoryMap = new Map<string, (typeof flatCategories)[number]>();
-          flatCategories.forEach((category) => {
-            const key = `${category.category_name.trim().toLowerCase()}|${Number(category.price).toString()}|${category.color_code}`;
-            if (!uniqueCategoryMap.has(key)) {
-              uniqueCategoryMap.set(key, category);
-            }
-          });
-          const uniqueCategories = Array.from(uniqueCategoryMap.values());
-
           // Find existing categories that match name, price, AND color
           const existingCategories = await tx.seatCategory.findMany({
             where: {
-              seatmap_id,
+              seatmap_id: trimmedSeatmapId,
               OR: uniqueCategories.map((c) => ({
                 category_name: c.category_name,
                 price: c.price,
@@ -355,7 +342,7 @@ export async function createShowAction(data: CreateShowPayload) {
                 category_name: c.category_name,
                 price: c.price,
                 color_code: c.color_code,
-                seatmap_id,
+                seatmap_id: trimmedSeatmapId,
               })),
               skipDuplicates: true,
             });
@@ -364,7 +351,7 @@ export async function createShowAction(data: CreateShowPayload) {
           // Re-fetch all to get IDs for the ones we need
           const allCategories = await tx.seatCategory.findMany({
             where: {
-              seatmap_id,
+              seatmap_id: trimmedSeatmapId,
               OR: uniqueCategories.map((c) => ({
                 category_name: c.category_name,
                 price: c.price,
@@ -384,7 +371,7 @@ export async function createShowAction(data: CreateShowPayload) {
           // Create Category Sets and Links
           for (let index = 0; index < normalizedCategorySets.length; index += 1) {
             const setItem = normalizedCategorySets[index];
-            const setName = setItem.set_name?.trim() || `Set ${index + 1}`;
+            const setName = normalizedSetNames[index];
 
             const createdSet = await tx.categorySet.create({
               data: {
@@ -456,7 +443,14 @@ export async function createShowAction(data: CreateShowPayload) {
               .filter(Boolean) as string[];
 
             for (const [seatId, catName] of Object.entries(setItem.seat_assignments)) {
-              const key = `${catName.trim().toLowerCase()}|${Number(setItem.categories.find(c => c.category_name === catName)?.price || 0).toString()}|${setItem.categories.find(c => c.category_name === catName)?.color_code}`;
+              const normalizedCategoryName = catName.trim().toLowerCase();
+              const matchedCategory = setItem.categories.find(
+                (category) =>
+                  category.category_name.trim().toLowerCase() === normalizedCategoryName,
+              );
+              if (!matchedCategory) continue;
+
+              const key = `${normalizedCategoryName}|${Number(matchedCategory.price).toString()}|${matchedCategory.color_code}`;
               const seat_category_id = categoryIdLookup.get(key);
               if (!seat_category_id) continue;
 
@@ -496,24 +490,29 @@ export async function createShowAction(data: CreateShowPayload) {
 
     // 🎯 QUEUE LIFECYCLE MANAGEMENT (After database transaction)
     // Initialize queues if show is created with OPEN status
-    const queueResults = [];
+    const queueResults: Array<Awaited<ReturnType<typeof initializeQueueChannel>>> = [];
     const allSchedIds = Array.from(schedIdMap.values());
 
     if (show_status === 'OPEN' && allSchedIds.length > 0) {
-      for (const schedId of allSchedIds) {
-        const showScopeId = `${show.show_id}:${schedId}`;
+      const queueInitResults = await Promise.allSettled(
+        allSchedIds.map((schedId) => {
+          const showScopeId = `${show.show_id}:${schedId}`;
+          return initializeQueueChannel(showScopeId);
+        })
+      );
 
-        try {
-          const result = await initializeQueueChannel(showScopeId);
-          queueResults.push(result);
-        } catch (queueError) {
-          console.error(
-            `Queue initialization failed for ${showScopeId}:`,
-            queueError
-          );
-          // Continue with other schedules even if one fails
+      queueInitResults.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          queueResults.push(result.value);
+          return;
         }
-      }
+
+        const showScopeId = `${show.show_id}:${allSchedIds[index]}`;
+        console.error(
+          `Queue initialization failed for ${showScopeId}:`,
+          result.reason
+        );
+      });
     }
 
     revalidatePath("/admin/shows");
@@ -524,6 +523,17 @@ export async function createShowAction(data: CreateShowPayload) {
       queueResults: queueResults.length > 0 ? queueResults : undefined,
     };
   } catch (error: unknown) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const targets = Array.isArray(error.meta?.target)
+        ? error.meta.target.map(String)
+        : [];
+      if (targets.includes("show_name")) {
+        return { success: false, error: "Show name already exists" };
+      }
+    }
     console.error("Error in createShowAction:", error);
     const message =
       error instanceof Error ? error.message : "Failed to create show";

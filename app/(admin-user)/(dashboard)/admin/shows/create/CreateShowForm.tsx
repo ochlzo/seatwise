@@ -46,6 +46,8 @@ import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
 import type { SeatmapState } from "@/lib/seatmap/types";
 import { uploadImageToCloudinary } from "@/lib/clients/cloudinary-upload";
+import { useAppDispatch } from "@/lib/hooks";
+import { setLoading } from "@/lib/features/loading/isLoadingSlice";
 // import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const STATUS_OPTIONS = [
@@ -116,6 +118,7 @@ type CreateShowFormProps = {
 
 export function CreateShowForm({ teamId }: CreateShowFormProps) {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const [isSaving, setIsSaving] = React.useState(false);
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
   const [isStatusConfirmOpen, setIsStatusConfirmOpen] = React.useState(false);
@@ -450,33 +453,56 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
   }, [categorySets, scheds]);
 
   // Count total seats in seatmap
-  const totalSeatsCount = React.useMemo(() => {
-    if (!seatmapData || !seatmapData.nodes) return 0;
-    return Object.values(seatmapData.nodes).filter(
-      (node) => node.type === "seat"
-    ).length;
+  const seatNodeIds = React.useMemo(() => {
+    if (!seatmapData?.nodes) return [] as string[];
+    return Object.values(seatmapData.nodes)
+      .filter((node) => node.type === "seat")
+      .map((node) => node.id);
   }, [seatmapData]);
 
-  // Validate that EACH category set has ALL seats assigned
-  const incompleteCategorySets = React.useMemo(() => {
-    if (!totalSeatsCount || categorySets.length === 0) return [];
+  const totalSeatsCount = React.useMemo(() => {
+    return seatNodeIds.length;
+  }, [seatNodeIds]);
+
+  // Validate that EACH category set has valid assignments for all seats in the seatmap.
+  const seatAssignmentIssues = React.useMemo(() => {
+    if (!seatNodeIds.length || categorySets.length === 0) return [];
+
+    const validSeatIds = new Set(seatNodeIds);
 
     return categorySets
       .map((setItem, index) => {
-        const assignedInThisSet = setItem.seatAssignments
-          ? Object.keys(setItem.seatAssignments).length
-          : 0;
+        const validCategoryIds = new Set(setItem.categories.map((category) => category.id));
+        const validAssignedSeatIds = new Set<string>();
+        let invalidAssignments = 0;
 
-        if (assignedInThisSet < totalSeatsCount) {
+        Object.entries(setItem.seatAssignments ?? {}).forEach(([seatId, categoryId]) => {
+          if (!validSeatIds.has(seatId) || !validCategoryIds.has(categoryId)) {
+            invalidAssignments += 1;
+            return;
+          }
+          validAssignedSeatIds.add(seatId);
+        });
+
+        const missing = seatNodeIds.reduce((count, seatId) => {
+          return validAssignedSeatIds.has(seatId) ? count : count + 1;
+        }, 0);
+
+        if (missing > 0 || invalidAssignments > 0) {
           return {
             setName: setItem.set_name || `Set ${index + 1}`,
-            missing: totalSeatsCount - assignedInThisSet,
+            missing,
+            invalidAssignments,
           };
         }
         return null;
       })
-      .filter(Boolean) as Array<{ setName: string; missing: number }>;
-  }, [categorySets, totalSeatsCount]);
+      .filter(Boolean) as Array<{
+        setName: string;
+        missing: number;
+        invalidAssignments: number;
+      }>;
+  }, [categorySets, seatNodeIds]);
 
   const validationState = React.useMemo(() => {
     const requiresSeatmap = formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
@@ -514,7 +540,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       (categorySets.length === 0 ||
         (scheds.length > 0 && unassignedSchedCount > 0) ||
         hasInvalidCategory ||
-        incompleteCategorySets.length > 0);
+        seatAssignmentIssues.length > 0);
 
     const cardErrors = {
       schedule:
@@ -534,10 +560,36 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     categorySets,
     scheds.length,
     unassignedSchedCount,
-    incompleteCategorySets.length,
+    seatAssignmentIssues.length,
     scheduleCoverage.missingDates.length,
     hasOverlappingSchedules,
   ]);
+
+  const seatAssignmentIssueMessage = React.useMemo(() => {
+    if (seatAssignmentIssues.length === 0) return null;
+
+    const labels = seatAssignmentIssues.slice(0, 2).map((issue) => {
+      const parts: string[] = [];
+      if (issue.missing > 0) {
+        parts.push(
+          `${issue.missing} unassigned seat${issue.missing === 1 ? "" : "s"}`
+        );
+      }
+      if (issue.invalidAssignments > 0) {
+        parts.push(
+          `${issue.invalidAssignments} invalid assignment${issue.invalidAssignments === 1 ? "" : "s"}`
+        );
+      }
+      return `${issue.setName}: ${parts.join(", ")}`;
+    });
+
+    const suffix =
+      seatAssignmentIssues.length > 2
+        ? ` +${seatAssignmentIssues.length - 2} more`
+        : "";
+
+    return `Assign every seat to a valid category before creating the show. ${labels.join(" | ")}${suffix}.`;
+  }, [seatAssignmentIssues]);
 
   const scheduleIssueMessage = React.useMemo(() => {
     if (scheduleCoverage.missingDates.length > 0) {
@@ -848,64 +900,68 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
   const handleSave = async () => {
     if (!isFormValid) return;
 
+    setIsSaving(true);
     const validScheds = scheds.filter(
       (s) => s.sched_date && s.sched_start_time && s.sched_end_time
     );
 
-    let imageUrl: string | undefined;
-    if (imageFile) {
-      const uploaded = await uploadImageToCloudinary(imageFile, "show-thumbnail");
-      imageUrl = uploaded.secureUrl;
+    try {
+      let imageUrl: string | undefined;
+      if (imageFile) {
+        const uploaded = await uploadImageToCloudinary(imageFile, "show-thumbnail");
+        imageUrl = uploaded.secureUrl;
+      }
+
+      // @ts-expect-error server action typing isn't compatible with direct client invocation
+      const result = await createShowAction({
+        ...formData,
+        team_id: teamId || undefined,
+        seatmap_id: formData.seatmap_id,
+        scheds: validScheds.map((sched) => ({
+          client_id: sched.id,
+          sched_date: sched.sched_date,
+          sched_start_time: sched.sched_start_time,
+          sched_end_time: sched.sched_end_time,
+        })),
+        category_sets: categorySets.map((setItem, index) => {
+          // Map seatAssignments (seatId -> categoryId) to (seatId -> categoryName)
+          const assignmentsByName: Record<string, string> = {};
+          if (setItem.seatAssignments) {
+            Object.entries(setItem.seatAssignments).forEach(([seatId, categoryId]) => {
+              const category = setItem.categories.find((c) => c.id === categoryId);
+              if (category) {
+                assignmentsByName[seatId] = category.category_name.trim() || "Untitled";
+              }
+            });
+          }
+
+          return {
+            set_name: setItem.set_name.trim() || `Set ${index + 1}`,
+            apply_to_all: setItem.apply_to_all,
+            sched_ids: setItem.sched_ids,
+            categories: setItem.categories.map((category) => ({
+              category_name: category.category_name.trim() || "Untitled",
+              price: category.price,
+              color_code: category.color_code,
+            })),
+            seat_assignments: assignmentsByName,
+          };
+        }),
+        show_image_key: imageUrl,
+        gcash_qr_image_base64: gcashQrImageBase64,
+      });
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to create show");
+        return;
+      }
+
+      toast.success("Show created successfully");
+      dispatch(setLoading(true));
+      router.push(`/admin/shows/${result.showId}`);
+    } finally {
+      setIsSaving(false);
     }
-
-    setIsSaving(true);
-    // @ts-expect-error server action typing isn't compatible with direct client invocation
-    const result = await createShowAction({
-      ...formData,
-      team_id: teamId || undefined,
-      seatmap_id: formData.seatmap_id,
-      scheds: validScheds.map((sched) => ({
-        client_id: sched.id,
-        sched_date: sched.sched_date,
-        sched_start_time: sched.sched_start_time,
-        sched_end_time: sched.sched_end_time,
-      })),
-      category_sets: categorySets.map((setItem, index) => {
-        // Map seatAssignments (seatId -> categoryId) to (seatId -> categoryName)
-        const assignmentsByName: Record<string, string> = {};
-        if (setItem.seatAssignments) {
-          Object.entries(setItem.seatAssignments).forEach(([seatId, categoryId]) => {
-            const category = setItem.categories.find((c) => c.id === categoryId);
-            if (category) {
-              assignmentsByName[seatId] = category.category_name.trim() || "Untitled";
-            }
-          });
-        }
-
-        return {
-          set_name: setItem.set_name.trim() || `Set ${index + 1}`,
-          apply_to_all: setItem.apply_to_all,
-          sched_ids: setItem.sched_ids,
-          categories: setItem.categories.map((category) => ({
-            category_name: category.category_name.trim() || "Untitled",
-            price: category.price,
-            color_code: category.color_code,
-          })),
-          seat_assignments: assignmentsByName,
-        };
-      }),
-      show_image_key: imageUrl,
-      gcash_qr_image_base64: gcashQrImageBase64,
-    });
-    setIsSaving(false);
-
-    if (!result.success) {
-      toast.error(result.error || "Failed to create show");
-      return;
-    }
-
-    toast.success("Show created successfully");
-    router.push(`/admin/shows/${result.showId}`);
   };
 
   return (
@@ -1468,6 +1524,12 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
               <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-6 text-sm text-muted-foreground">
                 No category sets yet. Add one to start pricing.
               </div>
+            )}
+
+            {seatAssignmentIssueMessage && (
+              <p className="text-xs text-destructive">
+                {seatAssignmentIssueMessage}
+              </p>
             )}
 
             <div className="space-y-4">
