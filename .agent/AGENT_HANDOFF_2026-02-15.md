@@ -1113,6 +1113,171 @@ In `prisma/schema.prisma`, `Show` includes:
 - Important implementation detail:
 - when structural edits are locked but a save is still allowed, `updateShowAction` preserves existing schedule IDs for queue lifecycle handling so status-related queue cleanup/init still works.
 
+### Schedule-Aware Show/Schedule Status Refactor (Implemented)
+
+- Files added/updated:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260314183000_add_sched_status/migration.sql`
+- `lib/shows/effectiveStatus.ts`
+- `lib/shows/showStatusLifecycle.ts`
+- `lib/db/Shows.ts`
+- `lib/actions/updateShow.ts`
+- `lib/actions/updateShowStatus.ts`
+- `app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm.tsx`
+- `app/(app-user)/(events)/[showId]/page.tsx`
+- `components/queue/ReserveNowButton.tsx`
+- `app/api/queue/join/route.ts`
+- `app/api/queue/status/route.ts`
+- `app/api/queue/active/route.ts`
+- `app/api/queue/complete/route.ts`
+- `app/api/reservations/reject/route.ts`
+- `app/api/reservations/stage/route.ts`
+
+#### Prisma/Data Model
+
+- Added new enum in Prisma:
+- `SchedStatus`
+- Values:
+- `ON_GOING`
+- `FULLY_BOOKED`
+- `CLOSED`
+- Added nullable `Sched.status`.
+- Migration added:
+- `20260314183000_add_sched_status`
+- Current intended persistence model:
+- `FULLY_BOOKED` is persisted on `Sched.status`
+- `ON_GOING` and time-based `CLOSED` are derived on read using Manila time
+
+#### Shared Effective Status Helper
+
+- New helper:
+- `lib/shows/effectiveStatus.ts`
+- Provides:
+- `getEffectiveSchedStatus()`
+- returns:
+- `OPEN`
+- `ON_GOING`
+- `FULLY_BOOKED`
+- `CLOSED`
+- precedence:
+- past end time => `CLOSED`
+- current Manila time within schedule window => `ON_GOING`
+- persisted `Sched.status === FULLY_BOOKED` => `FULLY_BOOKED`
+- otherwise => `OPEN`
+- `getEffectiveShowStatus()`
+- current behavior:
+- if stored `show.show_status` is not `OPEN`, it remains authoritative
+- if stored status is `OPEN` and any schedule is on-going => effective show status becomes `ON_GOING`
+- if stored status is `OPEN` and all schedules are past end time => effective show status becomes `CLOSED`
+- otherwise => `OPEN`
+- `countBlockingReservations()`
+- server-side count for `PENDING` + `CONFIRMED` reservations only
+- `hasShowReachedFinalScheduleEnd()`
+- checks last-schedule-end condition in Manila time
+- `syncScheduleCapacityStatuses()`
+- event-driven schedule capacity sync:
+- if a schedule has zero open seat assignments => persist `Sched.status = FULLY_BOOKED`
+- if open seats become available again => clear persisted status back to `null`
+
+#### Show Edit Flow Status Copy + Manual Status Restrictions
+
+- `ShowDetailForm.tsx` blocked-status modal copy now varies by target status for the requested `OPEN -> ...` cases:
+- `DRAFT`
+- `You cannot change this OPEN production back to DRAFT because it already has <count> active reservations (only pending / confirmed)`
+- `UPCOMING`
+- `You cannot change this OPEN production back to UPCOMING because it already has <count> active reservations (only pending / confirmed)`
+- `CANCELLED`
+- `You cannot change this OPEN production to CANCELLED because it already has <count> active reservations (only pending / confirmed)`
+- `CLOSED`
+- `You cannot change this OPEN production to CLOSED before the show even starts.`
+- Manual show-status options in the edit form now exclude:
+- `ON_GOING`
+- `CLOSED`
+- These statuses are now treated as derived/automatic after launch rather than manually selectable in the frontend.
+
+#### Backend Restricted Status Validation
+
+- `assertShowCanMoveToRestrictedStatus()` in `lib/shows/showStatusLifecycle.ts` now accepts:
+- current status
+- next status
+- show ID
+- Behavior:
+- `DRAFT`
+- `UPCOMING`
+- `CANCELLED`
+- blocked server-side when the show has `PENDING` / `CONFIRMED` reservations
+- `CLOSED`
+- blocked server-side until the show has actually passed the end of its final schedule in Manila time
+- The frontend guard still exists for UX, but backend enforcement is authoritative.
+
+#### Derived Show Status on Read
+
+- `lib/db/Shows.ts` now derives show status in read/query shaping instead of relying only on stored `show.show_status`.
+- `getShows()`:
+- fetches schedule timing/status data
+- derives effective show status per row
+- applies status filtering after deriving the status
+- `getShowById()`:
+- returns derived `show_status`
+- returns each schedule with `effective_status`
+- continues to return `blockingReservationCount` for frontend validation
+
+#### Public Event Page + Reserve Entry Rules
+
+- `app/(app-user)/(events)/[showId]/page.tsx` now serializes schedule `effective_status`.
+- Reserve button visibility is now based on whether the show has at least one reservable schedule (`effective_status === OPEN`), not only on stored `show_status === OPEN`.
+- Result:
+- a show can be effectively `ON_GOING` and still remain bookable overall if there are future schedules that are still open
+
+#### Schedule Picker UI Behavior
+
+- `components/queue/ReserveNowButton.tsx` now supports per-schedule effective status.
+- Schedule cards now:
+- show badge in the upper-right for:
+- `ON_GOING`
+- `FULLY_BOOKED`
+- `CLOSED`
+- disable click/selection for:
+- `ON_GOING`
+- `FULLY_BOOKED`
+- `CLOSED`
+- Only schedules with effective status `OPEN` remain selectable.
+
+#### Queue/Reservation Backend Enforcement
+
+- Updated queue/reserve-related routes to use effective schedule/show status instead of relying only on stored `show.show_status`:
+- `POST /api/queue/join`
+- `GET /api/queue/status`
+- `POST /api/queue/active`
+- `POST /api/queue/complete`
+- Current enforcement:
+- queue join / active validation / completion now reject schedules unless `getEffectiveSchedStatus(...) === OPEN`
+- queue endpoints also treat effective show statuses `OPEN` and `ON_GOING` as reservable at the show level
+- This preserves the ability to reserve future schedules while another schedule in the same show is currently on-going
+
+#### Fully Booked Triggering/Clearing
+
+- `FULLY_BOOKED` is now maintained in event-driven seat mutation paths.
+- After reservation completion:
+- `app/api/queue/complete/route.ts`
+- runs `syncScheduleCapacityStatuses()` after seats are reserved
+- After reopening seats on rejection/cancellation flows:
+- `app/api/reservations/reject/route.ts`
+- `app/api/reservations/stage/route.ts`
+- runs `syncScheduleCapacityStatuses()` so `FULLY_BOOKED` can clear automatically when seats become available again
+- No cron/poller was added for this behavior.
+
+#### Verification Status / Current Gaps
+
+- Verified:
+- `npx prisma generate` (pass)
+- `npx tsc --noEmit` (pass)
+- Repo-defined test command currently fails, but due to a pre-existing/broken test import path rather than this refactor:
+- `npm.cmd test`
+- failure:
+- `lib/db/showScheduleGrouping.test.ts` cannot resolve `lib/db/showScheduleGrouping`
+- No end-to-end DB/Redis-backed flow was run during this session.
+
 ## Validation Rules
 
 - Always implement validation in both places when a form mutates server state:
@@ -1148,6 +1313,20 @@ In `prisma/schema.prisma`, `Show` includes:
 - or block structural edits once dependent records/history exist
 - Do not assume a save action is safe just because validation passes at the form level.
 - Also verify whether a successful edit would invalidate historical/payment/reservation records or any queue/Redis lifecycle state.
+- When a feature uses derived status/state in the UI, enforce the same derived-state rules in backend mutation/read paths.
+- Example learned here:
+- a schedule disabled in the reserve picker because it is `ON_GOING`, `FULLY_BOOKED`, or `CLOSED`
+- must also be rejected by queue join / active / complete server routes
+- Prefer event-driven synchronization for derived persistence flags that depend on DB mutations.
+- Example learned here:
+- `Sched.status = FULLY_BOOKED` should be updated when seat assignments change
+- not by background polling
+- If time-based state is derived from business-local time, centralize the timezone logic in one shared helper and reuse it across:
+- list/detail reads
+- frontend serialization
+- backend guards
+- queue/reservation validation
+- For statuses that become automatic after launch, remove them from manual frontend controls first, then derive them in query/API shaping before attempting any background persistence approach.
 
 ## TODOs
 
@@ -1156,5 +1335,4 @@ In `prisma/schema.prisma`, `Show` includes:
 3. Wire in the `walk in` mode on the admin side.
 4. The email field in reservation room should have strict checking such as "@gmail.com". and should have confirmation modal ensuring the email and phone number is correct.
 5. add fields in teams model: contact number, email, facebook_account.
-6. add field in schedules model: status -> on_going, fully booked, closed.
-7. Overall UI polishing.
+6. Overall UI polishing.

@@ -3,6 +3,7 @@ import { PaymentStatus } from "@prisma/client";
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 import { sendReservationStatusUpdateEmail } from "@/lib/email/sendReservationStatusUpdateEmail";
 import { prisma } from "@/lib/prisma";
+import { syncScheduleCapacityStatuses } from "@/lib/shows/effectiveStatus";
 
 type StageTargetStatus = "CONFIRMED" | "CANCELLED";
 
@@ -154,6 +155,10 @@ export async function POST(request: NextRequest) {
             reservation.reservedSeats.map((row) => row.seat_assignment_id),
           )
         : [];
+    const affectedSchedIds =
+      targetStatus === "CANCELLED"
+        ? reservations.map((reservation) => reservation.sched_id)
+        : [];
 
     await prisma.$transaction(async (tx) => {
       await tx.reservation.updateMany({
@@ -178,6 +183,7 @@ export async function POST(request: NextRequest) {
           },
           data: { seat_status: "OPEN" },
         });
+        await syncScheduleCapacityStatuses(tx, affectedSchedIds);
       }
     });
 

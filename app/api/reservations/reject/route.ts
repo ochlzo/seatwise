@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
+import { syncScheduleCapacityStatuses } from "@/lib/shows/effectiveStatus";
 
 // POST /api/reservations/reject - Admin-only: reject a reservation and release seats
 export async function POST(request: NextRequest) {
@@ -70,6 +71,7 @@ export async function POST(request: NextRequest) {
           },
           data: { seat_status: "OPEN" },
         });
+        await syncScheduleCapacityStatuses(tx, [reservation.sched_id]);
       }
     });
 

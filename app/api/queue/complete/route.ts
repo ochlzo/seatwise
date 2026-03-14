@@ -5,6 +5,10 @@ import cloudinary from "@/lib/cloudinary";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
 import { sendReservationSubmittedEmail } from "@/lib/email/sendReservationSubmittedEmail";
+import {
+  getEffectiveSchedStatus,
+  syncScheduleCapacityStatuses,
+} from "@/lib/shows/effectiveStatus";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-PH", {
@@ -127,13 +131,25 @@ export async function POST(request: NextRequest) {
 
     const schedule = await prisma.sched.findFirst({
       where: { sched_id: schedId, show_id: showId },
-      include: {
+      select: {
+        sched_id: true,
+        sched_date: true,
+        sched_start_time: true,
+        sched_end_time: true,
+        status: true,
         show: { select: { show_name: true } },
       },
     });
 
     if (!schedule) {
       return NextResponse.json({ success: false, error: "Schedule not found" }, { status: 404 });
+    }
+
+    if (getEffectiveSchedStatus(schedule) !== "OPEN") {
+      return NextResponse.json(
+        { success: false, error: "This schedule is not currently accepting reservations." },
+        { status: 400 },
+      );
     }
 
     const showScopeId = `${showId}:${schedId}`;
@@ -241,6 +257,8 @@ export async function POST(request: NextRequest) {
               screenshot_url: uploadedScreenshotUrl,
             },
           });
+
+          await syncScheduleCapacityStatuses(tx, [schedId]);
 
           return {
             reservationId: created.reservation_id,

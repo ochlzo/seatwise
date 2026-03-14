@@ -15,6 +15,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { toast } from "@/components/ui/sonner";
 import { useRouter } from 'next/navigation';
 import { getOrCreateGuestId } from "@/lib/guest";
@@ -29,7 +30,15 @@ type Schedule = {
     sched_date: string | Date;
     sched_start_time: string | Date;
     sched_end_time: string | Date;
+    effective_status?: "OPEN" | "ON_GOING" | "FULLY_BOOKED" | "CLOSED";
     categories?: CategoryInfo[];
+};
+
+const SCHEDULE_STATUS_LABELS: Record<NonNullable<Schedule["effective_status"]>, string> = {
+    OPEN: "Open",
+    ON_GOING: "On Going",
+    FULLY_BOOKED: "Fully Booked",
+    CLOSED: "Closed",
 };
 
 interface ReserveNowButtonProps {
@@ -302,16 +311,27 @@ export function ReserveNowButton({
                                 <RadioGroup value={selectedSchedId || ''} onValueChange={setSelectedSchedId}>
                                     {schedulesForSelectedDate.map((sched) => {
                                         const categories = sched.categories || [];
+                                        const isSchedDisabled =
+                                            sched.effective_status === "ON_GOING" ||
+                                            sched.effective_status === "FULLY_BOOKED" ||
+                                            sched.effective_status === "CLOSED";
 
                                         return (
                                             <Card
                                                 key={sched.sched_id}
-                                                className={`cursor-pointer transition-all hover:shadow-md ${
+                                                className={`transition-all ${
+                                                    isSchedDisabled
+                                                        ? 'cursor-not-allowed opacity-60'
+                                                        : 'cursor-pointer hover:shadow-md'
+                                                } ${
                                                     selectedSchedId === sched.sched_id
                                                         ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
                                                         : 'hover:bg-muted/50'
                                                 } py-3 gap-3`}
-                                                onClick={() => setSelectedSchedId(sched.sched_id || '')}
+                                                onClick={() => {
+                                                    if (isSchedDisabled) return;
+                                                    setSelectedSchedId(sched.sched_id || '');
+                                                }}
                                             >
                                                 <CardContent className="px-4 py-2">
                                                     <div className="flex items-start gap-4">
@@ -319,17 +339,26 @@ export function ReserveNowButton({
                                                             value={sched.sched_id || ''}
                                                             id={sched.sched_id}
                                                             className="mt-1"
+                                                            disabled={isSchedDisabled}
                                                         />
                                                         <Label
                                                             htmlFor={sched.sched_id}
-                                                            className="flex-1 cursor-pointer"
+                                                            className={`flex-1 ${isSchedDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                                         >
                                                             <div className="flex flex-col gap-2">
-                                                                <div className="flex items-center gap-2">
+                                                                <div className="flex items-center justify-between gap-2">
                                                                     <span className="text-sm font-semibold sm:text-base">
                                                                         {formatTime(sched.sched_start_time)} -{' '}
                                                                         {formatTime(sched.sched_end_time)}
                                                                     </span>
+                                                                    {sched.effective_status && sched.effective_status !== "OPEN" && (
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="border-transparent text-[10px] uppercase"
+                                                                        >
+                                                                            {SCHEDULE_STATUS_LABELS[sched.effective_status]}
+                                                                        </Badge>
+                                                                    )}
                                                                 </div>
 
                                                                 {categories.length > 0 && (

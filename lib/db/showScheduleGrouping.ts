@@ -26,22 +26,45 @@ type SignatureRun = {
   item: GroupItem;
 };
 
+const MANILA_TZ = "Asia/Manila";
+
+const formatDateKey = (value: Date) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: MANILA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const year = parts.find((part) => part.type === "year")?.value ?? "0000";
+  const month = parts.find((part) => part.type === "month")?.value ?? "00";
+  const day = parts.find((part) => part.type === "day")?.value ?? "00";
+  return `${year}-${month}-${day}`;
+};
+
+const formatTimeKey = (value: Date) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: MANILA_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
+
 const toDateKey = (value: string | Date) => {
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    return formatDateKey(value);
   }
   if (value.includes("T")) {
-    return new Date(value).toISOString().slice(0, 10);
+    return formatDateKey(new Date(value));
   }
   return value;
 };
 
 const toTimeKey = (value: string | Date) => {
   if (value instanceof Date) {
-    return value.toISOString().slice(11, 16);
+    return formatTimeKey(value);
   }
   if (value.includes("T")) {
-    return new Date(value).toISOString().slice(11, 16);
+    return formatTimeKey(new Date(value));
   }
   return value.slice(0, 5);
 };

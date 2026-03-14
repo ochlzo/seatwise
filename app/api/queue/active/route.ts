@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
+import {
+  getEffectiveSchedStatus,
+  getEffectiveShowStatus,
+} from "@/lib/shows/effectiveStatus";
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +32,12 @@ export async function POST(request: NextRequest) {
         sched_id: schedId,
         show_id: showId,
       },
-      include: {
+      select: {
+        sched_id: true,
+        sched_date: true,
+        sched_start_time: true,
+        sched_end_time: true,
+        status: true,
         show: {
           select: {
             show_name: true,
@@ -62,12 +71,27 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const effectiveShowStatus = getEffectiveShowStatus({
+      show_status: schedule.show.show_status,
+      scheds: [schedule],
+    });
+    const effectiveSchedStatus = getEffectiveSchedStatus(schedule);
+
+    if (effectiveSchedStatus !== "OPEN") {
+      return NextResponse.json({
+        success: true,
+        valid: false,
+        reason: "closed",
+        showName: schedule.show.show_name,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       valid: true,
       showScopeId,
       showName: schedule.show.show_name,
-      showStatus: schedule.show.show_status,
+      showStatus: effectiveShowStatus,
       session: validation.session,
     });
   } catch (error) {

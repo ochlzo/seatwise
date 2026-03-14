@@ -81,6 +81,13 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: "#EF4444",
 };
 
+const MANUAL_STATUS_OPTIONS: ShowStatus[] = [
+  "DRAFT",
+  "UPCOMING",
+  "OPEN",
+  "CANCELLED",
+];
+
 const MAX_GCASH_QR_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_GCASH_QR_TYPES: Record<string, string[]> = {
   "image/jpeg": [".jpg", ".jpeg"],
@@ -294,6 +301,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const [isStatusConfirmOpen, setIsStatusConfirmOpen] = React.useState(false);
   const [pendingStatus, setPendingStatus] = React.useState<ShowStatus | null>(null);
   const [isStatusBlockedOpen, setIsStatusBlockedOpen] = React.useState(false);
+  const [blockedStatus, setBlockedStatus] = React.useState<ShowStatus | null>(null);
 
   // Schedule Editor State
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
@@ -903,19 +911,38 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const blockingReservationCount = show.blockingReservationCount ?? 0;
   const hasBlockingReservations = blockingReservationCount > 0;
   const isStructuralEditingLocked = isEditing && hasReservationHistory;
+  const statusBlockedMessage = React.useMemo(() => {
+    switch (blockedStatus) {
+      case "DRAFT":
+        return `You cannot change this OPEN production back to DRAFT because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`;
+      case "UPCOMING":
+        return `You cannot change this OPEN production back to UPCOMING because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`;
+      case "CANCELLED":
+        return `You cannot change this OPEN production to CANCELLED because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`;
+      case "CLOSED":
+        return "You cannot change this OPEN production to CLOSED before the show even starts.";
+      default:
+        return "Status change not allowed.";
+    }
+  }, [blockedStatus, blockingReservationCount]);
 
   const handleStatusSelection = React.useCallback((nextStatus: ShowStatus) => {
     if (nextStatus === formData.show_status) return;
 
+    if (formData.show_status === "OPEN" && nextStatus === "CLOSED") {
+      setBlockedStatus(nextStatus);
+      setIsStatusBlockedOpen(true);
+      return;
+    }
+
     if (
-      (
-        nextStatus === "CLOSED" ||
-        nextStatus === "CANCELLED" ||
-        nextStatus === "DRAFT" ||
-        nextStatus === "UPCOMING"
-      ) &&
+      formData.show_status === "OPEN" &&
+      (nextStatus === "DRAFT" ||
+        nextStatus === "UPCOMING" ||
+        nextStatus === "CANCELLED") &&
       hasBlockingReservations
     ) {
+      setBlockedStatus(nextStatus);
       setIsStatusBlockedOpen(true);
       return;
     }
@@ -1185,7 +1212,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                         <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                       <SelectContent>
-                        {Object.keys(STATUS_COLORS).map((status) => (
+                        {MANUAL_STATUS_OPTIONS.map((status) => (
                           <SelectItem key={status} value={status}>
                             {status.replace("_", " ")}
                           </SelectItem>
@@ -2835,12 +2862,17 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
               <AlertCircle className="h-5 w-5 text-red-600" />
             </div>
             <DialogTitle>Status change not allowed</DialogTitle>
-            <DialogDescription>
-              This show has {blockingReservationCount} pending or confirmed reservation(s). Resolve those bookings before changing the status to DRAFT, UPCOMING, CLOSED, or CANCELLED.
-            </DialogDescription>
+            <DialogDescription>{statusBlockedMessage}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => setIsStatusBlockedOpen(false)}>OK</Button>
+            <Button
+              onClick={() => {
+                setIsStatusBlockedOpen(false);
+                setBlockedStatus(null);
+              }}
+            >
+              OK
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { groupSchedulesByCommonalities } from "./showScheduleGrouping";
+import { groupSchedulesByCommonalities } from "./showScheduleGrouping.ts";
 
 test("groups contiguous dates with identical time and set", () => {
   const grouped = groupSchedulesByCommonalities([
@@ -413,4 +413,21 @@ test("hides multi-day range when all dates are already represented by single-day
   assert.ok(
     grouped.some((group) => group.start_date === "2026-02-18" && group.end_date === "2026-02-18"),
   );
+});
+
+test("preserves Manila wall-clock time when schedule input is an ISO timestamp", () => {
+  const grouped = groupSchedulesByCommonalities([
+    {
+      sched_date: "2026-03-14T00:00:00.000Z",
+      sched_start_time: "1970-01-01T09:05:00.000Z",
+      sched_end_time: "1970-01-01T09:07:00.000Z",
+      category_set_id: "set-a",
+      set_name: "Set A",
+    },
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].label, "Mar 14");
+  assert.equal(grouped[0].items[0].sched_start_time, "17:05");
+  assert.equal(grouped[0].items[0].sched_end_time, "17:07");
 });

@@ -497,7 +497,7 @@ export async function updateShowAction(
       };
     }
 
-    await assertShowCanMoveToRestrictedStatus(prisma, showId, newStatus);
+    await assertShowCanMoveToRestrictedStatus(prisma, showId, oldStatus, newStatus);
 
     const normalizedCategorySets: NormalizedCategorySet[] = category_sets.map(
       (setItem, index) => ({

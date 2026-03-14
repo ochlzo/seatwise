@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getQueueStatus } from "@/lib/queue/getQueueStatus";
 import { promoteNextInQueue } from "@/lib/queue/queueLifecycle";
+import {
+  getEffectiveSchedStatus,
+  getEffectiveShowStatus,
+} from "@/lib/shows/effectiveStatus";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +25,12 @@ export async function GET(request: NextRequest) {
         sched_id: schedId,
         show_id: showId,
       },
-      include: {
+      select: {
+        sched_id: true,
+        sched_date: true,
+        sched_start_time: true,
+        sched_end_time: true,
+        status: true,
         show: {
           select: {
             show_status: true,
@@ -40,13 +49,29 @@ export async function GET(request: NextRequest) {
 
     const showScopeId = `${showId}:${schedId}`;
 
-    if (schedule.show.show_status !== "OPEN") {
+    const effectiveShowStatus = getEffectiveShowStatus({
+      show_status: schedule.show.show_status,
+      scheds: [schedule],
+    });
+    const effectiveSchedStatus = getEffectiveSchedStatus(schedule);
+
+    if (effectiveShowStatus !== "OPEN" && effectiveShowStatus !== "ON_GOING") {
       return NextResponse.json({
         success: true,
         status: "closed",
         showScopeId,
         showName: schedule.show.show_name,
         message: "This show is not currently accepting reservations.",
+      });
+    }
+
+    if (effectiveSchedStatus !== "OPEN") {
+      return NextResponse.json({
+        success: true,
+        status: "closed",
+        showScopeId,
+        showName: schedule.show.show_name,
+        message: "This schedule is not currently accepting reservations.",
       });
     }
 

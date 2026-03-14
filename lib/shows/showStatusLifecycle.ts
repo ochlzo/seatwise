@@ -1,13 +1,12 @@
 import "server-only";
 
-import { ReservationStatus, type Prisma, type ShowStatus } from "@prisma/client";
+import type { Prisma, ShowStatus } from "@prisma/client";
 import { closeQueueChannel } from "@/lib/queue/closeQueue";
 import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
-
-const BLOCKING_RESERVATION_STATUSES: ReservationStatus[] = [
-  ReservationStatus.PENDING,
-  ReservationStatus.CONFIRMED,
-];
+import {
+  countBlockingReservations,
+  hasShowReachedFinalScheduleEnd,
+} from "@/lib/shows/effectiveStatus";
 
 const isReservationBlockingStatus = (status: ShowStatus) =>
   status === "CLOSED" ||
@@ -26,22 +25,41 @@ const isTransitioningToClosedStatus = (
 export async function assertShowCanMoveToRestrictedStatus(
   db: Prisma.TransactionClient | typeof import("@/lib/prisma").prisma,
   showId: string,
+  currentStatus: ShowStatus | null | undefined,
   nextStatus: ShowStatus,
 ) {
   if (!isReservationBlockingStatus(nextStatus)) {
     return;
   }
 
-  const blockingReservationCount = await db.reservation.count({
-    where: {
-      show_id: showId,
-      status: {
-        in: BLOCKING_RESERVATION_STATUSES,
-      },
-    },
-  });
+  if (nextStatus === "CLOSED") {
+    const hasReachedFinalScheduleEnd = await hasShowReachedFinalScheduleEnd(db, showId);
+    if (!hasReachedFinalScheduleEnd) {
+      throw new Error("You cannot change this OPEN production to CLOSED before the show even starts.");
+    }
+    return;
+  }
+
+  const blockingReservationCount = await countBlockingReservations(db, showId);
 
   if (blockingReservationCount > 0) {
+    if (currentStatus === "OPEN") {
+      if (nextStatus === "DRAFT") {
+        throw new Error(
+          `You cannot change this OPEN production back to DRAFT because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
+        );
+      }
+      if (nextStatus === "UPCOMING") {
+        throw new Error(
+          `You cannot change this OPEN production back to UPCOMING because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
+        );
+      }
+      if (nextStatus === "CANCELLED") {
+        throw new Error(
+          `You cannot change this OPEN production to CANCELLED because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
+        );
+      }
+    }
     throw new Error(
       `This show has ${blockingReservationCount} pending or confirmed reservation(s). Resolve those bookings before changing the status to ${nextStatus}.`,
     );

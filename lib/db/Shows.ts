@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { ReservationStatus, type Prisma, type ShowStatus } from "@prisma/client";
+import {
+  getEffectiveSchedStatus,
+  getEffectiveShowStatus,
+} from "@/lib/shows/effectiveStatus";
 
 type AdminScope = {
   teamId: string | null;
@@ -67,8 +71,11 @@ export async function getShows(params?: {
     include: {
       scheds: {
         select: {
+          sched_id: true,
+          sched_date: true,
           sched_start_time: true,
           sched_end_time: true,
+          status: true,
         },
         orderBy: {
           sched_start_time: "asc",
@@ -81,7 +88,22 @@ export async function getShows(params?: {
     orderBy,
   });
 
-  return shows;
+  const derivedShows = shows.map((show) => ({
+    ...show,
+    show_status: getEffectiveShowStatus(show),
+  }));
+
+  if (params?.status && params.status !== "ALL") {
+    return derivedShows.filter((show) => show.show_status === params.status);
+  }
+
+  if (params?.statusGroup === "active") {
+    return derivedShows.filter((show) =>
+      ["UPCOMING", "OPEN", "ON_GOING"].includes(show.show_status),
+    );
+  }
+
+  return derivedShows;
 }
 
 export async function getShowById(showId: string) {
@@ -136,5 +158,10 @@ export async function getShowById(showId: string) {
   return {
     ...show,
     blockingReservationCount,
+    show_status: getEffectiveShowStatus(show),
+    scheds: show.scheds.map((sched) => ({
+      ...sched,
+      effective_status: getEffectiveSchedStatus(sched),
+    })),
   };
 }

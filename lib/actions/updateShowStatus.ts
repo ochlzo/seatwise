@@ -25,7 +25,7 @@ export async function updateShowStatus(showId: string, newStatus: ShowStatus) {
 
         const oldStatus = show.show_status;
 
-        await assertShowCanMoveToRestrictedStatus(prisma, showId, newStatus);
+        await assertShowCanMoveToRestrictedStatus(prisma, showId, oldStatus, newStatus);
 
         // Update show status
         const updatedShow = await prisma.show.update({

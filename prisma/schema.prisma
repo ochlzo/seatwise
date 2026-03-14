@@ -67,6 +67,7 @@ model Sched {
   sched_date       DateTime         @db.Date
   sched_start_time DateTime         @db.Time(6)
   sched_end_time   DateTime         @db.Time(6)
+  status           SchedStatus?
   show_id          String
   category_set_id  String?
   createdAt        DateTime         @default(now())
@@ -288,4 +289,10 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+}
+
+enum SchedStatus {
+  ON_GOING
+  FULLY_BOOKED
+  CLOSED
 }
