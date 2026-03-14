@@ -10,6 +10,43 @@ import {
   signInviteToken,
 } from "@/lib/invite/adminInvite";
 
+export async function GET(request: NextRequest) {
+  try {
+    const adminContext = await getCurrentAdminContext();
+    const teamId = request.nextUrl.searchParams.get("teamId")?.trim();
+    const email = request.nextUrl.searchParams.get("email")?.trim().toLowerCase();
+
+    if (!teamId || !email) {
+      return NextResponse.json({ error: "teamId and email are required." }, { status: 400 });
+    }
+
+    if (!adminContext.isSuperadmin && adminContext.teamId !== teamId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const existingAdmin = await prisma.admin.findUnique({
+      where: { email },
+      select: { team_id: true, is_superadmin: true },
+    });
+
+    if (!existingAdmin) {
+      return NextResponse.json({ exists: false });
+    }
+
+    if (existingAdmin.team_id === teamId) {
+      return NextResponse.json({ exists: true, isTeamMember: true });
+    }
+
+    return NextResponse.json({ exists: true, isTeamMember: false });
+  } catch (error) {
+    if (error instanceof AdminContextError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[admin/access/invite][GET] Error:", error);
+    return NextResponse.json({ error: "Failed to check admin status." }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const adminContext = await getCurrentAdminContext();

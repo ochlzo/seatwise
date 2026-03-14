@@ -10,6 +10,46 @@ import {
   signInviteToken,
 } from "@/lib/invite/adminInvite";
 
+export async function GET(request: NextRequest) {
+  try {
+    const adminContext = await getCurrentAdminContext();
+    if (!adminContext.isSuperadmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const email = request.nextUrl.searchParams.get("email")?.trim().toLowerCase();
+    if (!email) {
+      return NextResponse.json({ error: "email is required." }, { status: 400 });
+    }
+
+    const existingAdmin = await prisma.admin.findUnique({
+      where: { email },
+      select: { is_superadmin: true, team_id: true, team: { select: { name: true } } },
+    });
+
+    if (!existingAdmin) {
+      return NextResponse.json({ exists: false });
+    }
+
+    if (existingAdmin.is_superadmin && !existingAdmin.team_id) {
+      return NextResponse.json({ exists: true, isSuperadmin: true });
+    }
+
+    return NextResponse.json({
+      exists: true,
+      isSuperadmin: false,
+      isTeamAdmin: true,
+      teamName: existingAdmin.team?.name ?? null,
+    });
+  } catch (error) {
+    if (error instanceof AdminContextError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[admin/access/invite/superadmin][GET] Error:", error);
+    return NextResponse.json({ error: "Failed to check admin status." }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const adminContext = await getCurrentAdminContext();
@@ -36,15 +76,20 @@ export async function POST(request: NextRequest) {
       select: { user_id: true, is_superadmin: true, team_id: true },
     });
     if (existingAdmin) {
-      if (!existingAdmin.is_superadmin || existingAdmin.team_id) {
-        await prisma.admin.update({
-          where: { email },
-          data: {
-            is_superadmin: true,
-            team_id: null,
-          },
-        });
+      if (existingAdmin.is_superadmin && !existingAdmin.team_id) {
+        return NextResponse.json(
+          { error: "This email is already registered as a superadmin." },
+          { status: 400 },
+        );
       }
+
+      await prisma.admin.update({
+        where: { email },
+        data: {
+          is_superadmin: true,
+          team_id: null,
+        },
+      });
 
       return NextResponse.json({ success: true, promotedExistingAdmin: true });
     }

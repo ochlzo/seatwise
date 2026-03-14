@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/ui/sonner";
-import { ShieldCheck, Loader2, Plus, Search, Trash2, AlertTriangle } from "lucide-react";
+import { ShieldCheck, Loader2, Plus, Search, Trash2, AlertTriangle, Pencil, Check, X } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -60,13 +60,20 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
   const [renameDraft, setRenameDraft] = React.useState<Record<string, string>>({});
   const [renamingTeamId, setRenamingTeamId] = React.useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = React.useState<Record<string, string>>({});
+  const [inviteEmailError, setInviteEmailError] = React.useState<Record<string, string>>({});
   const [invitingTeamId, setInvitingTeamId] = React.useState<string | null>(null);
   const [teamSearchQuery, setTeamSearchQuery] = React.useState("");
   const [adminSearchQuery, setAdminSearchQuery] = React.useState("");
   const [superadminInviteEmail, setSuperadminInviteEmail] = React.useState("");
+  const [superadminInviteEmailError, setSuperadminInviteEmailError] = React.useState("");
+  const [showSuperadminConfirm, setShowSuperadminConfirm] = React.useState(false);
+  const [superadminConfirmIsPromotion, setSuperadminConfirmIsPromotion] = React.useState(false);
+  const [superadminConfirmTeamName, setSuperadminConfirmTeamName] = React.useState<string | null>(null);
   const [isInvitingSuperadmin, setIsInvitingSuperadmin] = React.useState(false);
   const [deleteTargetTeam, setDeleteTargetTeam] = React.useState<Team | null>(null);
   const [isDeletingTeam, setIsDeletingTeam] = React.useState(false);
+  const [inlineEditTeamId, setInlineEditTeamId] = React.useState<string | null>(null);
+  const [inlineEditDraft, setInlineEditDraft] = React.useState("");
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -174,10 +181,40 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
   const sendInvite = async (targetTeamId: string) => {
     const email = (inviteEmail[targetTeamId] ?? "").trim();
     if (!email) {
-      toast.error("Invite email is required.");
+      setInviteEmailError((prev) => ({ ...prev, [targetTeamId]: "Email is required." }));
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setInviteEmailError((prev) => ({ ...prev, [targetTeamId]: "Enter a valid email address." }));
       return;
     }
 
+    try {
+      const checkRes = await fetch(
+        `/api/admin/access/invite?teamId=${encodeURIComponent(targetTeamId)}&email=${encodeURIComponent(email)}`,
+      );
+      const checkData = (await checkRes.json()) as {
+        exists?: boolean;
+        isTeamMember?: boolean;
+        error?: string;
+      };
+      if (!checkRes.ok) {
+        toast.error(checkData.error ?? "Failed to check admin status.");
+        return;
+      }
+      if (checkData.exists && checkData.isTeamMember) {
+        setInviteEmailError((prev) => ({
+          ...prev,
+          [targetTeamId]: "This email is already a member of this team.",
+        }));
+        return;
+      }
+    } catch {
+      toast.error("Failed to check admin status.");
+      return;
+    }
+
+    setInviteEmailError((prev) => ({ ...prev, [targetTeamId]: "" }));
     setInvitingTeamId(targetTeamId);
     try {
       const res = await fetch("/api/admin/access/invite", {
@@ -222,13 +259,51 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
     }
   };
 
-  const sendSuperadminInvite = async () => {
+  const requestSuperadminInvite = async () => {
     const email = superadminInviteEmail.trim();
     if (!email) {
-      toast.error("Superadmin invite email is required.");
+      setSuperadminInviteEmailError("Email is required.");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setSuperadminInviteEmailError("Enter a valid email address.");
+      return;
+    }
+    setSuperadminInviteEmailError("");
 
+    try {
+      const res = await fetch(
+        `/api/admin/access/invite/superadmin?email=${encodeURIComponent(email)}`,
+      );
+      const data = (await res.json()) as {
+        exists?: boolean;
+        isSuperadmin?: boolean;
+        isTeamAdmin?: boolean;
+        teamName?: string | null;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to check admin status.");
+        return;
+      }
+
+      if (data.exists && data.isSuperadmin) {
+        setSuperadminInviteEmailError("This email is already registered as a superadmin.");
+        return;
+      }
+
+      setSuperadminConfirmIsPromotion(Boolean(data.exists && data.isTeamAdmin));
+      setSuperadminConfirmTeamName(data.teamName ?? null);
+      setShowSuperadminConfirm(true);
+    } catch {
+      toast.error("Failed to check admin status.");
+    }
+  };
+
+  const sendSuperadminInvite = async () => {
+    const email = superadminInviteEmail.trim();
+    setShowSuperadminConfirm(false);
     setIsInvitingSuperadmin(true);
     try {
       const res = await fetch("/api/admin/access/invite/superadmin", {
@@ -242,7 +317,13 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
         promotedExistingAdmin?: boolean;
       };
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to process superadmin invite.");
+        const message = data.error || "Failed to process superadmin invite.";
+        if (res.status === 400) {
+          setSuperadminInviteEmailError(message);
+        } else {
+          toast.error(message);
+        }
+        return;
       }
 
       setSuperadminInviteEmail("");
@@ -252,12 +333,39 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
       } else {
         toast.success("Superadmin invite email sent.");
       }
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to process superadmin invite.",
-      );
+    } catch {
+      toast.error("Failed to process superadmin invite.");
     } finally {
       setIsInvitingSuperadmin(false);
+    }
+  };
+
+  const inlineRenameTeam = async (targetTeamId: string) => {
+    const name = inlineEditDraft.trim();
+    if (!name) {
+      toast.error("Team name is required.");
+      return;
+    }
+
+    setRenamingTeamId(targetTeamId);
+    try {
+      const res = await fetch(`/api/admin/access/teams/${targetTeamId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to update team.");
+      }
+
+      setInlineEditTeamId(null);
+      toast.success("Team renamed.");
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update team.");
+    } finally {
+      setRenamingTeamId(null);
     }
   };
 
@@ -318,13 +426,20 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
                   id="superadmin-invite-email"
                   type="email"
                   value={superadminInviteEmail}
-                  onChange={(event) => setSuperadminInviteEmail(event.target.value)}
+                  onChange={(event) => {
+                    setSuperadminInviteEmail(event.target.value);
+                    if (superadminInviteEmailError) setSuperadminInviteEmailError("");
+                  }}
                   placeholder="superadmin@email.com"
-                  className="h-8 text-sm md:h-9 md:text-base"
+                  className={`h-8 text-sm md:h-9 md:text-base ${superadminInviteEmailError ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                  onKeyDown={(e) => { if (e.key === "Enter") void requestSuperadminInvite(); }}
                 />
+                {superadminInviteEmailError && (
+                  <p className="text-xs text-destructive">{superadminInviteEmailError}</p>
+                )}
               </div>
               <Button
-                onClick={sendSuperadminInvite}
+                onClick={() => void requestSuperadminInvite()}
                 disabled={isInvitingSuperadmin}
                 className="h-8 gap-2 px-3 text-xs md:h-9 md:text-sm"
               >
@@ -339,6 +454,8 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
           </CardContent>
         </Card>
       )}
+
+      {isSuperadmin && !teamId && <Separator className="my-2 md:hidden" />}
 
       {isSuperadmin && !teamId && (
         <Card className="border-0 bg-transparent py-0 shadow-none md:border md:bg-card md:py-6 md:shadow-sm">
@@ -375,9 +492,11 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
         </Card>
       )}
 
+      {isSuperadmin && !teamId && <Separator className="my-2 md:hidden" />}
+
       {isSuperadmin && !teamId ? (
         <Card className="border-0 bg-transparent py-0 shadow-none md:border md:bg-card md:py-3 md:shadow-sm">
-          <CardHeader className="px-0 pb-3 md:px-6">
+          <CardHeader className="px-0 pb-0 pt-2 md:px-6 md:pb-3 md:pt-6">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-base md:text-lg">Teams</CardTitle>
               <div className="relative w-full max-w-xs">
@@ -397,56 +516,179 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
             ) : (
               <>
                 <div className="space-y-2 md:hidden">
-                  {filteredTeams.map((team) => (
-                    <button
-                      key={team.team_id}
-                      type="button"
-                      onClick={() => router.push(`/admin/access/${team.team_id}`)}
-                      className="w-full rounded-lg border border-sidebar-border/60 p-3 text-left transition hover:bg-muted/40"
-                    >
-                      <p className="text-sm font-semibold">{team.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {team.admins.length} admin member(s)
-                      </p>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground">
-                        <th className="py-2 pr-4 font-medium">Team</th>
-                        <th className="py-2 pr-4 font-medium">Admins</th>
-                        <th className="py-2 pr-0 font-medium">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredTeams.map((team) => (
-                        <tr
-                          key={team.team_id}
-                          className="cursor-pointer border-b border-sidebar-border/40 last:border-0 hover:bg-muted/30"
-                          onClick={() => router.push(`/admin/access/${team.team_id}`)}
-                        >
-                          <td className="py-2 pr-4 font-medium">{team.name}</td>
-                          <td className="py-2 pr-4 text-muted-foreground">{team.admins.length}</td>
-                          <td className="py-2 pr-0">
+                  {filteredTeams.map((team) => {
+                    const isEditing = inlineEditTeamId === team.team_id;
+                    const isSaving = renamingTeamId === team.team_id;
+                    return (
+                      <div
+                        key={team.team_id}
+                        className="rounded-lg border border-sidebar-border/60 p-3 transition"
+                      >
+                        {isEditing ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              autoFocus
+                              value={inlineEditDraft}
+                              onChange={(e) => setInlineEditDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") void inlineRenameTeam(team.team_id);
+                                if (e.key === "Escape") setInlineEditTeamId(null);
+                              }}
+                              className="h-7 text-sm font-semibold"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={isSaving}
+                              onClick={() => void inlineRenameTeam(team.team_id)}
+                              className="h-7 px-2"
+                            >
+                              {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                            </Button>
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-7 gap-1 text-destructive hover:bg-destructive/10"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDeleteTargetTeam(team);
-                              }}
+                              disabled={isSaving}
+                              onClick={() => setInlineEditTeamId(null)}
+                              className="h-7 px-2"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Delete
+                              <X className="h-3.5 w-3.5" />
                             </Button>
-                          </td>
-                        </tr>
-                      ))}
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/admin/access/${team.team_id}`)}
+                              className="flex-1 text-left"
+                            >
+                              <p className="text-sm font-semibold">{team.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {team.admins.length} admin member(s)
+                              </p>
+                            </button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setInlineEditDraft(team.name);
+                                setInlineEditTeamId(team.team_id);
+                              }}
+                              className="h-7 gap-1 px-2 text-xs"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Rename
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full table-fixed text-sm">
+                    <thead>
+                      <tr className="border-b border-sidebar-border/70 text-left text-muted-foreground">
+                        <th className="py-3 pr-4 font-medium">Team</th>
+                        <th className="py-3 pr-4 font-medium">Admins</th>
+                        <th className="py-3 pr-0 font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTeams.map((team) => {
+                        const isEditing = inlineEditTeamId === team.team_id;
+                        const isSaving = renamingTeamId === team.team_id;
+                        return (
+                          <tr
+                            key={team.team_id}
+                            className="border-b border-sidebar-border/40 last:border-0"
+                          >
+                            <td className="py-3 pr-4 font-medium">
+                              {isEditing ? (
+                                <Input
+                                  autoFocus
+                                  value={inlineEditDraft}
+                                  onChange={(e) => setInlineEditDraft(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") void inlineRenameTeam(team.team_id);
+                                    if (e.key === "Escape") setInlineEditTeamId(null);
+                                  }}
+                                  className="h-7 text-sm"
+                                />
+                              ) : (
+                                <span
+                                  className="cursor-pointer hover:underline"
+                                  onClick={() => router.push(`/admin/access/${team.team_id}`)}
+                                >
+                                  {team.name}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 pr-4 text-muted-foreground">{team.admins.length}</td>
+                            <td className="py-3 pr-0">
+                              <div className="flex items-center gap-1">
+                                {isEditing ? (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      disabled={isSaving}
+                                      onClick={() => void inlineRenameTeam(team.team_id)}
+                                      className="h-7 gap-1 px-2 text-xs"
+                                    >
+                                      {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                                      Save
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={isSaving}
+                                      onClick={() => setInlineEditTeamId(null)}
+                                      className="h-7 px-2 text-xs"
+                                    >
+                                      Cancel
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 gap-1 text-xs"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setInlineEditDraft(team.name);
+                                        setInlineEditTeamId(team.team_id);
+                                      }}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                      Rename
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 gap-1 text-destructive hover:bg-destructive/10 text-xs"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteTargetTeam(team);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Delete
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -475,9 +717,16 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
               [selectedTeam.team_id]: value,
             }))
           }
+          onInviteErrorChange={(value) =>
+            setInviteEmailError((prev) => ({
+              ...prev,
+              [selectedTeam.team_id]: value,
+            }))
+          }
+          inviteError={inviteEmailError[selectedTeam.team_id] ?? ""}
           onAdminSearchChange={setAdminSearchQuery}
           onRename={() => renameTeam(selectedTeam.team_id)}
-          onInvite={() => sendInvite(selectedTeam.team_id)}
+          onInvite={() => void sendInvite(selectedTeam.team_id)}
         />
       ) : (
         <Card>
@@ -486,6 +735,45 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={showSuperadminConfirm}
+        onOpenChange={(open) => { if (!open) setShowSuperadminConfirm(false); }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <ShieldCheck className="h-5 w-5 text-amber-600" />
+            </div>
+            <DialogTitle>
+              {superadminConfirmIsPromotion ? "Promote to superadmin?" : "Confirm superadmin invite?"}
+            </DialogTitle>
+            <DialogDescription>
+              {superadminConfirmIsPromotion ? (
+                <>
+                  <span className="font-semibold text-foreground">{superadminInviteEmail.trim()}</span>
+                  {" "}is currently a team admin{superadminConfirmTeamName ? <> of <span className="font-semibold text-foreground">{superadminConfirmTeamName}</span></> : ""}. Proceeding will promote them to superadmin and remove them from their team.
+                </>
+              ) : (
+                <>
+                  An invite will be sent to{" "}
+                  <span className="font-semibold text-foreground">{superadminInviteEmail.trim()}</span>
+                  . Please confirm the email is correct before proceeding.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSuperadminConfirm(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void sendSuperadminInvite()} className="gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              {superadminConfirmIsPromotion ? "Confirm & Promote" : "Confirm & Send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(deleteTargetTeam)}

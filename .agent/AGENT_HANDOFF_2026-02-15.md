@@ -1,4 +1,4 @@
-# Seatwise Agent Handoff (Current State, 2026-03-06)
+# Seatwise Agent Handoff (Current State, 2026-03-15)
 
 ## Purpose
 
@@ -112,10 +112,15 @@ This handoff is intentionally trimmed to active behavior only. Legacy/rolled-bac
 ## Admin Access UI Notes (Current)
 
 - Mobile and desktop are intentionally different in `AdminAccessClient.tsx`:
-- Mobile keeps compact stacked cards and tighter spacing.
-- Desktop (`md+`) uses a table for Team Admins with columns:
-- `Name`, `Username`, `Email`, `Status`.
+- Mobile: compact stacked cards, visible `Rename` button per team card, separators between sections (`my-2`).
+- Desktop (`md+`): `table-fixed` table for the teams list. Columns: `Team`, `Admins`, `Action`. Rows use `py-3` spacing.
+- Inline rename is available directly in the teams list (both mobile and desktop):
+  - Clicking "Rename" makes the team name field editable in-place.
+  - Save via button or Enter key; Cancel via button or Escape.
+  - Uses `inlineEditTeamId` + `inlineEditDraft` state.
+  - Calls `PATCH /api/admin/access/teams/[teamId]` on save.
 - Team Admin status badges are positioned top-right on mobile row cards.
+- `TeamAccessDetail.tsx` shows manage card (rename/invite) and admins card separated by `<Separator className="my-2 md:hidden" />` on mobile.
 
 ## Queue/Reservation Flow (Current)
 
@@ -393,7 +398,12 @@ In `prisma/schema.prisma`, `Show` includes:
 - Creates Redis invite session.
 - Generates signed invite token.
 - Sends `/login?invite=<token>` link.
-- If email already belongs to an existing Admin, returns success without sending a duplicate invite.
+- Pre-flight GET endpoint added: `GET /api/admin/access/invite?teamId=&email=`
+  - Returns `{ exists, isTeamMember }`.
+  - Used by client before sending the invite to validate the email is not already on the team.
+  - Returns `isTeamMember: true` if email already belongs to that team.
+- If email already belongs to an existing Admin on the same team: client shows inline field error "This email is already a member of this team."
+- If email belongs to an existing Admin on a different team or not at all: invite proceeds normally.
 
 #### New invite onboarding APIs
 
@@ -450,16 +460,21 @@ In `prisma/schema.prisma`, `Show` includes:
 
 ### Superadmin Invite Flow (Implemented)
 
-- Added dedicated endpoint:
+- Added dedicated endpoints:
 - `POST /api/admin/access/invite/superadmin`
+- `GET /api/admin/access/invite/superadmin?email=`
 - File: `app/api/admin/access/invite/superadmin/route.ts`
 - Permissions:
-- Only existing superadmin can call this route.
-- Behavior:
-- If target email is an existing Admin record, user is promoted immediately:
-- `is_superadmin=true`
-- `team_id=null`
-- If target email is not an existing Admin record, creates a secure onboarding invite with role target `SUPERADMIN`.
+- Only existing superadmin can call these routes.
+- GET behavior:
+- Returns `{ exists: false }` if email has no admin account.
+- Returns `{ exists: true, isSuperadmin: true }` if email is already a superadmin.
+- Returns `{ exists: true, isTeamAdmin: true, teamName }` if email is an existing team admin.
+- Used by client as pre-flight check before showing the confirm modal.
+- POST behavior:
+- If target email is already a superadmin (with no team): returns `400` error — "This email is already registered as a superadmin."
+- If target email is an existing team admin: promotes immediately (`is_superadmin=true`, `team_id=null`), returns `{ success: true, promotedExistingAdmin: true }`.
+- If target email is not an existing Admin record: creates a secure onboarding invite with role target `SUPERADMIN`.
 - Shared invite payload/session now includes role target:
 - `targetRole = TEAM_ADMIN | SUPERADMIN`
 - Role-aware checks enforced through invite routes via `doesInviteMatchSession()`.
@@ -1327,6 +1342,96 @@ In `prisma/schema.prisma`, `Show` includes:
 - backend guards
 - queue/reservation validation
 - For statuses that become automatic after launch, remove them from manual frontend controls first, then derive them in query/API shaping before attempting any background persistence approach.
+
+## Session Updates (2026-03-15)
+
+### Admin Access Page: Mobile UI Improvements (Implemented)
+
+- File: `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx`
+- Added `<Separator className="my-2 md:hidden" />` between each major section on mobile:
+  - After the page header description block.
+  - Between "Invite Superadmin" and "Create Team" cards.
+  - Between "Create Team" and "Teams" cards.
+- Added `pt-2` top padding on the Teams card header on mobile (preserving `md:pt-6` for desktop).
+- Reduced bottom padding on Teams card header to `pb-0` on mobile (`md:pb-3` desktop) to tighten spacing between the header row and the team list.
+- Teams table switched to `table-fixed` for even column distribution across Team / Admins / Action.
+- Table row padding increased from `py-2` to `py-3` for more comfortable row height.
+- File: `app/(admin-user)/(dashboard)/admin/access/components/TeamAccessDetail.tsx`
+- Added `<Separator className="my-2 md:hidden" />` between the manage card (rename/invite) and the "Team admins" card on mobile.
+
+### Admin Access: Inline Team Rename in Teams List (Implemented)
+
+- File: `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx`
+- Added inline rename action directly on the teams list (both mobile cards and desktop table rows).
+- State added:
+  - `inlineEditTeamId: string | null` — which team row is in edit mode.
+  - `inlineEditDraft: string` — live input value.
+- Mobile behavior:
+  - Each team card has a "Rename" button (ghost, icon + label).
+  - Clicking opens an inline `<Input>` + Save/Cancel buttons in place of the card's name display.
+  - Save: Enter key or Save button. Cancel: Cancel button or Escape key.
+- Desktop behavior:
+  - Team column shows clickable team name (underline on hover, routes to team detail).
+  - Action cell gains "Rename" button alongside Delete when not editing.
+  - When editing: Team column shows inline `<Input>`, Action cell shows Save / Cancel buttons.
+- Uses existing `PATCH /api/admin/access/teams/[teamId]` endpoint.
+- New handler: `inlineRenameTeam(targetTeamId)` — validates, calls PATCH, clears edit state on success.
+- Icons imported: `Pencil`, `Check`, `X`.
+
+### Admin Access: Superadmin Invite Field Validation + Confirm Modal (Implemented)
+
+- File: `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx`
+- Added inline field validation for the "Invite Superadmin" email field:
+  - State: `superadminInviteEmailError: string`.
+  - Validates: required, valid email format (regex).
+  - Error renders as red border on the input + error message below.
+  - Error clears on input change.
+  - Enter key triggers validation.
+- Added pre-flight admin status check before opening the confirm modal:
+  - Calls `GET /api/admin/access/invite/superadmin?email=` (new endpoint).
+  - If already a superadmin → sets field error inline, no modal shown.
+  - If existing team admin → opens confirm modal with promotion copy.
+  - If new email → opens confirm modal with standard invite copy.
+- Added confirmation modal (`showSuperadminConfirm`):
+  - No loading state on the modal itself — purely confirmatory.
+  - State: `superadminConfirmIsPromotion: boolean`, `superadminConfirmTeamName: string | null`.
+  - Promotion copy: "X is currently a team admin of Y. Proceeding will promote them to superadmin and remove them from their team."
+  - Invite copy: "An invite will be sent to X. Please confirm the email is correct before proceeding."
+  - Confirm button label: "Confirm & Promote" (promotion) or "Confirm & Send" (invite).
+  - Closing the modal does not trigger the invite.
+- Error handling after POST:
+  - `400` responses set `superadminInviteEmailError` inline (field-level error).
+  - Non-400 errors fall through to toast.
+
+### Admin Access: Superadmin Invite — Already-Superadmin Guard (Implemented)
+
+- File: `app/api/admin/access/invite/superadmin/route.ts`
+- POST now explicitly rejects emails that already belong to a superadmin with no team:
+  - Returns `400` with error: `"This email is already registered as a superadmin."`
+  - Previously this case silently no-oped (the `!is_superadmin || team_id` condition allowed re-promotion of an already-clean superadmin).
+- GET pre-flight endpoint added (see Superadmin Invite Flow section above).
+
+### Admin Access: Team Invite Field Validation + Same-Team Member Check (Implemented)
+
+- File: `app/(admin-user)/(dashboard)/admin/access/AdminAccessClient.tsx`
+- Added `inviteEmailError: Record<string, string>` state for per-team inline field errors on the invite field.
+- `sendInvite(targetTeamId)` now:
+  1. Validates required + email format; sets field error inline on failure.
+  2. Calls `GET /api/admin/access/invite?teamId=&email=` (new pre-flight endpoint).
+  3. If `isTeamMember: true` → sets field error: `"This email is already a member of this team."`
+  4. If check passes → proceeds with `POST /api/admin/access/invite`.
+  5. POST errors still surface as toasts.
+- File: `app/(admin-user)/(dashboard)/admin/access/components/TeamAccessDetail.tsx`
+- Added props: `inviteError: string`, `onInviteErrorChange: (value: string) => void`.
+- Invite email `<Input>` now shows red border when `inviteError` is set.
+- Error message renders below the input.
+- Error clears on any input change via `onInviteErrorChange("")`.
+- File: `app/api/admin/access/invite/route.ts`
+- New `GET` handler: `GET /api/admin/access/invite?teamId=&email=`
+  - Auth: same team-scoping rules as POST.
+  - Returns `{ exists: false }` if email has no admin account.
+  - Returns `{ exists: true, isTeamMember: true }` if email's `team_id` matches the queried `teamId`.
+  - Returns `{ exists: true, isTeamMember: false }` if email exists but belongs to a different team.
 
 ## TODOs
 

@@ -37,11 +37,13 @@ type TeamAccessDetailProps = {
   canManage: boolean;
   renameValue: string;
   inviteValue: string;
+  inviteError: string;
   adminSearchQuery: string;
   renamingTeamId: string | null;
   invitingTeamId: string | null;
   onRenameChange: (value: string) => void;
   onInviteChange: (value: string) => void;
+  onInviteErrorChange: (value: string) => void;
   onAdminSearchChange: (value: string) => void;
   onRename: () => void;
   onInvite: () => void;
@@ -55,11 +57,13 @@ export function TeamAccessDetail({
   canManage,
   renameValue,
   inviteValue,
+  inviteError,
   adminSearchQuery,
   renamingTeamId,
   invitingTeamId,
   onRenameChange,
   onInviteChange,
+  onInviteErrorChange,
   onAdminSearchChange,
   onRename,
   onInvite,
@@ -123,14 +127,22 @@ export function TeamAccessDetail({
             <div className="space-y-2">
               <Label htmlFor={`invite-${team.team_id}`}>Invite admin by email</Label>
               <div className="flex items-end gap-2">
-                <Input
-                  id={`invite-${team.team_id}`}
-                  type="email"
-                  placeholder="admin@email.com"
-                  value={inviteValue}
-                  onChange={(event) => onInviteChange(event.target.value)}
-                  className="h-8 text-sm md:h-9 md:text-base"
-                />
+                <div className="w-full space-y-1">
+                  <Input
+                    id={`invite-${team.team_id}`}
+                    type="email"
+                    placeholder="admin@email.com"
+                    value={inviteValue}
+                    onChange={(event) => {
+                      onInviteChange(event.target.value);
+                      if (inviteError) onInviteErrorChange("");
+                    }}
+                    className={`h-8 text-sm md:h-9 md:text-base${inviteError ? " border-destructive focus-visible:ring-destructive" : ""}`}
+                  />
+                  {inviteError && (
+                    <p className="text-xs text-destructive">{inviteError}</p>
+                  )}
+                </div>
                 <Button
                   onClick={onInvite}
                   disabled={invitingTeamId === team.team_id}
@@ -148,6 +160,8 @@ export function TeamAccessDetail({
           </CardContent>
         )}
       </Card>
+
+      <Separator className="my-2 md:hidden" />
 
       <Card className="mt-4 gap-4 py-1 shadow-sm md:mt-2 md:py-4">
         <CardHeader className="gap-2 px-3 pb-0 pt-2 md:px-6 md:pb-0">
