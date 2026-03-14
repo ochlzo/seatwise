@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import type { ShowStatus } from "@prisma/client";
 import { validateShowPayload } from "@/lib/actions/showValidation";
 import {
-  assertShowCanMoveToClosedStatus,
+  assertShowCanMoveToRestrictedStatus,
   runShowQueueStatusTransition,
 } from "@/lib/shows/showStatusLifecycle";
 
@@ -95,6 +95,200 @@ type UpdateShowPayload = {
   seatmap_id?: string | null;
   scheds?: UpdateShowSched[];
   category_sets?: UpdateCategorySet[];
+};
+
+type NormalizedCategory = {
+  category_name: string;
+  price: string;
+  color_code: UpdateCategorySetCategory["color_code"];
+};
+
+type NormalizedCategorySet = {
+  set_name: string;
+  sched_ids: string[];
+  categories: NormalizedCategory[];
+  seat_assignments: Record<string, string>;
+};
+
+type StructuralSnapshot = {
+  seatmap_id: string | null;
+  gcash_qr_image_key: string | null;
+  gcash_number: string;
+  gcash_account_name: string;
+  scheds: Array<{
+    sched_date: string;
+    sched_start_time: string;
+    sched_end_time: string;
+  }>;
+  category_sets: Array<{
+    set_name: string;
+    sched_keys: string[];
+    categories: NormalizedCategory[];
+    seat_assignments: Array<[string, string]>;
+  }>;
+};
+
+type ExistingShowForStructure = {
+  seatmap_id: string | null;
+  gcash_qr_image_key: string | null;
+  gcash_number?: string | null;
+  gcash_account_name?: string | null;
+  scheds: Array<{
+    sched_id: string;
+    sched_date: Date;
+    sched_start_time: Date;
+    sched_end_time: Date;
+    category_set_id: string | null;
+    seatAssignments: Array<{
+      seat_id: string;
+      set: {
+        seatCategory: {
+          category_name: string;
+        };
+      };
+    }>;
+  }>;
+  categorySets: Array<{
+    category_set_id: string;
+    set_name: string;
+    items: Array<{
+      seatCategory: {
+        category_name: string;
+        price: { toString(): string };
+        color_code: UpdateCategorySetCategory["color_code"];
+      };
+    }>;
+  }>;
+};
+
+const buildSchedKey = (sched: {
+  sched_date: string | Date;
+  sched_start_time: string | Date;
+  sched_end_time: string | Date;
+}) =>
+  [
+    toManilaDateKey(new Date(toDateOnly(sched.sched_date))),
+    toManilaTimeKey(toTime(sched.sched_start_time)),
+    toManilaTimeKey(toTime(sched.sched_end_time)),
+  ].join("|");
+
+const normalizeCategoriesForCompare = (categories: NormalizedCategory[]) =>
+  [...categories]
+    .map((category) => ({
+      category_name: category.category_name.trim().toLowerCase(),
+      price: Number(category.price).toString(),
+      color_code: category.color_code,
+    }))
+    .sort((a, b) =>
+      `${a.category_name}|${a.price}|${a.color_code}`.localeCompare(
+        `${b.category_name}|${b.price}|${b.color_code}`,
+      ),
+    );
+
+const buildIncomingStructuralSnapshot = ({
+  seatmapId,
+  gcashQrImageKey,
+  gcashNumber,
+  gcashAccountName,
+  scheds,
+  categorySets,
+}: {
+  seatmapId: string | null;
+  gcashQrImageKey: string | null;
+  gcashNumber: string;
+  gcashAccountName: string;
+  scheds: UpdateShowSched[];
+  categorySets: NormalizedCategorySet[];
+}): StructuralSnapshot => {
+  const schedKeyByClientId = new Map(
+    scheds.map((sched) => [sched.client_id, buildSchedKey(sched)]),
+  );
+
+  return {
+    seatmap_id: seatmapId,
+    gcash_qr_image_key: gcashQrImageKey,
+    gcash_number: gcashNumber.trim(),
+    gcash_account_name: gcashAccountName.trim(),
+    scheds: [...scheds]
+      .map((sched) => ({
+        sched_date: toManilaDateKey(new Date(toDateOnly(sched.sched_date))),
+        sched_start_time: toManilaTimeKey(toTime(sched.sched_start_time)),
+        sched_end_time: toManilaTimeKey(toTime(sched.sched_end_time)),
+      }))
+      .sort((a, b) =>
+        `${a.sched_date}|${a.sched_start_time}|${a.sched_end_time}`.localeCompare(
+          `${b.sched_date}|${b.sched_start_time}|${b.sched_end_time}`,
+        ),
+      ),
+    category_sets: [...categorySets]
+      .map((setItem) => ({
+        set_name: setItem.set_name.trim().toLowerCase(),
+        sched_keys: setItem.sched_ids
+          .map((schedId) => schedKeyByClientId.get(schedId))
+          .filter((value): value is string => Boolean(value))
+          .sort(),
+        categories: normalizeCategoriesForCompare(setItem.categories),
+        seat_assignments: Object.entries(setItem.seat_assignments)
+          .map(([seatId, categoryName]) => [seatId, categoryName.trim().toLowerCase()] as [string, string])
+          .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])),
+      }))
+      .sort((a, b) => a.set_name.localeCompare(b.set_name)),
+  };
+};
+
+const buildExistingStructuralSnapshot = (
+  show: ExistingShowForStructure,
+): StructuralSnapshot => {
+  const schedKeyById = new Map(
+    show.scheds.map((sched) => [sched.sched_id, buildSchedKey(sched)]),
+  );
+
+  return {
+    seatmap_id: show.seatmap_id ?? null,
+    gcash_qr_image_key: show.gcash_qr_image_key ?? null,
+    gcash_number: show.gcash_number?.trim() ?? "",
+    gcash_account_name: show.gcash_account_name?.trim() ?? "",
+    scheds: [...show.scheds]
+      .map((sched) => ({
+        sched_date: toManilaDateKey(new Date(toDateOnly(sched.sched_date))),
+        sched_start_time: toManilaTimeKey(toTime(sched.sched_start_time)),
+        sched_end_time: toManilaTimeKey(toTime(sched.sched_end_time)),
+      }))
+      .sort((a, b) =>
+        `${a.sched_date}|${a.sched_start_time}|${a.sched_end_time}`.localeCompare(
+          `${b.sched_date}|${b.sched_start_time}|${b.sched_end_time}`,
+        ),
+      ),
+    category_sets: [...show.categorySets]
+      .map((setItem) => {
+        const referenceSched = show.scheds.find(
+          (sched) => sched.category_set_id === setItem.category_set_id,
+        );
+
+        return {
+          set_name: setItem.set_name.trim().toLowerCase(),
+          sched_keys: show.scheds
+            .filter((sched) => sched.category_set_id === setItem.category_set_id)
+            .map((sched) => schedKeyById.get(sched.sched_id))
+            .filter((value): value is string => Boolean(value))
+            .sort(),
+          categories: normalizeCategoriesForCompare(
+            setItem.items.map((item) => ({
+              category_name: item.seatCategory.category_name,
+              price: item.seatCategory.price.toString(),
+              color_code: item.seatCategory.color_code,
+            })),
+          ),
+          seat_assignments: (referenceSched?.seatAssignments ?? [])
+            .map((assignment) => [
+              assignment.seat_id,
+              assignment.set.seatCategory.category_name.trim().toLowerCase(),
+            ] as [string, string])
+            .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])),
+        };
+      })
+      .sort((a, b) => a.set_name.localeCompare(b.set_name)),
+  };
 };
 
 const getCloudinaryPublicIdFromUrl = (url: string): string | null => {
@@ -185,20 +379,68 @@ export async function updateShowAction(
     const currentShow = await prisma.show.findUnique({
       where: { show_id: showId },
       select: {
+        show_id: true,
         show_status: true,
+        seatmap_id: true,
         gcash_qr_image_key: true,
+        gcash_number: true,
+        gcash_account_name: true,
+        _count: {
+          select: {
+            reservations: true,
+          },
+        },
         scheds: {
           select: {
             sched_id: true,
+            sched_date: true,
+            sched_start_time: true,
+            sched_end_time: true,
+            category_set_id: true,
+            seatAssignments: {
+              select: {
+                seat_id: true,
+                set: {
+                  select: {
+                    seatCategory: {
+                      select: {
+                        category_name: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        categorySets: {
+          select: {
+            category_set_id: true,
+            set_name: true,
+            items: {
+              select: {
+                seatCategory: {
+                  select: {
+                    category_name: true,
+                    price: true,
+                    color_code: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
     });
 
+    if (!currentShow) {
+      throw new Error("Show not found.");
+    }
+
     const oldStatus = currentShow?.show_status;
     const newStatus = show_status;
 
-    const previousSchedIds = currentShow?.scheds.map((sched) => sched.sched_id) ?? [];
+    const previousSchedIds = currentShow.scheds.map((sched) => sched.sched_id);
 
     let finalGcashQrImageUrl =
       gcash_qr_image_key?.trim() || currentShow?.gcash_qr_image_key || undefined;
@@ -255,9 +497,50 @@ export async function updateShowAction(
       };
     }
 
-    await assertShowCanMoveToClosedStatus(prisma, showId, newStatus);
+    await assertShowCanMoveToRestrictedStatus(prisma, showId, newStatus);
 
-    // Transaction to update show, schedules, and category sets
+    const normalizedCategorySets: NormalizedCategorySet[] = category_sets.map(
+      (setItem, index) => ({
+        set_name: setItem.set_name?.trim() || `Set ${index + 1}`,
+        sched_ids: setItem.sched_ids,
+        categories: setItem.categories.map((category) => ({
+          category_name: category.category_name.trim(),
+          price: category.price,
+          color_code: category.color_code,
+        })),
+        seat_assignments: setItem.seat_assignments ?? {},
+      }),
+    );
+
+    const flatCategories = normalizedCategorySets.flatMap((setItem) => setItem.categories);
+    const uniqueCategoryMap = new Map<string, NormalizedCategory>();
+    flatCategories.forEach((category) => {
+      const key = `${category.category_name.toLowerCase()}|${Number(category.price).toString()}|${category.color_code}`;
+      if (!uniqueCategoryMap.has(key)) {
+        uniqueCategoryMap.set(key, category);
+      }
+    });
+    const uniqueCategories = Array.from(uniqueCategoryMap.values());
+    const hasReservationHistory = currentShow._count.reservations > 0;
+    const incomingStructuralSnapshot = buildIncomingStructuralSnapshot({
+      seatmapId: trimmedSeatmapId,
+      gcashQrImageKey: finalGcashQrImageUrl?.trim() ?? null,
+      gcashNumber: gcash_number ?? "",
+      gcashAccountName: gcash_account_name ?? "",
+      scheds,
+      categorySets: normalizedCategorySets,
+    });
+    const existingStructuralSnapshot = buildExistingStructuralSnapshot(currentShow);
+    const hasStructuralChanges =
+      JSON.stringify(incomingStructuralSnapshot) !==
+      JSON.stringify(existingStructuralSnapshot);
+
+    if (hasReservationHistory && hasStructuralChanges) {
+      throw new Error(
+        "This show has reservation history. GCash details, seatmap, schedules, category sets, and seat assignments can no longer be structurally changed.",
+      );
+    }
+
     const schedIdMap = new Map<string, string>(); // temp_id -> db_sched_id
 
     await prisma.$transaction(
@@ -280,6 +563,13 @@ export async function updateShowAction(
           },
         });
 
+        if (hasReservationHistory) {
+          currentShow.scheds.forEach((sched) => {
+            schedIdMap.set(sched.sched_id, sched.sched_id);
+          });
+          return;
+        }
+
         // 2. Clear existing schedules, category sets, and related data
         await tx.seatAssignment.deleteMany({
           where: { sched: { show_id: showId } },
@@ -298,42 +588,28 @@ export async function updateShowAction(
         });
 
         // 3. Create new schedules
-        if (scheds && scheds.length > 0) {
-          for (let i = 0; i < scheds.length; i++) {
-            const sched = scheds[i];
-            const createdSched = await tx.sched.create({
+        if (scheds.length > 0) {
+          const createdScheds = await Promise.all(
+            scheds.map((sched) =>
+              tx.sched.create({
               data: {
                 show_id: showId,
                 sched_date: toDateOnly(sched.sched_date),
                 sched_start_time: toTime(sched.sched_start_time),
                 sched_end_time: toTime(sched.sched_end_time),
               },
-            });
-            // Use index as temp ID
-            schedIdMap.set(sched.client_id, createdSched.sched_id);
-          }
+              }),
+            ),
+          );
+
+          createdScheds.forEach((createdSched, index) => {
+            schedIdMap.set(scheds[index].client_id, createdSched.sched_id);
+          });
         }
 
         // 4. Create category sets if provided
-        if (category_sets.length > 0 && trimmedSeatmapId) {
+        if (normalizedCategorySets.length > 0 && trimmedSeatmapId) {
           const allDbSchedIds = Array.from(schedIdMap.values());
-
-          // Create/Reuse Categories
-          const flatCategories = category_sets.flatMap(
-            (setItem) => setItem.categories,
-          );
-          const uniqueCategoryMap = new Map<
-            string,
-            (typeof flatCategories)[number]
-          >();
-          flatCategories.forEach((category) => {
-            // Use name, price, and color to identify a unique category
-            const key = `${category.category_name.trim().toLowerCase()}|${Number(category.price).toString()}|${category.color_code}`;
-            if (!uniqueCategoryMap.has(key)) {
-              uniqueCategoryMap.set(key, category);
-            }
-          });
-          const uniqueCategories = Array.from(uniqueCategoryMap.values());
 
           // Find existing categories that match name, price, AND color
           const existingCategories = await tx.seatCategory.findMany({
@@ -395,9 +671,9 @@ export async function updateShowAction(
             [];
 
           // Create Category Sets
-          for (let index = 0; index < category_sets.length; index += 1) {
-            const setItem = category_sets[index];
-            const setName = setItem.set_name?.trim() || `Set ${index + 1}`;
+          for (let index = 0; index < normalizedCategorySets.length; index += 1) {
+            const setItem = normalizedCategorySets[index];
+            const setName = setItem.set_name;
 
             const createdSet = await tx.categorySet.create({
               data: {
@@ -460,9 +736,7 @@ export async function updateShowAction(
             seat_status: "OPEN";
           }> = [];
 
-          for (const setItem of category_sets) {
-            if (!setItem.seat_assignments) continue;
-
+          for (const setItem of normalizedCategorySets) {
             const targetSchedIds = setItem.sched_ids
               .map((id) => schedIdMap.get(id))
               .filter(Boolean) as string[];

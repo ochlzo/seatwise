@@ -9,6 +9,12 @@ const BLOCKING_RESERVATION_STATUSES: ReservationStatus[] = [
   ReservationStatus.CONFIRMED,
 ];
 
+const isReservationBlockingStatus = (status: ShowStatus) =>
+  status === "CLOSED" ||
+  status === "CANCELLED" ||
+  status === "DRAFT" ||
+  status === "UPCOMING";
+
 const isCloseLikeStatus = (status: ShowStatus) =>
   status === "CLOSED" || status === "CANCELLED";
 
@@ -17,12 +23,12 @@ const isTransitioningToClosedStatus = (
   newStatus: ShowStatus,
 ) => isCloseLikeStatus(newStatus) && (!oldStatus || !isCloseLikeStatus(oldStatus));
 
-export async function assertShowCanMoveToClosedStatus(
+export async function assertShowCanMoveToRestrictedStatus(
   db: Prisma.TransactionClient | typeof import("@/lib/prisma").prisma,
   showId: string,
   nextStatus: ShowStatus,
 ) {
-  if (!isCloseLikeStatus(nextStatus)) {
+  if (!isReservationBlockingStatus(nextStatus)) {
     return;
   }
 

@@ -1038,8 +1038,15 @@ In `prisma/schema.prisma`, `Show` includes:
 - `CONFIRMED`
 - Old blanket "any reservation record blocks status change" behavior was removed.
 - New shared server helper:
-- `assertShowCanMoveToClosedStatus()`
+- `assertShowCanMoveToRestrictedStatus()`
 - Used by both full show update flow and status-only update flow.
+- Restricted status moves now include:
+- `DRAFT`
+- `UPCOMING`
+- `CLOSED`
+- `CANCELLED`
+- Result:
+- if the show has blocking reservations in `PENDING` / `CONFIRMED`, it cannot be moved backward to `DRAFT` / `UPCOMING` and cannot be moved to `CLOSED` / `CANCELLED`
 - When a show transitions to `CLOSED` or `CANCELLED`, queue cleanup now runs through shared lifecycle logic for every related schedule scope.
 - Important nuance for full show edits:
 - `updateShowAction` deletes/recreates schedules during save, so queue cleanup now uses both:
@@ -1049,10 +1056,62 @@ In `prisma/schema.prisma`, `Show` includes:
 - Queue lifecycle helper now centralizes OPEN / close-like transitions in:
 - `runShowQueueStatusTransition()`
 - Frontend guard still exists, but now matches the backend rule:
-- `ShowDetailForm.tsx` only blocks selecting `CLOSED` or `CANCELLED` when the show has blocking reservations in `PENDING` / `CONFIRMED`
+- `ShowDetailForm.tsx` blocks selecting:
+- `DRAFT`
+- `UPCOMING`
+- `CLOSED`
+- `CANCELLED`
+- when the show has blocking reservations in `PENDING` / `CONFIRMED`
 - `getShowById()` now returns:
 - `blockingReservationCount`
 - This is computed server-side and used for the frontend modal copy / guard.
+
+### Show Edit Structural Lock After Reservation History (Implemented)
+
+- Files updated:
+- `lib/actions/updateShow.ts`
+- `app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm.tsx`
+- Root issue discovered:
+- full show edit still used destructive rebuild behavior for:
+- schedules
+- category sets
+- set rows
+- seat assignments
+- This caused FK errors once reservation history existed, because `reserved_seats` still references `seat_assignments`.
+- Observed failure:
+- `prisma.seatAssignment.deleteMany()` failed on:
+- `reserved_seats_seat_assignment_id_fkey`
+- Server-side fix:
+- `updateShowAction` now builds a normalized structural snapshot of:
+- `seatmap_id`
+- GCash QR image key
+- GCash number
+- GCash account name
+- schedules
+- category sets
+- seat assignments
+- It also builds the equivalent snapshot from the current DB state.
+- If the show has reservation history and the structural snapshot changes, the save is blocked with a clear error instead of attempting destructive deletes.
+- Non-structural edits still remain allowed:
+- show name
+- description
+- venue
+- address
+- status (subject to the restricted-status guard above)
+- Frontend alignment:
+- `ShowDetailForm.tsx` now visibly locks structural-edit controls when the show has reservation history.
+- Locked UI areas now include:
+- GCash QR upload/remove
+- GCash number
+- GCash account name
+- seatmap selection
+- schedule add/remove
+- category set add/remove/edit
+- category add/remove/edit
+- seat assignment changes in seatmap preview
+- Inline warning copy was updated to explain that these areas are locked because reservation history already exists.
+- Important implementation detail:
+- when structural edits are locked but a save is still allowed, `updateShowAction` preserves existing schedule IDs for queue lifecycle handling so status-related queue cleanup/init still works.
 
 ## Validation Rules
 
@@ -1074,6 +1133,21 @@ In `prisma/schema.prisma`, `Show` includes:
 - If an edit flow destroys/recreates related records, any cleanup keyed by the old records must still consider the previous identifiers.
 - Example:
 - show close/cancel queue cleanup must include old schedule IDs, not only newly recreated schedule IDs.
+- Before implementing or changing any edit action, explicitly check whether the edit path can affect relationship structure in the database.
+- This includes cases where the UI seems like a normal "edit" but the backend actually:
+- deletes and recreates children
+- rebinds foreign keys
+- swaps referenced templates/configuration
+- rebuilds join-table rows
+- If the edit path can affect relationship structure, check for downstream records that may already reference those rows.
+- Example learned here:
+- deleting/rebuilding `seat_assignments` is not safe once `reserved_seats` exists
+- because reservation history still holds FK references to those seat assignments
+- For relationship-sensitive edit flows, decide the behavior up front:
+- either use incremental/in-place updates
+- or block structural edits once dependent records/history exist
+- Do not assume a save action is safe just because validation passes at the form level.
+- Also verify whether a successful edit would invalidate historical/payment/reservation records or any queue/Redis lifecycle state.
 
 ## TODOs
 
@@ -1082,4 +1156,5 @@ In `prisma/schema.prisma`, `Show` includes:
 3. Wire in the `walk in` mode on the admin side.
 4. The email field in reservation room should have strict checking such as "@gmail.com". and should have confirmation modal ensuring the email and phone number is correct.
 5. add fields in teams model: contact number, email, facebook_account.
-6. Overall UI polishing.
+6. add field in schedules model: status -> on_going, fully booked, closed.
+7. Overall UI polishing.

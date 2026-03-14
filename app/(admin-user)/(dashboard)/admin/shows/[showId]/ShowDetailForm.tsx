@@ -898,14 +898,22 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     return "";
   }, [pendingStatus]);
 
+  const reservationCount = show._count?.reservations ?? 0;
+  const hasReservationHistory = reservationCount > 0;
   const blockingReservationCount = show.blockingReservationCount ?? 0;
   const hasBlockingReservations = blockingReservationCount > 0;
+  const isStructuralEditingLocked = isEditing && hasReservationHistory;
 
   const handleStatusSelection = React.useCallback((nextStatus: ShowStatus) => {
     if (nextStatus === formData.show_status) return;
 
     if (
-      (nextStatus === "CLOSED" || nextStatus === "CANCELLED") &&
+      (
+        nextStatus === "CLOSED" ||
+        nextStatus === "CANCELLED" ||
+        nextStatus === "DRAFT" ||
+        nextStatus === "UPCOMING"
+      ) &&
       hasBlockingReservations
     ) {
       setIsStatusBlockedOpen(true);
@@ -937,6 +945,11 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const isFormValid = !validationState.hasValidationErrors;
 
   const handleAddSchedules = () => {
+    if (isStructuralEditingLocked) {
+      toast.error("Schedules are locked because this show already has reservation history.");
+      return;
+    }
+
     if (!selectedDates.length) {
       toast.error("Select at least one date.");
       return;
@@ -1125,6 +1138,11 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {isStructuralEditingLocked && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  GCash details, schedules, seatmap, category sets, and seat assignments are locked because this show already has reservation history.
+                </div>
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label
@@ -1279,16 +1297,16 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     previewUrl={gcashQrPreview}
                     previewAlt="GCash QR code"
                     onFileAccepted={(file) => {
-                      if (!isEditing) return;
+                      if (!isEditing || isStructuralEditingLocked) return;
                       handleGcashQrAccepted(file);
                     }}
                     onRemove={() => {
-                      if (!isEditing) return;
+                      if (!isEditing || isStructuralEditingLocked) return;
                       handleGcashQrRemove();
                     }}
                     accept={ACCEPTED_GCASH_QR_TYPES}
                     maxSize={MAX_GCASH_QR_FILE_SIZE}
-                    disabled={!isEditing}
+                    disabled={!isEditing || isStructuralEditingLocked}
                     isProcessing={isGcashQrProcessing}
                     processingText="Preparing GCash QR image..."
                     uploadError={gcashQrUploadError}
@@ -1322,7 +1340,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           validationState.fieldErrors.gcashNumber &&
                           "border-red-500 focus-visible:ring-red-500/30",
                       )}
-                      readOnly={!isEditing}
+                      readOnly={!isEditing || isStructuralEditingLocked}
                     />
                   </div>
                   <div className="space-y-2">
@@ -1344,7 +1362,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           validationState.fieldErrors.gcashAccountName &&
                           "border-red-500 focus-visible:ring-red-500/30",
                       )}
-                      readOnly={!isEditing}
+                      readOnly={!isEditing || isStructuralEditingLocked}
                     />
                   </div>
                 </div>
@@ -1498,6 +1516,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                   size="sm"
                   onClick={() => setIsScheduleOpen(true)}
                   className="gap-2"
+                  disabled={isStructuralEditingLocked}
                 >
                   <Clock className="h-4 w-4" />
                   Add Schedule
@@ -1636,6 +1655,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           scheds: prev.scheds.filter((s) => s !== sched),
                                         }));
                                       }}
+                                      disabled={isStructuralEditingLocked}
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -1875,6 +1895,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                         ),
                                       }));
                                     }}
+                                    disabled={isStructuralEditingLocked}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -1915,7 +1936,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                 {isEditing ? (
                   <Combobox
                     value={formData.seatmap_id}
+                    disabled={isStructuralEditingLocked}
                     onValueChange={(value) => {
+                      if (isStructuralEditingLocked) return;
                       const nextValue = value ?? "";
                       setFormData({ ...formData, seatmap_id: nextValue });
                       const match = seatmaps.find(
@@ -1930,7 +1953,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       id="seatmap"
                       placeholder="Select a seatmap"
                       value={seatmapQuery}
-                      onChange={(event) => setSeatmapQuery(event.target.value)}
+                      onChange={(event) => {
+                        if (isStructuralEditingLocked) return;
+                        setSeatmapQuery(event.target.value);
+                      }}
                       className={cn(
                         isEditing &&
                           validationState.fieldErrors.seatmap &&
@@ -2040,13 +2066,13 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           <div className="relative mt-1">
                             <SeatmapPreview
                               seatmapId={formData.seatmap_id || undefined}
-                              allowMarqueeSelection={isEditing}
+                              allowMarqueeSelection={isEditing && !isStructuralEditingLocked}
                               selectedSeatIds={selectedSeatIds}
                               onSelectionChange={setSelectedSeatIds}
                               categories={setCategories}
                               seatCategories={currentAssignments}
                               onSeatCategoriesChange={
-                                isEditing
+                                isEditing && !isStructuralEditingLocked
                                   ? (newAssignments) =>
                                     updateSetSeatAssignments(
                                       activeSet.id,
@@ -2061,7 +2087,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                               categories={setCategories}
                               seatCategories={currentAssignments}
                               onAssign={
-                                isEditing
+                                isEditing && !isStructuralEditingLocked
                                   ? (seatIds, categoryId) => {
                                     updateSetSeatAssignments(
                                       activeSet.id,
@@ -2077,7 +2103,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                   : undefined
                               }
                               onClear={
-                                isEditing
+                                isEditing && !isStructuralEditingLocked
                                   ? (seatIds) => {
                                     updateSetSeatAssignments(
                                       activeSet.id,
@@ -2130,7 +2156,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           size="sm"
                           onClick={addCategorySet}
                           className="gap-1.5"
-                          disabled={allSchedsCovered}
+                          disabled={allSchedsCovered || isStructuralEditingLocked}
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Add Category Set
@@ -2167,6 +2193,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                     }
                                     placeholder="e.g. Premiere Set"
                                     className="h-8 text-sm"
+                                    readOnly={isStructuralEditingLocked}
                                   />
                                 </div>
                               </div>
@@ -2176,6 +2203,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                 size="icon"
                                 className="h-9 w-9 text-destructive hover:bg-destructive/10"
                                 onClick={() => removeCategorySet(setItem.id)}
+                                disabled={isStructuralEditingLocked}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -2197,7 +2225,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                     }
                                     disabled={
                                       formData.scheds.length === 0 ||
-                                      setItem.apply_to_all
+                                      setItem.apply_to_all ||
+                                      isStructuralEditingLocked
                                     }
                                   >
                                     <SelectTrigger className="h-7 w-[160px] text-[11px]">
@@ -2239,6 +2268,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           filter_date: "",
                                         })
                                       }
+                                      disabled={isStructuralEditingLocked}
                                     >
                                       Clear
                                     </Button>
@@ -2251,6 +2281,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                   className="h-4 w-4 accent-primary"
                                   checked={setItem.apply_to_all}
                                   onChange={(e) => {
+                                    if (isStructuralEditingLocked) return;
                                     const next = e.target.checked;
                                     const remaining = getAvailableScheds(
                                       setItem.id,
@@ -2262,7 +2293,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                   }}
                                   disabled={
                                     formData.scheds.length === 0 ||
-                                    getAvailableScheds(setItem.id).length === 0
+                                    getAvailableScheds(setItem.id).length === 0 ||
+                                    isStructuralEditingLocked
                                   }
                                 />
                                 Apply to all schedules
@@ -2288,7 +2320,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           sched.client_id,
                                         )
                                       }
-                                      disabled={setItem.apply_to_all}
+                                      disabled={setItem.apply_to_all || isStructuralEditingLocked}
                                     />
                                     {formatManilaDate(
                                       toDateValue(sched.sched_date),
@@ -2339,7 +2371,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                   className="gap-1.5"
                                   onClick={() => addCategoryToSet(setItem.id)}
                                   disabled={
-                                    getAvailableScheds(setItem.id).length === 0
+                                    getAvailableScheds(setItem.id).length === 0 ||
+                                    isStructuralEditingLocked
                                   }
                                 >
                                   <Plus className="h-3.5 w-3.5" />
@@ -2366,6 +2399,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                       <Input
                                         value={category.category_name}
                                         onChange={(e) =>
+                                          isStructuralEditingLocked
+                                            ? undefined
+                                            :
                                           updateCategoryInSet(
                                             setItem.id,
                                             category.id,
@@ -2373,6 +2409,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           )
                                         }
                                         placeholder="e.g. VIP"
+                                        readOnly={isStructuralEditingLocked}
                                       />
                                     </div>
                                     <div className="space-y-2">
@@ -2382,6 +2419,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                       <Input
                                         value={category.price}
                                         onChange={(e) => {
+                                          if (isStructuralEditingLocked) return;
                                           const next = e.target.value;
                                           if (
                                             next !== "" &&
@@ -2395,6 +2433,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           );
                                         }}
                                         onBlur={() => {
+                                          if (isStructuralEditingLocked) return;
                                           const raw = String(
                                             category.price ?? "",
                                           ).trim();
@@ -2418,6 +2457,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                             { price: clamped.toFixed(2) },
                                           );
                                         }}
+                                        readOnly={isStructuralEditingLocked}
                                       />
                                     </div>
                                     <div className="space-y-2">
@@ -2427,6 +2467,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                       <Select
                                         value={category.color_code}
                                         onValueChange={(value) =>
+                                          !isStructuralEditingLocked &&
                                           updateCategoryInSet(
                                             setItem.id,
                                             category.id,
@@ -2437,7 +2478,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           )
                                         }
                                       >
-                                        <SelectTrigger className="h-9 w-full">
+                                        <SelectTrigger className="h-9 w-full" disabled={isStructuralEditingLocked}>
                                           <SelectValue placeholder="Select color" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -2477,6 +2518,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                         category.id,
                                       )
                                     }
+                                    disabled={isStructuralEditingLocked}
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -2794,7 +2836,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
             </div>
             <DialogTitle>Status change not allowed</DialogTitle>
             <DialogDescription>
-              This show has {blockingReservationCount} pending or confirmed reservation(s). Resolve those bookings before changing the status to CLOSED or CANCELLED.
+              This show has {blockingReservationCount} pending or confirmed reservation(s). Resolve those bookings before changing the status to DRAFT, UPCOMING, CLOSED, or CANCELLED.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

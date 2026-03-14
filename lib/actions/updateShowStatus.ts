@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import type { ShowStatus } from '@prisma/client';
 import {
-    assertShowCanMoveToClosedStatus,
+    assertShowCanMoveToRestrictedStatus,
     runShowQueueStatusTransition,
 } from '@/lib/shows/showStatusLifecycle';
 
@@ -25,7 +25,7 @@ export async function updateShowStatus(showId: string, newStatus: ShowStatus) {
 
         const oldStatus = show.show_status;
 
-        await assertShowCanMoveToClosedStatus(prisma, showId, newStatus);
+        await assertShowCanMoveToRestrictedStatus(prisma, showId, newStatus);
 
         // Update show status
         const updatedShow = await prisma.show.update({
