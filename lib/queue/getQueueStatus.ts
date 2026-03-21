@@ -1,5 +1,6 @@
 import { redis } from "@/lib/clients/redis";
 import type { ActiveSession, TicketData } from "@/lib/types/queue";
+import { toOneBasedQueueRank } from "./rank";
 
 export type QueueHeartbeatStatus =
   | "waiting"
@@ -130,7 +131,7 @@ export async function getQueueStatus({
     Number.isFinite(avgServiceMs) && avgServiceMs > 0
       ? avgServiceMs
       : DEFAULT_AVG_SERVICE_MS;
-  const oneBasedRank = rank + 1;
+  const oneBasedRank = toOneBasedQueueRank(rank);
   const etaMs = oneBasedRank * safeAvgServiceMs;
 
   return {

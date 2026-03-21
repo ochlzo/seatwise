@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types lib/db/showScheduleGrouping.test.ts",
+    "test": "node --experimental-strip-types lib/db/showScheduleGrouping.test.ts && node --experimental-strip-types lib/queue/queueRankContract.test.ts",
     "queue:cleanup": "node --experimental-strip-types scripts/cleanup-queue.ts",
     "reservations:clear": "node --experimental-strip-types scripts/clear-reservations.ts",
     "bookings:clear": "node --experimental-strip-types scripts/clear-booking-domain.ts",
