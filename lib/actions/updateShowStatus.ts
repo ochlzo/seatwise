@@ -85,7 +85,7 @@ export async function getShowQueueStatus(showId: string) {
                         schedDate: sched.sched_date,
                         ...stats,
                     };
-                } catch (error) {
+                } catch {
                     return {
                         schedId: sched.sched_id,
                         schedDate: sched.sched_date,
