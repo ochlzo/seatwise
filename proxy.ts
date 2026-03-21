@@ -9,10 +9,7 @@ const PUBLIC_PATHS = new Set<string>([
 ]);
 
 const isAdminPath = (pathname: string) => {
-  return (
-    pathname === "/admin" ||
-    pathname.startsWith("/admin/")
-  );
+  return pathname === "/admin" || pathname.startsWith("/admin/");
 };
 
 const isAdminApiPath = (pathname: string) => {
@@ -33,7 +30,7 @@ const isPublicApiPath = (pathname: string, method: string) => {
   );
 };
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
 
   const isNextAsset =

@@ -41,9 +41,9 @@ const formatDuration = (ms: number) => {
 
 const toDisplayRank = (rank?: number) => {
   if (typeof rank !== "number" || !Number.isFinite(rank)) return null;
-  // Queue API rank is zero-based among waiting users.
-  // Display should account for one active user currently in reservation room.
-  return rank + 2;
+  // Queue API rank is 1-based among waiting users.
+  // The waiting-room display includes the currently active reservation-room user.
+  return rank + 1;
 };
 
 export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
@@ -310,7 +310,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
               {status.status === "waiting" && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">You're in</div>
+                    <div className="text-xs text-muted-foreground">You&apos;re in</div>
                     <div className="text-2xl font-semibold">
                       {toDisplayRank(status.rank) ? `#${toDisplayRank(status.rank)}` : "-"}
                     </div>

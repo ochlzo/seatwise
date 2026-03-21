@@ -196,6 +196,8 @@ export function ReserveSeatClient({
     string | null
   >(null);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = React.useState(false);
+  const [isContactConfirmDialogOpen, setIsContactConfirmDialogOpen] =
+    React.useState(false);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = React.useState(false);
   const [contactDetails, setContactDetails] = React.useState({
     firstName: "",
@@ -582,6 +584,15 @@ export function ReserveSeatClient({
     }
 
     setError(null);
+    setIsContactConfirmDialogOpen(true);
+  };
+
+  const handleContactConfirmDialogChange = (open: boolean) => {
+    setIsContactConfirmDialogOpen(open);
+  };
+
+  const handleConfirmContactDetails = () => {
+    setIsContactConfirmDialogOpen(false);
     setStep("payment");
   };
 
@@ -1179,6 +1190,45 @@ export function ReserveSeatClient({
                   ) : (
                     "Leave"
                   )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={isContactConfirmDialogOpen}
+            onOpenChange={handleContactConfirmDialogChange}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Confirm contact details</DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm">
+                  Please make sure these details are correct before continuing
+                  to payment. Your confirmation and updates will be sent to{" "}
+                  <span className="font-semibold text-foreground">
+                    {contactDetails.email.trim()}
+                  </span>{" "}
+                  and{" "}
+                  <span className="font-semibold text-foreground">
+                    {contactDetails.phoneNumber.trim()}
+                  </span>
+                  .
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex-row justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsContactConfirmDialogOpen(false)}
+                  className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                >
+                  Go back
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleConfirmContactDetails}
+                  className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                >
+                  Continue
                 </Button>
               </DialogFooter>
             </DialogContent>
