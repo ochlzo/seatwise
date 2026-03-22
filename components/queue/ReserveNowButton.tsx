@@ -287,7 +287,7 @@ export function ReserveNowButton({
                         </>
                     ) : (
                         <>
-                            <DialogHeader>
+                            <DialogHeader className="text-left sm:text-left">
                                 <div className="flex items-center gap-2">
                                     <Button
                                         variant="ghost"
@@ -298,7 +298,7 @@ export function ReserveNowButton({
                                     >
                                         <ChevronLeft className="h-4 w-4" />
                                     </Button>
-                                    <div className="flex-1">
+                                    <div className="min-w-0 flex-1 text-left">
                                         <DialogTitle className="text-base sm:text-lg">Select Time Slot</DialogTitle>
                                         <DialogDescription className="text-xs sm:text-sm">
                                             {selectedDate && formatDate(selectedDate)}
@@ -307,7 +307,7 @@ export function ReserveNowButton({
                                 </div>
                             </DialogHeader>
 
-                            <div className="space-y-3 max-h-[400px] overflow-y-auto py-4">
+                            <div className="space-y-3 max-h-[420px] overflow-y-auto py-4 pr-1">
                                 <RadioGroup value={selectedSchedId || ''} onValueChange={setSelectedSchedId}>
                                     {schedulesForSelectedDate.map((sched) => {
                                         const categories = sched.categories || [];
@@ -319,42 +319,47 @@ export function ReserveNowButton({
                                         return (
                                             <Card
                                                 key={sched.sched_id}
-                                                className={`transition-all ${
+                                                className={`transition-all rounded-xl border ${
                                                     isSchedDisabled
                                                         ? 'cursor-not-allowed opacity-60'
                                                         : 'cursor-pointer hover:shadow-md'
                                                 } ${
                                                     selectedSchedId === sched.sched_id
-                                                        ? 'ring-2 ring-blue-600 bg-blue-50 dark:bg-blue-950/20'
-                                                        : 'hover:bg-muted/50'
-                                                } py-3 gap-3`}
+                                                        ? 'ring-2 ring-blue-600 bg-blue-50/80 dark:bg-blue-950/20'
+                                                        : 'hover:bg-muted/40'
+                                                } py-0`}
                                                 onClick={() => {
                                                     if (isSchedDisabled) return;
                                                     setSelectedSchedId(sched.sched_id || '');
                                                 }}
                                             >
-                                                <CardContent className="px-4 py-2">
-                                                    <div className="flex items-start gap-4">
+                                                <CardContent className="px-4 py-4">
+                                                    <div className="flex items-start gap-2">
                                                         <RadioGroupItem
                                                             value={sched.sched_id || ''}
                                                             id={sched.sched_id}
-                                                            className="mt-1"
+                                                            className="mt-1 shrink-0"
                                                             disabled={isSchedDisabled}
                                                         />
                                                         <Label
                                                             htmlFor={sched.sched_id}
-                                                            className={`flex-1 ${isSchedDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                            className={`flex-1 !items-start !gap-0 ${isSchedDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                                                         >
-                                                            <div className="flex flex-col gap-2">
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-sm font-semibold sm:text-base">
-                                                                        {formatTime(sched.sched_start_time)} -{' '}
-                                                                        {formatTime(sched.sched_end_time)}
-                                                                    </span>
+                                                            <div className="w-full space-y-3">
+                                                                <div className="flex items-start gap-2">
+                                                                    <div className="min-w-0 flex-1 space-y-1">
+                                                                        <div className="text-sm font-semibold sm:text-base">
+                                                                            {formatTime(sched.sched_start_time)} -{' '}
+                                                                            {formatTime(sched.sched_end_time)}
+                                                                        </div>
+                                                                        <div className="text-xs text-muted-foreground">
+                                                                            {selectedDate && formatDate(selectedDate)}
+                                                                        </div>
+                                                                    </div>
                                                                     {sched.effective_status && sched.effective_status !== "OPEN" && (
                                                                         <Badge
                                                                             variant="outline"
-                                                                            className="border-transparent text-[10px] uppercase"
+                                                                            className="shrink-0 border-transparent text-[10px] uppercase tracking-wide"
                                                                         >
                                                                             {SCHEDULE_STATUS_LABELS[sched.effective_status]}
                                                                         </Badge>
@@ -362,14 +367,14 @@ export function ReserveNowButton({
                                                                 </div>
 
                                                                 {categories.length > 0 && (
-                                                                    <div className="flex flex-wrap gap-1.5 pl-6">
+                                                                    <div className="flex flex-wrap gap-2 pl-0">
                                                                         {categories.map((category) => (
                                                                             <div
                                                                                 key={`${sched.sched_id}-${category.name}`}
-                                                                                className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/60 bg-background px-2 py-0.5 text-[9px] sm:text-[10px]"
+                                                                                className="inline-flex items-center gap-1.5 rounded-full border border-sidebar-border/60 bg-background px-2.5 py-1 text-[10px] sm:text-xs"
                                                                             >
                                                                                 <span className="font-medium">{category.name}</span>
-                                                                                <span className="text-muted-foreground">
+                                                                                <span className="text-muted-foreground whitespace-nowrap">
                                                                                     PHP {Number.parseFloat(category.price).toFixed(2)}
                                                                                 </span>
                                                                             </div>
