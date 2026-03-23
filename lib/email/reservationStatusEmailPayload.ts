@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 type ReservationStatusTarget = "CONFIRMED" | "CANCELLED";
 
 type ReservationStatusEmailLineItem = {
@@ -28,7 +30,7 @@ type ReservationLike = {
     sched_end_time: Date;
   };
   payment?: {
-    amount?: number | string | null;
+    amount?: Prisma.Decimal | number | string | null;
   } | null;
   reservedSeats: Array<{
     seatAssignment: {
