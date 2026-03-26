@@ -16,12 +16,21 @@ export interface ActiveSession {
     startedAt: number;
 }
 
+export type QueuePauseReason = 'postponed' | 'walk_in';
+
+export interface QueuePauseState {
+    reason: QueuePauseReason;
+    message: string;
+    pausedAt: number;
+}
+
 export interface QueueStatus {
-    status: 'waiting' | 'active' | 'expired' | 'closed' | 'not_joined';
+    status: 'waiting' | 'active' | 'paused' | 'expired' | 'closed' | 'not_joined';
     ticketId?: string;
     rank?: number;
     name?: string;
     eta?: number; // estimated time in ms
+    pauseReason?: QueuePauseReason;
 }
 
 export interface QueueMoveEvent {

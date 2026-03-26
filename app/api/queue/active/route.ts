@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import {
+  isSchedStatusReservable,
   getEffectiveSchedStatus,
   getEffectiveShowStatus,
 } from "@/lib/shows/effectiveStatus";
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
     });
     const effectiveSchedStatus = getEffectiveSchedStatus(schedule);
 
-    if (effectiveSchedStatus !== "OPEN") {
+    if (!isSchedStatusReservable(effectiveSchedStatus)) {
       return NextResponse.json({
         success: true,
         valid: false,

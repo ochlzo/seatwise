@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const reservation = await prisma.reservation.findUnique({
       where: { reservation_id: reservationId },
       include: {
-        show: { select: { team_id: true, show_name: true } },
+        show: { select: { team_id: true, show_name: true, venue: true } },
         sched: {
           select: {
             sched_date: true,

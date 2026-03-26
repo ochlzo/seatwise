@@ -1,10 +1,12 @@
 import { redis } from "@/lib/clients/redis";
-import type { ActiveSession, TicketData } from "@/lib/types/queue";
+import type { ActiveSession, QueuePauseReason, TicketData } from "@/lib/types/queue";
+import { getQueuePauseState } from "./closeQueue";
 import { toOneBasedQueueRank } from "./rank";
 
 export type QueueHeartbeatStatus =
   | "waiting"
   | "active"
+  | "paused"
   | "expired"
   | "closed"
   | "not_joined";
@@ -20,6 +22,7 @@ export interface QueueHeartbeatResult {
   estimatedWaitMinutes?: number;
   activeToken?: string;
   expiresAt?: number;
+  pauseReason?: QueuePauseReason;
   message?: string;
 }
 
@@ -49,17 +52,6 @@ export async function getQueueStatus({
   showScopeId,
   userId,
 }: GetQueueStatusParams): Promise<QueueHeartbeatResult> {
-  const pausedKey = `seatwise:paused:${showScopeId}`;
-  const isPaused = (await redis.get(pausedKey)) as number | string | null;
-  if (isPaused) {
-    return {
-      success: true,
-      status: "closed",
-      showScopeId,
-      message: "Queue is currently paused for this show.",
-    };
-  }
-
   const userTicketKey = `seatwise:user_ticket:${showScopeId}`;
   const ticketId = (await redis.hget(userTicketKey, userId)) as string | null;
 
@@ -133,6 +125,22 @@ export async function getQueueStatus({
       : DEFAULT_AVG_SERVICE_MS;
   const oneBasedRank = toOneBasedQueueRank(rank);
   const etaMs = oneBasedRank * safeAvgServiceMs;
+  const pauseState = await getQueuePauseState(showScopeId);
+
+  if (pauseState) {
+    return {
+      success: true,
+      status: "paused",
+      showScopeId,
+      ticketId,
+      name: ticket?.name,
+      rank: oneBasedRank,
+      etaMs,
+      estimatedWaitMinutes: Math.ceil(etaMs / 60000),
+      pauseReason: pauseState.reason,
+      message: pauseState.message,
+    };
+  }
 
   return {
     success: true,

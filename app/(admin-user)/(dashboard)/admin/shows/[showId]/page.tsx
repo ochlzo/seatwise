@@ -5,6 +5,11 @@ import AdminShield from "@/components/AdminShield";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { ShowDetailForm } from "./ShowDetailForm";
 import StopLoadingOnMount from "@/components/stop-loading-on-mount";
+import { AdminWalkInButton } from "@/components/queue/AdminWalkInButton";
+import {
+    hasSelectableSchedules,
+    serializeSchedulesForPicker,
+} from "@/lib/shows/schedulePicker";
 
 export default async function ShowIdPage({
     params,
@@ -46,6 +51,9 @@ export default async function ShowIdPage({
         })),
     };
 
+    const serializedSchedules = serializeSchedulesForPicker(show.scheds);
+    const hasWalkInSchedules = hasSelectableSchedules(serializedSchedules);
+
     return (
         <>
             <StopLoadingOnMount />
@@ -72,7 +80,18 @@ export default async function ShowIdPage({
                         </p>
                     </div>
 
-                    <ShowDetailForm show={serializedShow} />
+                    <ShowDetailForm
+                        show={serializedShow}
+                        reserveButton={
+                            hasWalkInSchedules && serializedSchedules.length > 0 ? (
+                                <AdminWalkInButton
+                                    showId={show.show_id}
+                                    showName={show.show_name}
+                                    schedules={serializedSchedules}
+                                />
+                            ) : undefined
+                        }
+                    />
                 </div>
             </div>
         </>

@@ -32,6 +32,10 @@ import { toast } from "@/components/ui/sonner";
 import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
 import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
 import { getOrCreateGuestId } from "@/lib/guest";
+import {
+  getReservationRoomModeConfig,
+  type ReservationRoomMode,
+} from "@/lib/reservations/reservationRoomMode";
 
 type StoredActiveSession = {
   ticketId: string;
@@ -69,6 +73,10 @@ type ContactFieldErrors = {
 type ReserveSeatClientProps = {
   showId: string;
   schedId: string;
+  mode?: ReservationRoomMode;
+  queueParticipantId?: string;
+  initialActiveSession?: StoredActiveSession | null;
+  returnHref?: string;
   seatmapId?: string | null;
   gcashQrImageKey?: string | null;
   gcashNumber?: string | null;
@@ -160,6 +168,10 @@ const clearStoredSession = (showScopeId: string) => {
 export function ReserveSeatClient({
   showId,
   schedId,
+  mode = "online",
+  queueParticipantId,
+  initialActiveSession = null,
+  returnHref,
   seatmapId,
   gcashQrImageKey,
   gcashNumber,
@@ -170,8 +182,13 @@ export function ReserveSeatClient({
   seatStatusById,
 }: ReserveSeatClientProps) {
   const router = useRouter();
-  const guestId = React.useMemo(() => getOrCreateGuestId(), []);
+  const participantId = React.useMemo(
+    () => queueParticipantId ?? getOrCreateGuestId(),
+    [queueParticipantId],
+  );
   const showScopeId = `${showId}:${schedId}`;
+  const modeConfig = React.useMemo(() => getReservationRoomModeConfig(mode), [mode]);
+  const isWalkInMode = mode === "walk_in";
   const hasHandledExpiryRef = React.useRef(false);
   const hasShownOneMinuteToastRef = React.useRef(false);
   const hasShownTwentySecondToastRef = React.useRef(false);
@@ -199,6 +216,10 @@ export function ReserveSeatClient({
   const [isContactConfirmDialogOpen, setIsContactConfirmDialogOpen] =
     React.useState(false);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = React.useState(false);
+  const [isFinalizeWalkInDialogOpen, setIsFinalizeWalkInDialogOpen] =
+    React.useState(false);
+  const [walkInConfirmationComplete, setWalkInConfirmationComplete] =
+    React.useState(false);
   const [contactDetails, setContactDetails] = React.useState({
     firstName: "",
     lastName: "",
@@ -216,6 +237,16 @@ export function ReserveSeatClient({
   }, []);
 
   React.useEffect(() => {
+    if (typeof window === "undefined" || !initialActiveSession) return;
+
+    const storageKey = `seatwise:active:${showScopeId}:${initialActiveSession.ticketId}`;
+    const existing = window.sessionStorage.getItem(storageKey);
+    if (!existing) {
+      window.sessionStorage.setItem(storageKey, JSON.stringify(initialActiveSession));
+    }
+  }, [initialActiveSession, showScopeId]);
+
+  React.useEffect(() => {
     hasHandledExpiryRef.current = false;
     hasShownOneMinuteToastRef.current = false;
     hasShownTwentySecondToastRef.current = false;
@@ -230,7 +261,7 @@ export function ReserveSeatClient({
           body: JSON.stringify({
             showId,
             schedId,
-            guestId,
+            guestId: participantId,
             ticketId: stored.ticketId,
             activeToken: stored.activeToken,
           }),
@@ -239,7 +270,7 @@ export function ReserveSeatClient({
         // Best effort cleanup request; UI fallback still handles local session reset.
       }
     },
-    [guestId, schedId, showId],
+    [participantId, schedId, showId],
   );
 
   React.useEffect(() => {
@@ -261,7 +292,7 @@ export function ReserveSeatClient({
           body: JSON.stringify({
             showId,
             schedId,
-            guestId,
+            guestId: participantId,
             ticketId: stored.ticketId,
             activeToken: stored.activeToken,
           }),
@@ -293,7 +324,7 @@ export function ReserveSeatClient({
     };
 
     void verify();
-  }, [guestId, schedId, showId, showScopeId]);
+  }, [participantId, schedId, showId, showScopeId]);
 
   React.useEffect(() => {
     if (step === "success" || !expiresAt) return;
@@ -345,7 +376,7 @@ export function ReserveSeatClient({
       const payload = JSON.stringify({
         showId,
         schedId,
-        guestId,
+        guestId: participantId,
         ticketId: stored.ticketId,
         activeToken: stored.activeToken,
       });
@@ -371,7 +402,7 @@ export function ReserveSeatClient({
         // Best effort termination during navigation.
       }
     },
-    [guestId, schedId, showId, showScopeId],
+    [participantId, schedId, showId, showScopeId],
   );
 
   React.useEffect(() => {
@@ -380,9 +411,16 @@ export function ReserveSeatClient({
   }, [showScopeId]);
 
   React.useEffect(() => {
+    if (isWalkInMode) {
+      if (returnHref) {
+        router.prefetch(returnHref);
+      }
+      return;
+    }
+
     router.prefetch(`/queue/${showId}/${schedId}`);
     router.prefetch(`/${showId}`);
-  }, [router, schedId, showId]);
+  }, [isWalkInMode, returnHref, router, schedId, showId]);
 
   React.useEffect(() => {
     if (step === "success") return;
@@ -450,10 +488,21 @@ export function ReserveSeatClient({
   }, [router, schedId, showId, showScopeId, step, terminateQueueSession]);
 
   const goToQueue = () => {
+    if (isWalkInMode) {
+      router.push(returnHref ?? `/admin/shows/${showId}`);
+      return;
+    }
+
     router.push(`/queue/${showId}/${schedId}`);
   };
 
   const handleRejoinQueue = async () => {
+    if (isWalkInMode) {
+      setIsRejoining(true);
+      router.refresh();
+      return;
+    }
+
     setIsRejoining(true);
     try {
       const response = await fetch("/api/queue/join", {
@@ -462,7 +511,7 @@ export function ReserveSeatClient({
         body: JSON.stringify({
           showId,
           schedId,
-          guestId,
+          guestId: participantId,
         }),
       });
 
@@ -488,6 +537,11 @@ export function ReserveSeatClient({
   };
 
   const handleDeclineRejoin = () => {
+    if (isWalkInMode) {
+      router.push(returnHref ?? `/admin/shows/${showId}`);
+      return;
+    }
+
     router.push(`/${showId}`);
   };
 
@@ -496,13 +550,13 @@ export function ReserveSeatClient({
     setIsLeaving(true);
     allowNavigationRef.current = true;
     clearStoredSession(showScopeId);
-    router.push(`/${showId}`);
+    router.push(isWalkInMode ? (returnHref ?? `/admin/shows/${showId}`) : `/${showId}`);
 
     if (stored) {
       const payload = JSON.stringify({
         showId,
         schedId,
-        guestId,
+        guestId: participantId,
         ticketId: stored.ticketId,
         activeToken: stored.activeToken,
       });
@@ -602,6 +656,7 @@ export function ReserveSeatClient({
 
   const handleBackToContact = () => {
     setStep("contact");
+    setWalkInConfirmationComplete(false);
   };
 
   const handleLeaveDialogChange = (open: boolean) => {
@@ -624,12 +679,28 @@ export function ReserveSeatClient({
   };
 
   const handleOpenSubmitDialog = () => {
-    if (isLeaving || isCompleting || !screenshotUrl) return;
+    if (isLeaving || isCompleting) return;
+    if (modeConfig.requiresScreenshotUpload && !screenshotUrl) return;
     setIsSubmitDialogOpen(true);
   };
 
   const handleConfirmSubmitReservation = () => {
     setIsSubmitDialogOpen(false);
+    if (isWalkInMode) {
+      setIsFinalizeWalkInDialogOpen(true);
+      return;
+    }
+
+    void handleConfirmReservation();
+  };
+
+  const handleFinalizeWalkInDialogChange = (open: boolean) => {
+    setIsFinalizeWalkInDialogOpen(open);
+  };
+
+  const handleConfirmFinalizeWalkIn = () => {
+    setIsFinalizeWalkInDialogOpen(false);
+    setWalkInConfirmationComplete(true);
     void handleConfirmReservation();
   };
 
@@ -646,9 +717,9 @@ export function ReserveSeatClient({
     setScreenshotUrl(url);
   }, []);
 
-  // Final confirmation: complete reservation with screenshot
+  // Final confirmation: complete reservation
   const handleConfirmReservation = async () => {
-    if (!screenshotUrl) {
+    if (!isWalkInMode && !screenshotUrl) {
       toast.error("Please upload your GCash payment screenshot first.");
       return;
     }
@@ -667,7 +738,8 @@ export function ReserveSeatClient({
         body: JSON.stringify({
           showId,
           schedId,
-          guestId,
+          guestId: participantId,
+          mode,
           ticketId: stored.ticketId,
           activeToken: stored.activeToken,
           seatIds: selectedSeatIds,
@@ -684,6 +756,7 @@ export function ReserveSeatClient({
         success: boolean;
         error?: string;
         reservationNumber?: string;
+        warning?: string | null;
       };
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Failed to complete reservation session");
@@ -691,6 +764,9 @@ export function ReserveSeatClient({
 
       clearStoredSession(showScopeId);
       setReservationNumber(data.reservationNumber ?? null);
+      if (data.warning) {
+        toast.warning(data.warning);
+      }
       setStep("success");
     } catch (err) {
       setError(
@@ -858,7 +934,7 @@ export function ReserveSeatClient({
                         className="w-fit gap-1 text-sm"
                       >
                         <CreditCard className="h-3.5 w-3.5" />
-                        Payment
+                        {modeConfig.paymentBadgeLabel}
                       </Badge>
                     )}
                     <Badge
@@ -1239,10 +1315,9 @@ export function ReserveSeatClient({
           >
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Submit reservation?</DialogTitle>
+                <DialogTitle>{modeConfig.paymentConfirmationTitle}</DialogTitle>
                 <DialogDescription className="text-xs sm:text-sm">
-                  Please ensure all details are correct before submitting your
-                  reservation for verification.
+                  {modeConfig.paymentConfirmationDescription}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="flex-row justify-end gap-2">
@@ -1259,11 +1334,43 @@ export function ReserveSeatClient({
                   onClick={handleConfirmSubmitReservation}
                   className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
                 >
-                  Submit
+                  {modeConfig.paymentConfirmationButtonLabel}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          {isWalkInMode && modeConfig.finalConfirmationTitle && modeConfig.finalConfirmationDescription ? (
+            <Dialog
+              open={isFinalizeWalkInDialogOpen}
+              onOpenChange={handleFinalizeWalkInDialogChange}
+            >
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>{modeConfig.finalConfirmationTitle}</DialogTitle>
+                  <DialogDescription className="text-xs sm:text-sm">
+                    {modeConfig.finalConfirmationDescription}
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="flex-row justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsFinalizeWalkInDialogOpen(false)}
+                    className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                  >
+                    Go back
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleConfirmFinalizeWalkIn}
+                    className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm"
+                  >
+                    {modeConfig.finalConfirmationButtonLabel}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : null}
 
           {!isSuccess &&
             !isLoading &&
@@ -1366,7 +1473,7 @@ export function ReserveSeatClient({
                       className="w-full gap-2"
                     >
                       <CreditCard className="h-4 w-4" />
-                      Continue to Payment
+                      {modeConfig.contactActionLabel}
                     </Button>
                   </CardContent>
                 </Card>
@@ -1402,7 +1509,6 @@ export function ReserveSeatClient({
             expiresAt &&
             step === "payment" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-                {/* Left: GCash Upload */}
                 <Card className="gap-0 border-sidebar-border/70">
                   <CardHeader className="pb-1 sm:pb-3">
                     <div className="flex items-center gap-2">
@@ -1414,23 +1520,57 @@ export function ReserveSeatClient({
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <CardTitle className="text-base">
-                        Upload GCash Payment
-                      </CardTitle>
+                      <CardTitle className="text-base">{modeConfig.paymentTitle}</CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent className="px-3 pt-0 sm:px-6">
-                    <GcashUploadPanel
-                      onUploadComplete={handleScreenshotUploaded}
-                      disabled={isCompleting}
-                      qrImageUrl={gcashQrImageKey}
-                      gcashNumber={gcashNumber}
-                      gcashAccountName={gcashAccountName}
-                    />
+                    {isWalkInMode ? (
+                      <div className="space-y-4 pb-3 text-sm">
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+                          Collect the in-person payment first, then confirm the amount and seats
+                          before finalizing the walk-in sale.
+                        </div>
+                        <div className="rounded-xl border border-sidebar-border/70 bg-muted/20 p-4">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            Customer
+                          </p>
+                          <div className="mt-2 space-y-1">
+                            <p className="font-medium">
+                              {contactDetails.firstName.trim()} {contactDetails.lastName.trim()}
+                            </p>
+                            <p className="text-muted-foreground">{contactDetails.email.trim()}</p>
+                            <p className="text-muted-foreground">{contactDetails.phoneNumber.trim()}</p>
+                            <p className="text-muted-foreground">{contactDetails.address.trim()}</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-sidebar-border/70 bg-background p-4">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            Point-of-sale total
+                          </p>
+                          <p className="mt-2 text-3xl font-semibold">{formatCurrency(subtotal)}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {selectedSeatIds.length} seat{selectedSeatIds.length === 1 ? "" : "s"} selected
+                          </p>
+                        </div>
+                        {walkInConfirmationComplete ? (
+                          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
+                            Walk-in confirmation has been captured. Finalizing will save the sale
+                            and send the receipt.
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <GcashUploadPanel
+                        onUploadComplete={handleScreenshotUploaded}
+                        disabled={isCompleting}
+                        qrImageUrl={gcashQrImageKey}
+                        gcashNumber={gcashNumber}
+                        gcashAccountName={gcashAccountName}
+                      />
+                    )}
                   </CardContent>
                 </Card>
 
-                {/* Right: Order Summary + Confirm */}
                 <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
                   <Card className="border-sidebar-border/70">
                     <CardHeader className="pb-3">
@@ -1481,7 +1621,11 @@ export function ReserveSeatClient({
 
                   <Button
                     onClick={handleOpenSubmitDialog}
-                    disabled={isCompleting || !screenshotUrl || isLeaving}
+                    disabled={
+                      isCompleting ||
+                      (modeConfig.requiresScreenshotUpload && !screenshotUrl) ||
+                      isLeaving
+                    }
                     className="w-full gap-2"
                   >
                     {isCompleting ? (
@@ -1492,7 +1636,7 @@ export function ReserveSeatClient({
                     ) : (
                       <>
                         <CheckCircle2 className="h-4 w-4" />
-                        Submit Reservation
+                        {modeConfig.paymentActionLabel}
                       </>
                     )}
                   </Button>

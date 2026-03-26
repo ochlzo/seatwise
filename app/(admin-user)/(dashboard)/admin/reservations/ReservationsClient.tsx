@@ -30,8 +30,6 @@ import {
   GripVertical,
   Loader2,
   Mail,
-  MapPin,
-  Phone,
   Search,
   Ticket,
   XCircle,
@@ -54,6 +52,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/components/ui/sonner";
+import { getAdminPaymentDisplay } from "@/lib/reservations/adminPaymentDisplay";
 
 type PaymentData = {
   payment_id: string;
@@ -344,6 +343,11 @@ function SortableCard({
   isVerifying,
   onOpenDetails,
 }: SortableCardProps) {
+  const primaryPayment =
+    card.row.reservations.find((reservation) => reservation.payment?.screenshot_url)?.payment ??
+    card.row.reservations.find((reservation) => reservation.payment)?.payment ??
+    null;
+  const paymentDisplay = getAdminPaymentDisplay(primaryPayment?.method);
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useSortable({
       id: card.id,
@@ -413,6 +417,11 @@ function SortableCard({
             </button>
           </div>
           <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+          {paymentDisplay.cardTagLabel ? (
+            <span className="inline-flex w-fit items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700">
+              {paymentDisplay.cardTagLabel}
+            </span>
+          ) : null}
           <p className="text-xs text-muted-foreground">
             Reservation No: {card.row.reservationNumber}
           </p>
@@ -1043,6 +1052,7 @@ export function ReservationsClient() {
     selectedCard?.row.reservations.find((reservation) => reservation.payment)
       ?.payment ??
     null;
+  const selectedPaymentDisplay = getAdminPaymentDisplay(primaryPayment?.method);
 
   const resolveDropTarget = React.useCallback(
     (overId: string): KanbanStatus | null => {
@@ -1588,18 +1598,37 @@ export function ReservationsClient() {
                   <div className="flex min-h-full items-center justify-center p-6 lg:p-10 lg:pb-32">
                     <div className="w-full max-w-4xl space-y-4">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                          Proof Of Payment
-                        </p>
-                        {selectedCard.status !== "PENDING" ? (
-                          <span
-                            className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-xs ${selectedCardStatusBadgeClassName}`}
-                          >
-                            {selectedCard.status === "CONFIRMED"
-                              ? "Confirmed"
-                              : "Rejected"}
-                          </span>
-                        ) : null}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                            {selectedPaymentDisplay.panelTitle}
+                          </p>
+                          {selectedPaymentDisplay.cardTagLabel ? (
+                            <span className="inline-flex w-fit items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700 sm:text-xs">
+                              {selectedPaymentDisplay.cardTagLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {primaryPayment?.screenshot_url ? (
+                            <a
+                              href={primaryPayment.screenshot_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[11px] font-medium text-blue-600 underline underline-offset-4 transition-colors hover:text-blue-700"
+                            >
+                              {selectedPaymentDisplay.openLabel}
+                            </a>
+                          ) : null}
+                          {selectedCard.status !== "PENDING" ? (
+                            <span
+                              className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-xs ${selectedCardStatusBadgeClassName}`}
+                            >
+                              {selectedCard.status === "CONFIRMED"
+                                ? "Confirmed"
+                                : "Rejected"}
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
 
                       <div className="relative flex min-h-[60vh] items-center justify-center overflow-hidden bg-background">
@@ -1607,7 +1636,9 @@ export function ReservationsClient() {
                           <>
                             <img
                               src={primaryPayment.screenshot_url}
-                              alt={`Payment proof for ${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`}
+                              alt={selectedPaymentDisplay.imageAlt(
+                                `${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`,
+                              )}
                               className="max-h-[85vh] w-full cursor-zoom-in object-contain"
                               onClick={() => setIsImageExpanded(true)}
                             />
@@ -1615,7 +1646,7 @@ export function ReservationsClient() {
                         ) : (
                           <div className="flex flex-col items-center gap-3 px-6 py-12 text-center text-muted-foreground">
                             <CreditCard className="h-8 w-8" />
-                            <p className="text-sm">No payment image uploaded.</p>
+                            <p className="text-sm">{selectedPaymentDisplay.emptyStateLabel}</p>
                           </div>
                         )}
                       </div>
@@ -1689,7 +1720,7 @@ export function ReservationsClient() {
               download
               onClick={(event) => event.stopPropagation()}
               className="inline-flex h-10 w-10 items-center justify-center text-white/80 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-              aria-label="Download proof of payment image"
+              aria-label={selectedPaymentDisplay.downloadLabel}
             >
               <ArrowDownToLine className="h-4.5 w-4.5" />
             </a>
@@ -1704,7 +1735,9 @@ export function ReservationsClient() {
           <div className="flex h-full w-full items-center justify-center p-4 sm:p-8">
             <img
               src={primaryPayment.screenshot_url}
-              alt={`Expanded proof of payment for ${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`}
+              alt={selectedPaymentDisplay.expandedImageAlt(
+                `${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`,
+              )}
               className="max-h-full max-w-full object-contain"
               onClick={(event) => event.stopPropagation()}
             />

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getQueueStatus } from "@/lib/queue/getQueueStatus";
 import { promoteNextInQueue } from "@/lib/queue/queueLifecycle";
 import {
+  isSchedStatusReservable,
   getEffectiveSchedStatus,
   getEffectiveShowStatus,
 } from "@/lib/shows/effectiveStatus";
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    if (effectiveSchedStatus !== "OPEN") {
+    if (!isSchedStatusReservable(effectiveSchedStatus)) {
       return NextResponse.json({
         success: true,
         status: "closed",

@@ -10,7 +10,7 @@ import { getOrCreateGuestId } from "@/lib/guest";
 
 type QueueStatusResponse = {
   success: boolean;
-  status: "waiting" | "active" | "expired" | "closed" | "not_joined";
+  status: "waiting" | "active" | "paused" | "expired" | "closed" | "not_joined";
   showScopeId: string;
   showName?: string;
   ticketId?: string;
@@ -56,7 +56,8 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   const allowNavigationRef = React.useRef(false);
 
   const hasTerminableTicket =
-    !!status?.ticketId && (status.status === "waiting" || status.status === "active");
+    !!status?.ticketId &&
+    (status.status === "waiting" || status.status === "active" || status.status === "paused");
 
   const terminateTicket = React.useCallback(
     async (preferBeacon: boolean) => {
@@ -361,6 +362,37 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
                       ) : (
                         "Maybe later"
                       )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {status.status === "paused" && (
+                <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                    <AlertTriangle className="h-5 w-5" />
+                    <span className="font-medium">Queue temporarily paused</span>
+                  </div>
+                  <p className="text-sm text-amber-900/80 dark:text-amber-100/80">
+                    {status.message}
+                  </p>
+                  {typeof status.rank === "number" && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-md border border-amber-200/70 bg-background/70 p-3 dark:border-amber-900/60">
+                        <div className="text-xs text-muted-foreground">Your spot</div>
+                        <div className="text-2xl font-semibold">#{status.rank}</div>
+                      </div>
+                      <div className="rounded-md border border-amber-200/70 bg-background/70 p-3 dark:border-amber-900/60">
+                        <div className="text-xs text-muted-foreground">Estimated wait</div>
+                        <div className="text-2xl font-semibold">
+                          ~{status.estimatedWaitMinutes ?? Math.ceil((status.etaMs ?? 0) / 60000)} min
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-start gap-2">
+                    <Button variant="outline" onClick={goBackToShow}>
+                      Leave queue and go back
                     </Button>
                   </div>
                 </div>

@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
           select: {
             team_id: true,
             show_name: true,
+            venue: true,
           },
         },
         sched: {

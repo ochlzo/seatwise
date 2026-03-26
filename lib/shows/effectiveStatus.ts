@@ -6,6 +6,7 @@ import {
   type SchedStatus,
   type ShowStatus,
 } from "@prisma/client";
+import { isSchedStatusReservable } from "./reservationEligibility.ts";
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -68,6 +69,7 @@ const getNowKeys = () => {
 };
 
 export type EffectiveSchedStatus = "OPEN" | "ON_GOING" | "FULLY_BOOKED" | "CLOSED";
+export { isSchedStatusReservable };
 
 export function getEffectiveSchedStatus(schedule: ScheduleForStatus): EffectiveSchedStatus {
   const schedDateKey = toDateKey(schedule.sched_date);

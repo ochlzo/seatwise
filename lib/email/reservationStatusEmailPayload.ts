@@ -5,9 +5,12 @@ type ReservationStatusTarget = "CONFIRMED" | "CANCELLED";
 type ReservationStatusEmailLineItem = {
   reservationNumber: string;
   showName: string;
+  venue?: string;
   scheduleLabel: string;
   seatNumbers: string[];
   amount: string;
+  paymentMethod?: string | null;
+  proofImageUrl?: string | null;
 };
 
 type ReservationStatusEmailGroup = {
@@ -31,7 +34,10 @@ type ReservationLike = {
   };
   payment?: {
     amount?: Prisma.Decimal | number | string | null;
+    method?: string | null;
+    screenshot_url?: string | null;
   } | null;
+  phone_number?: string;
   reservedSeats: Array<{
     seatAssignment: {
       seat: {
@@ -73,6 +79,7 @@ export const buildReservationStatusEmailGroups = (
     const lineItem: ReservationStatusEmailLineItem = {
       reservationNumber: reservation.reservation_number,
       showName: reservation.show.show_name,
+      venue: "venue" in reservation.show ? (reservation.show as { venue?: string }).venue : undefined,
       scheduleLabel: formatScheduleLabel(
         reservation.sched.sched_date,
         reservation.sched.sched_start_time,
@@ -82,6 +89,8 @@ export const buildReservationStatusEmailGroups = (
         (row) => row.seatAssignment.seat.seat_number,
       ),
       amount: formatCurrency(Number(reservation.payment?.amount ?? 0)),
+      paymentMethod: reservation.payment?.method ? String(reservation.payment.method) : null,
+      proofImageUrl: reservation.payment?.screenshot_url ?? null,
     };
 
     if (!existing) {

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { redis } from "@/lib/clients/redis";
 import { ably } from "@/lib/clients/ably";
+import { clearWalkInPauseState } from "@/lib/queue/closeQueue";
 import type {
   ActiveSession,
   QueueActiveEvent,
@@ -149,18 +150,20 @@ export async function expireQueueSession({
     return { promoted: false };
   }
 
+  await clearWalkInPauseState(showScopeId);
   return promoteNextInQueue({ showScopeId });
 }
 
-const hasValidActiveSession = async (showScopeId: string): Promise<boolean> => {
+export const getCurrentActiveSession = async (
+  showScopeId: string,
+): Promise<ActiveSession | null> => {
   const activePattern = `seatwise:active:${showScopeId}:*`;
   const activeKeys = (await redis.keys(activePattern)) as string[];
   if (!Array.isArray(activeKeys) || activeKeys.length === 0) {
-    return false;
+    return null;
   }
 
   const now = Date.now();
-  let hasActive = false;
 
   for (const activeKey of activeKeys) {
     const ticketIdFromKey = extractTicketIdFromActiveKey(showScopeId, activeKey);
@@ -195,10 +198,10 @@ const hasValidActiveSession = async (showScopeId: string): Promise<boolean> => {
       continue;
     }
 
-    hasActive = true;
+    return active;
   }
 
-  return hasActive;
+  return null;
 };
 
 const publishQueueMoveEvent = async (showScopeId: string) => {
@@ -256,8 +259,8 @@ export async function promoteNextInQueue({
       return { promoted: false };
     }
 
-    const hasActive = await hasValidActiveSession(showScopeId);
-    if (hasActive) {
+    const activeSession = await getCurrentActiveSession(showScopeId);
+    if (activeSession) {
       return { promoted: false };
     }
 
@@ -335,5 +338,6 @@ export async function completeActiveSessionAndPromoteNext({
   const newAvg = Math.round(safeCurrentAvg * 0.9 + thisUserTimeMs * 0.1);
   await redis.set(avgServiceMsKey, newAvg);
 
+  await clearWalkInPauseState(showScopeId);
   return promoteNextInQueue({ showScopeId });
 }

@@ -7,6 +7,7 @@ interface JoinQueueParams {
     showScopeId: string; // format: "showId:schedId"
     userId: string;
     userName: string;
+    queueScore?: number;
 }
 
 interface JoinQueueResult {
@@ -39,6 +40,7 @@ export async function joinQueue({
     showScopeId,
     userId,
     userName,
+    queueScore,
 }: JoinQueueParams): Promise<JoinQueueResult> {
     try {
         // 1. Check if user is already in queue
@@ -75,7 +77,7 @@ export async function joinQueue({
 
         // 2. Generate unique ticket ID
         const ticketId = uuidv4();
-        const timestamp = Date.now();
+        const timestamp = typeof queueScore === 'number' ? queueScore : Date.now();
 
         // 3. Create ticket data
         const ticket: TicketData = {

@@ -1,6 +1,12 @@
 import { redis } from '@/lib/clients/redis';
 import { ably } from '@/lib/clients/ably';
-import type { QueueClosedEvent } from '@/lib/types/queue';
+import type { ActiveSession } from '@/lib/types/queue';
+import type { QueueClosedEvent, QueuePauseReason } from '@/lib/types/queue';
+import {
+    createQueuePauseState,
+    parseQueuePauseState,
+    shouldClearWalkInPauseState,
+} from '@/lib/queue/pauseState';
 
 /**
  * Close queue and notify all users
@@ -75,21 +81,57 @@ export async function closeQueueChannel(
     }
 }
 
+export async function getQueuePauseState(showScopeId: string) {
+    const pausedKey = `seatwise:paused:${showScopeId}`;
+    const pausedRaw = await redis.get(pausedKey);
+    const pauseState = parseQueuePauseState(pausedRaw);
+    if (!pauseState) {
+        return null;
+    }
+
+    const hasLiveActiveSession = await queueHasLiveActiveSession(showScopeId);
+    if (
+        shouldClearWalkInPauseState({
+            pauseState,
+            hasLiveActiveSession,
+        })
+    ) {
+        await redis.del(pausedKey);
+        return null;
+    }
+
+    return pauseState;
+}
+
+export async function clearWalkInPauseState(showScopeId: string) {
+    const pausedKey = `seatwise:paused:${showScopeId}`;
+    const pauseState = parseQueuePauseState(await redis.get(pausedKey));
+    if (pauseState?.reason !== 'walk_in') {
+        return false;
+    }
+
+    await redis.del(pausedKey);
+    return true;
+}
+
 /**
  * Pause queue (for POSTPONED status)
  * Keeps data but prevents new joins
  */
-export async function pauseQueueChannel(showScopeId: string) {
+export async function pauseQueueChannel(
+    showScopeId: string,
+    reason: QueuePauseReason = 'postponed'
+) {
     try {
-        // Set a flag to indicate queue is paused
         const pausedKey = `seatwise:paused:${showScopeId}`;
-        await redis.set(pausedKey, 1);
+        const pauseState = createQueuePauseState(reason);
+        await redis.set(pausedKey, JSON.stringify(pauseState));
 
         // Notify all users
         const channel = ably.channels.get(`seatwise:${showScopeId}:public`);
         await channel.publish('queue-event', {
             type: 'QUEUE_CLOSED',
-            message: 'This show has been postponed. Queue is temporarily paused.',
+            message: pauseState.message,
             timestamp: Date.now(),
         });
 
@@ -98,6 +140,7 @@ export async function pauseQueueChannel(showScopeId: string) {
         return {
             success: true,
             showScopeId,
+            reason,
             message: 'Queue paused successfully',
         };
     } catch (error) {
@@ -135,3 +178,39 @@ export async function resumeQueueChannel(showScopeId: string) {
         throw error;
     }
 }
+
+const parseActiveSession = (value: unknown): ActiveSession | null => {
+    if (value == null) return null;
+    if (typeof value === 'string') {
+        try {
+            return JSON.parse(value) as ActiveSession;
+        } catch {
+            return null;
+        }
+    }
+    if (typeof value === 'object') {
+        return value as ActiveSession;
+    }
+    return null;
+};
+
+const queueHasLiveActiveSession = async (showScopeId: string) => {
+    const activeKeys = (await redis.keys(`seatwise:active:${showScopeId}:*`)) as string[];
+    if (!Array.isArray(activeKeys) || activeKeys.length === 0) {
+        return false;
+    }
+
+    const now = Date.now();
+
+    for (const activeKey of activeKeys) {
+        const session = parseActiveSession(await redis.get(activeKey));
+        if (!session || session.expiresAt <= now) {
+            await redis.del(activeKey);
+            continue;
+        }
+
+        return true;
+    }
+
+    return false;
+};

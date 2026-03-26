@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+
+import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 import cloudinary from "@/lib/cloudinary";
-import { validateActiveSession } from "@/lib/queue/validateActiveSession";
-import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
 import { sendReservationSubmittedEmail } from "@/lib/email/sendReservationSubmittedEmail";
+import { sendWalkInReceiptEmail } from "@/lib/email/sendWalkInReceiptEmail";
+import { prisma } from "@/lib/prisma";
+import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
+import { validateActiveSession } from "@/lib/queue/validateActiveSession";
+import { buildCompletionPaymentRecord } from "@/lib/reservations/completionPayment";
 import {
   getEffectiveSchedStatus,
+  isSchedStatusReservable,
   syncScheduleCapacityStatuses,
 } from "@/lib/shows/effectiveStatus";
+import {
+  type WalkInReceiptPayload,
+} from "@/lib/walk-in/receipt";
+import { uploadWalkInReceiptImage } from "@/lib/walk-in/uploadReceiptImage";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-PH", {
@@ -17,6 +26,20 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value);
 
+const formatScheduleLabel = (dateValue: Date, startValue: Date, endValue: Date) => {
+  const dateLabel = new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(dateValue);
+  const timeLabel = new Intl.DateTimeFormat("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `${dateLabel}, ${timeLabel.format(startValue)} - ${timeLabel.format(endValue)}`;
+};
+
 const normalize = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_PHONE_REGEX = /^09\d{9}$/;
@@ -24,87 +47,99 @@ const DATA_URL_IMAGE_REGEX = /^data:image\/[a-zA-Z0-9.+-]+;base64,/;
 const RESERVATION_NUMBER_MAX_ATTEMPTS = 50;
 const RESERVATION_TRANSACTION_TIMEOUT_MS = 15_000;
 
+type CompletionMode = "online" | "walk_in";
+
+type CompletionRequestBody = {
+  showId?: string;
+  schedId?: string;
+  guestId?: string;
+  ticketId?: string;
+  activeToken?: string;
+  seatIds?: string[];
+  screenshotUrl?: string;
+  firstName?: string;
+  lastName?: string;
+  address?: string;
+  email?: string;
+  phoneNumber?: string;
+  mode?: CompletionMode;
+};
+
+type ReservationDraft = {
+  reservationId: string;
+  reservationNumber: string;
+  seatNumbers: string[];
+  totalAmount: number;
+};
+
 const generateReservationNumber = () =>
   Math.floor(Math.random() * 10_000)
     .toString()
     .padStart(4, "0");
 
+const normalizeMode = (value: unknown): CompletionMode =>
+  value === "walk_in" ? "walk_in" : "online";
+
+const buildContact = (body: CompletionRequestBody) => ({
+  firstName: normalize(body.firstName),
+  lastName: normalize(body.lastName),
+  address: normalize(body.address),
+  email: normalize(body.email).toLowerCase(),
+  phoneNumber: normalize(body.phoneNumber),
+});
+
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as {
-      showId?: string;
-      schedId?: string;
-      guestId?: string;
-      ticketId?: string;
-      activeToken?: string;
-      seatIds?: string[];
-      screenshotUrl?: string;
-      firstName?: string;
-      lastName?: string;
-      address?: string;
-      email?: string;
-      phoneNumber?: string;
-    };
+    const body = (await request.json()) as CompletionRequestBody;
+    const mode = normalizeMode(body.mode);
+    const isWalkInMode = mode === "walk_in";
+    let adminContext: Awaited<ReturnType<typeof getCurrentAdminContext>> | null = null;
 
-    const {
-      showId,
-      schedId,
-      guestId,
-      ticketId,
-      activeToken,
-      seatIds = [],
-      screenshotUrl,
-      firstName,
-      lastName,
-      address,
-      email,
-      phoneNumber,
-    } = body;
+    const showId = normalize(body.showId);
+    const schedId = normalize(body.schedId);
+    const ticketId = normalize(body.ticketId);
+    const activeToken = normalize(body.activeToken);
 
-    if (!showId || !schedId || !guestId || !ticketId || !activeToken) {
+    let participantId = normalize(body.guestId);
+
+    if (isWalkInMode) {
+      try {
+        adminContext = await getCurrentAdminContext();
+        participantId = adminContext.userId;
+      } catch (error) {
+        if (error instanceof AdminContextError) {
+          return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+        }
+
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
+    if (!showId || !schedId || !participantId || !ticketId || !activeToken) {
       return NextResponse.json(
         { success: false, error: "Missing queue session identifiers." },
         { status: 400 },
       );
     }
 
-    if (!Array.isArray(seatIds) || seatIds.length === 0) {
+    const seatIds = Array.isArray(body.seatIds) ? body.seatIds : [];
+    if (seatIds.length === 0) {
       return NextResponse.json(
         { success: false, error: "Please select at least one seat." },
         { status: 400 },
       );
     }
 
-    if (!screenshotUrl || !DATA_URL_IMAGE_REGEX.test(screenshotUrl)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid payment screenshot payload." },
-        { status: 400 },
-      );
+    if (!isWalkInMode) {
+      if (!body.screenshotUrl || !DATA_URL_IMAGE_REGEX.test(body.screenshotUrl)) {
+        return NextResponse.json(
+          { success: false, error: "Invalid payment screenshot payload." },
+          { status: 400 },
+        );
+      }
     }
 
-    let uploadedScreenshotUrl: string;
-    try {
-      const upload = await cloudinary.uploader.upload(screenshotUrl, {
-        folder: "seatwise/settings/payment_submissions",
-        resource_type: "image",
-      });
-      uploadedScreenshotUrl = upload.secure_url;
-    } catch (error) {
-      console.error("[queue/complete] failed to upload payment screenshot:", error);
-      return NextResponse.json(
-        { success: false, error: "Failed to upload payment screenshot." },
-        { status: 500 },
-      );
-    }
-
-    const contact = {
-      firstName: normalize(firstName),
-      lastName: normalize(lastName),
-      address: normalize(address),
-      email: normalize(email).toLowerCase(),
-      phoneNumber: normalize(phoneNumber),
-    };
-
+    const contact = buildContact(body);
     if (
       !contact.firstName ||
       !contact.lastName ||
@@ -130,14 +165,26 @@ export async function POST(request: NextRequest) {
     }
 
     const schedule = await prisma.sched.findFirst({
-      where: { sched_id: schedId, show_id: showId },
+      where: {
+        sched_id: schedId,
+        show_id: showId,
+        show:
+          isWalkInMode && adminContext && !adminContext.isSuperadmin
+            ? { team_id: adminContext.teamId ?? "__NO_TEAM__" }
+            : undefined,
+      },
       select: {
         sched_id: true,
         sched_date: true,
         sched_start_time: true,
         sched_end_time: true,
         status: true,
-        show: { select: { show_name: true } },
+        show: {
+          select: {
+            show_name: true,
+            venue: true,
+          },
+        },
       },
     });
 
@@ -145,7 +192,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Schedule not found" }, { status: 404 });
     }
 
-    if (getEffectiveSchedStatus(schedule) !== "OPEN") {
+    if (!isSchedStatusReservable(getEffectiveSchedStatus(schedule))) {
       return NextResponse.json(
         { success: false, error: "This schedule is not currently accepting reservations." },
         { status: 400 },
@@ -156,7 +203,7 @@ export async function POST(request: NextRequest) {
     const validation = await validateActiveSession({
       showScopeId,
       ticketId,
-      userId: guestId,
+      userId: participantId,
       activeToken,
     });
 
@@ -196,23 +243,73 @@ export async function POST(request: NextRequest) {
       0,
     );
 
-    let reservation:
-      | {
-          reservationId: string;
-          reservationNumber: string;
-          seatNumbers: string[];
-          totalAmount: number;
-        }
-      | null = null;
+    let uploadedScreenshotUrl: string | null = null;
+    if (!isWalkInMode) {
+      try {
+        const upload = await cloudinary.uploader.upload(body.screenshotUrl!, {
+          folder: "seatwise/settings/payment_submissions",
+          resource_type: "image",
+        });
+        uploadedScreenshotUrl = upload.secure_url;
+      } catch (error) {
+        console.error("[queue/complete] failed to upload payment screenshot:", error);
+        return NextResponse.json(
+          { success: false, error: "Failed to upload payment screenshot." },
+          { status: 500 },
+        );
+      }
+    }
 
-    for (
-      let attempt = 1;
-      attempt <= RESERVATION_NUMBER_MAX_ATTEMPTS;
-      attempt += 1
-    ) {
+    const scheduleLabel = formatScheduleLabel(
+      schedule.sched_date,
+      schedule.sched_start_time,
+      schedule.sched_end_time,
+    );
+
+    let reservation: ReservationDraft | null = null;
+    let walkInReceiptPayload: WalkInReceiptPayload | null = null;
+    let walkInReceiptUrl: string | null = null;
+    let paymentRecordedAt: Date | null = null;
+
+    for (let attempt = 1; attempt <= RESERVATION_NUMBER_MAX_ATTEMPTS; attempt += 1) {
       const reservationNumber = generateReservationNumber();
 
+      if (isWalkInMode) {
+        walkInReceiptPayload = {
+          reservationNumber,
+          customerName: `${contact.firstName} ${contact.lastName}`.trim(),
+          customerEmail: contact.email,
+          customerPhoneNumber: contact.phoneNumber,
+          showName: schedule.show.show_name,
+          venue: schedule.show.venue,
+          scheduleLabel,
+          seatNumbers,
+          totalAmount,
+        };
+
+        try {
+          walkInReceiptUrl = await uploadWalkInReceiptImage(walkInReceiptPayload, {
+            folder: "seatwise/settings/walk_in_receipts",
+            publicIdPrefix: "walk-in",
+            format: "png",
+          });
+        } catch (error) {
+          console.error("[queue/complete] failed to upload walk-in receipt:", error);
+          return NextResponse.json(
+            { success: false, error: "Failed to generate walk-in receipt." },
+            { status: 500 },
+          );
+        }
+      }
+
       try {
+        paymentRecordedAt = isWalkInMode ? new Date() : null;
+        const paymentRecord = buildCompletionPaymentRecord({
+          mode,
+          assetUrl: isWalkInMode ? walkInReceiptUrl : uploadedScreenshotUrl,
+          paidAt: paymentRecordedAt,
+        });
+
         reservation = await prisma.$transaction(async (tx) => {
           const reservedSeats = await tx.seatAssignment.updateMany({
             where: {
@@ -229,7 +326,7 @@ export async function POST(request: NextRequest) {
           const created = (await tx.reservation.create({
             data: {
               reservation_number: reservationNumber,
-              guest_id: guestId,
+              guest_id: participantId,
               show_id: showId,
               sched_id: schedId,
               first_name: contact.firstName,
@@ -237,9 +334,9 @@ export async function POST(request: NextRequest) {
               address: contact.address,
               email: contact.email,
               phone_number: contact.phoneNumber,
-              status: "PENDING",
+              status: isWalkInMode ? "CONFIRMED" : "PENDING",
             },
-          } as any)) as { reservation_id: string; reservation_number: string };
+          })) as { reservation_id: string; reservation_number: string };
 
           await tx.reservedSeat.createMany({
             data: seatAssignmentIds.map((seatAssignmentId) => ({
@@ -252,9 +349,7 @@ export async function POST(request: NextRequest) {
             data: {
               reservation_id: created.reservation_id,
               amount: totalAmount,
-              method: "GCASH",
-              status: "PENDING",
-              screenshot_url: uploadedScreenshotUrl,
+              ...paymentRecord,
             },
           });
 
@@ -267,6 +362,7 @@ export async function POST(request: NextRequest) {
             totalAmount,
           };
         }, { timeout: RESERVATION_TRANSACTION_TIMEOUT_MS });
+
         break;
       } catch (error) {
         const isUniqueConflict =
@@ -282,8 +378,7 @@ export async function POST(request: NextRequest) {
         const isReservationNumberConflict =
           isUniqueConflict &&
           (conflictTargets.includes("Reservation_show_id_reservation_number_key") ||
-            (conflictTargets.includes("show_id") &&
-              conflictTargets.includes("reservation_number")));
+            (conflictTargets.includes("show_id") && conflictTargets.includes("reservation_number")));
 
         if (isReservationNumberConflict) {
           continue;
@@ -294,9 +389,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!reservation) {
-      throw new Error(
-        "Failed to generate a unique reservation number. Please try again.",
-      );
+      throw new Error("Failed to generate a unique reservation number. Please try again.");
     }
 
     const promotion = await completeActiveSessionAndPromoteNext({
@@ -304,17 +397,40 @@ export async function POST(request: NextRequest) {
       session: validation.session,
     });
 
-    void sendReservationSubmittedEmail({
-      to: contact.email,
-      customerName: `${contact.firstName} ${contact.lastName}`.trim(),
-      reservationNumber: reservation.reservationNumber,
-      showName: schedule.show.show_name,
-      scheduleLabel: new Date(schedule.sched_date).toLocaleDateString(),
-      seatNumbers: reservation.seatNumbers,
-      totalAmount: formatCurrency(reservation.totalAmount),
-    }).catch((error) => {
-      console.error("[queue/complete] failed to send email:", error);
-    });
+    let warning: string | null = null;
+
+    if (isWalkInMode && walkInReceiptPayload) {
+      try {
+        await sendWalkInReceiptEmail({
+          to: contact.email,
+          customerName: walkInReceiptPayload.customerName,
+          reservationNumber: reservation.reservationNumber,
+          showName: schedule.show.show_name,
+          scheduleLabel,
+          seatNumbers: reservation.seatNumbers,
+          totalAmount: formatCurrency(reservation.totalAmount),
+          receiptImageUrl: walkInReceiptUrl ?? "",
+        });
+      } catch (error) {
+        console.error("[queue/complete] failed to send walk-in receipt email:", error);
+        warning = "Walk-in sale was saved, but the receipt email could not be sent.";
+      }
+    }
+
+    if (!isWalkInMode) {
+      void sendReservationSubmittedEmail({
+        to: contact.email,
+        customerName: `${contact.firstName} ${contact.lastName}`.trim(),
+        reservationNumber: reservation.reservationNumber,
+        showName: schedule.show.show_name,
+        scheduleLabel: new Date(schedule.sched_date).toLocaleDateString(),
+        seatNumbers: reservation.seatNumbers,
+        totalAmount: formatCurrency(reservation.totalAmount),
+        proofImageUrl: uploadedScreenshotUrl,
+      }).catch((error) => {
+        console.error("[queue/complete] failed to send email:", error);
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -323,7 +439,8 @@ export async function POST(request: NextRequest) {
       showScopeId,
       showName: schedule.show.show_name,
       reservedCount: reservation.seatNumbers.length,
-      emailSent: true,
+      emailSent: isWalkInMode ? warning == null : true,
+      warning,
       promoted: promotion.promoted,
       next: promotion.activeSession
         ? {

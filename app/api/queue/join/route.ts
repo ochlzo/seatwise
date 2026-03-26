@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { joinQueue } from '@/lib/queue/joinQueue';
+import { getQueuePauseState } from '@/lib/queue/closeQueue';
 import { promoteNextInQueue } from '@/lib/queue/queueLifecycle';
 import { prisma } from '@/lib/prisma';
 import {
+    isSchedStatusReservable,
     getEffectiveSchedStatus,
     getEffectiveShowStatus,
 } from '@/lib/shows/effectiveStatus';
@@ -66,15 +68,23 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (effectiveSchedStatus !== "OPEN") {
+        if (!isSchedStatusReservable(effectiveSchedStatus)) {
             return NextResponse.json(
                 { success: false, error: 'This schedule is not currently accepting reservations' },
                 { status: 400 },
             );
         }
 
-        // 3. Join the queue
         const showScopeId = `${showId}:${schedId}`;
+        const pauseState = await getQueuePauseState(showScopeId);
+        if (pauseState) {
+            return NextResponse.json(
+                { success: false, error: pauseState.message, pauseReason: pauseState.reason },
+                { status: 409 }
+            );
+        }
+
+        // 3. Join the queue
         const userName =
             typeof displayName === "string" && displayName.trim().length > 0
                 ? displayName.trim()
