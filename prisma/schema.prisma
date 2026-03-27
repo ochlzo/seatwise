@@ -23,6 +23,7 @@ model Admin {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   team         Team?         @relation(fields: [team_id], references: [team_id])
+  ticket_consumed_reservations Reservation[] @relation("ReservationTicketConsumedByAdmin")
 
   @@index([team_id])
 }
@@ -42,6 +43,7 @@ model Show {
   gcash_account_name String?
   team_id          String
   seatmap_id       String?
+  ticket_template_id String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   categorySets     CategorySet[]
@@ -49,8 +51,10 @@ model Show {
   scheds           Sched[]
   seatmap          Seatmap?      @relation(fields: [seatmap_id], references: [seatmap_id])
   team             Team          @relation(fields: [team_id], references: [team_id])
+  ticketTemplate   TicketTemplate? @relation(fields: [ticket_template_id], references: [ticket_template_id])
 
   @@index([team_id])
+  @@index([ticket_template_id])
 }
 
 model Team {
@@ -60,6 +64,7 @@ model Team {
   updatedAt  DateTime @updatedAt
   admins     Admin[]
   shows      Show[]
+  ticketTemplates TicketTemplate[]
 }
 
 model Sched {
@@ -163,6 +168,33 @@ model Set {
   @@index([seat_category_id])
 }
 
+model TicketTemplate {
+  ticket_template_id String                  @id @default(cuid())
+  team_id            String
+  template_name      String
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  shows              Show[]
+  team               Team                    @relation(fields: [team_id], references: [team_id])
+  versions           TicketTemplateVersion[]
+
+  @@unique([team_id, template_name])
+  @@index([team_id])
+}
+
+model TicketTemplateVersion {
+  ticket_template_version_id String          @id @default(cuid())
+  ticket_template_id         String
+  version_number             Int
+  template_schema            Json
+  createdAt                  DateTime        @default(now())
+  reservations               Reservation[]
+  ticketTemplate             TicketTemplate  @relation(fields: [ticket_template_id], references: [ticket_template_id])
+
+  @@unique([ticket_template_id, version_number])
+  @@index([ticket_template_id])
+}
+
 model SeatAssignment {
   seat_assignment_id String        @id @default(cuid())
   seat_status        SeatStatus    @default(OPEN)
@@ -194,17 +226,26 @@ model Reservation {
   show_id        String
   sched_id       String
   status         ReservationStatus @default(PENDING)
+  ticket_template_version_id String?
+  ticket_issued_at DateTime?
+  ticket_consumed_at DateTime?
+  ticket_consumed_by_admin_id String?
+  ticket_delivery_error String?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   payment        Payment?
   show           Show              @relation(fields: [show_id], references: [show_id])
   sched          Sched             @relation(fields: [sched_id], references: [sched_id])
   reservedSeats  ReservedSeat[]
+  ticketConsumedByAdmin Admin? @relation("ReservationTicketConsumedByAdmin", fields: [ticket_consumed_by_admin_id], references: [user_id])
+  ticketTemplateVersion TicketTemplateVersion? @relation(fields: [ticket_template_version_id], references: [ticket_template_version_id])
 
   @@index([guest_id])
   @@index([show_id])
   @@index([sched_id])
   @@index([reservation_number])
+  @@index([ticket_template_version_id])
+  @@index([ticket_consumed_by_admin_id])
   @@unique([show_id, reservation_number])
 }
 
@@ -270,6 +311,7 @@ enum ColorCodes {
 enum SeatStatus {
   OPEN
   RESERVED
+  CONSUMED
 }
 
 enum ReservationStatus {
