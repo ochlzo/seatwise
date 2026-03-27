@@ -174,9 +174,9 @@ function hydrateAssetNode(node: TicketTemplateAssetNode): TicketTemplateAssetEdi
   return {
     ...node,
     kind: "asset",
-    opacity: 1,
-    src: node.assetKey ?? null,
-    name: node.assetKey ?? null,
+    opacity: clampOpacity(node.opacity),
+    src: node.src ?? node.assetKey ?? null,
+    name: node.name ?? node.assetKey ?? null,
   };
 }
 
@@ -184,14 +184,14 @@ function hydrateFieldNode(node: TicketTemplateFieldNode): TicketTemplateFieldEdi
   return {
     ...node,
     kind: "field",
-    opacity: 1,
-    label: getFieldLabel(node.fieldKey),
-    width: 420,
-    fontSize: 64,
-    fontFamily: "Georgia",
-    fontWeight: 700,
-    fill: "#111827",
-    align: "left",
+    opacity: clampOpacity(node.opacity),
+    label: node.label ?? getFieldLabel(node.fieldKey),
+    width: clampNumber(node.width, 420, 80),
+    fontSize: clampNumber(node.fontSize, 64, 12),
+    fontFamily: node.fontFamily ?? "Georgia",
+    fontWeight: clampNumber(node.fontWeight, 700, 100),
+    fill: node.fill ?? "#111827",
+    align: node.align ?? "left",
   };
 }
 
@@ -199,7 +199,7 @@ function hydrateQrNode(node: TicketTemplateQrNode): TicketTemplateQrEditorNode {
   return {
     ...node,
     kind: "qr",
-    opacity: 1,
+    opacity: clampOpacity(node.opacity),
   };
 }
 
@@ -275,6 +275,19 @@ const ticketTemplateSlice = createSlice({
   reducers: {
     resetTicketTemplate: () => createInitialState(),
     markTicketTemplateSaved(state) {
+      state.hasUnsavedChanges = false;
+    },
+    registerSavedTicketTemplate(
+      state,
+      action: PayloadAction<{
+        ticketTemplateId: string;
+        loadedVersionId: string;
+        title: string;
+      }>,
+    ) {
+      state.ticketTemplateId = action.payload.ticketTemplateId;
+      state.loadedVersionId = action.payload.loadedVersionId;
+      state.title = action.payload.title.trim() || TICKET_TEMPLATE_DEFAULT_TITLE;
       state.hasUnsavedChanges = false;
     },
     setTitle(state, action: PayloadAction<string>) {
@@ -500,6 +513,7 @@ export const {
   markTicketTemplateSaved,
   moveAssetLayer,
   redo,
+  registerSavedTicketTemplate,
   replaceNodes,
   resetTicketTemplate,
   selectNode,
@@ -527,15 +541,26 @@ export function serializeTicketTemplateEditor(
             y: node.y,
             width: node.width,
             height: node.height,
+            opacity: node.opacity,
             assetKey: node.assetKey ?? undefined,
+            src: node.src ?? undefined,
+            name: node.name ?? undefined,
           };
         case "field":
           return {
             id: node.id,
             kind: "field",
             fieldKey: node.fieldKey,
+            label: node.label,
             x: node.x,
             y: node.y,
+            width: node.width,
+            fontSize: node.fontSize,
+            fontFamily: node.fontFamily,
+            fontWeight: node.fontWeight,
+            fill: node.fill,
+            align: node.align,
+            opacity: node.opacity,
           };
         case "qr":
           return {
@@ -544,6 +569,7 @@ export function serializeTicketTemplateEditor(
             x: node.x,
             y: node.y,
             size: node.size,
+            opacity: node.opacity,
           };
       }
     }),

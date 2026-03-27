@@ -30,6 +30,18 @@ function toStringValue(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
+function toNullableStringValue(value: unknown): string | null | undefined {
+  if (value === null) {
+    return null;
+  }
+
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function toAlignValue(value: unknown): "left" | "center" | "right" {
+  return value === "center" || value === "right" ? value : "left";
+}
+
 function isTicketTemplateNodeKind(value: unknown): value is TicketTemplateNodeKind {
   return (
     typeof value === "string" &&
@@ -48,10 +60,13 @@ function normalizeAssetNode(
     y: toFiniteNumber(node.y),
     width: toFiniteNumber(node.width),
     height: toFiniteNumber(node.height),
+    opacity: toFiniteNumber(node.opacity, 1),
     assetKey:
       typeof node.assetKey === "string" || node.assetKey === null
         ? node.assetKey
         : undefined,
+    src: toNullableStringValue(node.src),
+    name: toNullableStringValue(node.name),
   };
 }
 
@@ -63,8 +78,16 @@ function normalizeFieldNode(
     id: toStringValue(node.id, `field-${index}`),
     kind: "field",
     fieldKey: toStringValue(node.fieldKey, ""),
+    label: toStringValue(node.label, toStringValue(node.fieldKey, "")),
     x: toFiniteNumber(node.x),
     y: toFiniteNumber(node.y),
+    width: toFiniteNumber(node.width, 420),
+    fontSize: toFiniteNumber(node.fontSize, 64),
+    fontFamily: toStringValue(node.fontFamily, "Georgia"),
+    fontWeight: toFiniteNumber(node.fontWeight, 700),
+    fill: toStringValue(node.fill, "#111827"),
+    align: toAlignValue(node.align),
+    opacity: toFiniteNumber(node.opacity, 1),
   };
 }
 
@@ -78,6 +101,7 @@ function normalizeQrNode(
     x: toFiniteNumber(node.x),
     y: toFiniteNumber(node.y),
     size: toFiniteNumber(node.size),
+    opacity: toFiniteNumber(node.opacity, 1),
   };
 }
 

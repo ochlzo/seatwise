@@ -4,33 +4,56 @@ import cloudinary from "@/lib/cloudinary";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { prisma } from "@/lib/prisma";
 
-type UploadPurpose = "show-thumbnail" | "avatar-custom" | "gcash-receipt";
+type UploadPurpose =
+  | "show-thumbnail"
+  | "avatar-custom"
+  | "gcash-receipt"
+  | "ticket-template-asset";
 
 const PURPOSES: Record<
   UploadPurpose,
   {
-    folder: string;
     requiresAdmin: boolean;
+    buildFolder: (params: {
+      ticketTemplateId?: string;
+      uploadKey?: string;
+    }) => string;
+    allowedFormats?: string;
   }
 > = {
   "show-thumbnail": {
-    folder: "seatwise/show_thumbnails",
     requiresAdmin: true,
+    buildFolder: () => "seatwise/show_thumbnails",
   },
   "avatar-custom": {
-    folder: "seatwise/avatars/user_custom",
     requiresAdmin: false,
+    buildFolder: () => "seatwise/avatars/user_custom",
   },
   "gcash-receipt": {
-    folder: "seatwise/settings/payment_submission",
     requiresAdmin: false,
+    buildFolder: () => "seatwise/settings/payment_submission",
+  },
+  "ticket-template-asset": {
+    requiresAdmin: true,
+    buildFolder: ({ ticketTemplateId, uploadKey }) => {
+      const folderKey = (ticketTemplateId?.trim() || uploadKey?.trim() || "draft")
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+      return `seatwise/ticket_templates/${folderKey || "draft"}/assets`;
+    },
+    allowedFormats: "png",
   },
 };
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => null)) as
-      | { purpose?: UploadPurpose }
+      | {
+          purpose?: UploadPurpose;
+          ticketTemplateId?: string;
+          uploadKey?: string;
+        }
       | null;
     const purpose = body?.purpose;
 
@@ -49,6 +72,10 @@ export async function POST(request: NextRequest) {
     const uid = decoded.uid;
 
     const config = PURPOSES[purpose];
+    const folder = config.buildFolder({
+      ticketTemplateId: body?.ticketTemplateId,
+      uploadKey: body?.uploadKey,
+    });
 
     if (config.requiresAdmin) {
       const admin = await prisma.admin.findUnique({
@@ -62,9 +89,13 @@ export async function POST(request: NextRequest) {
 
     const timestamp = Math.floor(Date.now() / 1000);
     const paramsToSign: Record<string, string | number> = {
-      folder: config.folder,
+      folder,
       timestamp,
     };
+
+    if (config.allowedFormats) {
+      paramsToSign.allowed_formats = config.allowedFormats;
+    }
 
     if (purpose === "avatar-custom") {
       paramsToSign.public_id = uid;
@@ -91,7 +122,8 @@ export async function POST(request: NextRequest) {
       cloudName,
       timestamp,
       signature,
-      folder: config.folder,
+      folder,
+      allowedFormats: config.allowedFormats,
       publicId: purpose === "avatar-custom" ? uid : undefined,
       overwrite: purpose === "avatar-custom",
       invalidate: purpose === "avatar-custom",

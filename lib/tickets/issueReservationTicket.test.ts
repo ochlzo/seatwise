@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createEmptyTicketTemplate } from "./templateSchema.ts";
+import {
+  createEmptyTicketTemplate,
+  normalizeTemplateVersion,
+} from "./templateSchema.ts";
 import {
   getTicketTemplateById,
   saveTicketTemplateVersionRecord,
@@ -201,7 +204,61 @@ test("saving a template creates version 1", async () => {
   assert.equal(saved.version.version_number, 1);
 });
 
-test("saving again creates version 2 for the same template", async () => {
+test("saving preserves uploaded asset refs and editor node properties in version JSON", async () => {
+  const db = createMemoryTicketTemplateDb();
+  const templateSchema = createEmptyTicketTemplate();
+
+  templateSchema.nodes.push(
+    {
+      id: "asset-hero",
+      kind: "asset",
+      x: 0,
+      y: 0,
+      width: 720,
+      height: 320,
+      opacity: 0.65,
+      assetKey: "seatwise/ticket_templates/draft-123/assets/hero",
+      src: "https://res.cloudinary.com/seatwise/image/upload/v1/hero.png",
+      name: "hero.png",
+    },
+    {
+      id: "field-booking-ref",
+      kind: "field",
+      fieldKey: "reservation_number",
+      label: "Booking Ref",
+      x: 120,
+      y: 160,
+      width: 420,
+      fontSize: 58,
+      fontFamily: "Georgia",
+      fontWeight: 700,
+      fill: "#111827",
+      align: "center",
+      opacity: 0.9,
+    },
+    {
+      id: "qr-1",
+      kind: "qr",
+      x: 2000,
+      y: 110,
+      size: 220,
+      opacity: 0.8,
+    },
+  );
+
+  const saved = await saveTicketTemplateVersionRecord(
+    {
+      teamId: "team-alpha",
+      templateName: "VIP Ticket",
+      templateSchema,
+    },
+    db,
+  );
+
+  assert.deepEqual(saved.version.template_schema.nodes, templateSchema.nodes);
+});
+
+test("saving again emits the next version number for the same template", async () => {
   const db = createMemoryTicketTemplateDb();
 
   const initial = await saveTicketTemplateVersionRecord(
@@ -235,7 +292,71 @@ test("saving again creates version 2 for the same template", async () => {
   assert.equal(savedAgain.template.ticket_template_id, initial.template.ticket_template_id);
   assert.equal(savedAgain.template.template_name, "Orchestra Ticket v2");
   assert.equal(savedAgain.version.version_number, 2);
-  assert.deepEqual(savedAgain.version.template_schema.nodes, nextSchema.nodes);
+  assert.deepEqual(
+    savedAgain.version.template_schema.nodes,
+    normalizeTemplateVersion(nextSchema).nodes,
+  );
+});
+
+test("saving preserves asset z-order from the editor state", async () => {
+  const db = createMemoryTicketTemplateDb();
+  const templateSchema = createEmptyTicketTemplate();
+
+  templateSchema.nodes.push(
+    {
+      id: "asset-background",
+      kind: "asset",
+      x: 0,
+      y: 0,
+      width: 2550,
+      height: 825,
+      assetKey: "seatwise/ticket_templates/draft-123/assets/background",
+      src: "https://res.cloudinary.com/seatwise/image/upload/v1/background.png",
+      name: "background.png",
+      opacity: 1,
+    },
+    {
+      id: "asset-logo",
+      kind: "asset",
+      x: 1840,
+      y: 64,
+      width: 240,
+      height: 240,
+      assetKey: "seatwise/ticket_templates/draft-123/assets/logo",
+      src: "https://res.cloudinary.com/seatwise/image/upload/v1/logo.png",
+      name: "logo.png",
+      opacity: 1,
+    },
+    {
+      id: "field-show-name",
+      kind: "field",
+      fieldKey: "show_name",
+      label: "Show Name",
+      x: 120,
+      y: 120,
+      width: 560,
+      fontSize: 72,
+      fontFamily: "Georgia",
+      fontWeight: 700,
+      fill: "#111827",
+      align: "left",
+      opacity: 1,
+    },
+  );
+
+  const saved = await saveTicketTemplateVersionRecord(
+    {
+      teamId: "team-alpha",
+      templateName: "Layered Ticket",
+      templateSchema,
+    },
+    db,
+  );
+
+  assert.deepEqual(
+    saved.version.template_schema.nodes.map((node) => node.id),
+    ["asset-background", "asset-logo", "field-show-name"],
+  );
 });
 
 test("loading a template returns the latest version plus historical versions", async () => {
@@ -286,5 +407,8 @@ test("loading a template returns the latest version plus historical versions", a
     loaded?.versions.map((version) => version.version_number),
     [2, 1],
   );
-  assert.deepEqual(loaded?.latestVersion.template_schema.nodes, secondSchema.nodes);
+  assert.deepEqual(
+    loaded?.latestVersion.template_schema.nodes,
+    normalizeTemplateVersion(secondSchema).nodes,
+  );
 });

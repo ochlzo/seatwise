@@ -126,22 +126,42 @@ export function TicketTemplateInspector() {
             />
 
             {selectedNode.kind === "asset" ? (
-              <div className="grid grid-cols-2 gap-3">
-                <NumericInput
-                  id="ticket-asset-width"
-                  label="Width"
-                  value={selectedNode.width}
-                  min={24}
-                  onCommit={(nextValue) => updateSelectedNode({ width: nextValue })}
-                />
-                <NumericInput
-                  id="ticket-asset-height"
-                  label="Height"
-                  value={selectedNode.height}
-                  min={24}
-                  onCommit={(nextValue) => updateSelectedNode({ height: nextValue })}
-                />
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <NumericInput
+                    id="ticket-asset-width"
+                    label="Width"
+                    value={selectedNode.width}
+                    min={24}
+                    onCommit={(nextValue) => updateSelectedNode({ width: nextValue })}
+                  />
+                  <NumericInput
+                    id="ticket-asset-height"
+                    label="Height"
+                    value={selectedNode.height}
+                    min={24}
+                    onCommit={(nextValue) => updateSelectedNode({ height: nextValue })}
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="ticket-asset-name">Asset Name</Label>
+                  <Input
+                    id="ticket-asset-name"
+                    value={selectedNode.name ?? ""}
+                    readOnly
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="ticket-asset-ref">Cloudinary Ref</Label>
+                  <Input
+                    id="ticket-asset-ref"
+                    value={selectedNode.assetKey ?? ""}
+                    readOnly
+                  />
+                </div>
+              </>
             ) : null}
 
             {selectedNode.kind === "field" ? (

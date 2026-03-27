@@ -41,6 +41,7 @@ export async function saveTicketTemplateAction(payload: SaveTicketTemplatePayloa
     return {
       success: true,
       ticketTemplateId: saved.template.ticket_template_id,
+      ticketTemplateVersionId: saved.version.ticket_template_version_id,
       versionNumber: saved.version.version_number,
     };
   } catch (error: unknown) {

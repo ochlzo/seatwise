@@ -1,4 +1,7 @@
-export type UploadPurpose = "show-thumbnail" | "avatar-custom";
+export type UploadPurpose =
+  | "show-thumbnail"
+  | "avatar-custom"
+  | "ticket-template-asset";
 
 type SignedUploadResponse = {
   uploadUrl: string;
@@ -6,6 +9,7 @@ type SignedUploadResponse = {
   timestamp: number;
   signature: string;
   folder: string;
+  allowedFormats?: string;
   publicId?: string;
   overwrite?: boolean;
   invalidate?: boolean;
@@ -19,11 +23,19 @@ type CloudinaryUploadResult = {
 export async function uploadImageToCloudinary(
   file: File | string,
   purpose: UploadPurpose,
+  options?: {
+    ticketTemplateId?: string | null;
+    uploadKey?: string | null;
+  },
 ): Promise<CloudinaryUploadResult> {
   const signResponse = await fetch("/api/uploads/cloudinary/sign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ purpose }),
+    body: JSON.stringify({
+      purpose,
+      ticketTemplateId: options?.ticketTemplateId ?? undefined,
+      uploadKey: options?.uploadKey ?? undefined,
+    }),
   });
 
   if (!signResponse.ok) {
@@ -38,6 +50,9 @@ export async function uploadImageToCloudinary(
   formData.append("timestamp", String(signed.timestamp));
   formData.append("signature", signed.signature);
   formData.append("folder", signed.folder);
+  if (signed.allowedFormats) {
+    formData.append("allowed_formats", signed.allowedFormats);
+  }
 
   if (signed.publicId) {
     formData.append("public_id", signed.publicId);
@@ -69,4 +84,3 @@ export async function uploadImageToCloudinary(
     publicId: uploadData.public_id,
   };
 }
-

@@ -98,15 +98,26 @@ function TicketAssetNode({
         }}
       />
       {!image ? (
-        <Rect
-          x={node.x * displayScale}
-          y={node.y * displayScale}
-          width={node.width * displayScale}
-          height={node.height * displayScale}
-          fill="#e5e7eb"
-          dash={[12, 6]}
-          listening={false}
-        />
+        <>
+          <Rect
+            x={node.x * displayScale}
+            y={node.y * displayScale}
+            width={node.width * displayScale}
+            height={node.height * displayScale}
+            fill="#e5e7eb"
+            dash={[12, 6]}
+            listening={false}
+          />
+          <Text
+            x={node.x * displayScale + 16}
+            y={node.y * displayScale + 16}
+            width={Math.max(node.width * displayScale - 32, 0)}
+            text={node.name ?? "PNG Asset"}
+            fontSize={Math.max(14, 24 * displayScale)}
+            fill="#52525b"
+            listening={false}
+          />
+        </>
       ) : null}
     </>
   );

@@ -12,6 +12,7 @@ import {
   createEmptyTicketTemplate,
   normalizeTemplateVersion,
 } from "./templateSchema.ts";
+import { serializeTicketTemplateEditor } from "../features/ticketTemplate/ticketTemplateSlice.ts";
 
 type EditorSliceModule = {
   default: (
@@ -149,4 +150,88 @@ test("ticket template editor keeps field nodes above asset nodes", async () => {
     editorState.nodes.map((node) => node.id),
     ["asset-1", "asset-2", "field-1", "qr-1"],
   );
+});
+
+test("serializeTicketTemplateEditor preserves editable node properties for save and reload", () => {
+  const serialized = serializeTicketTemplateEditor({
+    canvas: {
+      width: 2550,
+      height: 825,
+    },
+    nodes: [
+      {
+        id: "asset-hero",
+        kind: "asset",
+        x: 24,
+        y: 36,
+        width: 800,
+        height: 320,
+        opacity: 0.7,
+        assetKey: "seatwise/ticket_templates/draft-123/assets/hero",
+        src: "https://res.cloudinary.com/seatwise/image/upload/v1/hero.png",
+        name: "hero.png",
+      },
+      {
+        id: "field-booking-ref",
+        kind: "field",
+        fieldKey: "reservation_number",
+        label: "Booking Ref",
+        x: 120,
+        y: 160,
+        width: 420,
+        fontSize: 58,
+        fontFamily: "Georgia",
+        fontWeight: 700,
+        fill: "#111827",
+        align: "center",
+        opacity: 0.9,
+      },
+      {
+        id: "qr-1",
+        kind: "qr",
+        x: 2000,
+        y: 110,
+        size: 220,
+        opacity: 0.8,
+      },
+    ],
+  });
+
+  assert.deepEqual(serialized.nodes, [
+    {
+      id: "asset-hero",
+      kind: "asset",
+      x: 24,
+      y: 36,
+      width: 800,
+      height: 320,
+      opacity: 0.7,
+      assetKey: "seatwise/ticket_templates/draft-123/assets/hero",
+      src: "https://res.cloudinary.com/seatwise/image/upload/v1/hero.png",
+      name: "hero.png",
+    },
+    {
+      id: "field-booking-ref",
+      kind: "field",
+      fieldKey: "reservation_number",
+      label: "Booking Ref",
+      x: 120,
+      y: 160,
+      width: 420,
+      fontSize: 58,
+      fontFamily: "Georgia",
+      fontWeight: 700,
+      fill: "#111827",
+      align: "center",
+      opacity: 0.9,
+    },
+    {
+      id: "qr-1",
+      kind: "qr",
+      x: 2000,
+      y: 110,
+      size: 220,
+      opacity: 0.8,
+    },
+  ]);
 });

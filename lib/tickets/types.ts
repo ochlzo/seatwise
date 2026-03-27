@@ -18,15 +18,27 @@ type TicketTemplateNodeBase<TKind extends TicketTemplateNodeKind> = {
 export type TicketTemplateAssetNode = TicketTemplateNodeBase<"asset"> & {
   width: number;
   height: number;
+  opacity?: number;
   assetKey?: string | null;
+  src?: string | null;
+  name?: string | null;
 };
 
 export type TicketTemplateFieldNode = TicketTemplateNodeBase<"field"> & {
   fieldKey: string;
+  label?: string;
+  width?: number;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: number;
+  fill?: string;
+  align?: "left" | "center" | "right";
+  opacity?: number;
 };
 
 export type TicketTemplateQrNode = TicketTemplateNodeBase<"qr"> & {
   size: number;
+  opacity?: number;
 };
 
 export type TicketTemplateNode =

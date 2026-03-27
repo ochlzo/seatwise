@@ -11,6 +11,7 @@ import {
   FolderOpen,
   RotateCcw,
   RotateCw,
+  Save,
   Trash2,
 } from "lucide-react";
 
@@ -22,9 +23,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "@/components/ui/sonner";
+import { saveTicketTemplateAction } from "@/lib/actions/saveTicketTemplate";
 import {
   deleteSelectedNode,
   duplicateSelectedNode,
+  registerSavedTicketTemplate,
   redo,
   resetTicketTemplate,
   serializeTicketTemplateEditor,
@@ -44,6 +48,7 @@ export function TicketTemplateFileMenu() {
   const hasSelection = Boolean(ticketTemplateState.selectedNodeId);
   const hasUndo = ticketTemplateState.history.past.length > 0;
   const hasRedo = ticketTemplateState.history.future.length > 0;
+  const [isSavingTemplate, setIsSavingTemplate] = React.useState(false);
 
   const exportEditorJson = React.useCallback(() => {
     const payload = {
@@ -82,6 +87,50 @@ export function TicketTemplateFileMenu() {
     dispatch(resetTicketTemplate());
     router.push("/ticket-builder");
   }, [dispatch, router]);
+
+  const saveTemplate = React.useCallback(async () => {
+    const templateName = ticketTemplateState.title.trim();
+    if (!templateName) {
+      toast.error("Template name is required.");
+      return;
+    }
+
+    setIsSavingTemplate(true);
+
+    try {
+      const templateSchema = serializeTicketTemplateEditor(ticketTemplateState);
+      const result = await saveTicketTemplateAction({
+        ticketTemplateId: ticketTemplateState.ticketTemplateId ?? undefined,
+        templateName,
+        templateSchema,
+      });
+
+      if (!result.success || !result.ticketTemplateId || !result.ticketTemplateVersionId) {
+        throw new Error(result.error || "Failed to save ticket template.");
+      }
+
+      dispatch(
+        registerSavedTicketTemplate({
+          ticketTemplateId: result.ticketTemplateId,
+          loadedVersionId: result.ticketTemplateVersionId,
+          title: templateName,
+        }),
+      );
+
+      router.replace(`/ticket-builder?ticketTemplateId=${result.ticketTemplateId}`);
+      toast.success(
+        result.versionNumber === 1
+          ? "Saved template version 1."
+          : `Saved template version ${result.versionNumber}.`,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to save ticket template.";
+      toast.error(message);
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  }, [dispatch, router, ticketTemplateState]);
 
   return (
     <DropdownMenu>
@@ -143,6 +192,17 @@ export function TicketTemplateFileMenu() {
         >
           <Trash2 className="h-4 w-4 text-rose-600" />
           Delete Selection
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          onClick={() => void saveTemplate()}
+          disabled={isSavingTemplate}
+          className="gap-2"
+        >
+          <Save className="h-4 w-4 text-emerald-600" />
+          {isSavingTemplate ? "Saving Template..." : "Save Template"}
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
