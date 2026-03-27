@@ -23,6 +23,7 @@ const segmentMap: Record<string, string> = {
   admin: "Admin Dashboard",
   reservations: "Reservations",
   "seat-builder": "Seatmap Builder",
+  "ticket-builder": "Ticket Designer",
 };
 
 const formatSegment = (segment: string) => {
@@ -106,7 +107,7 @@ export function PageHeader({
     });
 
     return crumbs;
-  }, [pathname]);
+  }, [pathname, parentHref, parentLabel]);
 
   return (
     <StickyHeader

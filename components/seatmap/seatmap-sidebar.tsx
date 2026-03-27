@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useEffect } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Sidebar,
@@ -11,6 +12,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { buttonVariants } from "@/components/ui/button";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import {
   addSeatGrid,
@@ -23,10 +25,15 @@ import { DialogTrigger } from "@/components/ui/dialog";
 import { SeatmapHowToDialog } from "@/components/seatmap/how-to";
 import Image from "next/image";
 import type { SeatmapShapeNode } from "@/lib/seatmap/types";
+import { cn } from "@/lib/utils";
 
 export function SeatMapSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
+  const ticketNavItems = [
+    { label: "Ticket Templates", href: "/admin/ticket-templates" },
+    { label: "Ticket Designer", href: "/ticket-builder" },
+  ] as const;
   const dispatch = useAppDispatch();
   const drawShape = useAppSelector((state) => state.seatmap.drawShape);
   const showGuidePaths = useAppSelector(
@@ -100,6 +107,33 @@ export function SeatMapSidebar({
         </div>
       </SidebarHeader>
       <SidebarContent className="px-2 pb-2">
+        <div className="mb-4 rounded-lg border border-zinc-200/80 bg-white/70 p-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <div className="mb-2 px-1 text-xs font-medium text-zinc-500">
+            Tickets
+          </div>
+          <div className="grid gap-1">
+            {ticketNavItems.map((item) => {
+              const isActive = pathname === item.href;
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    buttonVariants({
+                      variant: isActive ? "secondary" : "ghost",
+                      size: "sm",
+                    }),
+                    "h-8 justify-start px-2 text-xs",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="text-xs text-zinc-500 mb-2">Seats (draggable)</div>
         <div
           className="p-3 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg flex flex-col items-center gap-2 cursor-grab active:cursor-grabbing hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"

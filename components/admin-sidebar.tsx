@@ -5,6 +5,7 @@ import {
     Settings2,
     Theater,
     Armchair,
+    Ticket,
     UserRound,
     ShieldUser
 } from "lucide-react"
@@ -90,7 +91,22 @@ const data = {
                     url: "/seat-builder",
                 },
             ],
-        }
+        },
+        {
+            title: "Tickets",
+            url: "#",
+            icon: Ticket,
+            items: [
+                {
+                    title: "Ticket Templates",
+                    url: "/admin/ticket-templates",
+                },
+                {
+                    title: "Ticket Designer",
+                    url: "/ticket-builder",
+                },
+            ],
+        },
     ]
 }
 
