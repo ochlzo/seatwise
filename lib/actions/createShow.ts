@@ -24,6 +24,7 @@ type CreateShowPayload = {
   gcash_account_name?: string;
   image_base64?: string;
   seatmap_id?: string; // Optional for DRAFT shows
+  ticket_template_id?: string;
   scheds?: Array<{
     client_id: string;
     sched_date: string;
@@ -131,6 +132,7 @@ export async function createShowAction(data: CreateShowPayload) {
       gcash_account_name,
       image_base64,
       seatmap_id,
+      ticket_template_id,
       scheds = [],
       category_sets = [],
       categories = [],
@@ -171,6 +173,7 @@ export async function createShowAction(data: CreateShowPayload) {
     const uniqueCategories = Array.from(uniqueCategoryMap.values());
 
     const trimmedSeatmapId = seatmap_id?.trim();
+    const trimmedTicketTemplateId = ticket_template_id?.trim();
     const seatmap = trimmedSeatmapId
       ? await prisma.seatmap.findUnique({
           where: { seatmap_id: trimmedSeatmapId },
@@ -179,6 +182,17 @@ export async function createShowAction(data: CreateShowPayload) {
             seats: {
               select: { seat_id: true },
             },
+          },
+        })
+      : null;
+    const ticketTemplate = trimmedTicketTemplateId
+      ? await prisma.ticketTemplate.findFirst({
+          where: {
+            ticket_template_id: trimmedTicketTemplateId,
+            team_id: adminTeamId,
+          },
+          select: {
+            ticket_template_id: true,
           },
         })
       : null;
@@ -196,10 +210,12 @@ export async function createShowAction(data: CreateShowPayload) {
       gcash_number,
       gcash_account_name,
       seatmap_id: trimmedSeatmapId,
+      ticket_template_id: trimmedTicketTemplateId,
       scheds,
       categorySets: normalizedCategorySets,
       seatIds: seatmap?.seats.map((seat) => seat.seat_id) ?? [],
       seatmapExists: Boolean(seatmap),
+      ticketTemplateExists: !trimmedTicketTemplateId || Boolean(ticketTemplate),
     });
 
     if (payloadValidation.hasValidationErrors) {
@@ -285,6 +301,7 @@ export async function createShowAction(data: CreateShowPayload) {
             gcash_account_name: gcash_account_name?.trim() || undefined,
             team_id: adminTeamId,
             seatmap_id: trimmedSeatmapId || undefined, // Allow undefined for DRAFT shows
+            ticket_template_id: trimmedTicketTemplateId || undefined,
           },
         });
 

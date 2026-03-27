@@ -217,6 +217,7 @@ type ShowDetail = {
   show_end_date: string | Date;
   show_image_key?: string | null;
   seatmap_id?: string | null;
+  ticket_template_id?: string | null;
   scheds: Array<{
     sched_id?: string;
     sched_date: string | Date;
@@ -284,6 +285,13 @@ type SeatmapOption = {
   updatedAt: string;
 };
 
+type TicketTemplateOption = {
+  ticket_template_id: string;
+  template_name: string;
+  latestVersionNumber: number | null;
+  updatedAt: string;
+};
+
 type SchedDraft = Omit<
   ShowDetail["scheds"][number],
   "sched_date" | "sched_start_time" | "sched_end_time"
@@ -307,6 +315,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
   const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
   const [seatmapQuery, setSeatmapQuery] = React.useState("");
+  const [ticketTemplates, setTicketTemplates] = React.useState<TicketTemplateOption[]>([]);
+  const [ticketTemplateQuery, setTicketTemplateQuery] = React.useState("");
   const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
   const [timeRanges, setTimeRanges] = React.useState([
     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
@@ -333,6 +343,13 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       seatmap.seatmap_name.toLowerCase().includes(query),
     );
   }, [seatmapQuery, seatmaps]);
+  const filteredTicketTemplates = React.useMemo(() => {
+    const query = ticketTemplateQuery.trim().toLowerCase();
+    if (!query) return ticketTemplates;
+    return ticketTemplates.filter((template) =>
+      template.template_name.toLowerCase().includes(query),
+    );
+  }, [ticketTemplateQuery, ticketTemplates]);
 
   const [formData, setFormData] = React.useState<{
     show_name: string;
@@ -345,6 +362,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     show_start_date: string;
     show_end_date: string;
     seatmap_id: string;
+    ticket_template_id: string;
     scheds: SchedDraft[];
   }>({
     show_name: show.show_name,
@@ -357,6 +375,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     show_start_date: toManilaDateKey(new Date(show.show_start_date)),
     show_end_date: toManilaDateKey(new Date(show.show_end_date)),
     seatmap_id: show.seatmap_id || "",
+    ticket_template_id: show.ticket_template_id || "",
     scheds: (show.scheds || []).map((s) => ({
       ...s,
       sched_date: toManilaDateKey(new Date(s.sched_date)),
@@ -389,6 +408,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       show_start_date: toManilaDateKey(new Date(show.show_start_date)),
       show_end_date: toManilaDateKey(new Date(show.show_end_date)),
       seatmap_id: show.seatmap_id || "",
+      ticket_template_id: show.ticket_template_id || "",
       scheds: (show.scheds || []).map((s) => ({
         ...s,
         sched_date: toManilaDateKey(new Date(s.sched_date)),
@@ -493,6 +513,26 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   React.useEffect(() => {
     if (!allowEdit) return;
 
+    let isMounted = true;
+    const loadTicketTemplates = async () => {
+      try {
+        const response = await fetch("/api/ticket-templates");
+        if (!response.ok) throw new Error("Failed to load ticket templates");
+        const data = await response.json();
+        if (isMounted) setTicketTemplates(data.ticketTemplates ?? []);
+      } catch (error) {
+        console.error("Failed to load ticket templates", error);
+      }
+    };
+    loadTicketTemplates();
+    return () => {
+      isMounted = false;
+    };
+  }, [allowEdit]);
+
+  React.useEffect(() => {
+    if (!allowEdit) return;
+
     if (!formData.seatmap_id) {
       if (seatmapQuery) {
         setSeatmapQuery("");
@@ -506,6 +546,23 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       setSeatmapQuery(match.seatmap_name);
     }
   }, [allowEdit, formData.seatmap_id, seatmapQuery, seatmaps]);
+
+  React.useEffect(() => {
+    if (!allowEdit) return;
+
+    if (!formData.ticket_template_id) {
+      if (ticketTemplateQuery) {
+        setTicketTemplateQuery("");
+      }
+      return;
+    }
+    const match = ticketTemplates.find(
+      (template) => template.ticket_template_id === formData.ticket_template_id,
+    );
+    if (match && match.template_name !== ticketTemplateQuery) {
+      setTicketTemplateQuery(match.template_name);
+    }
+  }, [allowEdit, formData.ticket_template_id, ticketTemplateQuery, ticketTemplates]);
 
   // Fetch seatmap data when seatmap is selected
   React.useEffect(() => {
@@ -1029,6 +1086,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
         show_start_date: formData.show_start_date,
         show_end_date: formData.show_end_date,
         seatmap_id: formData.seatmap_id || null,
+        ticket_template_id: formData.ticket_template_id || null,
         scheds: formData.scheds.map((s) => ({
           client_id: s.client_id,
           sched_date: s.sched_date,
@@ -1955,6 +2013,67 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
               {/* Seatmap Selection */}
               <div className="space-y-2">
                 <Label
+                  htmlFor="ticket-template"
+                  className="text-xs font-semibold text-muted-foreground"
+                >
+                  Ticket Template
+                </Label>
+                {isEditing ? (
+                  <Combobox
+                    value={formData.ticket_template_id}
+                    onValueChange={(value) => {
+                      const nextValue = value ?? "";
+                      setFormData({ ...formData, ticket_template_id: nextValue });
+                      const match = ticketTemplates.find(
+                        (template) => template.ticket_template_id === nextValue,
+                      );
+                      if (match) {
+                        setTicketTemplateQuery(match.template_name);
+                      }
+                    }}
+                  >
+                    <ComboboxInput
+                      id="ticket-template"
+                      placeholder="Select a ticket template"
+                      value={ticketTemplateQuery}
+                      onChange={(event) => setTicketTemplateQuery(event.target.value)}
+                    />
+                    <ComboboxContent>
+                      <ComboboxList>
+                        {filteredTicketTemplates.map((template) => (
+                          <ComboboxItem
+                            key={template.ticket_template_id}
+                            value={template.ticket_template_id}
+                          >
+                            {template.template_name}
+                            {template.latestVersionNumber
+                              ? ` (v${template.latestVersionNumber})`
+                              : ""}
+                          </ComboboxItem>
+                        ))}
+                        {ticketTemplates.length === 0 && (
+                          <ComboboxEmpty>No ticket templates found.</ComboboxEmpty>
+                        )}
+                      </ComboboxList>
+                    </ComboboxContent>
+                  </Combobox>
+                ) : (
+                  <Input
+                    id="ticket-template"
+                    value={
+                      ticketTemplates.find(
+                        (template) =>
+                          template.ticket_template_id === formData.ticket_template_id,
+                      )?.template_name || "Unassigned"
+                    }
+                    readOnly
+                    className="font-medium bg-muted/30"
+                  />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label
                   htmlFor="seatmap"
                   className="text-xs font-semibold text-muted-foreground"
                 >
@@ -2020,9 +2139,22 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           validationState.fieldErrors.seatmap &&
                           "border-red-500 focus-visible:ring-red-500/30",
                       )}
-                    />
+                  />
                 )}
               </div>
+
+              {!isEditing ? (
+                <div className="md:col-span-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push(`/admin/shows/${show.show_id}/scanner`)}
+                    className="w-full justify-center md:w-auto"
+                  >
+                    <Ticket className="mr-2 h-4 w-4" />
+                    Open Ticket Scanner
+                  </Button>
+                </div>
+              ) : null}
 
               {!formData.seatmap_id ? (
                 <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-8 text-center">
@@ -2634,6 +2766,17 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
             </div>
           )}
 
+          {!isEditing && allowEdit ? (
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/admin/shows/${show.show_id}/scanner`)}
+              className="w-full h-12 font-semibold uppercase tracking-widest text-base"
+            >
+              <Ticket className="w-5 h-5 mr-2" />
+              Open Ticket Scanner
+            </Button>
+          ) : null}
+
           {allowEdit && isEditing ? (
             <div className="grid gap-3">
               <Button
@@ -2667,6 +2810,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       new Date(show.show_end_date),
                     ),
                     seatmap_id: show.seatmap_id || "",
+                    ticket_template_id: show.ticket_template_id || "",
                     scheds: (show.scheds || []).map((s) => ({
                       ...s,
                       sched_date: toManilaDateKey(new Date(s.sched_date)),

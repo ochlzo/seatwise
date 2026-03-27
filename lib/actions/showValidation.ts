@@ -1,4 +1,3 @@
-import "server-only";
 import type { ShowStatus } from "@prisma/client";
 
 const MANILA_TZ = "Asia/Manila";
@@ -37,10 +36,12 @@ type ValidateShowPayloadArgs = {
   gcash_number?: string;
   gcash_account_name?: string;
   seatmap_id?: string | null;
+  ticket_template_id?: string | null;
   scheds: ShowSchedInput[];
   categorySets: ShowCategorySetInput[];
   seatIds: string[];
   seatmapExists: boolean;
+  ticketTemplateExists?: boolean;
 };
 
 type ValidationState = {
@@ -56,6 +57,7 @@ type ValidationState = {
     gcash_number: boolean;
     gcash_account_name: boolean;
     seatmap_id: boolean;
+    ticket_template_id: boolean;
   };
   cardErrors: {
     schedule: boolean;
@@ -142,6 +144,7 @@ const buildValidationMessage = (validation: ValidationState) => {
   if (fieldErrors.show_start_date || fieldErrors.show_end_date) {
     return "A valid show date range is required.";
   }
+  if (fieldErrors.ticket_template_id) return "Selected ticket template was not found.";
   if (fieldErrors.seatmap_id) return "A seatmap is required for UPCOMING or OPEN shows.";
   if (cardErrors.schedule) {
     return "Schedules must cover every show date without overlapping time ranges.";
@@ -167,10 +170,12 @@ export function validateShowPayload(args: ValidateShowPayloadArgs) {
     gcash_number,
     gcash_account_name,
     seatmap_id,
+    ticket_template_id,
     scheds,
     categorySets,
     seatIds,
     seatmapExists,
+    ticketTemplateExists = true,
   } = args;
 
   const hasDateRange = !!show_start_date && !!show_end_date;
@@ -206,6 +211,8 @@ export function validateShowPayload(args: ValidateShowPayloadArgs) {
     gcash_number: !gcash_number?.trim(),
     gcash_account_name: !gcash_account_name?.trim(),
     seatmap_id: requiresSeatmap && !seatmap_id?.trim(),
+    ticket_template_id:
+      !!ticket_template_id?.trim() && !ticketTemplateExists,
   };
 
   const allClientSchedIds = scheds.map((sched) => sched.client_id);

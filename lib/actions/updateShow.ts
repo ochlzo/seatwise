@@ -93,6 +93,7 @@ type UpdateShowPayload = {
   show_start_date: string | Date;
   show_end_date: string | Date;
   seatmap_id?: string | null;
+  ticket_template_id?: string | null;
   scheds?: UpdateShowSched[];
   category_sets?: UpdateCategorySet[];
 };
@@ -358,11 +359,13 @@ export async function updateShowAction(
       show_start_date,
       show_end_date,
       seatmap_id,
+      ticket_template_id,
       scheds = [],
       category_sets = [],
     } = data;
 
     const trimmedSeatmapId = seatmap_id?.trim() || null;
+    const trimmedTicketTemplateId = ticket_template_id?.trim() || null;
     const seatmap = trimmedSeatmapId
       ? await prisma.seatmap.findUnique({
           where: { seatmap_id: trimmedSeatmapId },
@@ -380,8 +383,10 @@ export async function updateShowAction(
       where: { show_id: showId },
       select: {
         show_id: true,
+        team_id: true,
         show_status: true,
         seatmap_id: true,
+        ticket_template_id: true,
         gcash_qr_image_key: true,
         gcash_number: true,
         gcash_account_name: true,
@@ -437,6 +442,18 @@ export async function updateShowAction(
       throw new Error("Show not found.");
     }
 
+    const ticketTemplate = trimmedTicketTemplateId
+      ? await prisma.ticketTemplate.findFirst({
+          where: {
+            ticket_template_id: trimmedTicketTemplateId,
+            team_id: currentShow.team_id,
+          },
+          select: {
+            ticket_template_id: true,
+          },
+        })
+      : null;
+
     const oldStatus = currentShow?.show_status;
     const newStatus = show_status;
 
@@ -483,10 +500,12 @@ export async function updateShowAction(
       gcash_number,
       gcash_account_name,
       seatmap_id: trimmedSeatmapId,
+      ticket_template_id: trimmedTicketTemplateId,
       scheds,
       categorySets: category_sets,
       seatIds: seatmap?.seats.map((seat) => seat.seat_id) ?? [],
       seatmapExists: Boolean(seatmap),
+      ticketTemplateExists: !trimmedTicketTemplateId || Boolean(ticketTemplate),
     });
 
     if (payloadValidation.hasValidationErrors) {
@@ -560,6 +579,7 @@ export async function updateShowAction(
             gcash_number: gcash_number?.trim() || undefined,
             gcash_account_name: gcash_account_name?.trim() || undefined,
             seatmap_id: trimmedSeatmapId || undefined,
+            ticket_template_id: trimmedTicketTemplateId,
           },
         });
 

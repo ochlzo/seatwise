@@ -85,6 +85,13 @@ type SeatmapOption = {
   updatedAt: string;
 };
 
+type TicketTemplateOption = {
+  ticket_template_id: string;
+  template_name: string;
+  latestVersionNumber: number | null;
+  updatedAt: string;
+};
+
 type CategoryDraft = {
   id: string;
   category_name: string;
@@ -134,6 +141,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     show_start_date: "",
     show_end_date: "",
     seatmap_id: "",
+    ticket_template_id: "",
   });
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
@@ -148,6 +156,9 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
   const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
   const [isLoadingSeatmaps, setIsLoadingSeatmaps] = React.useState(false);
   const [seatmapQuery, setSeatmapQuery] = React.useState("");
+  const [ticketTemplates, setTicketTemplates] = React.useState<TicketTemplateOption[]>([]);
+  const [isLoadingTicketTemplates, setIsLoadingTicketTemplates] = React.useState(false);
+  const [ticketTemplateQuery, setTicketTemplateQuery] = React.useState("");
   const [timeRanges, setTimeRanges] = React.useState<TimeRangeDraft[]>([
     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
   ]);
@@ -192,6 +203,19 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       seatmap.seatmap_name.toLowerCase().includes(query)
     );
   }, [seatmapQuery, seatmaps, formData.seatmap_id]);
+  const filteredTicketTemplates = React.useMemo(() => {
+    const query = ticketTemplateQuery.trim().toLowerCase();
+    if (!query) return ticketTemplates;
+    const selected = ticketTemplates.find(
+      (template) => template.ticket_template_id === formData.ticket_template_id,
+    );
+    if (selected && selected.template_name.toLowerCase() === query) {
+      return ticketTemplates;
+    }
+    return ticketTemplates.filter((template) =>
+      template.template_name.toLowerCase().includes(query),
+    );
+  }, [formData.ticket_template_id, ticketTemplateQuery, ticketTemplates]);
   const hasSeatmapSelected = Boolean(formData.seatmap_id);
 
   React.useEffect(() => {
@@ -272,6 +296,35 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       }
     };
     loadSeatmaps();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadTicketTemplates = async () => {
+      try {
+        setIsLoadingTicketTemplates(true);
+        const response = await fetch("/api/ticket-templates");
+        if (!response.ok) {
+          throw new Error("Failed to load ticket templates");
+        }
+        const data = await response.json();
+        if (!isMounted) return;
+        setTicketTemplates(data.ticketTemplates ?? []);
+      } catch (error: unknown) {
+        if (!isMounted) return;
+        const message =
+          error instanceof Error ? error.message : "Unable to load ticket templates";
+        toast.error(message);
+      } finally {
+        if (isMounted) {
+          setIsLoadingTicketTemplates(false);
+        }
+      }
+    };
+    loadTicketTemplates();
     return () => {
       isMounted = false;
     };
@@ -459,10 +512,6 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       .filter((node) => node.type === "seat")
       .map((node) => node.id);
   }, [seatmapData]);
-
-  const totalSeatsCount = React.useMemo(() => {
-    return seatNodeIds.length;
-  }, [seatNodeIds]);
 
   // Validate that EACH category set has valid assignments for all seats in the seatmap.
   const seatAssignmentIssues = React.useMemo(() => {
@@ -692,6 +741,21 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     }
   }, [formData.seatmap_id, seatmapQuery, seatmaps]);
 
+  React.useEffect(() => {
+    if (!formData.ticket_template_id) {
+      if (ticketTemplateQuery) {
+        setTicketTemplateQuery("");
+      }
+      return;
+    }
+    const match = ticketTemplates.find(
+      (template) => template.ticket_template_id === formData.ticket_template_id,
+    );
+    if (match && match.template_name !== ticketTemplateQuery) {
+      setTicketTemplateQuery(match.template_name);
+    }
+  }, [formData.ticket_template_id, ticketTemplateQuery, ticketTemplates]);
+
   const removeSched = (id: string) => {
     setScheds((prev) => prev.filter((s) => s.id !== id));
   };
@@ -917,6 +981,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
         ...formData,
         team_id: teamId || undefined,
         seatmap_id: formData.seatmap_id,
+        ticket_template_id: formData.ticket_template_id || undefined,
         scheds: validScheds.map((sched) => ({
           client_id: sched.id,
           sched_date: sched.sched_date,
@@ -1306,10 +1371,24 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
 
       <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
         <CardHeader>
-          <CardTitle className="text-lg md:text-xl font-semibold">
-            Seatmap
-          </CardTitle>
-          <CardDescription>Select a seatmap template and preview the layout.</CardDescription>
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-lg md:text-xl font-semibold">
+                Presentation Setup
+              </CardTitle>
+              <CardDescription>
+                Select a seatmap template and optional ticket template for this production.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/admin/ticket-templates")}
+            >
+              Manage Ticket Templates
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
@@ -1355,6 +1434,63 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
                     )}
                     {!isLoadingSeatmaps && seatmaps.length === 0 && (
                       <ComboboxEmpty>No seatmaps found.</ComboboxEmpty>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+            </div>
+            <div className="space-y-2">
+              <Label
+                htmlFor="ticket-template"
+                className="text-xs font-semibold text-muted-foreground"
+              >
+                Ticket Template
+              </Label>
+              <Combobox
+                value={formData.ticket_template_id}
+                onValueChange={(value) => {
+                  const nextValue = value ?? "";
+                  setFormData({ ...formData, ticket_template_id: nextValue });
+                  const match = ticketTemplates.find(
+                    (template) => template.ticket_template_id === nextValue,
+                  );
+                  if (match) {
+                    setTicketTemplateQuery(match.template_name);
+                  }
+                }}
+              >
+                <ComboboxInput
+                  id="ticket-template"
+                  placeholder={
+                    isLoadingTicketTemplates
+                      ? "Loading ticket templates..."
+                      : "Select a ticket template"
+                  }
+                  disabled={isLoadingTicketTemplates}
+                  value={ticketTemplateQuery}
+                  onChange={(event) => setTicketTemplateQuery(event.target.value)}
+                />
+                <ComboboxContent>
+                  <ComboboxList>
+                    {isLoadingTicketTemplates ? (
+                      <ComboboxItem value="loading-ticket-templates" disabled>
+                        Loading ticket templates...
+                      </ComboboxItem>
+                    ) : (
+                      filteredTicketTemplates.map((template) => (
+                        <ComboboxItem
+                          key={template.ticket_template_id}
+                          value={template.ticket_template_id}
+                        >
+                          {template.template_name}
+                          {template.latestVersionNumber
+                            ? ` (v${template.latestVersionNumber})`
+                            : ""}
+                        </ComboboxItem>
+                      ))
+                    )}
+                    {!isLoadingTicketTemplates && ticketTemplates.length === 0 && (
+                      <ComboboxEmpty>No ticket templates found.</ComboboxEmpty>
                     )}
                   </ComboboxList>
                 </ComboboxContent>
