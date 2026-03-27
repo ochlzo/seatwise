@@ -43,7 +43,8 @@ next-env.d.ts
 
 /lib/generated/prisma
 
- .agent/
- .codex/
- .windsurf/
- .claude/
+.agent/
+.codex/
+.windsurf/
+.claude/
+.worktrees/
