@@ -1,7 +1,8 @@
 import { configureStore } from '@reduxjs/toolkit';
-import authReducer from './features/auth/authSlice';
-import loadingReducer from './features/loading/isLoadingSlice';
-import seatmapReducer from './features/seatmap/seatmapSlice';
+import authReducer from './features/auth/authSlice.ts';
+import loadingReducer from './features/loading/isLoadingSlice.ts';
+import seatmapReducer from './features/seatmap/seatmapSlice.ts';
+import ticketTemplateReducer from './features/ticketTemplate/ticketTemplateSlice.ts';
 
 export const makeStore = () => {
     return configureStore({
@@ -9,6 +10,7 @@ export const makeStore = () => {
             auth: authReducer,
             loading: loadingReducer,
             seatmap: seatmapReducer,
+            ticketTemplate: ticketTemplateReducer,
         },
     });
 };

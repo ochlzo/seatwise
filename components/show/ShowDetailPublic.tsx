@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { SeatStatus } from "@prisma/client";
 import {
     MapPin,
     Ticket,
@@ -97,7 +98,7 @@ type ShowDetail = {
             seat_id: string;
             sched_id: string;
             set_id: string;
-            seat_status: "OPEN" | "RESERVED";
+            seat_status: SeatStatus;
             set: {
                 set_id: string;
                 sched_id: string;

@@ -63,7 +63,7 @@ import {
 import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "@/components/ui/sonner";
 import { useRouter } from "next/navigation";
-import type { ShowStatus } from "@prisma/client";
+import type { SeatStatus, ShowStatus } from "@prisma/client";
 import Image from "next/image";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
@@ -229,7 +229,7 @@ type ShowDetail = {
       seat_id: string;
       sched_id: string;
       set_id: string;
-      seat_status: "OPEN" | "RESERVED";
+      seat_status: SeatStatus;
       set: {
         set_id: string;
         sched_id: string;

@@ -13,6 +13,24 @@ import {
   normalizeTemplateVersion,
 } from "./templateSchema.ts";
 
+type EditorSliceModule = {
+  default: (
+    state: unknown,
+    action: { type: string; payload?: unknown },
+  ) => unknown;
+};
+
+async function loadEditorReducer() {
+  try {
+    const module = (await import(
+      "../features/ticketTemplate/ticketTemplateSlice.ts"
+    )) as EditorSliceModule;
+    return module.default;
+  } catch {
+    return null;
+  }
+}
+
 test("createEmptyTicketTemplate returns the fixed ticket canvas dimensions", () => {
   const template = createEmptyTicketTemplate();
 
@@ -65,5 +83,70 @@ test("normalizeTemplateVersion keeps field nodes above asset nodes", () => {
   assert.deepEqual(
     normalized.nodes.map((node) => node.id),
     ["asset-1", "asset-2", "field-1", "field-2", "qr-1"],
+  );
+});
+
+test("ticket template editor initializes with a fixed empty canvas", async () => {
+  const reducer = await loadEditorReducer();
+  assert.ok(reducer, "ticket template reducer should exist");
+  const editorState = reducer?.(undefined, { type: "@@INIT" }) as
+    | {
+        title: string;
+        canvas: { width: number; height: number };
+        nodes: Array<unknown>;
+        hasUnsavedChanges: boolean;
+      }
+    | undefined;
+
+  assert.equal(editorState.title, "Untitled Ticket Template");
+  assert.deepEqual(editorState.canvas, {
+    width: 2550,
+    height: 825,
+  });
+  assert.deepEqual(editorState.nodes, []);
+  assert.equal(editorState.hasUnsavedChanges, false);
+});
+
+test("ticket template editor ignores canvas resize mutations", async () => {
+  const reducer = await loadEditorReducer();
+  assert.ok(reducer, "ticket template reducer should exist");
+  const editorState = reducer?.(undefined, {
+    type: "ticketTemplate/updateCanvasSize",
+    payload: {
+      width: 100,
+      height: 100,
+    },
+  }) as
+    | {
+        canvas: { width: number; height: number };
+      }
+    | undefined;
+
+  assert.deepEqual(editorState.canvas, {
+    width: 2550,
+    height: 825,
+  });
+});
+
+test("ticket template editor keeps field nodes above asset nodes", async () => {
+  const reducer = await loadEditorReducer();
+  assert.ok(reducer, "ticket template reducer should exist");
+  const editorState = reducer?.(undefined, {
+    type: "ticketTemplate/replaceNodes",
+    payload: [
+      { id: "field-1", kind: "field", fieldKey: "show_name", x: 320, y: 140 },
+      { id: "asset-1", kind: "asset", x: 0, y: 0, width: 400, height: 200 },
+      { id: "asset-2", kind: "asset", x: 450, y: 0, width: 300, height: 180 },
+      { id: "qr-1", kind: "qr", x: 1700, y: 120, size: 180 },
+    ],
+  }) as
+    | {
+        nodes: Array<{ id: string }>;
+      }
+    | undefined;
+
+  assert.deepEqual(
+    editorState.nodes.map((node) => node.id),
+    ["asset-1", "asset-2", "field-1", "qr-1"],
   );
 });

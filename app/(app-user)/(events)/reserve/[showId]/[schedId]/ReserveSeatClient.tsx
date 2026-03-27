@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import type { SeatStatus } from "@prisma/client";
 import {
   AlertTriangle,
   Clock3,
@@ -84,7 +85,7 @@ type ReserveSeatClientProps = {
   seatmapCategories: ReserveSeatCategory[];
   seatCategoryAssignments: Record<string, string>;
   seatNumbersById: Record<string, string>;
-  seatStatusById: Record<string, "OPEN" | "RESERVED">;
+  seatStatusById: Record<string, SeatStatus>;
 };
 
 const EXPIRED_WINDOW_MESSAGE =

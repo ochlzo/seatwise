@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { ReserveSeatClient } from "./ReserveSeatClient";
 import { notFound } from "next/navigation";
+import type { SeatStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type SeatmapCategoryPayload = {
@@ -11,7 +12,7 @@ type SeatmapCategoryPayload = {
   price: string;
 };
 
-type SeatStatusPayload = "OPEN" | "RESERVED";
+type SeatStatusPayload = SeatStatus;
 
 export default async function ReserveSeatPage({
   params,

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { SeatStatus } from "@prisma/client";
 
 import AdminShield from "@/components/AdminShield";
 import { PageHeader } from "@/components/page-header";
@@ -14,7 +15,7 @@ type SeatmapCategoryPayload = {
   price: string;
 };
 
-type SeatStatusPayload = "OPEN" | "RESERVED";
+type SeatStatusPayload = SeatStatus;
 
 export default async function AdminWalkInRoomPage({
   params,

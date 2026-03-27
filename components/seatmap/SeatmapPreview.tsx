@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { SeatStatus } from "@prisma/client";
 import {
   Stage,
   Layer,
@@ -37,7 +38,7 @@ type SeatmapPreviewProps = {
   // Controlled category assignment props (maps seat ID -> category ID)
   categories?: SeatmapPreviewCategory[];
   seatCategories?: Record<string, string>;
-  seatStatusById?: Record<string, "OPEN" | "RESERVED">;
+  seatStatusById?: Record<string, SeatStatus>;
   showReservationOverlay?: boolean;
   onSeatCategoriesChange?: (categories: Record<string, string>) => void;
 };
@@ -542,7 +543,7 @@ function SeatNodes({
   isCtrlDown: boolean;
   categories: SeatmapPreviewCategory[];
   seatCategories: Record<string, string>;
-  seatStatusById: Record<string, "OPEN" | "RESERVED">;
+  seatStatusById: Record<string, SeatStatus>;
 }) {
   const seats = Object.values(nodes).filter((node): node is SeatmapSeatNode => node.type === "seat");
   const { theme, resolvedTheme } = useTheme();
