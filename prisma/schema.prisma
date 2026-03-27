@@ -51,10 +51,11 @@ model Show {
   scheds           Sched[]
   seatmap          Seatmap?      @relation(fields: [seatmap_id], references: [seatmap_id])
   team             Team          @relation(fields: [team_id], references: [team_id])
-  ticketTemplate   TicketTemplate? @relation(fields: [ticket_template_id], references: [ticket_template_id])
+  ticketTemplate   TicketTemplate? @relation(fields: [ticket_template_id, team_id], references: [ticket_template_id, team_id], onDelete: Restrict)
 
   @@index([team_id])
   @@index([ticket_template_id])
+  @@index([ticket_template_id, team_id])
 }
 
 model Team {
@@ -178,6 +179,7 @@ model TicketTemplate {
   team               Team                    @relation(fields: [team_id], references: [team_id])
   versions           TicketTemplateVersion[]
 
+  @@unique([ticket_template_id, team_id])
   @@unique([team_id, template_name])
   @@index([team_id])
 }
@@ -238,7 +240,7 @@ model Reservation {
   sched          Sched             @relation(fields: [sched_id], references: [sched_id])
   reservedSeats  ReservedSeat[]
   ticketConsumedByAdmin Admin? @relation("ReservationTicketConsumedByAdmin", fields: [ticket_consumed_by_admin_id], references: [user_id])
-  ticketTemplateVersion TicketTemplateVersion? @relation(fields: [ticket_template_version_id], references: [ticket_template_version_id])
+  ticketTemplateVersion TicketTemplateVersion? @relation(fields: [ticket_template_version_id], references: [ticket_template_version_id], onDelete: Restrict)
 
   @@index([guest_id])
   @@index([show_id])

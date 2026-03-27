@@ -37,6 +37,9 @@ CREATE TABLE "TicketTemplateVersion" (
 CREATE INDEX "TicketTemplate_team_id_idx" ON "TicketTemplate"("team_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "TicketTemplate_ticket_template_id_team_id_key" ON "TicketTemplate"("ticket_template_id", "team_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "TicketTemplate_team_id_template_name_key" ON "TicketTemplate"("team_id", "template_name");
 
 -- CreateIndex
@@ -54,8 +57,11 @@ CREATE INDEX "Reservation_ticket_consumed_by_admin_id_idx" ON "Reservation"("tic
 -- CreateIndex
 CREATE INDEX "Show_ticket_template_id_idx" ON "Show"("ticket_template_id");
 
+-- CreateIndex
+CREATE INDEX "Show_ticket_template_id_team_id_idx" ON "Show"("ticket_template_id", "team_id");
+
 -- AddForeignKey
-ALTER TABLE "Show" ADD CONSTRAINT "Show_ticket_template_id_fkey" FOREIGN KEY ("ticket_template_id") REFERENCES "TicketTemplate"("ticket_template_id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Show" ADD CONSTRAINT "Show_ticket_template_id_team_id_fkey" FOREIGN KEY ("ticket_template_id", "team_id") REFERENCES "TicketTemplate"("ticket_template_id", "team_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "TicketTemplate" ADD CONSTRAINT "TicketTemplate_team_id_fkey" FOREIGN KEY ("team_id") REFERENCES "Team"("team_id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -67,4 +73,4 @@ ALTER TABLE "TicketTemplateVersion" ADD CONSTRAINT "TicketTemplateVersion_ticket
 ALTER TABLE "Reservation" ADD CONSTRAINT "Reservation_ticket_consumed_by_admin_id_fkey" FOREIGN KEY ("ticket_consumed_by_admin_id") REFERENCES "Admin"("user_id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Reservation" ADD CONSTRAINT "Reservation_ticket_template_version_id_fkey" FOREIGN KEY ("ticket_template_version_id") REFERENCES "TicketTemplateVersion"("ticket_template_version_id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Reservation" ADD CONSTRAINT "Reservation_ticket_template_version_id_fkey" FOREIGN KEY ("ticket_template_version_id") REFERENCES "TicketTemplateVersion"("ticket_template_version_id") ON DELETE RESTRICT ON UPDATE CASCADE;
