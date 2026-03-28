@@ -16,7 +16,7 @@ test("buildCompletionPaymentRecord keeps the online pending payment branch", () 
   assert.equal(payment.paid_at, null);
 });
 
-test("buildCompletionPaymentRecord switches walk-in sales to paid receipts", () => {
+test("buildCompletionPaymentRecord keeps walk-in sales paid without a generated receipt image url", () => {
   const paidAt = new Date("2026-03-27T10:00:00.000Z");
   const payment = buildCompletionPaymentRecord({
     mode: "walk_in",
@@ -26,7 +26,7 @@ test("buildCompletionPaymentRecord switches walk-in sales to paid receipts", () 
 
   assert.equal(payment.method, "WALK_IN");
   assert.equal(payment.status, "PAID");
-  assert.equal(payment.screenshot_url, "https://cdn.example.com/receipt.png");
+  assert.equal(payment.screenshot_url, null);
   assert.equal(payment.paid_at, paidAt);
 });
 

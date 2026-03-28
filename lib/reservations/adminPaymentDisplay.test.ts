@@ -3,15 +3,15 @@ import assert from "node:assert/strict";
 
 import { getAdminPaymentDisplay } from "./adminPaymentDisplay.ts";
 
-test("getAdminPaymentDisplay returns walk-in receipt labels for WALK_IN payments", () => {
+test("getAdminPaymentDisplay treats walk-in screenshot urls as uploaded payment proof only", () => {
   const display = getAdminPaymentDisplay("WALK_IN");
 
-  assert.equal(display.kind, "walk_in_receipt");
+  assert.equal(display.kind, "proof_of_payment");
   assert.equal(display.cardTagLabel, "Walk-In");
-  assert.equal(display.panelTitle, "Walk-In Receipt");
-  assert.equal(display.emptyStateLabel, "No walk-in receipt uploaded.");
-  assert.match(display.imageAlt("Ada Lovelace"), /Walk-in receipt for Ada Lovelace/);
-  assert.equal(display.downloadLabel, "Download walk-in receipt image");
+  assert.equal(display.panelTitle, "Payment Proof");
+  assert.equal(display.emptyStateLabel, "No uploaded payment proof for this walk-in payment.");
+  assert.match(display.imageAlt("Ada Lovelace"), /uploaded payment proof.*Ada Lovelace/i);
+  assert.equal(display.downloadLabel, "Download uploaded payment proof image");
 });
 
 test("getAdminPaymentDisplay keeps proof-of-payment copy for online payments", () => {
@@ -19,9 +19,9 @@ test("getAdminPaymentDisplay keeps proof-of-payment copy for online payments", (
 
   assert.equal(display.kind, "proof_of_payment");
   assert.equal(display.cardTagLabel, null);
-  assert.equal(display.panelTitle, "Proof Of Payment");
-  assert.equal(display.emptyStateLabel, "No payment image uploaded.");
+  assert.equal(display.panelTitle, "Payment Proof");
+  assert.equal(display.emptyStateLabel, "No uploaded payment proof.");
   assert.match(display.imageAlt("Ada Lovelace"), /Payment proof for Ada Lovelace/);
-  assert.equal(display.downloadLabel, "Download proof of payment image");
+  assert.equal(display.downloadLabel, "Download uploaded payment proof image");
 });
 

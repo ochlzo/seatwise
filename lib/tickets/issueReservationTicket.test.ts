@@ -1,16 +1,41 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  createEmptyTicketTemplate,
-  normalizeTemplateVersion,
-} from "./templateSchema.ts";
-import {
-  getTicketTemplateById,
-  saveTicketTemplateVersionRecord,
-} from "../db/TicketTemplates.ts";
+import { createEmptyTicketTemplate } from "./templateSchema.ts";
 
-type StoredTemplateVersion = {
+type MemoryReservationRecord = {
+  reservation_id: string;
+  reservation_number: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  status: string;
+  ticket_template_version_id: string | null;
+  ticket_issued_at: Date | null;
+  ticket_delivery_error: string | null;
+  show: {
+    show_id: string;
+    show_name: string;
+    venue: string;
+    ticket_template_id: string | null;
+  };
+  sched: {
+    sched_id: string;
+    sched_date: Date;
+    sched_start_time: Date;
+  };
+  reservedSeats: Array<{
+    seatAssignment: {
+      seat_assignment_id: string;
+      seat_id: string;
+      seat: {
+        seat_number: string;
+      };
+    };
+  }>;
+};
+
+type MemoryTemplateVersionRecord = {
   ticket_template_version_id: string;
   ticket_template_id: string;
   version_number: number;
@@ -18,397 +43,324 @@ type StoredTemplateVersion = {
   createdAt: Date;
 };
 
-type StoredTemplate = {
-  ticket_template_id: string;
-  team_id: string;
-  template_name: string;
-  createdAt: Date;
-  updatedAt: Date;
-  versions: StoredTemplateVersion[];
-};
-
-function createMemoryTicketTemplateDb() {
-  const templates: StoredTemplate[] = [];
-  let templateCounter = 0;
-  let versionCounter = 0;
-
-  const findTemplateById = (ticketTemplateId: string) =>
-    templates.find((template) => template.ticket_template_id === ticketTemplateId) ?? null;
-
-  return {
-    ticketTemplate: {
-      async create(args: {
-        data: {
-          team_id: string;
-          template_name: string;
-        };
-      }) {
-        const createdAt = new Date(`2026-03-27T00:00:0${templateCounter}Z`);
-        const template: StoredTemplate = {
-          ticket_template_id: `ticket-template-${++templateCounter}`,
-          team_id: args.data.team_id,
-          template_name: args.data.template_name,
-          createdAt,
-          updatedAt: createdAt,
-          versions: [],
-        };
-        templates.push(template);
-        return {
-          ticket_template_id: template.ticket_template_id,
-          team_id: template.team_id,
-          template_name: template.template_name,
-          createdAt: template.createdAt,
-          updatedAt: template.updatedAt,
-        };
-      },
-      async update(args: {
-        where: { ticket_template_id: string };
-        data: { template_name: string; updatedAt: Date };
-      }) {
-        const template = findTemplateById(args.where.ticket_template_id);
-        if (!template) {
-          throw new Error("Template not found");
-        }
-        template.template_name = args.data.template_name;
-        template.updatedAt = args.data.updatedAt;
-        return {
-          ticket_template_id: template.ticket_template_id,
-          team_id: template.team_id,
-          template_name: template.template_name,
-          createdAt: template.createdAt,
-          updatedAt: template.updatedAt,
-        };
-      },
-      async findFirst(args: {
-        where: {
-          ticket_template_id: string;
-          team_id?: string;
-        };
-        include?: {
-          versions?: {
-            orderBy?: { version_number: "asc" | "desc" };
-          };
-        };
-      }) {
-        const template = templates.find((candidate) => {
-          if (candidate.ticket_template_id !== args.where.ticket_template_id) {
-            return false;
-          }
-          if (args.where.team_id && candidate.team_id !== args.where.team_id) {
-            return false;
-          }
-          return true;
-        });
-        if (!template) {
-          return null;
-        }
-        const versions = [...template.versions];
-        if (args.include?.versions?.orderBy?.version_number === "desc") {
-          versions.sort((left, right) => right.version_number - left.version_number);
-        } else if (args.include?.versions?.orderBy?.version_number === "asc") {
-          versions.sort((left, right) => left.version_number - right.version_number);
-        }
-        return {
-          ticket_template_id: template.ticket_template_id,
-          team_id: template.team_id,
-          template_name: template.template_name,
-          createdAt: template.createdAt,
-          updatedAt: template.updatedAt,
-          versions,
-        };
-      },
-      async findMany(args: {
-        where?: {
-          team_id?: string;
-        };
-        include?: {
-          versions?: {
-            orderBy?: { version_number: "asc" | "desc" };
-          };
-        };
-        orderBy?: {
-          updatedAt: "asc" | "desc";
-        };
-      }) {
-        let results = [...templates];
-        if (args.where?.team_id) {
-          results = results.filter((template) => template.team_id === args.where?.team_id);
-        }
-        if (args.orderBy?.updatedAt === "desc") {
-          results.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
-        } else if (args.orderBy?.updatedAt === "asc") {
-          results.sort((left, right) => left.updatedAt.getTime() - right.updatedAt.getTime());
-        }
-        return results.map((template) => {
-          const versions = [...template.versions];
-          if (args.include?.versions?.orderBy?.version_number === "desc") {
-            versions.sort((left, right) => right.version_number - left.version_number);
-          } else if (args.include?.versions?.orderBy?.version_number === "asc") {
-            versions.sort((left, right) => left.version_number - right.version_number);
-          }
-          return {
-            ticket_template_id: template.ticket_template_id,
-            team_id: template.team_id,
-            template_name: template.template_name,
-            createdAt: template.createdAt,
-            updatedAt: template.updatedAt,
-            versions,
-          };
-        });
-      },
-    },
-    ticketTemplateVersion: {
-      async create(args: {
-        data: {
-          ticket_template_id: string;
-          version_number: number;
-          template_schema: ReturnType<typeof createEmptyTicketTemplate>;
-        };
-      }) {
-        const template = findTemplateById(args.data.ticket_template_id);
-        if (!template) {
-          throw new Error("Template not found");
-        }
-        const version: StoredTemplateVersion = {
-          ticket_template_version_id: `ticket-template-version-${++versionCounter}`,
-          ticket_template_id: args.data.ticket_template_id,
-          version_number: args.data.version_number,
-          template_schema: args.data.template_schema,
-          createdAt: new Date(`2026-03-27T00:01:0${versionCounter}Z`),
-        };
-        template.versions.push(version);
-        template.updatedAt = version.createdAt;
-        return version;
-      },
-    },
-    async $transaction<T>(callback: (tx: ReturnType<typeof createMemoryTicketTemplateDb>) => Promise<T>) {
-      return callback(this as ReturnType<typeof createMemoryTicketTemplateDb>);
-    },
-  };
-}
-
-test("saving a template creates version 1", async () => {
-  const db = createMemoryTicketTemplateDb();
-
-  const saved = await saveTicketTemplateVersionRecord(
-    {
-      teamId: "team-alpha",
-      templateName: "Orchestra Ticket",
-      templateSchema: createEmptyTicketTemplate(),
-    },
-    db,
-  );
-
-  assert.equal(saved.template.template_name, "Orchestra Ticket");
-  assert.equal(saved.template.team_id, "team-alpha");
-  assert.equal(saved.version.version_number, 1);
-});
-
-test("saving preserves uploaded asset refs and editor node properties in version JSON", async () => {
-  const db = createMemoryTicketTemplateDb();
-  const templateSchema = createEmptyTicketTemplate();
-
-  templateSchema.nodes.push(
-    {
-      id: "asset-hero",
-      kind: "asset",
-      x: 0,
-      y: 0,
-      width: 720,
-      height: 320,
-      opacity: 0.65,
-      assetKey: "seatwise/ticket_templates/draft-123/assets/hero",
-      src: "https://res.cloudinary.com/seatwise/image/upload/v1/hero.png",
-      name: "hero.png",
-    },
-    {
-      id: "field-booking-ref",
-      kind: "field",
-      fieldKey: "reservation_number",
-      label: "Booking Ref",
-      x: 120,
-      y: 160,
-      width: 420,
-      fontSize: 58,
-      fontFamily: "Georgia",
-      fontWeight: 700,
-      fill: "#111827",
-      align: "center",
-      opacity: 0.9,
-    },
-    {
-      id: "qr-1",
-      kind: "qr",
-      x: 2000,
-      y: 110,
-      size: 220,
-      opacity: 0.8,
-    },
-  );
-
-  const saved = await saveTicketTemplateVersionRecord(
-    {
-      teamId: "team-alpha",
-      templateName: "VIP Ticket",
-      templateSchema,
-    },
-    db,
-  );
-
-  assert.deepEqual(saved.version.template_schema.nodes, templateSchema.nodes);
-});
-
-test("saving again emits the next version number for the same template", async () => {
-  const db = createMemoryTicketTemplateDb();
-
-  const initial = await saveTicketTemplateVersionRecord(
-    {
-      teamId: "team-alpha",
-      templateName: "Orchestra Ticket",
-      templateSchema: createEmptyTicketTemplate(),
-    },
-    db,
-  );
-
-  const nextSchema = createEmptyTicketTemplate();
-  nextSchema.nodes.push({
-    id: "field-show-name",
-    kind: "field",
-    fieldKey: "show_name",
-    x: 180,
-    y: 240,
-  });
-
-  const savedAgain = await saveTicketTemplateVersionRecord(
-    {
-      ticketTemplateId: initial.template.ticket_template_id,
-      teamId: "team-alpha",
-      templateName: "Orchestra Ticket v2",
-      templateSchema: nextSchema,
-    },
-    db,
-  );
-
-  assert.equal(savedAgain.template.ticket_template_id, initial.template.ticket_template_id);
-  assert.equal(savedAgain.template.template_name, "Orchestra Ticket v2");
-  assert.equal(savedAgain.version.version_number, 2);
-  assert.deepEqual(
-    savedAgain.version.template_schema.nodes,
-    normalizeTemplateVersion(nextSchema).nodes,
-  );
-});
-
-test("saving preserves asset z-order from the editor state", async () => {
-  const db = createMemoryTicketTemplateDb();
-  const templateSchema = createEmptyTicketTemplate();
-
-  templateSchema.nodes.push(
-    {
-      id: "asset-background",
-      kind: "asset",
-      x: 0,
-      y: 0,
-      width: 2550,
-      height: 825,
-      assetKey: "seatwise/ticket_templates/draft-123/assets/background",
-      src: "https://res.cloudinary.com/seatwise/image/upload/v1/background.png",
-      name: "background.png",
-      opacity: 1,
-    },
-    {
-      id: "asset-logo",
-      kind: "asset",
-      x: 1840,
-      y: 64,
-      width: 240,
-      height: 240,
-      assetKey: "seatwise/ticket_templates/draft-123/assets/logo",
-      src: "https://res.cloudinary.com/seatwise/image/upload/v1/logo.png",
-      name: "logo.png",
-      opacity: 1,
-    },
+function createTemplateVersion(
+  input: Partial<MemoryTemplateVersionRecord> & {
+    ticket_template_version_id: string;
+    version_number: number;
+  },
+): MemoryTemplateVersionRecord {
+  const template = createEmptyTicketTemplate();
+  template.nodes.push(
     {
       id: "field-show-name",
       kind: "field",
       fieldKey: "show_name",
-      label: "Show Name",
       x: 120,
       y: 120,
-      width: 560,
+      width: 580,
       fontSize: 72,
-      fontFamily: "Georgia",
-      fontWeight: 700,
-      fill: "#111827",
-      align: "left",
-      opacity: 1,
     },
-  );
-
-  const saved = await saveTicketTemplateVersionRecord(
     {
-      teamId: "team-alpha",
-      templateName: "Layered Ticket",
-      templateSchema,
+      id: "field-reservation-number",
+      kind: "field",
+      fieldKey: "reservation_number",
+      x: 120,
+      y: 240,
+      width: 420,
+      fontSize: 54,
     },
-    db,
+    {
+      id: "qr-ticket",
+      kind: "qr",
+      x: 2140,
+      y: 110,
+      size: 220,
+    },
   );
 
-  assert.deepEqual(
-    saved.version.template_schema.nodes.map((node) => node.id),
-    ["asset-background", "asset-logo", "field-show-name"],
+  return {
+    ticket_template_version_id: input.ticket_template_version_id,
+    ticket_template_id: input.ticket_template_id ?? "ticket-template-1",
+    version_number: input.version_number,
+    template_schema: input.template_schema ?? template,
+    createdAt: input.createdAt ?? new Date("2026-03-27T10:00:00Z"),
+  };
+}
+
+function createReservationRecord(
+  input: Partial<MemoryReservationRecord> & {
+    reservation_id: string;
+    reservation_number: string;
+  },
+): MemoryReservationRecord {
+  return {
+    reservation_id: input.reservation_id,
+    reservation_number: input.reservation_number,
+    first_name: input.first_name ?? "Ada",
+    last_name: input.last_name ?? "Lovelace",
+    email: input.email ?? "ada@example.com",
+    status: input.status ?? "CONFIRMED",
+    ticket_template_version_id: input.ticket_template_version_id ?? null,
+    ticket_issued_at: input.ticket_issued_at ?? null,
+    ticket_delivery_error: input.ticket_delivery_error ?? "Previous delivery failure",
+    show: input.show ?? {
+      show_id: "show-1",
+      show_name: "Seatwise Live",
+      venue: "Main Hall",
+      ticket_template_id: "ticket-template-1",
+    },
+    sched: input.sched ?? {
+      sched_id: "sched-1",
+      sched_date: new Date("2026-04-10T00:00:00+08:00"),
+      sched_start_time: new Date("2026-04-10T19:00:00+08:00"),
+    },
+    reservedSeats: input.reservedSeats ?? [
+      {
+        seatAssignment: {
+          seat_assignment_id: "seat-assignment-1",
+          seat_id: "seat-1",
+          seat: { seat_number: "A1" },
+        },
+      },
+      {
+        seatAssignment: {
+          seat_assignment_id: "seat-assignment-2",
+          seat_id: "seat-2",
+          seat: { seat_number: "A2" },
+        },
+      },
+    ],
+  };
+}
+
+function createIssueTicketDb(args: {
+  reservation: MemoryReservationRecord;
+  templateVersions: MemoryTemplateVersionRecord[];
+}) {
+  const reservation = structuredClone(args.reservation) as MemoryReservationRecord;
+  const templateVersions = args.templateVersions.map((version) =>
+    structuredClone(version),
+  ) as MemoryTemplateVersionRecord[];
+
+  return {
+    records: {
+      reservation,
+      templateVersions,
+    },
+    db: {
+      reservation: {
+        async findUnique(args: { where: { reservation_id: string } }) {
+          if (args.where.reservation_id !== reservation.reservation_id) {
+            return null;
+          }
+
+          return structuredClone(reservation) as MemoryReservationRecord;
+        },
+        async update(args: {
+          where: { reservation_id: string };
+          data: {
+            ticket_template_version_id: string;
+            ticket_issued_at: Date;
+            ticket_delivery_error: string | null;
+          };
+        }) {
+          assert.equal(args.where.reservation_id, reservation.reservation_id);
+          reservation.ticket_template_version_id = args.data.ticket_template_version_id;
+          reservation.ticket_issued_at = args.data.ticket_issued_at;
+          reservation.ticket_delivery_error = args.data.ticket_delivery_error;
+          return structuredClone(reservation) as MemoryReservationRecord;
+        },
+      },
+      ticketTemplateVersion: {
+        async findUnique(args: {
+          where: { ticket_template_version_id: string };
+        }) {
+          return (
+            templateVersions.find(
+              (version) =>
+                version.ticket_template_version_id ===
+                args.where.ticket_template_version_id,
+            ) ?? null
+          );
+        },
+        async findFirst(args: {
+          where: { ticket_template_id: string };
+          orderBy: { version_number: "asc" | "desc" };
+        }) {
+          const matches = templateVersions
+            .filter(
+              (version) =>
+                version.ticket_template_id === args.where.ticket_template_id,
+            )
+            .sort((left, right) =>
+              args.orderBy.version_number === "desc"
+                ? right.version_number - left.version_number
+                : left.version_number - right.version_number,
+            );
+
+          return matches[0] ?? null;
+        },
+      },
+    },
+  };
+}
+
+test("walk-in issuance uses the show's current template version and stores it on the reservation", async () => {
+  const { issueReservationTicket } = await import("./issueReservationTicket.ts");
+  const issuedAt = new Date("2026-03-28T18:00:00+08:00");
+  const db = createIssueTicketDb({
+    reservation: createReservationRecord({
+      reservation_id: "reservation-walk-in",
+      reservation_number: "4821",
+    }),
+    templateVersions: [
+      createTemplateVersion({
+        ticket_template_version_id: "ticket-template-version-1",
+        version_number: 1,
+      }),
+      createTemplateVersion({
+        ticket_template_version_id: "ticket-template-version-2",
+        version_number: 2,
+      }),
+    ],
+  });
+  const renderCalls: Array<{ qrValue: string; templateVersionNumber: number }> = [];
+  const buildPdfCalls: Uint8Array[] = [];
+
+  const result = await issueReservationTicket(
+    {
+      reservationId: "reservation-walk-in",
+      baseUrl: "https://seatwise.test",
+      secret: "ticket-secret",
+      issuedAt,
+    },
+    {
+      db: db.db,
+      renderTicketPng: async ({ template, qrValue }) => {
+        renderCalls.push({
+          qrValue,
+          templateVersionNumber: template.version_number,
+        });
+        return Buffer.from("ticket-png");
+      },
+      buildTicketPdf: async ({ ticketPng }) => {
+        buildPdfCalls.push(ticketPng);
+        return Uint8Array.from([0x25, 0x50, 0x44, 0x46]);
+      },
+    },
   );
+
+  assert.equal(result.ticketTemplateVersionId, "ticket-template-version-2");
+  assert.equal(result.ticketPdfFilename, "seatwise-ticket-4821.pdf");
+  assert.deepEqual(result.seatLabels, ["A1", "A2"]);
+  assert.equal(db.records.reservation.ticket_template_version_id, "ticket-template-version-2");
+  assert.equal(
+    db.records.reservation.ticket_issued_at?.toISOString(),
+    issuedAt.toISOString(),
+  );
+  assert.equal(db.records.reservation.ticket_delivery_error, null);
+  assert.equal(renderCalls[0]?.templateVersionNumber, 2);
+  assert.match(
+    renderCalls[0]?.qrValue ?? "",
+    /^https:\/\/seatwise\.test\/ticket\/verify\/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
+  );
+  assert.deepEqual(buildPdfCalls, [Buffer.from("ticket-png")]);
 });
 
-test("loading a template returns the latest version plus historical versions", async () => {
-  const db = createMemoryTicketTemplateDb();
-
-  const initial = await saveTicketTemplateVersionRecord(
-    {
-      teamId: "team-alpha",
-      templateName: "Orchestra Ticket",
-      templateSchema: createEmptyTicketTemplate(),
-    },
-    db,
-  );
-
-  const secondSchema = createEmptyTicketTemplate();
-  secondSchema.nodes.push({
-    id: "asset-hero",
-    kind: "asset",
-    x: 0,
-    y: 0,
-    width: 300,
-    height: 300,
-    assetKey: "seatwise/tickets/hero.png",
+test("online verification issuance also uses the show's current template version", async () => {
+  const { issueReservationTicket } = await import("./issueReservationTicket.ts");
+  const db = createIssueTicketDb({
+    reservation: createReservationRecord({
+      reservation_id: "reservation-online",
+      reservation_number: "5120",
+      status: "CONFIRMED",
+      show: {
+        show_id: "show-2",
+        show_name: "Seatwise Encore",
+        venue: "Black Box Theater",
+        ticket_template_id: "ticket-template-2",
+      },
+    }),
+    templateVersions: [
+      createTemplateVersion({
+        ticket_template_version_id: "ticket-template-version-5",
+        ticket_template_id: "ticket-template-2",
+        version_number: 5,
+      }),
+      createTemplateVersion({
+        ticket_template_version_id: "ticket-template-version-6",
+        ticket_template_id: "ticket-template-2",
+        version_number: 6,
+      }),
+    ],
   });
 
-  await saveTicketTemplateVersionRecord(
+  const result = await issueReservationTicket(
     {
-      ticketTemplateId: initial.template.ticket_template_id,
-      teamId: "team-alpha",
-      templateName: "Orchestra Ticket",
-      templateSchema: secondSchema,
+      reservationId: "reservation-online",
+      baseUrl: "https://seatwise.test",
+      secret: "ticket-secret",
+      issuedAt: new Date("2026-03-28T20:00:00+08:00"),
     },
-    db,
+    {
+      db: db.db,
+      renderTicketPng: async () => Buffer.from("ticket-png"),
+      buildTicketPdf: async () => Uint8Array.from([1, 2, 3]),
+    },
   );
 
-  const loaded = await getTicketTemplateById(
-    initial.template.ticket_template_id,
+  assert.equal(result.ticketTemplateVersionId, "ticket-template-version-6");
+  assert.equal(db.records.reservation.ticket_template_version_id, "ticket-template-version-6");
+});
+
+test("reissuing a reservation ticket reuses the stored template version instead of a newer show version", async () => {
+  const { issueReservationTicket } = await import("./issueReservationTicket.ts");
+  const db = createIssueTicketDb({
+    reservation: createReservationRecord({
+      reservation_id: "reservation-reissue",
+      reservation_number: "9001",
+      ticket_template_version_id: "ticket-template-version-3",
+      ticket_issued_at: new Date("2026-03-28T18:00:00+08:00"),
+      show: {
+        show_id: "show-3",
+        show_name: "Seatwise Reprise",
+        venue: "Studio Hall",
+        ticket_template_id: "ticket-template-3",
+      },
+    }),
+    templateVersions: [
+      createTemplateVersion({
+        ticket_template_version_id: "ticket-template-version-3",
+        ticket_template_id: "ticket-template-3",
+        version_number: 3,
+      }),
+      createTemplateVersion({
+        ticket_template_version_id: "ticket-template-version-4",
+        ticket_template_id: "ticket-template-3",
+        version_number: 4,
+      }),
+    ],
+  });
+  let renderedTemplateVersionId: string | null = null;
+
+  const result = await issueReservationTicket(
     {
-      teamId: "team-alpha",
-      isSuperadmin: false,
+      reservationId: "reservation-reissue",
+      baseUrl: "https://seatwise.test",
+      secret: "ticket-secret",
+      issuedAt: new Date("2026-03-29T09:15:00+08:00"),
     },
-    db,
+    {
+      db: db.db,
+      renderTicketPng: async ({ template }) => {
+        renderedTemplateVersionId = template.ticket_template_version_id;
+        return Buffer.from("ticket-png");
+      },
+      buildTicketPdf: async () => Uint8Array.from([9, 0, 0, 1]),
+    },
   );
 
-  assert.ok(loaded);
-  assert.equal(loaded?.latestVersion.version_number, 2);
-  assert.deepEqual(
-    loaded?.versions.map((version) => version.version_number),
-    [2, 1],
-  );
-  assert.deepEqual(
-    loaded?.latestVersion.template_schema.nodes,
-    normalizeTemplateVersion(secondSchema).nodes,
-  );
+  assert.equal(result.ticketTemplateVersionId, "ticket-template-version-3");
+  assert.equal(renderedTemplateVersionId, "ticket-template-version-3");
+  assert.equal(db.records.reservation.ticket_template_version_id, "ticket-template-version-3");
 });

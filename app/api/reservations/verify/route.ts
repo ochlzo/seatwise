@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
-import { buildReservationStatusEmailGroups } from "@/lib/email/reservationStatusEmailPayload";
-import { sendReservationStatusUpdateEmail } from "@/lib/email/sendReservationStatusUpdateEmail";
+import { sendIssuedTicketEmail } from "@/lib/email/sendIssuedTicketEmail";
+import { issueReservationTicket } from "@/lib/tickets/issueReservationTicket";
 
 // POST /api/reservations/verify - Admin-only: verify a reservation + payment
 export async function POST(request: NextRequest) {
@@ -83,27 +83,59 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    const [emailGroup] = buildReservationStatusEmailGroups([
-      {
-        ...reservation,
-        reservation_number: (reservation as { reservation_number: string })
-          .reservation_number,
-      },
-    ]);
+    let warning: string | null = null;
 
-    if (emailGroup) {
-      await sendReservationStatusUpdateEmail({
-        to: emailGroup.to,
-        customerName: emailGroup.customerName,
-        targetStatus: "CONFIRMED",
-        lineItems: emailGroup.lineItems,
+    try {
+      const issuedTicket = await issueReservationTicket({
+        reservationId,
+        baseUrl:
+          process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+          request.nextUrl.origin ||
+          "http://localhost:3000",
       });
+
+      await sendIssuedTicketEmail({
+        to: issuedTicket.email,
+        customerName: issuedTicket.customerName,
+        reservationNumber: issuedTicket.reservationNumber,
+        showName: issuedTicket.showName,
+        venue: issuedTicket.venue,
+        scheduleLabel: issuedTicket.scheduleLabel,
+        seatLabels: issuedTicket.seatLabels,
+        ticketPdf: issuedTicket.ticketPdf,
+        ticketPdfFilename: issuedTicket.ticketPdfFilename,
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Ticket delivery failed.";
+      console.error("[reservations/verify] failed to issue confirmed ticket:", error);
+      warning = "Reservation was confirmed, but the PDF ticket could not be delivered.";
+      await prisma.reservation
+        .update({
+          where: { reservation_id: reservationId },
+          data: {
+            ticket_delivery_error: errorMessage,
+          },
+        })
+        .catch((updateError) => {
+          console.error(
+            "[reservations/verify] failed to persist ticket delivery error:",
+            updateError,
+          );
+        });
     }
 
     return NextResponse.json({
       success: true,
       reservationId,
       newStatus: "CONFIRMED",
+      warning,
+      email: {
+        attemptedCount: 1,
+        sentCount: warning ? 0 : 1,
+        failedCount: warning ? 1 : 0,
+        sent: warning == null,
+      },
     });
   } catch (error) {
     console.error("[reservations/verify] Error:", error);

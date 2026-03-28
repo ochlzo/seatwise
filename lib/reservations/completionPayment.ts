@@ -20,7 +20,7 @@ export const buildCompletionPaymentRecord = ({
     ? {
         method: "WALK_IN",
         status: "PAID",
-        screenshot_url: assetUrl,
+        screenshot_url: null,
         paid_at: paidAt ?? null,
       }
     : {

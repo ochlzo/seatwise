@@ -151,6 +151,7 @@ type PendingMove = {
 type StageUpdateResponse = {
   success: boolean;
   error?: string;
+  warning?: string | null;
   email?: {
     attemptedCount: number;
     sentCount: number;
@@ -723,21 +724,32 @@ export function ReservationsClient() {
       });
 
       try {
-        const response = await fetch("/api/reservations/stage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reservationIds, targetStatus }),
-        });
+        const endpoint =
+          targetStatus === "CONFIRMED"
+            ? "/api/reservations/verify"
+            : "/api/reservations/reject";
 
-        const data = (await response.json()) as StageUpdateResponse;
-        if (!response.ok || !data.success) {
-          throw new Error(
-            data.error ||
-              (targetStatus === "CONFIRMED"
-                ? "Failed to verify reservations"
-                : "Failed to reject reservations"),
-          );
-        }
+        const results = await Promise.all(
+          reservationIds.map(async (reservationId) => {
+            const response = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ reservationId }),
+            });
+
+            const data = (await response.json()) as StageUpdateResponse;
+            if (!response.ok || !data.success) {
+              throw new Error(
+                data.error ||
+                  (targetStatus === "CONFIRMED"
+                    ? "Failed to verify reservations"
+                    : "Failed to reject reservations"),
+              );
+            }
+
+            return data;
+          }),
+        );
 
         const paidAt = new Date().toISOString();
         setShows((prev) =>
@@ -773,9 +785,11 @@ export function ReservationsClient() {
 
         const actionLabel =
           targetStatus === "CONFIRMED" ? "confirmed" : "rejected";
-        const emailResult = data.email;
+        const notificationFailures = results.filter(
+          (result) => result.warning || result.email?.sent === false,
+        );
 
-        if (!emailResult || emailResult.sent) {
+        if (notificationFailures.length === 0) {
           toast.success(
             reservationIds.length === 1
               ? `Reservation ${actionLabel} and customer notified.`
@@ -784,8 +798,8 @@ export function ReservationsClient() {
         } else {
           toast.warning(
             reservationIds.length === 1
-              ? `Reservation ${actionLabel}, but the email could not be sent.`
-              : `${reservationIds.length} reservations ${actionLabel}, but ${emailResult.failedCount} email notification${emailResult.failedCount === 1 ? "" : "s"} failed.`,
+              ? `Reservation ${actionLabel}, but the customer notification could not be fully delivered.`
+              : `${reservationIds.length} reservations ${actionLabel}, but ${notificationFailures.length} customer notification${notificationFailures.length === 1 ? "" : "s"} could not be fully delivered.`,
           );
         }
 

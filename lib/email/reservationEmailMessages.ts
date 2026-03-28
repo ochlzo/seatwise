@@ -15,17 +15,6 @@ type ReservationSubmittedEmailPayload = {
   proofImageUrl?: string | null;
 };
 
-type WalkInReceiptEmailPayload = {
-  to: string;
-  customerName: string;
-  reservationNumber: string;
-  showName: string;
-  scheduleLabel: string;
-  seatNumbers: string[];
-  totalAmount: string;
-  receiptImageUrl: string;
-};
-
 type ReservationStatusEmailLineItem = {
   reservationNumber: string;
   showName: string;
@@ -166,99 +155,12 @@ export const buildReservationSubmittedEmailMessage = ({
   return rawParts.join(CRLF);
 };
 
-export const buildWalkInReceiptEmailMessage = ({
-  sender,
-  payload,
-  receiptAttachment,
-}: {
-  sender: string;
-  payload: WalkInReceiptEmailPayload;
-  receiptAttachment: EmailImageAttachment;
-}) => {
-  const textBody = [
-    `Hi ${payload.customerName},`,
-    "",
-    "Thank you for your in-person purchase through Seatwise.",
-    "",
-    `Reservation Number: ${payload.reservationNumber}`,
-    `Show: ${payload.showName}`,
-    `Schedule: ${payload.scheduleLabel}`,
-    `Seats: ${payload.seatNumbers.join(", ")}`,
-    `Total Paid: ${payload.totalAmount}`,
-    "",
-    "This ticket purchase was completed as a walk-in / bought in person transaction.",
-    `Receipt image: ${payload.receiptImageUrl}`,
-    "",
-    "Thank you,",
-    "Seatwise Team",
-  ].join(CRLF);
-
-  const htmlBody = `
-    <div style="font-family:Segoe UI,Arial,sans-serif;color:#111827;line-height:1.6">
-      <p>Hi ${escapeHtml(payload.customerName)},</p>
-      <p>Thank you for your in-person purchase through Seatwise.</p>
-      <div style="border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f9fafb">
-        <p><strong>Reservation Number:</strong> ${escapeHtml(payload.reservationNumber)}</p>
-        <p><strong>Show:</strong> ${escapeHtml(payload.showName)}</p>
-        <p><strong>Schedule:</strong> ${escapeHtml(payload.scheduleLabel)}</p>
-        <p><strong>Seats:</strong> ${escapeHtml(payload.seatNumbers.join(", "))}</p>
-        <p><strong>Total Paid:</strong> ${escapeHtml(payload.totalAmount)}</p>
-        <p><strong>Purchase Type:</strong> Walk-in / bought in person</p>
-      </div>
-      <p style="margin-top:20px">Your receipt image is shown below for reference. The same image is also attached as a downloadable file.</p>
-      <img src="${escapeHtml(payload.receiptImageUrl)}" alt="Walk-in receipt" style="display:block;max-width:100%;border-radius:16px;border:1px solid #d1d5db" />
-      <p style="margin-top:20px">Thank you,<br />Seatwise Team</p>
-    </div>
-  `.trim();
-
-  const mixedBoundary = `seatwise-walk-in-mixed-${payload.reservationNumber}`;
-  const alternativeBoundary = `seatwise-walk-in-alt-${payload.reservationNumber}`;
-
-  return [
-    `From: Seatwise <${sender}>`,
-    `To: ${payload.to}`,
-    `Subject: Seatwise Walk-In Receipt - ${payload.showName}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
-    "",
-    `--${mixedBoundary}`,
-    `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"`,
-    "",
-    `--${alternativeBoundary}`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    "Content-Transfer-Encoding: 7bit",
-    "",
-    textBody,
-    "",
-    `--${alternativeBoundary}`,
-    'Content-Type: text/html; charset="UTF-8"',
-    "Content-Transfer-Encoding: 7bit",
-    "",
-    htmlBody,
-    "",
-    `--${alternativeBoundary}--`,
-    "",
-    `--${mixedBoundary}`,
-    `Content-Type: ${receiptAttachment.contentType}; name="${receiptAttachment.filename}"`,
-    `Content-Disposition: attachment; filename="${receiptAttachment.filename}"`,
-    "Content-Transfer-Encoding: base64",
-    "",
-    encodeAttachmentBody(receiptAttachment.content),
-    "",
-    `--${mixedBoundary}--`,
-  ].join(CRLF);
-};
-
 export const buildReservationStatusUpdateEmailMessage = ({
   sender,
   payload,
-  receiptImageUrls,
-  receiptAttachments,
 }: {
   sender: string;
   payload: ReservationStatusUpdateEmailPayload;
-  receiptImageUrls: string[];
-  receiptAttachments: EmailImageAttachment[];
 }) => {
   const isConfirmed = payload.targetStatus === "CONFIRMED";
   const statusLabel = isConfirmed ? "Confirmed" : "Rejected";
@@ -275,7 +177,7 @@ export const buildReservationStatusUpdateEmailMessage = ({
     buildReservationSummary(payload.lineItems),
     "",
     isConfirmed
-      ? `Receipt image: ${receiptImageUrls.join(", ")}`
+      ? "Your reservation status has been updated to CONFIRMED."
       : "If you need help, please contact the organizer or admin team for assistance.",
     "",
     "Thank you,",
@@ -308,17 +210,7 @@ export const buildReservationStatusUpdateEmailMessage = ({
       </div>
       ${
         isConfirmed
-          ? `<p style="margin-top:20px">Your receipt image is shown below for reference. The same image is also attached as a downloadable file.</p>
-             ${receiptImageUrls
-               .map(
-                 (url, index) => `
-                   <div style="margin-top:24px">
-                     <p style="font-weight:600;margin-bottom:10px">Receipt ${index + 1}</p>
-                     <img src="${escapeHtml(url)}" alt="Reservation receipt ${index + 1}" style="display:block;max-width:100%;border-radius:16px;border:1px solid #d1d5db" />
-                   </div>
-                 `.trim(),
-               )
-               .join("")}`
+          ? "<p style=\"margin-top:20px\">Your reservation status has been updated to CONFIRMED.</p>"
           : "<p style=\"margin-top:20px\">If you need help, please contact the organizer or admin team for assistance.</p>"
       }
       <p style="margin-top:20px">Thank you,<br />Seatwise Team</p>
@@ -352,18 +244,6 @@ export const buildReservationStatusUpdateEmailMessage = ({
     `--${alternativeBoundary}--`,
   ];
 
-  for (const attachment of receiptAttachments) {
-    rawParts.push(
-      "",
-      `--${mixedBoundary}`,
-      `Content-Type: ${attachment.contentType}; name="${attachment.filename}"`,
-      `Content-Disposition: attachment; filename="${attachment.filename}"`,
-      "Content-Transfer-Encoding: base64",
-      "",
-      encodeAttachmentBody(attachment.content),
-    );
-  }
-
   rawParts.push("", `--${mixedBoundary}--`);
   return rawParts.join(CRLF);
 };
@@ -373,5 +253,4 @@ export type {
   ReservationStatusEmailLineItem,
   ReservationStatusUpdateEmailPayload,
   ReservationSubmittedEmailPayload,
-  WalkInReceiptEmailPayload,
 };

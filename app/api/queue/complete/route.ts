@@ -3,8 +3,8 @@ import { Prisma } from "@prisma/client";
 
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 import cloudinary from "@/lib/cloudinary";
+import { sendIssuedTicketEmail } from "@/lib/email/sendIssuedTicketEmail";
 import { sendReservationSubmittedEmail } from "@/lib/email/sendReservationSubmittedEmail";
-import { sendWalkInReceiptEmail } from "@/lib/email/sendWalkInReceiptEmail";
 import { prisma } from "@/lib/prisma";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
@@ -14,10 +14,7 @@ import {
   isSchedStatusReservable,
   syncScheduleCapacityStatuses,
 } from "@/lib/shows/effectiveStatus";
-import {
-  type WalkInReceiptPayload,
-} from "@/lib/walk-in/receipt";
-import { uploadWalkInReceiptImage } from "@/lib/walk-in/uploadReceiptImage";
+import { issueReservationTicket } from "@/lib/tickets/issueReservationTicket";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-PH", {
@@ -25,20 +22,6 @@ const formatCurrency = (value: number) =>
     currency: "PHP",
     maximumFractionDigits: 2,
   }).format(value);
-
-const formatScheduleLabel = (dateValue: Date, startValue: Date, endValue: Date) => {
-  const dateLabel = new Intl.DateTimeFormat("en-PH", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(dateValue);
-  const timeLabel = new Intl.DateTimeFormat("en-PH", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  return `${dateLabel}, ${timeLabel.format(startValue)} - ${timeLabel.format(endValue)}`;
-};
 
 const normalize = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -260,53 +243,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const scheduleLabel = formatScheduleLabel(
-      schedule.sched_date,
-      schedule.sched_start_time,
-      schedule.sched_end_time,
-    );
-
     let reservation: ReservationDraft | null = null;
-    let walkInReceiptPayload: WalkInReceiptPayload | null = null;
-    let walkInReceiptUrl: string | null = null;
     let paymentRecordedAt: Date | null = null;
 
     for (let attempt = 1; attempt <= RESERVATION_NUMBER_MAX_ATTEMPTS; attempt += 1) {
       const reservationNumber = generateReservationNumber();
 
-      if (isWalkInMode) {
-        walkInReceiptPayload = {
-          reservationNumber,
-          customerName: `${contact.firstName} ${contact.lastName}`.trim(),
-          customerEmail: contact.email,
-          customerPhoneNumber: contact.phoneNumber,
-          showName: schedule.show.show_name,
-          venue: schedule.show.venue,
-          scheduleLabel,
-          seatNumbers,
-          totalAmount,
-        };
-
-        try {
-          walkInReceiptUrl = await uploadWalkInReceiptImage(walkInReceiptPayload, {
-            folder: "seatwise/settings/walk_in_receipts",
-            publicIdPrefix: "walk-in",
-            format: "png",
-          });
-        } catch (error) {
-          console.error("[queue/complete] failed to upload walk-in receipt:", error);
-          return NextResponse.json(
-            { success: false, error: "Failed to generate walk-in receipt." },
-            { status: 500 },
-          );
-        }
-      }
-
       try {
         paymentRecordedAt = isWalkInMode ? new Date() : null;
         const paymentRecord = buildCompletionPaymentRecord({
           mode,
-          assetUrl: isWalkInMode ? walkInReceiptUrl : uploadedScreenshotUrl,
+          assetUrl: uploadedScreenshotUrl,
           paidAt: paymentRecordedAt,
         });
 
@@ -399,21 +346,45 @@ export async function POST(request: NextRequest) {
 
     let warning: string | null = null;
 
-    if (isWalkInMode && walkInReceiptPayload) {
+    if (isWalkInMode) {
       try {
-        await sendWalkInReceiptEmail({
-          to: contact.email,
-          customerName: walkInReceiptPayload.customerName,
-          reservationNumber: reservation.reservationNumber,
-          showName: schedule.show.show_name,
-          scheduleLabel,
-          seatNumbers: reservation.seatNumbers,
-          totalAmount: formatCurrency(reservation.totalAmount),
-          receiptImageUrl: walkInReceiptUrl ?? "",
+        const issuedTicket = await issueReservationTicket({
+          reservationId: reservation.reservationId,
+          baseUrl:
+            process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+            request.nextUrl.origin ||
+            "http://localhost:3000",
+        });
+
+        await sendIssuedTicketEmail({
+          to: issuedTicket.email,
+          customerName: issuedTicket.customerName,
+          reservationNumber: issuedTicket.reservationNumber,
+          showName: issuedTicket.showName,
+          venue: issuedTicket.venue,
+          scheduleLabel: issuedTicket.scheduleLabel,
+          seatLabels: issuedTicket.seatLabels,
+          ticketPdf: issuedTicket.ticketPdf,
+          ticketPdfFilename: issuedTicket.ticketPdfFilename,
         });
       } catch (error) {
-        console.error("[queue/complete] failed to send walk-in receipt email:", error);
-        warning = "Walk-in sale was saved, but the receipt email could not be sent.";
+        const errorMessage =
+          error instanceof Error ? error.message : "Ticket delivery failed.";
+        console.error("[queue/complete] failed to issue walk-in ticket:", error);
+        warning = "Walk-in sale was saved, but the PDF ticket could not be delivered.";
+        await prisma.reservation
+          .update({
+            where: { reservation_id: reservation.reservationId },
+            data: {
+              ticket_delivery_error: errorMessage,
+            },
+          })
+          .catch((updateError) => {
+            console.error(
+              "[queue/complete] failed to persist walk-in ticket delivery error:",
+              updateError,
+            );
+          });
       }
     }
 
