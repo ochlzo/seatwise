@@ -225,6 +225,7 @@ test("consumeIssuedTicket marks the reservation consumed and all linked seats CO
     {
       token,
       showId: "show-123",
+      schedId: "sched-123",
       adminContext: ADMIN_CONTEXT,
       secret: TEST_SECRET,
     },
@@ -291,6 +292,7 @@ test("consumeIssuedTicket returns an already-consumed invalid result without mut
     {
       token,
       showId: "show-123",
+      schedId: "sched-123",
       adminContext: ADMIN_CONTEXT,
       secret: TEST_SECRET,
     },
@@ -318,6 +320,51 @@ test("consumeIssuedTicket returns an already-consumed invalid result without mut
     "2026-03-28T12:15:00.000Z",
   );
   assert.equal(snapshot.reservation.ticket_consumed_by_admin_id, "admin-previous");
+  assert.deepEqual(snapshot.mutationCounts, {
+    reservationUpdates: 0,
+    seatAssignmentUpdates: 0,
+  });
+});
+
+test("consumeIssuedTicket rejects tickets from a different schedule with a schedule-specific message", async () => {
+  const reservation = createIssuedReservation({
+    sched: {
+      sched_id: "sched-789",
+      sched_date: new Date("2026-03-29T00:00:00+08:00"),
+      sched_start_time: new Date("2026-03-29T19:00:00+08:00"),
+    },
+  });
+  const db = createMemoryTicketDb(reservation);
+  const token = createSignedQrPayload(
+    {
+      reservationId: reservation.reservation_id,
+      reservationNumber: reservation.reservation_number,
+    },
+    { secret: TEST_SECRET },
+  );
+
+  const result = await consumeIssuedTicket(
+    {
+      token,
+      showId: "show-123",
+      schedId: "sched-123",
+      adminContext: ADMIN_CONTEXT,
+      secret: TEST_SECRET,
+    },
+    db,
+  );
+
+  assert.deepEqual(result, {
+    status: "INVALID",
+    reason: "SCHEDULE_MISMATCH",
+    verification: {
+      status: "INVALID",
+      reason: "SCHEDULE_MISMATCH",
+      message: "Invalid ticket. This is for the 7:00 PM schedule.",
+    },
+  });
+
+  const snapshot = db.getSnapshot();
   assert.deepEqual(snapshot.mutationCounts, {
     reservationUpdates: 0,
     seatAssignmentUpdates: 0,

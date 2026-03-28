@@ -25,7 +25,25 @@ type TicketVerificationResultProps = {
   description?: string;
   emptyMessage?: string;
   className?: string;
+  actions?: React.ReactNode;
+  notice?: {
+    tone: "neutral" | "warning" | "success" | "destructive";
+    message: string;
+  } | null;
 };
+
+function getNoticeClassName(tone: NonNullable<TicketVerificationResultProps["notice"]>["tone"]) {
+  switch (tone) {
+    case "warning":
+      return "border-amber-200 bg-amber-50 text-amber-900";
+    case "success":
+      return "border-emerald-200 bg-emerald-50 text-emerald-900";
+    case "destructive":
+      return "border-destructive/25 bg-destructive/5 text-destructive";
+    default:
+      return "border-sidebar-border/70 bg-muted/20 text-muted-foreground";
+  }
+}
 
 function formatConsumedAt(value: string | null) {
   if (!value) return null;
@@ -44,6 +62,8 @@ export function TicketVerificationResult({
   description,
   emptyMessage = "Scan or open a ticket to view its verification status.",
   className,
+  actions = null,
+  notice = null,
 }: TicketVerificationResultProps) {
   if (loading) {
     return (
@@ -57,6 +77,19 @@ export function TicketVerificationResult({
             Looking up the signed ticket token.
           </CardDescription>
         </CardHeader>
+        {notice ? (
+          <CardContent className="pt-0">
+            <div
+              className={cn(
+                "rounded-md border px-4 py-3 text-sm",
+                getNoticeClassName(notice.tone),
+              )}
+            >
+              {notice.message}
+            </div>
+          </CardContent>
+        ) : null}
+        {actions ? <CardContent className="pt-0">{actions}</CardContent> : null}
       </Card>
     );
   }
@@ -71,6 +104,19 @@ export function TicketVerificationResult({
           </CardTitle>
           <CardDescription>{description ?? emptyMessage}</CardDescription>
         </CardHeader>
+        {notice ? (
+          <CardContent className="pt-0">
+            <div
+              className={cn(
+                "rounded-md border px-4 py-3 text-sm",
+                getNoticeClassName(notice.tone),
+              )}
+            >
+              {notice.message}
+            </div>
+          </CardContent>
+        ) : null}
+        {actions ? <CardContent className="pt-0">{actions}</CardContent> : null}
       </Card>
     );
   }
@@ -83,8 +129,21 @@ export function TicketVerificationResult({
             <AlertTriangle className="h-4 w-4" />
             Invalid Ticket
           </CardTitle>
-          <CardDescription>{result.message}</CardDescription>
+          <CardDescription>{description ?? result.message}</CardDescription>
         </CardHeader>
+        {notice ? (
+          <CardContent className="pt-0">
+            <div
+              className={cn(
+                "rounded-md border px-4 py-3 text-sm",
+                getNoticeClassName(notice.tone),
+              )}
+            >
+              {notice.message}
+            </div>
+          </CardContent>
+        ) : null}
+        {actions ? <CardContent className="pt-0">{actions}</CardContent> : null}
       </Card>
     );
   }
@@ -117,6 +176,18 @@ export function TicketVerificationResult({
           </Badge>
         </div>
       </CardHeader>
+      {notice ? (
+        <CardContent className="pt-0">
+          <div
+            className={cn(
+              "rounded-md border px-4 py-3 text-sm",
+              getNoticeClassName(notice.tone),
+            )}
+          >
+            {notice.message}
+          </div>
+        </CardContent>
+      ) : null}
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -163,6 +234,7 @@ export function TicketVerificationResult({
           </div>
         ) : null}
       </CardContent>
+      {actions ? <CardContent className="pt-0">{actions}</CardContent> : null}
     </Card>
   );
 }

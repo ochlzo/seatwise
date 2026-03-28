@@ -65,3 +65,64 @@ test("ticket templates page keeps explicit admin access enforcement", () => {
 
   assert.match(pageContents, /getCurrentAdminContext/);
 });
+
+test("scanner page removes readiness chrome and scanner copy that no longer matches the Figma layout", () => {
+  const scannerPage = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/shows/[showId]/scanner/page.tsx",
+  );
+  const scannerComponent = readRepoFile("components/tickets/AdminTicketScanner.tsx");
+
+  assert.doesNotMatch(scannerPage, /Readiness/);
+  assert.doesNotMatch(scannerPage, /Manage Ticket Templates/);
+  assert.doesNotMatch(
+    scannerComponent,
+    /ticket checks are door-staff scoped to this show/,
+  );
+  assert.doesNotMatch(
+    scannerComponent,
+    /Rear camera is active\. Point it at a Seatwise ticket QR code\./,
+  );
+  assert.doesNotMatch(scannerComponent, /Fallback Image Scan/);
+  assert.doesNotMatch(
+    scannerComponent,
+    /Upload a QR screenshot or photo if camera access is unavailable\./,
+  );
+});
+
+test("show detail opens a schedule-scoped ticket scanner flow instead of pushing directly to the unscoped scanner", () => {
+  const showDetailForm = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm.tsx",
+  );
+
+  assert.match(showDetailForm, /Select Schedule/i);
+  assert.match(showDetailForm, /Open scanner/i);
+  assert.doesNotMatch(
+    showDetailForm,
+    /router\.push\(`\/admin\/shows\/\$\{show\.show_id\}\/scanner`\)/,
+  );
+});
+
+test("scanner page is schedule scoped and removes the schedule selector and back button from the Figma layout", () => {
+  const scannerPage = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/shows/[showId]/scanner/page.tsx",
+  );
+  const scannerComponent = readRepoFile("components/tickets/AdminTicketScanner.tsx");
+  const consumeRoute = readRepoFile("app/api/tickets/consume/route.ts");
+  const verifyRoute = readRepoFile("app/api/tickets/verify/route.ts");
+
+  assert.match(scannerPage, /searchParams/);
+  assert.match(consumeRoute, /schedId/);
+  assert.match(verifyRoute, /schedId/);
+  assert.doesNotMatch(scannerComponent, /Back To Show/);
+  assert.doesNotMatch(scannerComponent, /Schedules/);
+});
+
+test("scanner flow pauses after scan, verifies first, and exposes consume or continue actions from the result card", () => {
+  const scannerComponent = readRepoFile("components/tickets/AdminTicketScanner.tsx");
+
+  assert.match(scannerComponent, /Consume E-Ticket/);
+  assert.match(scannerComponent, /Continue/);
+  assert.match(scannerComponent, /\/api\/tickets\/verify/);
+  assert.match(scannerComponent, /pauseScanner/);
+  assert.match(scannerComponent, /resumeScanner/);
+});

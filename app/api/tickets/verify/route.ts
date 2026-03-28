@@ -4,13 +4,13 @@ import {
   AdminContextError,
   getCurrentAdminContext,
 } from "@/lib/auth/adminContext";
-import {
-  consumeIssuedTicket,
-  TicketConsumeAuthorizationError,
-} from "@/lib/tickets/consumeIssuedTicket";
 import { normalizeScannedTicketToken } from "@/lib/tickets/qrPayload";
+import {
+  verifyScannedIssuedTicket,
+} from "@/lib/tickets/verifyScannedIssuedTicket";
+import { TicketConsumeAuthorizationError } from "@/lib/tickets/consumeIssuedTicket";
 
-type ConsumeTicketRequestBody = {
+type VerifyTicketRequestBody = {
   token?: string;
   showId?: string;
   schedId?: string;
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as ConsumeTicketRequestBody;
+    const body = (await request.json()) as VerifyTicketRequestBody;
     const token = normalizeScannedTicketToken(normalize(body.token));
     const showId = normalize(body.showId);
     const schedId = normalize(body.schedId);
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await consumeIssuedTicket({
+    const result = await verifyScannedIssuedTicket({
       token,
       showId,
       schedId,
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    console.error("[tickets/consume] Error:", error);
+    console.error("[tickets/verify] Error:", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 },

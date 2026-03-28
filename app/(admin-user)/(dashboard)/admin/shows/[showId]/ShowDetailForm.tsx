@@ -45,6 +45,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Combobox,
   ComboboxContent,
@@ -306,6 +307,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const router = useRouter();
   const [isSaving, setIsSaving] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
+  const [isScannerScheduleDialogOpen, setIsScannerScheduleDialogOpen] = React.useState(false);
+  const [selectedScannerSchedId, setSelectedScannerSchedId] = React.useState("");
   const [isStatusConfirmOpen, setIsStatusConfirmOpen] = React.useState(false);
   const [pendingStatus, setPendingStatus] = React.useState<ShowStatus | null>(null);
   const [isStatusBlockedOpen, setIsStatusBlockedOpen] = React.useState(false);
@@ -335,6 +338,58 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   );
   const [gcashQrUploadError, setGcashQrUploadError] = React.useState<string | null>(null);
   const [isGcashQrProcessing, setIsGcashQrProcessing] = React.useState(false);
+
+  const scannerScheduleOptions = React.useMemo(
+    () =>
+      (show.scheds ?? [])
+        .filter((sched): sched is typeof sched & { sched_id: string } => Boolean(sched.sched_id))
+        .sort((left, right) => {
+          const leftDate = toDateValue(left.sched_date).getTime();
+          const rightDate = toDateValue(right.sched_date).getTime();
+          if (leftDate !== rightDate) return leftDate - rightDate;
+
+          const leftTime = toTimeValue(left.sched_start_time).getTime();
+          const rightTime = toTimeValue(right.sched_start_time).getTime();
+          return leftTime - rightTime;
+        })
+        .map((sched) => ({
+          schedId: sched.sched_id,
+          label: `${formatManilaDate(toDateValue(sched.sched_date))} at ${formatManilaTime(
+            toTimeValue(sched.sched_start_time),
+          )}`,
+        })),
+    [show.scheds],
+  );
+
+  const openScheduleScopedScanner = React.useCallback(
+    (schedId: string) => {
+      router.push(
+        `/admin/shows/${show.show_id}/scanner?schedId=${encodeURIComponent(schedId)}`,
+      );
+    },
+    [router, show.show_id],
+  );
+
+  const handleOpenTicketScanner = React.useCallback(() => {
+    if (scannerScheduleOptions.length === 0) {
+      toast.error("No schedules are available for the ticket scanner.");
+      return;
+    }
+
+    if (scannerScheduleOptions.length === 1) {
+      openScheduleScopedScanner(scannerScheduleOptions[0].schedId);
+      return;
+    }
+
+    setSelectedScannerSchedId(scannerScheduleOptions[0].schedId);
+    setIsScannerScheduleDialogOpen(true);
+  }, [openScheduleScopedScanner, scannerScheduleOptions]);
+
+  const handleConfirmScannerSchedule = React.useCallback(() => {
+    if (!selectedScannerSchedId) return;
+    setIsScannerScheduleDialogOpen(false);
+    openScheduleScopedScanner(selectedScannerSchedId);
+  }, [openScheduleScopedScanner, selectedScannerSchedId]);
 
   const filteredSeatmaps = React.useMemo(() => {
     const query = seatmapQuery.trim().toLowerCase();
@@ -2147,7 +2202,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                 <div className="md:col-span-2">
                   <Button
                     variant="outline"
-                    onClick={() => router.push(`/admin/shows/${show.show_id}/scanner`)}
+                    onClick={handleOpenTicketScanner}
                     className="w-full justify-center md:w-auto"
                   >
                     <Ticket className="mr-2 h-4 w-4" />
@@ -2769,7 +2824,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
           {!isEditing && allowEdit ? (
             <Button
               variant="outline"
-              onClick={() => router.push(`/admin/shows/${show.show_id}/scanner`)}
+              onClick={handleOpenTicketScanner}
               className="w-full h-12 font-semibold uppercase tracking-widest text-base"
             >
               <Ticket className="w-5 h-5 mr-2" />
@@ -2867,6 +2922,61 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
           ) : null}
         </div>
       </div>
+
+      {allowEdit && (
+        <Dialog
+          open={isScannerScheduleDialogOpen}
+          onOpenChange={setIsScannerScheduleDialogOpen}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Select Schedule</DialogTitle>
+              <DialogDescription>
+                Open scanner for one schedule only.
+              </DialogDescription>
+            </DialogHeader>
+            <RadioGroup
+              value={selectedScannerSchedId}
+              onValueChange={setSelectedScannerSchedId}
+              className="gap-3 py-2"
+            >
+              {scannerScheduleOptions.map((schedule) => (
+                <label
+                  key={schedule.schedId}
+                  htmlFor={`scanner-schedule-${schedule.schedId}`}
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-sidebar-border px-4 py-4 transition-colors hover:border-primary/40"
+                >
+                  <RadioGroupItem
+                    id={`scanner-schedule-${schedule.schedId}`}
+                    value={schedule.schedId}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium leading-5">{schedule.label}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Open scanner
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </RadioGroup>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsScannerScheduleDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmScannerSchedule}
+                disabled={!selectedScannerSchedId}
+              >
+                Open Scanner
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {allowEdit && (
         <Dialog open={isScheduleOpen} onOpenChange={setIsScheduleOpen}>

@@ -8,7 +8,8 @@ export type TicketVerificationInvalidReason =
   | "INVALID_TOKEN"
   | "TICKET_NOT_FOUND"
   | "TICKET_NOT_ISSUED"
-  | "SHOW_MISMATCH";
+  | "SHOW_MISMATCH"
+  | "SCHEDULE_MISMATCH";
 
 export type TicketVerificationInvalidResult = {
   status: "INVALID";

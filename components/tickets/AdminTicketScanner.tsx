@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import type { SeatStatus } from "@prisma/client";
-import { Camera, ImageUp, Loader2, ScanQrCode, ShieldAlert } from "lucide-react";
+import { ImageUp, Loader2, ScanQrCode } from "lucide-react";
 
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import type { SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
@@ -15,10 +15,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import type { TicketConsumeResult } from "@/lib/tickets/consumeIssuedTicket";
 import { normalizeScannedTicketToken } from "@/lib/tickets/qrPayload";
-import type { TicketVerificationResult as TicketVerificationResultData } from "@/lib/tickets/verifyIssuedTicket";
+import type {
+  TicketConsumeInvalidReason,
+  TicketConsumeResult,
+} from "@/lib/tickets/consumeIssuedTicket";
+import type {
+  TicketVerificationInvalidResult,
+  TicketVerificationSuccessResult,
+} from "@/lib/tickets/verifyIssuedTicket";
+import type { VerifyScannedIssuedTicketResult } from "@/lib/tickets/verifyScannedIssuedTicket";
 
 export type TicketScannerSchedulePreview = {
   schedId: string;
@@ -34,21 +40,29 @@ export type TicketScannerSchedulePreview = {
 
 type AdminTicketScannerProps = {
   showId: string;
-  showName: string;
+  schedId: string;
   seatmapId?: string | null;
-  schedules: TicketScannerSchedulePreview[];
+  schedule: TicketScannerSchedulePreview;
 };
 
 type ScannerOutcome =
   | {
-      kind: "success";
-      reason: null;
-      verification: TicketVerificationResultData;
+      kind: "readyToConsume";
+      token: string;
+      verification: TicketVerificationSuccessResult;
+    }
+  | {
+      kind: "consumed";
+      verification: TicketVerificationSuccessResult;
+    }
+  | {
+      kind: "alreadyConsumed";
+      verification: TicketVerificationSuccessResult;
     }
   | {
       kind: "invalid";
-      reason: string;
-      verification: TicketVerificationResultData;
+      reason: Exclude<TicketConsumeInvalidReason, "ALREADY_CONSUMED"> | string;
+      verification: TicketVerificationInvalidResult;
     };
 
 type CameraState =
@@ -57,14 +71,21 @@ type CameraState =
   | "unsupported"
   | "unavailable"
   | "denied"
+  | "paused"
   | "error";
 
-function createInvalidResult(message: string): TicketVerificationResultData {
+function createInvalidResult(message: string): TicketVerificationInvalidResult {
   return {
     status: "INVALID",
     reason: "INVALID_TOKEN",
     message,
   };
+}
+
+function isInvalidVerificationResult(
+  result: VerifyScannedIssuedTicketResult,
+): result is Extract<VerifyScannedIssuedTicketResult, { status: "INVALID" }> {
+  return result.status === "INVALID";
 }
 
 function getCameraErrorState(error: unknown): {
@@ -76,14 +97,14 @@ function getCameraErrorState(error: unknown): {
       return {
         state: "denied",
         message:
-          "Camera access was denied. Allow camera access or use the image upload fallback.",
+          "Camera access was denied. Allow camera access or use Scan From Image instead.",
       };
     }
 
     if (error.name === "NotFoundError") {
       return {
         state: "unavailable",
-        message: "No camera was found on this device. Use the image upload fallback.",
+        message: "No camera was found on this device. Use Scan From Image instead.",
       };
     }
   }
@@ -93,66 +114,127 @@ function getCameraErrorState(error: unknown): {
     message:
       error instanceof Error
         ? error.message
-        : "The camera could not be started. Use the image upload fallback.",
+        : "The camera could not be started. Use Scan From Image instead.",
+  };
+}
+
+function getScannerNotice(
+  cameraState: CameraState,
+  cameraMessage: string,
+  scannerOutcome: ScannerOutcome | null,
+) {
+  if (cameraState !== "ready" && cameraState !== "paused") {
+    return {
+      tone: "warning" as const,
+      message: cameraMessage,
+    };
+  }
+
+  if (!scannerOutcome) {
+    return {
+      tone: "neutral" as const,
+      message:
+        cameraState === "paused"
+          ? cameraMessage
+          : "Scan a ticket or use Scan From Image to view the latest result.",
+    };
+  }
+
+  if (scannerOutcome.kind === "readyToConsume") {
+    return {
+      tone: "success" as const,
+      message: "Ticket ready to consume.",
+    };
+  }
+
+  if (scannerOutcome.kind === "consumed") {
+    return {
+      tone: "success" as const,
+      message: "E-ticket consumed successfully. Click continue to scan the next ticket.",
+    };
+  }
+
+  if (scannerOutcome.kind === "alreadyConsumed") {
+    return {
+      tone: "warning" as const,
+      message: "This ticket was already consumed. No data was changed.",
+    };
+  }
+
+  return {
+    tone: "destructive" as const,
+    message: scannerOutcome.verification.message,
   };
 }
 
 export function AdminTicketScanner({
   showId,
-  showName,
+  schedId,
   seatmapId,
-  schedules,
+  schedule,
 }: AdminTicketScannerProps) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const scannerRef = React.useRef<{
+    start: () => Promise<void>;
+    stop: () => void;
     destroy: () => void;
   } | null>(null);
   const isProcessingRef = React.useRef(false);
   const lastScanRef = React.useRef<{ token: string; at: number } | null>(null);
   const [cameraState, setCameraState] = React.useState<CameraState>("starting");
   const [cameraMessage, setCameraMessage] = React.useState(
-    "Starting the rear camera scanner.",
+    "Starting the camera scanner.",
   );
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isVerifying, setIsVerifying] = React.useState(false);
+  const [isConsuming, setIsConsuming] = React.useState(false);
   const [isScanningImage, setIsScanningImage] = React.useState(false);
-  const [lastToken, setLastToken] = React.useState<string | null>(null);
   const [scannerOutcome, setScannerOutcome] = React.useState<ScannerOutcome | null>(
     null,
   );
-  const [previewSchedules, setPreviewSchedules] = React.useState(schedules);
-  const [activeSchedId, setActiveSchedId] = React.useState(
-    schedules[0]?.schedId ?? "",
+  const [previewSchedule, setPreviewSchedule] = React.useState(schedule);
+  const isBusy = isVerifying || isConsuming;
+
+  const scannerNotice = React.useMemo(
+    () => getScannerNotice(cameraState, cameraMessage, scannerOutcome),
+    [cameraMessage, cameraState, scannerOutcome],
   );
 
-  const activeSchedule = React.useMemo(
-    () =>
-      previewSchedules.find((schedule) => schedule.schedId === activeSchedId) ??
-      previewSchedules[0] ??
-      null,
-    [activeSchedId, previewSchedules],
-  );
+  const pauseScanner = React.useEffectEvent(() => {
+    scannerRef.current?.stop();
+    setCameraState("paused");
+    setCameraMessage("Scanner paused. Review the result before continuing.");
+  });
 
-  const applyConsumedSeatsToPreview = React.useEffectEvent(
-    (schedId: string, seatIds: string[]) => {
-      setActiveSchedId(schedId);
-      setPreviewSchedules((currentSchedules) =>
-        currentSchedules.map((schedule) =>
-          schedule.schedId !== schedId
-            ? schedule
-            : {
-                ...schedule,
-                seatStatusById: seatIds.reduce<Record<string, SeatStatus>>(
-                  (nextStatusById, seatId) => {
-                    nextStatusById[seatId] = "CONSUMED";
-                    return nextStatusById;
-                  },
-                  { ...schedule.seatStatusById },
-                ),
-              },
-        ),
-      );
-    },
-  );
+  const resumeScanner = React.useEffectEvent(async () => {
+    setScannerOutcome(null);
+
+    if (!scannerRef.current) {
+      return;
+    }
+
+    try {
+      await scannerRef.current.start();
+      setCameraState("ready");
+      setCameraMessage("Camera ready.");
+    } catch (error) {
+      const nextError = getCameraErrorState(error);
+      setCameraState(nextError.state);
+      setCameraMessage(nextError.message);
+    }
+  });
+
+  const applyConsumedSeatsToPreview = React.useEffectEvent((seatIds: string[]) => {
+    setPreviewSchedule((currentSchedule) => ({
+      ...currentSchedule,
+      seatStatusById: seatIds.reduce<Record<string, SeatStatus>>(
+        (nextStatusById, seatId) => {
+          nextStatusById[seatId] = "CONSUMED";
+          return nextStatusById;
+        },
+        { ...currentSchedule.seatStatusById },
+      ),
+    }));
+  });
 
   const processToken = React.useEffectEvent(async (token: string) => {
     const normalizedToken = normalizeScannedTicketToken(token);
@@ -171,9 +253,85 @@ export function AdminTicketScanner({
 
     isProcessingRef.current = true;
     lastScanRef.current = { token: normalizedToken, at: now };
-    setIsSubmitting(true);
-    setLastToken(normalizedToken);
+    if (scannerRef.current) {
+      pauseScanner();
+    }
+    setIsVerifying(true);
     setScannerOutcome(null);
+
+    try {
+      const response = await fetch("/api/tickets/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: normalizedToken,
+          showId,
+          schedId,
+        }),
+      });
+
+      const data = (await response.json()) as
+        | VerifyScannedIssuedTicketResult
+        | { error?: string };
+
+      if (!response.ok || !("status" in data)) {
+        throw new Error(
+          "error" in data && data.error
+            ? data.error
+            : "Ticket verification failed.",
+        );
+      }
+
+      const verificationResult = data as VerifyScannedIssuedTicketResult;
+
+      if (verificationResult.status === "VALID") {
+        setScannerOutcome({
+          kind: "readyToConsume",
+          token: normalizedToken,
+          verification: verificationResult.verification,
+        });
+        return;
+      }
+
+      if (verificationResult.status === "CONSUMED") {
+        setScannerOutcome({
+          kind: "alreadyConsumed",
+          verification: verificationResult.verification,
+        });
+        return;
+      }
+
+      if (isInvalidVerificationResult(verificationResult)) {
+        setScannerOutcome({
+          kind: "invalid",
+          reason: verificationResult.reason,
+          verification: verificationResult.verification,
+        });
+      }
+    } catch (error) {
+      setScannerOutcome({
+        kind: "invalid",
+        reason: "REQUEST_FAILED",
+        verification: createInvalidResult(
+          error instanceof Error
+            ? error.message
+            : "Ticket verification request failed.",
+        ),
+      });
+    } finally {
+      isProcessingRef.current = false;
+      setIsVerifying(false);
+    }
+  });
+
+  const handleConsumeTicket = React.useEffectEvent(async () => {
+    if (scannerOutcome?.kind !== "readyToConsume") {
+      return;
+    }
+
+    setIsConsuming(true);
 
     try {
       const response = await fetch("/api/tickets/consume", {
@@ -182,8 +340,9 @@ export function AdminTicketScanner({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          token: normalizedToken,
+          token: scannerOutcome.token,
           showId,
+          schedId,
         }),
       });
 
@@ -200,10 +359,17 @@ export function AdminTicketScanner({
       }
 
       if (data.status === "CONSUMED") {
-        applyConsumedSeatsToPreview(data.schedId, data.seatIds);
+        applyConsumedSeatsToPreview(data.seatIds);
         setScannerOutcome({
-          kind: "success",
-          reason: null,
+          kind: "consumed",
+          verification: data.verification,
+        });
+        return;
+      }
+
+      if (data.reason === "ALREADY_CONSUMED") {
+        setScannerOutcome({
+          kind: "alreadyConsumed",
           verification: data.verification,
         });
         return;
@@ -225,9 +391,13 @@ export function AdminTicketScanner({
         ),
       });
     } finally {
-      isProcessingRef.current = false;
-      setIsSubmitting(false);
+      setIsConsuming(false);
     }
+  });
+
+  const handleContinue = React.useEffectEvent(async () => {
+    lastScanRef.current = null;
+    await resumeScanner();
   });
 
   React.useEffect(() => {
@@ -243,7 +413,7 @@ export function AdminTicketScanner({
       ) {
         setCameraState("unsupported");
         setCameraMessage(
-          "This browser does not support live camera scanning. Use the image upload fallback.",
+          "This browser does not support live camera scanning. Use Scan From Image instead.",
         );
         return;
       }
@@ -258,7 +428,7 @@ export function AdminTicketScanner({
         if (!hasCamera) {
           setCameraState("unavailable");
           setCameraMessage(
-            "No camera was found on this device. Use the image upload fallback.",
+            "No camera was found on this device. Use Scan From Image instead.",
           );
           return;
         }
@@ -288,9 +458,7 @@ export function AdminTicketScanner({
         }
 
         setCameraState("ready");
-        setCameraMessage(
-          "Rear camera is active. Point it at a Seatwise ticket QR code.",
-        );
+        setCameraMessage("Camera ready.");
       } catch (error) {
         if (isDisposed) return;
 
@@ -309,7 +477,7 @@ export function AdminTicketScanner({
     };
   }, []);
 
-  const handleImageUpload = React.useCallback(
+  const handleImageUpload = React.useEffectEvent(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       event.target.value = "";
@@ -341,170 +509,151 @@ export function AdminTicketScanner({
         setIsScanningImage(false);
       }
     },
-    [],
   );
 
+  const resultActions = React.useMemo(() => {
+    if (scannerOutcome?.kind === "readyToConsume") {
+      return (
+        <Button
+          type="button"
+          onClick={() => void handleConsumeTicket()}
+          disabled={isBusy}
+          className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+        >
+          {isConsuming ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Consuming E-Ticket
+            </>
+          ) : (
+            "Consume E-Ticket"
+          )}
+        </Button>
+      );
+    }
+
+    if (!scannerOutcome) {
+      return null;
+    }
+
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => void handleContinue()}
+        disabled={isBusy}
+        className="w-full"
+      >
+        Continue
+      </Button>
+    );
+  }, [isBusy, isConsuming, scannerOutcome]);
+
   return (
-    <div className="grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-      <Card className="border-sidebar-border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <ScanQrCode className="h-4 w-4 text-primary" />
-            Live Ticket Scanner
-          </CardTitle>
-          <CardDescription>
-            {showName}
-            {" "}
-            ticket checks are door-staff scoped to this show.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-zinc-950">
-            <div className="relative aspect-[4/3] min-h-[18rem]">
-              <video
-                ref={videoRef}
-                className="h-full w-full object-cover"
-                muted
-                playsInline
-              />
-              <div className="pointer-events-none absolute inset-0 border-[10px] border-white/10" />
-              <div className="pointer-events-none absolute inset-x-6 top-6 rounded-full border border-white/20 bg-black/35 px-3 py-1 text-center text-xs font-medium tracking-[0.2em] text-white/90 uppercase">
-                Rear Camera Preferred
-              </div>
-              {(cameraState === "starting" || isSubmitting) && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/45">
-                  <div className="flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-sm text-white">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {isSubmitting ? "Checking ticket" : "Starting camera"}
+    <div className="flex flex-1 flex-col gap-4 py-4">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
+        <Card className="gap-0 border-sidebar-border">
+          <CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pb-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ScanQrCode className="h-4 w-4 text-primary" />
+              Scanner
+            </CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              asChild
+              disabled={isScanningImage || isBusy || cameraState === "paused"}
+              className="justify-self-end"
+            >
+              <label className="cursor-pointer">
+                {isScanningImage ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ImageUp className="mr-2 h-4 w-4" />
+                )}
+                Scan From Image
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+              </label>
+            </Button>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+                <div className="overflow-hidden rounded-xl border border-sidebar-border/70 bg-zinc-950">
+              <div className="relative aspect-[4/3] min-h-[18rem] lg:min-h-[25rem]">
+                <video
+                  ref={videoRef}
+                  className="h-full w-full object-cover"
+                  muted
+                  playsInline
+                />
+                <div className="pointer-events-none absolute inset-0 border-[10px] border-white/10" />
+                {(cameraState === "starting" || isBusy) && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/45">
+                    <div className="flex items-center gap-2 rounded-full bg-black/60 px-4 py-2 text-sm text-white">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {isConsuming
+                        ? "Consuming ticket"
+                        : isVerifying
+                          ? "Checking ticket"
+                          : "Starting camera"}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div
-            className={cn(
-              "rounded-lg border px-4 py-3 text-sm",
-              cameraState === "ready"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-amber-200 bg-amber-50 text-amber-900",
-            )}
-          >
-            <div className="flex items-start gap-2">
-              {cameraState === "ready" ? (
-                <Camera className="mt-0.5 h-4 w-4 shrink-0" />
-              ) : (
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-              )}
-              <p>{cameraMessage}</p>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-dashed border-sidebar-border/70 bg-muted/20 p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Fallback Image Scan</p>
-                <p className="text-sm text-muted-foreground">
-                  Upload a QR screenshot or photo if camera access is unavailable.
-                </p>
+                )}
+                {cameraState === "paused" && !isBusy ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <div className="rounded-full bg-black/70 px-4 py-2 text-sm text-white">
+                      Scanner paused
+                    </div>
+                  </div>
+                ) : null}
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                asChild
-                disabled={isScanningImage}
-              >
-                <label className="cursor-pointer">
-                  {isScanningImage ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <ImageUp className="mr-2 h-4 w-4" />
-                  )}
-                  Scan From Image
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                  />
-                </label>
-              </Button>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          {lastToken ? (
-            <div className="rounded-lg border border-sidebar-border/60 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-              Last scanned token:
-              {" "}
-              <span className="font-mono">{`${lastToken.slice(0, 18)}...`}</span>
-            </div>
-          ) : null}
+        <TicketVerificationResult
+          result={scannerOutcome?.verification ?? null}
+          loading={isBusy}
+          title="Scan Result"
+          description={
+            scannerOutcome?.kind === "readyToConsume"
+              ? "This e-ticket is valid and ready for manual consume."
+              : "Latest verification details."
+          }
+          emptyMessage="Scan a ticket to view its details."
+          notice={scannerNotice}
+          actions={resultActions}
+          className="h-full border-sidebar-border"
+        />
 
-          {scannerOutcome?.kind === "invalid" &&
-          scannerOutcome.reason === "ALREADY_CONSUMED" ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              This ticket was already consumed. No data was changed.
-            </div>
-          ) : null}
-
-          <TicketVerificationResult
-            result={scannerOutcome?.verification ?? null}
-            loading={isSubmitting}
-            title="Latest Scan Result"
-            description="Fresh scans consume the ticket. Re-scans return an explicit already-consumed result."
-          />
-        </CardContent>
-      </Card>
-
-      <Card className="border-sidebar-border">
-        <CardHeader>
-          <CardTitle className="text-base">Seatmap Preview</CardTitle>
-          <CardDescription>
-            Successful consumes update the affected seats in the schedule preview
-            immediately.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {previewSchedules.length > 1 ? (
-            <div className="flex flex-wrap gap-2">
-              {previewSchedules.map((schedule) => (
-                <Button
-                  key={schedule.schedId}
-                  type="button"
-                  variant={
-                    schedule.schedId === activeSchedule?.schedId
-                      ? "default"
-                      : "outline"
-                  }
-                  size="sm"
-                  onClick={() => setActiveSchedId(schedule.schedId)}
-                >
-                  {schedule.label}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-
-          {activeSchedule && seatmapId ? (
-            <div className="space-y-3">
-              <p className="text-sm font-medium">{activeSchedule.label}</p>
+        <Card className="gap-0 border-sidebar-border lg:col-span-2">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">Seatmap Preview</CardTitle>
+            <CardDescription>{previewSchedule.label}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {seatmapId ? (
               <SeatmapPreview
                 seatmapId={seatmapId}
-                categories={activeSchedule.seatmapCategories}
-                seatCategories={activeSchedule.seatCategoryAssignments}
-                seatStatusById={activeSchedule.seatStatusById}
+                categories={previewSchedule.seatmapCategories}
+                seatCategories={previewSchedule.seatCategoryAssignments}
+                seatStatusById={previewSchedule.seatStatusById}
                 showReservationOverlay
-                heightClassName="h-[360px]"
+                heightClassName="h-[28rem] lg:h-[32rem]"
               />
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-sidebar-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
-              Seatmap preview is unavailable for this show.
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            ) : (
+              <div className="rounded-lg border border-dashed border-sidebar-border/70 px-4 py-10 text-center text-sm text-muted-foreground">
+                Seatmap preview is unavailable for this show.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

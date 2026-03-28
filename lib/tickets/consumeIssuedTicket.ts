@@ -5,8 +5,9 @@ import {
   type LoadedIssuedTicketReservation,
   loadIssuedTicketReservation,
   mapIssuedTicketToPublicResult,
+  type TicketVerificationInvalidResult,
   type TicketVerificationInvalidReason,
-  type TicketVerificationResult,
+  type TicketVerificationSuccessResult,
   type VerifyIssuedTicketDb,
 } from "./verifyIssuedTicket.ts";
 
@@ -30,17 +31,23 @@ export type TicketConsumeResult =
       showId: string;
       schedId: string;
       seatIds: string[];
-      verification: TicketVerificationResult;
+      verification: TicketVerificationSuccessResult;
     }
   | {
       status: "INVALID";
-      reason: TicketConsumeInvalidReason;
-      verification: TicketVerificationResult;
+      reason: "ALREADY_CONSUMED";
+      verification: TicketVerificationSuccessResult;
+    }
+  | {
+      status: "INVALID";
+      reason: TicketVerificationInvalidReason;
+      verification: TicketVerificationInvalidResult;
     };
 
 type ConsumeIssuedTicketOptions = {
   token: string;
   showId: string;
+  schedId: string;
   adminContext: AdminContext;
   secret?: string;
   consumedAt?: Date;
@@ -73,11 +80,32 @@ type ConsumeIssuedTicketDb = VerifyIssuedTicketDb & {
 
 const DEFAULT_DB = prisma as unknown as ConsumeIssuedTicketDb;
 
-function createShowMismatchResult(): TicketVerificationResult {
+function createShowMismatchResult(): TicketVerificationInvalidResult {
   return {
     status: "INVALID",
     reason: "SHOW_MISMATCH",
     message: "Ticket does not belong to this show.",
+  };
+}
+
+function formatScheduleTime(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(new Date(value));
+}
+
+function createScheduleMismatchResult(
+  reservation: LoadedIssuedTicketReservation,
+): TicketVerificationInvalidResult {
+  return {
+    status: "INVALID",
+    reason: "SCHEDULE_MISMATCH",
+    message: `Invalid ticket. This is for the ${formatScheduleTime(
+      reservation.sched.sched_start_time,
+    )} schedule.`,
   };
 }
 
@@ -122,6 +150,14 @@ export async function consumeIssuedTicket(
       status: "INVALID",
       reason: "SHOW_MISMATCH",
       verification: createShowMismatchResult(),
+    };
+  }
+
+  if (loaded.reservation.sched.sched_id !== input.schedId) {
+    return {
+      status: "INVALID",
+      reason: "SCHEDULE_MISMATCH",
+      verification: createScheduleMismatchResult(loaded.reservation),
     };
   }
 
