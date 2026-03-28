@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { updateNode } from "@/lib/features/ticketTemplate/ticketTemplateSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { TICKET_TEMPLATE_FONT_OPTIONS } from "@/lib/tickets/fontCatalog";
 
 function NumericInput({
   id,
@@ -78,6 +79,13 @@ export function TicketTemplateInspector() {
     },
     [dispatch, selectedNode],
   );
+
+  const hasSelectedFontInCatalog =
+    selectedNode?.kind === "field"
+      ? TICKET_TEMPLATE_FONT_OPTIONS.some(
+          (option) => option.family === selectedNode.fontFamily,
+        )
+      : true;
 
   return (
     <Card className="gap-4 border-zinc-200/80 bg-white/90 py-4 dark:border-zinc-800 dark:bg-zinc-950/80">
@@ -175,6 +183,34 @@ export function TicketTemplateInspector() {
                       updateSelectedNode({ label: event.target.value })
                     }
                   />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="ticket-field-font-family">Font Family</Label>
+                  <Select
+                    value={selectedNode.fontFamily}
+                    onValueChange={(nextValue) =>
+                      updateSelectedNode({ fontFamily: nextValue })
+                    }
+                  >
+                    <SelectTrigger id="ticket-field-font-family" className="w-full">
+                      <SelectValue placeholder="Choose font family" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {!hasSelectedFontInCatalog ? (
+                        <SelectItem value={selectedNode.fontFamily}>
+                          <span style={{ fontFamily: selectedNode.fontFamily }}>
+                            {selectedNode.fontFamily}
+                          </span>
+                        </SelectItem>
+                      ) : null}
+                      {TICKET_TEMPLATE_FONT_OPTIONS.map((option) => (
+                        <SelectItem key={option.family} value={option.family}>
+                          <span style={{ fontFamily: option.family }}>{option.label}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

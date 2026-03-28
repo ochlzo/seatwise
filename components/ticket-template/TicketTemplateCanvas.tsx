@@ -14,6 +14,7 @@ import {
   updateNode,
 } from "@/lib/features/ticketTemplate/ticketTemplateSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { getTicketTemplateFontOptionByFamily } from "@/lib/tickets/fontCatalog";
 
 function useAssetImage(src: string | null) {
   const [image, setImage] = React.useState<HTMLImageElement | null>(null);
@@ -305,6 +306,18 @@ export function TicketTemplateCanvas() {
   const stageDisplayHeight = canvas.height * displayScale;
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const fieldFontFamilies = React.useMemo(
+    () =>
+      new Set(
+        nodes
+          .filter(
+            (node): node is TicketTemplateFieldEditorNode => node.kind === "field",
+          )
+          .map((node) => node.fontFamily?.trim())
+          .filter((family): family is string => Boolean(family)),
+      ),
+    [nodes],
+  );
 
   React.useEffect(() => {
     const transformer = transformerRef.current;
@@ -328,6 +341,27 @@ export function TicketTemplateCanvas() {
     transformer.nodes([selectedCanvasNode as never]);
     transformer.getLayer()?.batchDraw();
   }, [selectedNode, selectedNodeId]);
+
+  React.useEffect(() => {
+    fieldFontFamilies.forEach((family) => {
+      const option = getTicketTemplateFontOptionByFamily(family);
+      if (!option?.cssUrl) {
+        return;
+      }
+
+      const safeFamily = family.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const linkId = `ticket-template-font-${safeFamily}`;
+      if (document.getElementById(linkId)) {
+        return;
+      }
+
+      const link = document.createElement("link");
+      link.id = linkId;
+      link.rel = "stylesheet";
+      link.href = option.cssUrl;
+      document.head.appendChild(link);
+    });
+  }, [fieldFontFamilies]);
 
   React.useEffect(() => {
     const handleExport = (event: Event) => {
