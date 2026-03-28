@@ -529,6 +529,11 @@
 - Create: `lib/email/sendIssuedTicketEmail.ts`
 - Modify: `app/api/queue/complete/route.ts`
 - Modify: `app/api/reservations/verify/route.ts`
+- Modify: `lib/email/sendReservationStatusUpdateEmail.ts`
+- Modify: `app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx`
+- Delete: `lib/walk-in/receipt.ts`
+- Delete: `lib/walk-in/uploadReceiptImage.ts`
+- Delete: `lib/email/sendWalkInReceiptEmail.ts`
 - Test: `lib/tickets/issueReservationTicket.test.ts`
 - Test: `lib/email/ticketEmailMessages.test.ts`
 
@@ -538,6 +543,8 @@
     - online verification uses the show's current template
     - reservation stores the exact `ticket_template_version_id`
     - email attaches a PDF with the expected filename
+    - walk-in completion no longer generates or uploads a receipt image
+    - confirmed reservation emails no longer attach or inline the old generated receipt image
   - Run:
     ```bash
     node --experimental-strip-types lib/tickets/issueReservationTicket.test.ts
@@ -551,20 +558,29 @@
     - resolve the latest template version for first issue
     - render PNG + PDF
     - update reservation with `ticket_template_version_id` and `ticket_issued_at`
+  - Treat the versioned ticket PDF as the only post-confirmation customer artifact. Do not generate a parallel receipt image.
 
 - [ ] **Step 3: Implement the PDF email sender**
   - Reuse `lib/email/gmailClient.ts` to send a raw MIME message with a PDF attachment.
   - Keep provider-specific code isolated in `sendIssuedTicketEmail.ts`.
+  - The issued-ticket email replaces the old generated receipt-image email for confirmed reservations and walk-ins.
 
 - [ ] **Step 4: Hook walk-in issuance into `/api/queue/complete`**
   - After the reservation transaction succeeds, issue the ticket immediately for `walk_in`.
+  - Remove the walk-in receipt-image generation/upload path entirely instead of keeping it as fallback.
   - If ticket delivery fails, return a warning without rolling back the reservation.
 
 - [ ] **Step 5: Hook online issuance into `/api/reservations/verify`**
   - After confirmation succeeds, issue the ticket and send the PDF.
-  - Preserve the existing confirmation email semantics only if they are still needed; otherwise replace them with the issued-ticket email for confirmed reservations.
+  - Replace the existing confirmed-reservation receipt-image email path with the issued-ticket email for confirmed reservations.
+  - Refactor `sendReservationStatusUpdateEmail.ts` so it no longer generates confirmed receipt images; keep it only for non-ticket status emails such as rejection/staging if still needed.
 
-- [ ] **Step 6: Re-run the issuance/email tests**
+- [ ] **Step 6: Remove the old generated receipt-image implementation**
+  - Delete `lib/walk-in/receipt.ts`, `lib/walk-in/uploadReceiptImage.ts`, and `lib/email/sendWalkInReceiptEmail.ts` once the new PDF path is wired.
+  - Remove any imports, helper calls, and Cloudinary folders that existed only for generated receipt images.
+  - Clean up the admin reservations UI so `Payment.screenshot_url` is treated only as uploaded payment proof, not as a generated receipt surrogate.
+
+- [ ] **Step 7: Re-run the issuance/email tests**
   - Run:
     ```bash
     node --experimental-strip-types lib/tickets/issueReservationTicket.test.ts
@@ -572,10 +588,11 @@
     ```
   - Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
   - Run:
     ```bash
-    git add lib/tickets/issueReservationTicket.ts lib/email/ticketEmailMessages.ts lib/email/sendIssuedTicketEmail.ts app/api/queue/complete/route.ts app/api/reservations/verify/route.ts lib/tickets/issueReservationTicket.test.ts lib/email/ticketEmailMessages.test.ts
+    git add lib/tickets/issueReservationTicket.ts lib/email/ticketEmailMessages.ts lib/email/sendIssuedTicketEmail.ts lib/email/sendReservationStatusUpdateEmail.ts app/api/queue/complete/route.ts app/api/reservations/verify/route.ts "app/(admin-user)/(dashboard)/admin/reservations/ReservationsClient.tsx" lib/tickets/issueReservationTicket.test.ts lib/email/ticketEmailMessages.test.ts
+    git rm lib/walk-in/receipt.ts lib/walk-in/uploadReceiptImage.ts lib/email/sendWalkInReceiptEmail.ts
     git commit -m "feat: issue and email versioned reservation tickets"
     ```
 
@@ -604,7 +621,9 @@
   - If camera access is unavailable, the scanner page shows a clear fallback state instead of a broken camera surface.
   - A non-admin scan still opens the public verification page and shows status `CONSUMED` after the admin consume action.
   - Walk-in reservation completes and emails a PDF ticket.
+  - Walk-in reservation no longer uploads or displays a generated receipt image anywhere in admin.
   - Online reservation stays pending on `/api/queue/complete`, then issues the PDF ticket after `/api/reservations/verify`.
+  - Confirmed reservation emails no longer inline or attach the old generated receipt image.
 
 - [ ] **Step 3: Validate version immutability**
   - Confirm a reservation issued on version 1 still references version 1 after the template is later saved as version 2.
@@ -612,7 +631,7 @@
 - [ ] **Step 4: Capture rollout assumptions**
   - Required env vars for Gmail and Cloudinary.
   - Cloudinary folder naming for ticket assets.
-  - Whether old confirmation-email copy should be retired or coexist with ticket emails.
+  - Confirm that generated receipt-image folders can be retired because the ticket PDF is now the only issued artifact.
 
 - [ ] **Step 5: Commit**
   - Run:
@@ -625,8 +644,8 @@
 
 - **Schema changes:** new `TicketTemplate` and `TicketTemplateVersion` models; `Show.ticket_template_id`; `Reservation.ticket_template_version_id`, `Reservation.ticket_issued_at`, `Reservation.ticket_consumed_at`, `Reservation.ticket_consumed_by_admin_id`, `Reservation.ticket_delivery_error`; `SeatStatus.CONSUMED`
 - **Admin UI:** new `/admin/ticket-templates` list page, real `/ticket-builder` editor, show-form ticket-template selector, scanner launcher in `ShowDetailForm.tsx`, dedicated admin scanner page
-- **APIs:** new ticket-template list/detail routes; extended Cloudinary upload-signing purpose; new public verify and admin consume ticket routes; reservation issuance hooks in existing completion/verify routes
-- **Server services:** template normalization, signed QR payloads, version lookup, field interpolation, QR generation, PNG renderer, PDF builder, ticket verification service, ticket consume service, issuance service, issued-ticket email sender
+- **APIs:** new ticket-template list/detail routes; extended Cloudinary upload-signing purpose; new public verify and admin consume ticket routes; reservation issuance hooks in existing completion/verify routes; removal of old generated receipt-image delivery hooks
+- **Server services:** template normalization, signed QR payloads, version lookup, field interpolation, QR generation, PNG renderer, PDF builder, ticket verification service, ticket consume service, issuance service, issued-ticket email sender, and retirement of the old generated receipt-image helpers
 - **Tests:** new `lib/tickets/*`, scanner/verify tests, and `lib/email/ticketEmailMessages.test.ts`, plus `package.json` test-chain updates
 
 ## Implementation Notes For The Executor
@@ -635,4 +654,5 @@
 - Keep the ticket editor intentionally narrower than the seatmap editor. Do not add canvas resize, arbitrary page sizes, or non-PNG asset support in v1.
 - Favor immutable template versions over "draft/publish" complexity unless a real requirement emerges during implementation.
 - Do not block reservation creation on email delivery. Ticket delivery failures should be persisted as warnings/errors for admin follow-up.
+- The versioned ticket PDF is the only post-confirmation customer artifact. Do not keep the old generated receipt-image pipeline as fallback unless a new requirement appears.
 - Reuse the current admin auth, page header, upload signing, and email transport patterns before introducing new abstractions.

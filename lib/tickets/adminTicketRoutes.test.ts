@@ -19,12 +19,18 @@ test("ticket builder lives on /ticket-builder and enforces admin access", () => 
 
   const builderPage = readRepoFile(currentBuilderPath);
   assert.match(builderPage, /getCurrentAdminContext/);
+  assert.match(builderPage, /notFound/);
+  assert.doesNotMatch(builderPage, /callbackUrl/);
+  assert.doesNotMatch(builderPage, /redirect/);
 });
 
 test("seat builder keeps explicit admin access enforcement", () => {
   const pageContents = readRepoFile("app/(admin-user)/seat-builder/page.tsx");
 
   assert.match(pageContents, /getCurrentAdminContext/);
+  assert.match(pageContents, /notFound/);
+  assert.doesNotMatch(pageContents, /callbackUrl/);
+  assert.doesNotMatch(pageContents, /redirect/);
 });
 
 test("ticket template navigation points to /ticket-builder", () => {
