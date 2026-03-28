@@ -137,12 +137,13 @@ function createMemoryTicketDb(record: MemoryReservationRecord) {
 
         return {
           ...seatAssignment,
+          seat_status: "CONSUMED" as const,
           updatedAt: new Date(seatAssignment.updatedAt),
           seat: { ...seatAssignment.seat },
         };
       },
     },
-    async $transaction<T>(callback: (tx: typeof db) => Promise<T>) {
+    async $transaction<T>(callback: (tx: any) => Promise<T>) {
       return callback(db);
     },
     getSnapshot() {
@@ -255,7 +256,10 @@ test("consumeIssuedTicket marks only the scanned seat CONSUMED and keeps the res
   assert.equal(snapshot.reservation.ticket_consumed_by_admin_id, null);
   assert.equal(snapshot.reservation.ticket_consumed_at, null);
   assert.deepEqual(
-    snapshot.reservation.reservedSeats.map((seat) => seat.seatAssignment.seat_status),
+    snapshot.reservation.reservedSeats.map(
+      (seat: MemoryReservationRecord["reservedSeats"][number]) =>
+        seat.seatAssignment.seat_status,
+    ),
     ["CONSUMED", "RESERVED"],
   );
   assert.deepEqual(snapshot.mutationCounts, {

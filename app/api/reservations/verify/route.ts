@@ -66,26 +66,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.reservation.update({
-        where: { reservation_id: reservationId },
-        data: { status: "CONFIRMED" },
+    const paidAt = new Date();
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.reservation.update({
+          where: { reservation_id: reservationId },
+          data: { status: "CONFIRMED" },
+        });
+
+        if (reservation.payment) {
+          await tx.payment.update({
+            where: { payment_id: reservation.payment.payment_id },
+            data: {
+              status: "PAID",
+              paid_at: paidAt,
+            },
+          });
+        }
       });
 
-      if (reservation.payment) {
-        await tx.payment.update({
-          where: { payment_id: reservation.payment.payment_id },
-          data: {
-            status: "PAID",
-            paid_at: new Date(),
-          },
-        });
-      }
-    });
-
-    let warning: string | null = null;
-
-    try {
       const issuedTicket = await issueReservationTicket({
         reservationId,
         baseUrl:
@@ -111,33 +110,49 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Ticket delivery failed.";
-      console.error("[reservations/verify] failed to issue confirmed ticket:", error);
-      warning = "Reservation was confirmed, but the PDF ticket could not be delivered.";
-      await prisma.reservation
-        .update({
+      console.error("[reservations/verify] failed to complete approval flow:", error);
+
+      await prisma.$transaction(async (tx) => {
+        await tx.reservation.update({
           where: { reservation_id: reservationId },
           data: {
+            status: "PENDING",
+            ticket_template_version_id: null,
+            ticket_issued_at: null,
             ticket_delivery_error: errorMessage,
           },
-        })
-        .catch((updateError) => {
-          console.error(
-            "[reservations/verify] failed to persist ticket delivery error:",
-            updateError,
-          );
         });
+
+        if (reservation.payment) {
+          await tx.payment.update({
+            where: { payment_id: reservation.payment.payment_id },
+            data: {
+              status: "PENDING",
+              paid_at: null,
+            },
+          });
+        }
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Payment approval was reverted because the ticket could not be completed or emailed.",
+        },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({
       success: true,
       reservationId,
       newStatus: "CONFIRMED",
-      warning,
       email: {
         attemptedCount: 1,
-        sentCount: warning ? 0 : 1,
-        failedCount: warning ? 1 : 0,
-        sent: warning == null,
+        sentCount: 1,
+        failedCount: 0,
+        sent: true,
       },
     });
   } catch (error) {

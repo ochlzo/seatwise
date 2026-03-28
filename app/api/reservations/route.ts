@@ -87,6 +87,7 @@ export async function GET() {
                 showName: string;
                 venue: string;
                 showImageKey: string | null;
+                teamId: string | null;
                 reservations: typeof reservations;
             }
         >();
@@ -114,6 +115,7 @@ export async function GET() {
                     showName: show.show_name,
                     venue: show.venue,
                     showImageKey: show.show_image_key,
+                    teamId: show.team_id ?? null,
                     reservations: [],
                 });
             }

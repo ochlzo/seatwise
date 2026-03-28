@@ -45,14 +45,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
 import { toast } from "@/components/ui/sonner";
+import { useAppSelector } from "@/lib/hooks";
 import { getAdminPaymentDisplay } from "@/lib/reservations/adminPaymentDisplay";
+import type { RootState } from "@/lib/store";
 
 type PaymentData = {
   payment_id: string;
@@ -107,7 +110,13 @@ type ShowGroup = {
   showName: string;
   venue: string;
   showImageKey: string | null;
+  teamId: string | null;
   reservations: ReservationData[];
+};
+
+type TeamOption = {
+  team_id: string;
+  name: string;
 };
 
 type UserReservationRow = {
@@ -151,7 +160,8 @@ type PendingMove = {
 type StageUpdateResponse = {
   success: boolean;
   error?: string;
-  warning?: string | null;
+  message?: string;
+  details?: string;
   email?: {
     attemptedCount: number;
     sentCount: number;
@@ -179,6 +189,12 @@ type RollbackGhost = {
   toRect: RollbackRect;
   isAnimating: boolean;
 };
+
+const APPROVAL_PROGRESS_STEPS = [
+  { delayMs: 0, label: "Moving to approved..." },
+  { delayMs: 1200, label: "Building ticket..." },
+  { delayMs: 2600, label: "Sending email..." },
+] as const;
 
 const COLUMNS: Array<{
   key: KanbanStatus;
@@ -288,6 +304,24 @@ const formatTimeRange = (start: string, end: string) => {
   return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
 };
 
+const getApiErrorMessage = (
+  payload: unknown,
+  fallback: string,
+): string => {
+  if (!payload || typeof payload !== "object") return fallback;
+
+  const messageCandidate =
+    "error" in payload && typeof payload.error === "string"
+      ? payload.error
+      : "message" in payload && typeof payload.message === "string"
+        ? payload.message
+        : "details" in payload && typeof payload.details === "string"
+          ? payload.details
+          : null;
+
+  return messageCandidate?.trim() ? messageCandidate : fallback;
+};
+
 const getRowStatus = (row: UserReservationRow): KanbanStatus => {
   if (row.pendingReservationIds.length > 0) return "PENDING";
   if (
@@ -336,12 +370,14 @@ const buildUserRows = (
 type SortableCardProps = {
   card: KanbanCard;
   isVerifying: boolean;
+  progressLabel?: string | null;
   onOpenDetails: (card: KanbanCard) => void;
 };
 
 function SortableCard({
   card,
   isVerifying,
+  progressLabel = null,
   onOpenDetails,
 }: SortableCardProps) {
   const primaryPayment =
@@ -434,7 +470,7 @@ function SortableCard({
           {isVerifying && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Updating status and sending email...
+              {progressLabel ?? "Updating reservation..."}
             </div>
           )}
         </div>
@@ -489,6 +525,7 @@ type KanbanColumnProps = {
   stageClassName: string;
   stageCountClassName: string;
   stageSurfaceClassName: string;
+  progressLabelsByCardId: Partial<Record<string, string>>;
   onOpenDetails: (card: KanbanCard) => void;
 };
 
@@ -502,6 +539,7 @@ function KanbanColumn({
   stageClassName,
   stageCountClassName,
   stageSurfaceClassName,
+  progressLabelsByCardId,
   onOpenDetails,
 }: KanbanColumnProps) {
   const { setNodeRef } = useDroppable({
@@ -550,6 +588,7 @@ function KanbanColumn({
                 key={card.id}
                 card={card}
                 isVerifying={updatingCardIds.has(card.id)}
+                progressLabel={progressLabelsByCardId[card.id] ?? null}
                 onOpenDetails={onOpenDetails}
               />
             ),
@@ -561,18 +600,32 @@ function KanbanColumn({
 }
 
 export function ReservationsClient() {
+  const user = useAppSelector((state: RootState) => state.auth.user);
   const [shows, setShows] = React.useState<ShowGroup[]>([]);
+  const [teams, setTeams] = React.useState<TeamOption[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [searchInput, setSearchInput] = React.useState("");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedShowId, setSelectedShowId] = React.useState("all");
+  const [showFilterQuery, setShowFilterQuery] = React.useState("All Shows");
+  const [isShowComboboxOpen, setIsShowComboboxOpen] = React.useState(false);
+  const [selectedTeamId, setSelectedTeamId] = React.useState("all");
+  const [teamFilterQuery, setTeamFilterQuery] = React.useState("All Teams");
+  const [isTeamComboboxOpen, setIsTeamComboboxOpen] = React.useState(false);
   const [updatingCardIds, setUpdatingCardIds] = React.useState<Set<string>>(
     () => new Set(),
   );
+  const [approvalProgressLabels, setApprovalProgressLabels] = React.useState<
+    Partial<Record<string, string>>
+  >({});
   const [pendingMove, setPendingMove] = React.useState<PendingMove | null>(
     null,
   );
+  const [isPendingMoveSubmitting, setIsPendingMoveSubmitting] =
+    React.useState(false);
+  const [pendingMoveProgressLabel, setPendingMoveProgressLabel] =
+    React.useState<string | null>(null);
   const [activeDropColumn, setActiveDropColumn] =
     React.useState<KanbanStatus | null>(null);
   const [activeDragCardId, setActiveDragCardId] = React.useState<string | null>(
@@ -612,6 +665,7 @@ export function ReservationsClient() {
       activationConstraint: { distance: 6 },
     }),
   );
+  const isSuperadmin = Boolean(user?.isSuperadmin);
 
   React.useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -690,6 +744,27 @@ export function ReservationsClient() {
   }, [selectedCardId]);
 
   React.useEffect(() => {
+    if (!isPendingMoveSubmitting || !pendingMove) {
+      setPendingMoveProgressLabel(null);
+      return;
+    }
+
+    if (pendingMove.targetStatus === "CONFIRMED") {
+      setPendingMoveProgressLabel(
+        approvalProgressLabels[pendingMove.cardId] ??
+          APPROVAL_PROGRESS_STEPS[0].label,
+      );
+      return;
+    }
+
+    setPendingMoveProgressLabel("Moving to rejected...");
+  }, [
+    approvalProgressLabels,
+    isPendingMoveSubmitting,
+    pendingMove,
+  ]);
+
+  React.useEffect(() => {
     const fetchReservations = async () => {
       try {
         const res = await fetch("/api/reservations");
@@ -709,6 +784,48 @@ export function ReservationsClient() {
     void fetchReservations();
   }, []);
 
+  React.useEffect(() => {
+    if (!isSuperadmin) {
+      setSelectedTeamId("all");
+      setTeamFilterQuery("All Teams");
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchTeams = async () => {
+      try {
+        const response = await fetch("/api/admin/access/teams");
+        const data = (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          teams?: TeamOption[];
+        };
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to load teams.");
+        }
+
+        if (!isMounted) return;
+        setTeams(
+          (data.teams ?? []).map((team) => ({
+            team_id: team.team_id,
+            name: team.name,
+          })),
+        );
+      } catch (err) {
+        if (!isMounted) return;
+        toast.error(err instanceof Error ? err.message : "Failed to load teams.");
+      }
+    };
+
+    void fetchTeams();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isSuperadmin]);
+
   const handleStageUpdate = React.useCallback(
     async (
       card: KanbanCard,
@@ -722,6 +839,29 @@ export function ReservationsClient() {
         next.add(card.id);
         return next;
       });
+      const clearProgressTimers: number[] = [];
+
+      const clearApprovalProgress = () => {
+        clearProgressTimers.forEach((timerId) => window.clearTimeout(timerId));
+        setApprovalProgressLabels((prev) => {
+          if (!(card.id in prev)) return prev;
+          const next = { ...prev };
+          delete next[card.id];
+          return next;
+        });
+      };
+
+      if (targetStatus === "CONFIRMED") {
+        APPROVAL_PROGRESS_STEPS.forEach(({ delayMs, label }) => {
+          const timerId = window.setTimeout(() => {
+            setApprovalProgressLabels((prev) => ({
+              ...prev,
+              [card.id]: label,
+            }));
+          }, delayMs);
+          clearProgressTimers.push(timerId);
+        });
+      }
 
       try {
         const endpoint =
@@ -737,14 +877,20 @@ export function ReservationsClient() {
               body: JSON.stringify({ reservationId }),
             });
 
-            const data = (await response.json()) as StageUpdateResponse;
-            if (!response.ok || !data.success) {
-              throw new Error(
-                data.error ||
-                  (targetStatus === "CONFIRMED"
-                    ? "Failed to verify reservations"
-                    : "Failed to reject reservations"),
-              );
+            let data: StageUpdateResponse | null = null;
+            try {
+              data = (await response.json()) as StageUpdateResponse;
+            } catch {
+              data = null;
+            }
+
+            const fallbackError =
+              targetStatus === "CONFIRMED"
+                ? "Failed to verify reservations"
+                : "Failed to reject reservations";
+
+            if (!response.ok || !data?.success) {
+              throw new Error(getApiErrorMessage(data, fallbackError));
             }
 
             return data;
@@ -784,24 +930,13 @@ export function ReservationsClient() {
         );
 
         const actionLabel =
-          targetStatus === "CONFIRMED" ? "confirmed" : "rejected";
-        const notificationFailures = results.filter(
-          (result) => result.warning || result.email?.sent === false,
+          targetStatus === "CONFIRMED" ? "approved" : "rejected";
+        void results;
+        toast.success(
+          reservationIds.length === 1
+            ? `Reservation ${actionLabel} successfully.`
+            : `${reservationIds.length} reservations ${actionLabel} successfully.`,
         );
-
-        if (notificationFailures.length === 0) {
-          toast.success(
-            reservationIds.length === 1
-              ? `Reservation ${actionLabel} and customer notified.`
-              : `${reservationIds.length} reservations ${actionLabel} and customer notified.`,
-          );
-        } else {
-          toast.warning(
-            reservationIds.length === 1
-              ? `Reservation ${actionLabel}, but the customer notification could not be fully delivered.`
-              : `${reservationIds.length} reservations ${actionLabel}, but ${notificationFailures.length} customer notification${notificationFailures.length === 1 ? "" : "s"} could not be fully delivered.`,
-          );
-        }
 
         return true;
       } catch (err) {
@@ -814,6 +949,7 @@ export function ReservationsClient() {
         );
         return false;
       } finally {
+        clearApprovalProgress();
         setUpdatingCardIds((prev) => {
           const next = new Set(prev);
           next.delete(card.id);
@@ -832,17 +968,68 @@ export function ReservationsClient() {
     [shows],
   );
 
-  const filteredShows = React.useMemo(() => {
-    const scopedShows =
-      selectedShowId === "all"
-        ? shows
-        : shows.filter((show) => show.showId === selectedShowId);
+  const filteredShowFilterOptions = React.useMemo(() => {
+    const query = showFilterQuery.trim().toLowerCase();
+    if (!query || query === "all shows") return showFilterOptions;
+    return showFilterOptions.filter((show) =>
+      show.label.toLowerCase().includes(query),
+    );
+  }, [showFilterOptions, showFilterQuery]);
 
-    if (!searchQuery.trim()) return scopedShows;
+  const teamFilterOptions = React.useMemo(
+    () =>
+      [...teams]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((team) => ({ id: team.team_id, label: team.name })),
+    [teams],
+  );
+
+  const filteredTeamFilterOptions = React.useMemo(() => {
+    const query = teamFilterQuery.trim().toLowerCase();
+    if (!query || query === "all teams") return teamFilterOptions;
+    return teamFilterOptions.filter((team) =>
+      team.label.toLowerCase().includes(query),
+    );
+  }, [teamFilterOptions, teamFilterQuery]);
+
+  React.useEffect(() => {
+    if (
+      selectedShowId !== "all" &&
+      !showFilterOptions.some((show) => show.id === selectedShowId)
+    ) {
+      setSelectedShowId("all");
+      setShowFilterQuery("All Shows");
+    }
+  }, [selectedShowId, showFilterOptions]);
+
+  React.useEffect(() => {
+    if (!isSuperadmin) return;
+
+    if (
+      selectedTeamId !== "all" &&
+      !teamFilterOptions.some((team) => team.id === selectedTeamId)
+    ) {
+      setSelectedTeamId("all");
+      setTeamFilterQuery("All Teams");
+    }
+  }, [isSuperadmin, selectedTeamId, teamFilterOptions]);
+
+  const filteredShows = React.useMemo(() => {
+    const teamScopedShows =
+      selectedTeamId === "all"
+        ? shows
+        : shows.filter((show) => show.teamId === selectedTeamId);
+
+    const showScopedShows =
+      selectedShowId === "all"
+        ? teamScopedShows
+        : teamScopedShows.filter((show) => show.showId === selectedShowId);
+
+    if (!searchQuery.trim()) return showScopedShows;
 
     const q = searchQuery.toLowerCase();
 
-    return scopedShows
+    return showScopedShows
       .map((show) => ({
         ...show,
         reservations: show.reservations.filter(
@@ -861,7 +1048,7 @@ export function ReservationsClient() {
         ),
       }))
       .filter((show) => show.reservations.length > 0);
-  }, [searchQuery, selectedShowId, shows]);
+  }, [searchQuery, selectedShowId, selectedTeamId, shows]);
 
   const kanbanCards = React.useMemo(() => {
     const cards: KanbanCard[] = [];
@@ -1059,6 +1246,18 @@ export function ReservationsClient() {
   const totalReservations = effectiveKanbanCards.length;
   const pendingCount = orderedCardsByColumn.PENDING.length;
   const confirmedCount = orderedCardsByColumn.CONFIRMED.length;
+  const pendingTotalAmount = orderedCardsByColumn.PENDING.reduce(
+    (sum, card) => sum + card.row.totalAmount,
+    0,
+  );
+  const confirmedTotalAmount = orderedCardsByColumn.CONFIRMED.reduce(
+    (sum, card) => sum + card.row.totalAmount,
+    0,
+  );
+  const overallTotalAmount = effectiveKanbanCards.reduce(
+    (sum, card) => sum + card.row.totalAmount,
+    0,
+  );
   const primaryPayment =
     selectedCard?.row.reservations.find(
       (reservation) => reservation.payment?.screenshot_url,
@@ -1091,6 +1290,9 @@ export function ReservationsClient() {
   const selectedCardIsUpdating = selectedCard
     ? updatingCardIds.has(selectedCard.id)
     : false;
+  const selectedCardProgressLabel = selectedCard
+    ? approvalProgressLabels[selectedCard.id] ?? null
+    : null;
   const selectedCardStatusBadgeClassName =
     selectedCard?.status === "CONFIRMED"
       ? "bg-emerald-100 text-emerald-700"
@@ -1125,6 +1327,10 @@ export function ReservationsClient() {
   );
 
   const handleCancelPendingMove = React.useCallback(() => {
+    if (isPendingMoveSubmitting) {
+      return;
+    }
+
     if (pendingMove?.source === "drag" && pendingMoveCard) {
       const previewElement = document.querySelector(
         `[data-preview-id="preview:${pendingMoveCard.id}"]`,
@@ -1148,6 +1354,7 @@ export function ReservationsClient() {
     setPreviewColumn(null);
   }, [
     clearRollbackPreview,
+    isPendingMoveSubmitting,
     pendingMove?.source,
     pendingMoveCard,
     startRollbackPreview,
@@ -1159,13 +1366,15 @@ export function ReservationsClient() {
     const move = pendingMove;
     const targetCard = cardById.get(move.cardId);
     if (!targetCard) {
+      setIsPendingMoveSubmitting(false);
+      setPendingMoveProgressLabel(null);
       setPendingMove(null);
       setPreviewColumn(null);
       clearRollbackPreview();
       return;
     }
 
-    setPendingMove(null);
+    setIsPendingMoveSubmitting(true);
     setPreviewColumn(null);
     clearRollbackPreview();
     setOptimisticCardStatuses((prev) => ({
@@ -1207,6 +1416,9 @@ export function ReservationsClient() {
         delete next[targetCard.id];
         return next;
       });
+      setPendingMove(null);
+      setPendingMoveProgressLabel(null);
+      setIsPendingMoveSubmitting(false);
       return;
     }
 
@@ -1228,6 +1440,8 @@ export function ReservationsClient() {
 
       return next;
     });
+    setPendingMoveProgressLabel(null);
+    setIsPendingMoveSubmitting(false);
   }, [
     cardById,
     clearRollbackPreview,
@@ -1333,35 +1547,33 @@ export function ReservationsClient() {
             <DialogTitle>Warning: stage change</DialogTitle>
             <DialogDescription>
               {pendingMoveCard ? (
-                <>
-                  Move {pendingMoveCard.row.user.first_name}{" "}
-                  {pendingMoveCard.row.user.last_name} for{" "}
-                  {pendingMoveCard.showName} to {pendingMoveLabel}? This action
-                  cannot be undone or changed.{" "}
-                  <a
-                    href="#"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setPendingMove(null);
-                      setPreviewColumn(null);
-                      clearRollbackPreview();
-                      setSelectedCardId(pendingMoveCard.id);
-                    }}
-                    className="font-medium text-amber-700 underline underline-offset-4 transition-colors hover:text-amber-800"
-                  >
-                    Check payment first?
-                  </a>
-                </>
+                pendingMove?.targetStatus === "CONFIRMED" ? (
+                  "We're accepting this payment. Be sure you have confirmed that the payment was received before continuing."
+                ) : (
+                  <>
+                    Move {pendingMoveCard.row.user.first_name}{" "}
+                    {pendingMoveCard.row.user.last_name} for{" "}
+                    {pendingMoveCard.showName} to {pendingMoveLabel}? This action
+                    cannot be undone or changed.
+                  </>
+                )
               ) : (
                 "Confirm this reservation stage change. This action cannot be undone or changed."
               )}
             </DialogDescription>
+            {isPendingMoveSubmitting ? (
+              <div className="flex items-center gap-2 rounded-md border border-sidebar-border/70 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{pendingMoveProgressLabel ?? "Updating reservation..."}</span>
+              </div>
+            ) : null}
           </DialogHeader>
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={handleCancelPendingMove}
+              disabled={isPendingMoveSubmitting}
             >
               Cancel
             </Button>
@@ -1376,8 +1588,16 @@ export function ReservationsClient() {
               onClick={() => {
                 void handleConfirmStageMove();
               }}
+              disabled={isPendingMoveSubmitting}
             >
-              {`Move to ${pendingMoveLabel}`}
+              {isPendingMoveSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {pendingMoveProgressLabel ?? "Updating reservation..."}
+                </>
+              ) : (
+                `Move to ${pendingMoveLabel}`
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1388,13 +1608,72 @@ export function ReservationsClient() {
           className={`fixed inset-0 z-[80] bg-background transition-opacity duration-200 ${isPortalVisible ? "opacity-100" : "opacity-0"}`}
         >
           <div
-            className={`grid h-full min-h-0 transition-[transform,opacity] duration-300 ease-out lg:grid-cols-[minmax(420px,0.9fr)_minmax(0,1.1fr)] ${isPortalVisible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}
+            className={`flex h-full min-h-0 flex-col transition-[transform,opacity] duration-300 ease-out ${isPortalVisible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}
           >
-            <div
-              className={`min-h-0 border-b border-sidebar-border/70 px-6 py-5 dark:border-white/10 lg:border-b-0 lg:border-r ${isPortalScrollReady ? "overflow-y-auto" : "overflow-hidden"}`}
-            >
-              <div className="mx-auto max-w-2xl space-y-8">
-                <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center justify-between gap-3 border-b border-sidebar-border/70 px-6 py-4 dark:border-white/10">
+              <div className="flex flex-wrap items-center gap-2">
+                {canConfirmSelectedCard ? (
+                  <>
+                    <Button
+                      type="button"
+                      className="h-9 bg-emerald-600 px-4 text-xs text-white hover:bg-emerald-700 sm:h-10 sm:text-sm"
+                      disabled={selectedCardIsUpdating}
+                      onClick={() => {
+                        setPendingMove({
+                          cardId: selectedCard.id,
+                          targetStatus: "CONFIRMED",
+                          source: "portal",
+                        });
+                      }}
+                    >
+                      {selectedCardIsUpdating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {selectedCardProgressLabel ?? "Approving payment..."}
+                        </>
+                      ) : (
+                        "Accept"
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="h-9 px-4 text-xs sm:h-10 sm:text-sm"
+                      disabled={selectedCardIsUpdating}
+                      onClick={() => {
+                        setPendingMove({
+                          cardId: selectedCard.id,
+                          targetStatus: "REJECTED",
+                          source: "portal",
+                        });
+                      }}
+                    >
+                      {selectedCardIsUpdating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Updating reservation...
+                        </>
+                      ) : (
+                        "Reject"
+                      )}
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCardId(null)}
+                className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-black px-3 text-xs font-medium text-white shadow-sm sm:h-10 sm:text-sm"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(420px,0.9fr)_minmax(0,1.1fr)]">
+              <div
+                className={`min-h-0 border-b border-sidebar-border/70 px-6 py-5 dark:border-white/10 lg:border-b-0 lg:border-r ${isPortalScrollReady ? "overflow-y-auto" : "overflow-hidden"}`}
+              >
+                <div className="mx-auto max-w-2xl space-y-8">
                   <div className="space-y-2">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                       Payment Record
@@ -1409,64 +1688,8 @@ export function ReservationsClient() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCardId(null)}
-                    className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-black px-3 text-xs font-medium text-white shadow-sm sm:h-10 sm:text-sm"
-                  >
-                    Close
-                  </button>
-                </div>
 
-                {canConfirmSelectedCard ? (
-                  <div className="flex gap-3 border-t border-sidebar-border/70 pt-6 dark:border-white/10 lg:hidden">
-                    <Button
-                      type="button"
-                      className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
-                      disabled={selectedCardIsUpdating}
-                      onClick={() => {
-                        setPendingMove({
-                          cardId: selectedCard.id,
-                          targetStatus: "CONFIRMED",
-                          source: "portal",
-                        });
-                      }}
-                    >
-                      {selectedCardIsUpdating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        "Accept"
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      className="flex-1"
-                      disabled={selectedCardIsUpdating}
-                      onClick={() => {
-                        setPendingMove({
-                          cardId: selectedCard.id,
-                          targetStatus: "REJECTED",
-                          source: "portal",
-                        });
-                      }}
-                    >
-                      {selectedCardIsUpdating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        "Reject"
-                      )}
-                    </Button>
-                  </div>
-                ) : null}
-
-                <section className="space-y-3 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
+                  <section className="space-y-3 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
                   <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
                     <Mail className="h-3.5 w-3.5" />
                     Customer Details
@@ -1497,9 +1720,9 @@ export function ReservationsClient() {
                       </p>
                     </div>
                   </div>
-                </section>
+                  </section>
 
-                <section className="space-y-4 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
+                  <section className="space-y-4 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
                   <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
                     <Ticket className="h-3.5 w-3.5" />
                     Reservation Details
@@ -1600,123 +1823,65 @@ export function ReservationsClient() {
                       </div>
                     ))}
                   </div>
-                </section>
-              </div>
-            </div>
-
-            <div className="min-h-0 bg-muted/20">
-              <div className="flex h-full min-h-0 flex-col">
-                <div
-                  className={`flex-1 ${isPortalScrollReady ? "overflow-y-auto" : "overflow-hidden"}`}
-                >
-                  <div className="flex min-h-full items-center justify-center p-6 lg:p-10 lg:pb-32">
-                    <div className="w-full max-w-4xl space-y-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                            {selectedPaymentDisplay.panelTitle}
-                          </p>
-                          {selectedPaymentDisplay.cardTagLabel ? (
-                            <span className="inline-flex w-fit items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700 sm:text-xs">
-                              {selectedPaymentDisplay.cardTagLabel}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          {primaryPayment?.screenshot_url ? (
-                            <a
-                              href={primaryPayment.screenshot_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[11px] font-medium text-blue-600 underline underline-offset-4 transition-colors hover:text-blue-700"
-                            >
-                              {selectedPaymentDisplay.openLabel}
-                            </a>
-                          ) : null}
-                          {selectedCard.status !== "PENDING" ? (
-                            <span
-                              className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-xs ${selectedCardStatusBadgeClassName}`}
-                            >
-                              {selectedCard.status === "CONFIRMED"
-                                ? "Confirmed"
-                                : "Rejected"}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div className="relative flex min-h-[60vh] items-center justify-center overflow-hidden bg-background">
-                        {primaryPayment?.screenshot_url ? (
-                          <>
-                            <img
-                              src={primaryPayment.screenshot_url}
-                              alt={selectedPaymentDisplay.imageAlt(
-                                `${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`,
-                              )}
-                              className="max-h-[85vh] w-full cursor-zoom-in object-contain"
-                              onClick={() => setIsImageExpanded(true)}
-                            />
-                          </>
-                        ) : (
-                          <div className="flex flex-col items-center gap-3 px-6 py-12 text-center text-muted-foreground">
-                            <CreditCard className="h-8 w-8" />
-                            <p className="text-sm">{selectedPaymentDisplay.emptyStateLabel}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  </section>
                 </div>
+              </div>
 
-                {canConfirmSelectedCard ? (
-                  <div className="hidden border-t border-sidebar-border/70 bg-background/95 p-4 backdrop-blur-sm dark:border-white/10 lg:sticky lg:bottom-0 lg:block lg:px-10 lg:py-5">
-                    <div className="mx-auto flex w-full max-w-4xl gap-3">
-                      <Button
-                        type="button"
-                        className="flex-1 bg-emerald-600 text-xs text-white hover:bg-emerald-700 sm:text-sm"
-                        disabled={selectedCardIsUpdating}
-                        onClick={() => {
-                          setPendingMove({
-                            cardId: selectedCard.id,
-                            targetStatus: "CONFIRMED",
-                            source: "portal",
-                          });
-                        }}
-                      >
-                        {selectedCardIsUpdating ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Sending...
-                          </>
-                        ) : (
-                          "Accept"
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="flex-1 text-xs sm:text-sm"
-                        disabled={selectedCardIsUpdating}
-                        onClick={() => {
-                          setPendingMove({
-                            cardId: selectedCard.id,
-                            targetStatus: "REJECTED",
-                            source: "portal",
-                          });
-                        }}
-                      >
-                        {selectedCardIsUpdating ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Sending...
-                          </>
-                        ) : (
-                          "Reject"
-                        )}
-                      </Button>
+              <div className="min-h-0 bg-muted/20">
+                <div className="flex h-full min-h-0 flex-col">
+                  <div
+                    className={`flex-1 ${isPortalScrollReady ? "overflow-y-auto" : "overflow-hidden"}`}
+                  >
+                    <div className="flex min-h-full items-center justify-center p-6 lg:p-10 lg:pb-32">
+                      <div className="w-full max-w-4xl space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                              {selectedPaymentDisplay.panelTitle}
+                            </p>
+                            {selectedPaymentDisplay.cardTagLabel ? (
+                              <span className="inline-flex w-fit items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700 sm:text-xs">
+                                {selectedPaymentDisplay.cardTagLabel}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {selectedCard.status !== "PENDING" ? (
+                              <span
+                                className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-xs ${selectedCardStatusBadgeClassName}`}
+                              >
+                                {selectedCard.status === "CONFIRMED"
+                                  ? "Confirmed"
+                                  : "Rejected"}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="relative flex min-h-[60vh] items-center justify-center overflow-hidden bg-background">
+                          {primaryPayment?.screenshot_url ? (
+                            <>
+                              <img
+                                src={primaryPayment.screenshot_url}
+                                alt={selectedPaymentDisplay.imageAlt(
+                                  `${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`,
+                                )}
+                                className="max-h-[85vh] w-full cursor-zoom-in object-contain"
+                                onClick={() => setIsImageExpanded(true)}
+                              />
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-center gap-3 px-6 py-12 text-center text-muted-foreground">
+                              <CreditCard className="h-8 w-8" />
+                              <p className="text-sm">{selectedPaymentDisplay.emptyStateLabel}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ) : null}
+
+                </div>
               </div>
             </div>
           </div>
@@ -1762,49 +1927,85 @@ export function ReservationsClient() {
       <div className="space-y-6">
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
-            <CardContent className="flex items-center gap-4 py-4">
-              <div className="rounded-lg bg-amber-100 p-2.5 dark:bg-amber-900/30">
-                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            <CardContent className="flex items-center justify-between gap-4 py-4">
+              <div className="flex items-center gap-4">
+                <div className="rounded-lg bg-amber-100 p-2.5 dark:bg-amber-900/30">
+                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{pendingCount}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Pending Reservations
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{pendingCount}</p>
-                <p className="text-xs text-muted-foreground">
-                  Pending Reservations
+              <div className="text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Total Amount
+                </p>
+                <p className="text-sm font-semibold sm:text-base">
+                  {formatCurrency(pendingTotalAmount)}
                 </p>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="flex items-center gap-4 py-4">
-              <div className="rounded-lg bg-green-100 p-2.5 dark:bg-green-900/30">
-                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <CardContent className="flex items-center justify-between gap-4 py-4">
+              <div className="flex items-center gap-4">
+                <div className="rounded-lg bg-green-100 p-2.5 dark:bg-green-900/30">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{confirmedCount}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Confirmed Reservations
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{confirmedCount}</p>
-                <p className="text-xs text-muted-foreground">
-                  Confirmed Reservations
+              <div className="text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Total Amount
+                </p>
+                <p className="text-sm font-semibold sm:text-base">
+                  {formatCurrency(confirmedTotalAmount)}
                 </p>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="flex items-center gap-4 py-4">
-              <div className="rounded-lg bg-blue-100 p-2.5 dark:bg-blue-900/30">
-                <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <CardContent className="flex items-center justify-between gap-4 py-4">
+              <div className="flex items-center gap-4">
+                <div className="rounded-lg bg-blue-100 p-2.5 dark:bg-blue-900/30">
+                  <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{totalReservations}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Total Customers Reserved
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-2xl font-bold">{totalReservations}</p>
-                <p className="text-xs text-muted-foreground">
-                  Total Customers Reserved
+              <div className="text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Overall Amount
+                </p>
+                <p className="text-sm font-semibold sm:text-base">
+                  {formatCurrency(overallTotalAmount)}
                 </p>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
+        <div
+          className={`grid gap-3 ${
+            isSuperadmin
+              ? "md:grid-cols-[minmax(0,1fr)_220px_220px]"
+              : "md:grid-cols-[minmax(0,1fr)_240px]"
+          }`}
+        >
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -1816,19 +2017,95 @@ export function ReservationsClient() {
             />
           </div>
 
-          <Select value={selectedShowId} onValueChange={setSelectedShowId}>
-            <SelectTrigger className="w-full border-sidebar-border/70 dark:border-white/20 bg-background">
-              <SelectValue placeholder="Filter by show" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Shows</SelectItem>
-              {showFilterOptions.map((show) => (
-                <SelectItem key={show.id} value={show.id}>
-                  {show.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {isSuperadmin ? (
+            <Combobox
+              open={isTeamComboboxOpen}
+              onOpenChange={setIsTeamComboboxOpen}
+              openOnInputClick
+              autoHighlight
+              value={selectedTeamId}
+              onValueChange={(value) => {
+                const nextValue = value ?? "all";
+                setSelectedTeamId(nextValue);
+                const selectedTeam = teamFilterOptions.find(
+                  (team) => team.id === nextValue,
+                );
+                setTeamFilterQuery(selectedTeam?.label ?? "All Teams");
+                setIsTeamComboboxOpen(false);
+              }}
+            >
+              <ComboboxInput
+                aria-label="Filter teams"
+                placeholder="All Teams"
+                value={teamFilterQuery}
+                onFocus={() => setIsTeamComboboxOpen(true)}
+                onChange={(event) => {
+                  setTeamFilterQuery(event.target.value);
+                  setSelectedTeamId("all");
+                  setIsTeamComboboxOpen(true);
+                }}
+                className="w-full border-sidebar-border/70 dark:border-white/20 bg-background"
+              />
+              <ComboboxContent>
+                <ComboboxList className="max-h-72">
+                  <ComboboxItem value="all">All Teams</ComboboxItem>
+                  {filteredTeamFilterOptions.length > 0 ? (
+                    filteredTeamFilterOptions.map((team) => (
+                      <ComboboxItem key={team.id} value={team.id}>
+                        {team.label}
+                      </ComboboxItem>
+                    ))
+                  ) : (
+                    <ComboboxEmpty>No teams found.</ComboboxEmpty>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+          ) : null}
+
+          <Combobox
+            open={isShowComboboxOpen}
+            onOpenChange={setIsShowComboboxOpen}
+            openOnInputClick
+            autoHighlight
+            value={selectedShowId}
+            onValueChange={(value) => {
+              const nextValue = value ?? "all";
+              setSelectedShowId(nextValue);
+              const selectedShow = showFilterOptions.find(
+                (show) => show.id === nextValue,
+              );
+              setShowFilterQuery(selectedShow?.label ?? "All Shows");
+              setIsShowComboboxOpen(false);
+            }}
+          >
+            <ComboboxInput
+              aria-label="Filter shows"
+              placeholder="All Shows"
+              value={showFilterQuery}
+              onFocus={() => setIsShowComboboxOpen(true)}
+              onChange={(event) => {
+                setShowFilterQuery(event.target.value);
+                setSelectedShowId("all");
+                setIsShowComboboxOpen(true);
+              }}
+              className="w-full border-sidebar-border/70 dark:border-white/20 bg-background"
+            />
+            <ComboboxContent>
+              <ComboboxList className="max-h-72">
+                <ComboboxItem value="all">All Shows</ComboboxItem>
+                {filteredShowFilterOptions.length > 0 ? (
+                  filteredShowFilterOptions.map((show) => (
+                    <ComboboxItem key={show.id} value={show.id}>
+                      {show.label}
+                    </ComboboxItem>
+                  ))
+                ) : (
+                  <ComboboxEmpty>No shows found.</ComboboxEmpty>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
         </div>
 
         {kanbanCards.length === 0 ? (
@@ -1897,6 +2174,7 @@ export function ReservationsClient() {
                   cards={displayCardsByColumn[column.key]}
                   isActiveDrop={activeDropColumn === column.key}
                   updatingCardIds={updatingCardIds}
+                  progressLabelsByCardId={approvalProgressLabels}
                   onOpenDetails={(card) => setSelectedCardId(card.id)}
                 />
               ))}
