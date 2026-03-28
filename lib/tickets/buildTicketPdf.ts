@@ -1,4 +1,4 @@
-import { PDFDocument } from "pdf-lib";
+import { degrees, PDFDocument } from "pdf-lib";
 
 import {
   TICKET_TEMPLATE_CANVAS_INCH_HEIGHT,
@@ -14,16 +14,17 @@ const PDF_POINTS_PER_INCH = 72;
 export async function buildTicketPdf({ ticketPng }: BuildTicketPdfParams) {
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([
-    TICKET_TEMPLATE_CANVAS_INCH_WIDTH * PDF_POINTS_PER_INCH,
     TICKET_TEMPLATE_CANVAS_INCH_HEIGHT * PDF_POINTS_PER_INCH,
+    TICKET_TEMPLATE_CANVAS_INCH_WIDTH * PDF_POINTS_PER_INCH,
   ]);
   const embeddedPng = await pdf.embedPng(ticketPng);
 
   page.drawImage(embeddedPng, {
-    x: 0,
+    x: page.getWidth(),
     y: 0,
-    width: page.getWidth(),
-    height: page.getHeight(),
+    width: page.getHeight(),
+    height: page.getWidth(),
+    rotate: degrees(90),
   });
 
   return pdf.save();

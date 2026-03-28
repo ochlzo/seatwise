@@ -6,7 +6,7 @@ import sharp from "sharp";
 
 import { buildTicketPdf } from "./buildTicketPdf.ts";
 
-test("buildTicketPdf creates a single-page 8.5in x 2.75in PDF from a ticket PNG", async () => {
+test("buildTicketPdf creates a single-page portrait PDF from a ticket PNG", async () => {
   const pngBuffer = await sharp({
     create: {
       width: 2550,
@@ -28,6 +28,6 @@ test("buildTicketPdf creates a single-page 8.5in x 2.75in PDF from a ticket PNG"
   assert.equal(pdf.getPageCount(), 1);
 
   const [page] = pdf.getPages();
-  assert.equal(page.getWidth(), 612);
-  assert.equal(page.getHeight(), 198);
+  assert.equal(page.getWidth(), 198);
+  assert.equal(page.getHeight(), 612);
 });
