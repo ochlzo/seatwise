@@ -30,17 +30,18 @@ const encodeAttachmentBody = (content: Buffer | Uint8Array) =>
 export const buildIssuedTicketEmailMessage = ({
   sender,
   payload,
-  ticketAttachment,
+  ticketAttachments,
 }: {
   sender: string;
   payload: IssuedTicketEmailPayload;
-  ticketAttachment: EmailBinaryAttachment;
+  ticketAttachments: EmailBinaryAttachment[];
 }) => {
   const seatList = payload.seatLabels.join(", ");
+  const ticketNoun = ticketAttachments.length === 1 ? "ticket is" : "tickets are";
   const textBody = [
     `Hi ${payload.customerName},`,
     "",
-    "Your Seatwise ticket is attached as a PDF.",
+    `Your Seatwise ${ticketNoun} attached as PDF${ticketAttachments.length === 1 ? "." : "s."}`,
     "",
     `Reservation Number: ${payload.reservationNumber}`,
     `Show: ${payload.showName}`,
@@ -57,7 +58,7 @@ export const buildIssuedTicketEmailMessage = ({
   const htmlBody = `
     <div style="font-family:Segoe UI,Arial,sans-serif;color:#111827;line-height:1.6">
       <p>Hi ${escapeHtml(payload.customerName)},</p>
-      <p>Your attached PDF ticket is ready.</p>
+      <p>Your attached PDF ${escapeHtml(ticketAttachments.length === 1 ? "ticket is" : "tickets are")} ready.</p>
       <div style="border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f9fafb">
         <p><strong>Reservation Number:</strong> ${escapeHtml(payload.reservationNumber)}</p>
         <p><strong>Show:</strong> ${escapeHtml(payload.showName)}</p>
@@ -97,13 +98,15 @@ export const buildIssuedTicketEmailMessage = ({
     "",
     `--${alternativeBoundary}--`,
     "",
-    `--${mixedBoundary}`,
-    `Content-Type: ${ticketAttachment.contentType}; name="${ticketAttachment.filename}"`,
-    `Content-Disposition: attachment; filename="${ticketAttachment.filename}"`,
-    "Content-Transfer-Encoding: Base64",
-    "",
-    encodeAttachmentBody(ticketAttachment.content),
-    "",
+    ...ticketAttachments.flatMap((ticketAttachment) => [
+      `--${mixedBoundary}`,
+      `Content-Type: ${ticketAttachment.contentType}; name="${ticketAttachment.filename}"`,
+      `Content-Disposition: attachment; filename="${ticketAttachment.filename}"`,
+      "Content-Transfer-Encoding: Base64",
+      "",
+      encodeAttachmentBody(ticketAttachment.content),
+      "",
+    ]),
     `--${mixedBoundary}--`,
   ].join(CRLF);
 };

@@ -120,7 +120,10 @@ export async function verifyScannedIssuedTicket(
     };
   }
 
-  const verification = mapIssuedTicketToPublicResult(loaded.reservation);
+  const verification = mapIssuedTicketToPublicResult(
+    loaded.reservation,
+    loaded.seatAssignmentId,
+  );
 
   return {
     status: verification.status,

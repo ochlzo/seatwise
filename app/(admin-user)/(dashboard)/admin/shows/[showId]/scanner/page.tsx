@@ -99,7 +99,7 @@ export default async function AdminShowScannerPage({
           </>
         }
       />
-      <div className="mx-auto flex w-full max-w-[1160px] flex-1 flex-col px-4 pb-6 pt-0 md:px-8">
+      <div className="mx-auto flex w-full max-w-[26rem] flex-1 flex-col px-3 pb-6 pt-0 md:max-w-[1160px] md:px-8">
         <AdminTicketScanner
           showId={show.show_id}
           schedId={schedule.schedId}

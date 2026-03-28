@@ -10,24 +10,26 @@ import {
 } from "./ticketEmailMessages.ts";
 
 type SendIssuedTicketEmailInput = IssuedTicketEmailPayload & {
-  ticketPdf: Uint8Array;
-  ticketPdfFilename: string;
+  ticketAttachments: Array<{
+    filename: string;
+    contentType: string;
+    content: Uint8Array;
+  }>;
 };
 
 export const sendIssuedTicketEmail = async ({
-  ticketPdf,
-  ticketPdfFilename,
+  ticketAttachments,
   ...payload
 }: SendIssuedTicketEmailInput) => {
   const sender = getGmailSender();
   const rawMessage = buildIssuedTicketEmailMessage({
     sender,
     payload,
-    ticketAttachment: {
-      filename: ticketPdfFilename,
-      contentType: "application/pdf",
-      content: Buffer.from(ticketPdf),
-    },
+    ticketAttachments: ticketAttachments.map((attachment) => ({
+      filename: attachment.filename,
+      contentType: attachment.contentType,
+      content: Buffer.from(attachment.content),
+    })),
   });
 
   await sendGmailRawMessage(encodeGmailRawMessage(rawMessage));

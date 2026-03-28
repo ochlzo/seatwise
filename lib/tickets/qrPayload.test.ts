@@ -13,6 +13,7 @@ test("createSignedQrPayload signs a token that can be verified", () => {
     {
       reservationId: "reservation-123",
       reservationNumber: "SW-2026-0001",
+      seatAssignmentId: "seat-assignment-1",
     },
     {
       secret: "seatwise-ticket-secret",
@@ -26,6 +27,7 @@ test("createSignedQrPayload signs a token that can be verified", () => {
   assert.deepEqual(verified, {
     reservationId: "reservation-123",
     reservationNumber: "SW-2026-0001",
+    seatAssignmentId: "seat-assignment-1",
   });
 });
 
@@ -34,6 +36,7 @@ test("verifySignedQrPayload rejects tampered tokens", () => {
     {
       reservationId: "reservation-123",
       reservationNumber: "SW-2026-0001",
+      seatAssignmentId: "seat-assignment-1",
     },
     {
       secret: "seatwise-ticket-secret",
@@ -45,6 +48,7 @@ test("verifySignedQrPayload rejects tampered tokens", () => {
     JSON.stringify({
       reservationId: "reservation-999",
       reservationNumber: "SW-2026-0001",
+      seatAssignmentId: "seat-assignment-1",
     }),
     "utf8",
   ).toString("base64url");
@@ -63,6 +67,7 @@ test("buildTicketVerificationUrl appends the signed token to the public route", 
     {
       reservationId: "reservation-123",
       reservationNumber: "SW-2026-0001",
+      seatAssignmentId: "seat-assignment-1",
     },
     {
       secret: "seatwise-ticket-secret",
@@ -81,6 +86,7 @@ test("normalizeScannedTicketToken extracts the signed token from a verification 
     {
       reservationId: "reservation-123",
       reservationNumber: "SW-2026-0001",
+      seatAssignmentId: "seat-assignment-1",
     },
     {
       secret: "seatwise-ticket-secret",

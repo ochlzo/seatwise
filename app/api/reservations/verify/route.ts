@@ -102,8 +102,11 @@ export async function POST(request: NextRequest) {
         venue: issuedTicket.venue,
         scheduleLabel: issuedTicket.scheduleLabel,
         seatLabels: issuedTicket.seatLabels,
-        ticketPdf: issuedTicket.ticketPdf,
-        ticketPdfFilename: issuedTicket.ticketPdfFilename,
+        ticketAttachments: issuedTicket.ticketPdfs.map((ticket) => ({
+          filename: ticket.ticketPdfFilename,
+          contentType: "application/pdf",
+          content: ticket.ticketPdf,
+        })),
       });
     } catch (error) {
       const errorMessage =

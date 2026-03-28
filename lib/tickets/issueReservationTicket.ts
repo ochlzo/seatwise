@@ -35,6 +35,7 @@ type LoadedReservation = {
     seatAssignment: {
       seat_assignment_id: string;
       seat_id: string;
+      updatedAt?: Date;
       seat: {
         seat_number: string;
       };
@@ -110,12 +111,16 @@ export type IssuedReservationTicket = {
   venue: string;
   scheduleLabel: string;
   seatLabels: string[];
-  verificationUrl: string;
-  qrToken: string;
   ticketTemplateVersionId: string;
   ticketIssuedAt: Date;
-  ticketPdf: Uint8Array;
-  ticketPdfFilename: string;
+  ticketPdfs: Array<{
+    seatAssignmentId: string;
+    seatLabel: string;
+    qrToken: string;
+    verificationUrl: string;
+    ticketPdf: Uint8Array;
+    ticketPdfFilename: string;
+  }>;
 };
 
 const DEFAULT_DB = prisma as unknown as IssueReservationTicketDb;
@@ -147,8 +152,8 @@ function formatScheduleLabel(schedule: LoadedReservation["sched"]) {
   return `${dateLabel}, ${timeLabel}`;
 }
 
-function buildIssuedTicketFilename(reservationNumber: string) {
-  return `seatwise-ticket-${reservationNumber}.pdf`;
+function buildIssuedTicketFilename(seatLabel: string, reservationNumber: string) {
+  return `seatwise-ticket-${seatLabel}-${reservationNumber}.pdf`;
 }
 
 function mapTemplateVersion(
@@ -202,6 +207,7 @@ async function loadReservation(
             select: {
               seat_assignment_id: true,
               seat_id: true,
+              updatedAt: true,
               seat: {
                 select: {
                   seat_number: true,
@@ -289,16 +295,7 @@ export async function issueReservationTicket(
   const db = deps.db ?? DEFAULT_DB;
   const reservation = await loadReservation(input.reservationId, db);
   const templateVersion = await resolveTemplateVersion(reservation, db);
-  const qrToken = createSignedQrPayload(
-    {
-      reservationId: reservation.reservation_id,
-      reservationNumber: reservation.reservation_number,
-    },
-    { secret: input.secret },
-  );
-  const verificationUrl = buildTicketVerificationUrl(qrToken, {
-    baseUrl: resolveBaseUrl(input.baseUrl),
-  });
+  const baseUrl = resolveBaseUrl(input.baseUrl);
   const interpolated = interpolateTicketFields({
     reservation: {
       reservationId: reservation.reservation_id,
@@ -317,17 +314,48 @@ export async function issueReservationTicket(
     seats: reservation.reservedSeats.map(({ seatAssignment }) => ({
       seat: seatAssignment.seat.seat_number,
     })),
-    qrToken,
-    verificationUrl,
+    qrToken: "",
+    verificationUrl: "",
   });
   const renderTicketPng = deps.renderTicketPng ?? defaultRenderTicketPng;
   const buildTicketPdf = deps.buildTicketPdf ?? defaultBuildTicketPdf;
-  const ticketPng = await renderTicketPng({
-    template: templateVersion,
-    fields: interpolated.fields,
-    qrValue: verificationUrl,
-  });
-  const ticketPdf = await buildTicketPdf({ ticketPng });
+  const ticketPdfs = await Promise.all(
+    reservation.reservedSeats.map(async ({ seatAssignment }, index) => {
+      const seatLabel = interpolated.seatLabels[index] ?? seatAssignment.seat.seat_number;
+      const qrToken = createSignedQrPayload(
+        {
+          reservationId: reservation.reservation_id,
+          reservationNumber: reservation.reservation_number,
+          seatAssignmentId: seatAssignment.seat_assignment_id,
+        },
+        { secret: input.secret },
+      );
+      const verificationUrl = buildTicketVerificationUrl(qrToken, {
+        baseUrl,
+      });
+      const ticketPng = await renderTicketPng({
+        template: templateVersion,
+        fields: {
+          ...interpolated.fields,
+          seat: seatLabel,
+        },
+        qrValue: verificationUrl,
+      });
+      const ticketPdf = await buildTicketPdf({ ticketPng });
+
+      return {
+        seatAssignmentId: seatAssignment.seat_assignment_id,
+        seatLabel,
+        qrToken,
+        verificationUrl,
+        ticketPdf,
+        ticketPdfFilename: buildIssuedTicketFilename(
+          seatLabel,
+          reservation.reservation_number,
+        ),
+      };
+    }),
+  );
   const ticketIssuedAt = input.issuedAt ?? new Date();
 
   await db.reservation.update({
@@ -350,12 +378,9 @@ export async function issueReservationTicket(
     venue: reservation.show.venue,
     scheduleLabel: formatScheduleLabel(reservation.sched),
     seatLabels: interpolated.seatLabels,
-    verificationUrl,
-    qrToken,
     ticketTemplateVersionId: templateVersion.ticket_template_version_id,
     ticketIssuedAt,
-    ticketPdf,
-    ticketPdfFilename: buildIssuedTicketFilename(reservation.reservation_number),
+    ticketPdfs,
   };
 }
 

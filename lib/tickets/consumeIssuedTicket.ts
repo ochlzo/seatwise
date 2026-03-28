@@ -57,23 +57,27 @@ type ConsumeIssuedTicketDb = VerifyIssuedTicketDb & {
   reservation: VerifyIssuedTicketDb["reservation"] & {
     update(args: {
       where: { reservation_id: string };
-      data: {
+      data: Partial<{
         ticket_consumed_at: Date;
         ticket_consumed_by_admin_id: string;
-      };
+      }>;
     }): Promise<LoadedIssuedTicketReservation>;
   };
   seatAssignment: {
-    updateMany(args: {
-      where: {
-        seat_assignment_id: {
-          in: string[];
-        };
-      };
+    update(args: {
+      where: { seat_assignment_id: string };
       data: {
         seat_status: "CONSUMED";
       };
-    }): Promise<{ count: number }>;
+    }): Promise<{
+      seat_assignment_id: string;
+      seat_id: string;
+      seat_status: "CONSUMED";
+      updatedAt: Date;
+      seat: {
+        seat_number: string;
+      };
+    }>;
   };
   $transaction<T>(callback: (tx: ConsumeIssuedTicketDb) => Promise<T>): Promise<T>;
 };
@@ -161,53 +165,97 @@ export async function consumeIssuedTicket(
     };
   }
 
-  if (loaded.reservation.ticket_consumed_at) {
+  const targetSeatAssignment = loaded.reservation.reservedSeats.find(
+    ({ seatAssignment }) =>
+      seatAssignment.seat_assignment_id === loaded.seatAssignmentId,
+  )?.seatAssignment;
+
+  if (!targetSeatAssignment) {
+    return {
+      status: "INVALID",
+      reason: "TICKET_NOT_FOUND",
+      verification: {
+        status: "INVALID",
+        reason: "TICKET_NOT_FOUND",
+        message: "Ticket could not be found.",
+      },
+    };
+  }
+
+  if (targetSeatAssignment.seat_status === "CONSUMED") {
     return {
       status: "INVALID",
       reason: "ALREADY_CONSUMED",
-      verification: mapIssuedTicketToPublicResult(loaded.reservation),
+      verification: mapIssuedTicketToPublicResult(
+        loaded.reservation,
+        loaded.seatAssignmentId,
+      ),
     };
   }
 
   const consumedAt = input.consumedAt ?? new Date();
-  const seatIds = loaded.reservation.reservedSeats.map(
-    ({ seatAssignment }) => seatAssignment.seat_id,
-  );
-  const seatAssignmentIds = loaded.reservation.reservedSeats.map(
-    ({ seatAssignment }) => seatAssignment.seat_assignment_id,
-  );
+  const seatIds = [targetSeatAssignment.seat_id];
 
-  await db.$transaction(async (tx) => {
-    await tx.reservation.update({
-      where: { reservation_id: loaded.reservation!.reservation_id },
+  const consumedSeatAssignment = await db.$transaction(async (tx) => {
+    const updatedSeatAssignment = await tx.seatAssignment.update({
+      where: {
+        seat_assignment_id: targetSeatAssignment.seat_assignment_id,
+      },
       data: {
-        ticket_consumed_at: consumedAt,
-        ticket_consumed_by_admin_id: input.adminContext.userId,
+        seat_status: "CONSUMED",
       },
     });
 
-    if (seatAssignmentIds.length > 0) {
-      await tx.seatAssignment.updateMany({
-        where: {
-          seat_assignment_id: {
-            in: seatAssignmentIds,
-          },
-        },
+    const allSeatsConsumed = loaded.reservation.reservedSeats.every(({ seatAssignment }) =>
+      seatAssignment.seat_assignment_id === targetSeatAssignment.seat_assignment_id
+        ? true
+        : seatAssignment.seat_status === "CONSUMED",
+    );
+
+    if (allSeatsConsumed) {
+      await tx.reservation.update({
+        where: { reservation_id: loaded.reservation!.reservation_id },
         data: {
-          seat_status: "CONSUMED",
+          ticket_consumed_at: consumedAt,
+          ticket_consumed_by_admin_id: input.adminContext.userId,
         },
       });
     }
+
+    return updatedSeatAssignment;
   });
 
   const consumedReservation: LoadedIssuedTicketReservation = {
     ...loaded.reservation,
-    ticket_consumed_at: consumedAt,
-    ticket_consumed_by_admin_id: input.adminContext.userId,
+    ticket_consumed_at:
+      loaded.reservation.reservedSeats.length === 1 ||
+      loaded.reservation.reservedSeats.every(({ seatAssignment }) =>
+        seatAssignment.seat_assignment_id === targetSeatAssignment.seat_assignment_id
+          ? true
+          : seatAssignment.seat_status === "CONSUMED",
+      )
+        ? consumedAt
+        : loaded.reservation.ticket_consumed_at,
+    ticket_consumed_by_admin_id:
+      loaded.reservation.reservedSeats.length === 1 ||
+      loaded.reservation.reservedSeats.every(({ seatAssignment }) =>
+        seatAssignment.seat_assignment_id === targetSeatAssignment.seat_assignment_id
+          ? true
+          : seatAssignment.seat_status === "CONSUMED",
+      )
+        ? input.adminContext.userId
+        : loaded.reservation.ticket_consumed_by_admin_id,
     reservedSeats: loaded.reservation.reservedSeats.map(({ seatAssignment }) => ({
       seatAssignment: {
         ...seatAssignment,
-        seat_status: "CONSUMED",
+        seat_status:
+          seatAssignment.seat_assignment_id === consumedSeatAssignment.seat_assignment_id
+            ? "CONSUMED"
+            : seatAssignment.seat_status,
+        updatedAt:
+          seatAssignment.seat_assignment_id === consumedSeatAssignment.seat_assignment_id
+            ? consumedSeatAssignment.updatedAt
+            : seatAssignment.updatedAt,
         seat: {
           ...seatAssignment.seat,
         },
@@ -220,6 +268,9 @@ export async function consumeIssuedTicket(
     showId: consumedReservation.show.show_id,
     schedId: consumedReservation.sched.sched_id,
     seatIds,
-    verification: mapIssuedTicketToPublicResult(consumedReservation),
+    verification: mapIssuedTicketToPublicResult(
+      consumedReservation,
+      loaded.seatAssignmentId,
+    ),
   };
 }

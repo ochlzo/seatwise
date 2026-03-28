@@ -13,6 +13,7 @@ type MemorySeatAssignmentRecord = {
   seat_assignment_id: string;
   seat_id: string;
   seat_status: SeatStatus;
+  updatedAt: Date;
   seat: {
     seat_number: string;
   };
@@ -59,6 +60,7 @@ function cloneReservation(record: MemoryReservationRecord): MemoryReservationRec
     reservedSeats: record.reservedSeats.map((seat) => ({
       seatAssignment: {
         ...seat.seatAssignment,
+        updatedAt: new Date(seat.seatAssignment.updatedAt),
         seat: { ...seat.seatAssignment.seat },
       },
     })),
@@ -100,37 +102,44 @@ function createMemoryTicketDb(record: MemoryReservationRecord) {
       },
       async update(args: {
         where: { reservation_id: string };
-        data: {
+        data: Partial<{
           ticket_consumed_at: Date;
           ticket_consumed_by_admin_id: string;
-        };
+        }>;
       }) {
         if (args.where.reservation_id !== record.reservation_id) {
           throw new Error("Reservation not found");
         }
 
         mutationCounts.reservationUpdates += 1;
-        record.ticket_consumed_at = new Date(args.data.ticket_consumed_at);
-        record.ticket_consumed_by_admin_id = args.data.ticket_consumed_by_admin_id;
+        record.ticket_consumed_at = args.data.ticket_consumed_at
+          ? new Date(args.data.ticket_consumed_at)
+          : record.ticket_consumed_at;
+        record.ticket_consumed_by_admin_id =
+          args.data.ticket_consumed_by_admin_id ?? record.ticket_consumed_by_admin_id;
 
         return cloneReservation(record);
       },
     },
     seatAssignment: {
-      async updateMany(args: {
-        where: { seat_assignment_id: { in: string[] } };
+      async update(args: {
+        where: { seat_assignment_id: string };
         data: { seat_status: SeatStatus };
       }) {
         mutationCounts.seatAssignmentUpdates += 1;
 
-        args.where.seat_assignment_id.in.forEach((seatAssignmentId) => {
-          const seatAssignment = seatAssignments.get(seatAssignmentId);
-          if (seatAssignment) {
-            seatAssignment.seat_status = args.data.seat_status;
-          }
-        });
+        const seatAssignment = seatAssignments.get(args.where.seat_assignment_id);
+        if (!seatAssignment) {
+          throw new Error("Seat assignment not found");
+        }
+        seatAssignment.seat_status = args.data.seat_status;
+        seatAssignment.updatedAt = new Date("2026-03-28T12:15:00.000Z");
 
-        return { count: args.where.seat_assignment_id.in.length };
+        return {
+          ...seatAssignment,
+          updatedAt: new Date(seatAssignment.updatedAt),
+          seat: { ...seatAssignment.seat },
+        };
       },
     },
     async $transaction<T>(callback: (tx: typeof db) => Promise<T>) {
@@ -182,6 +191,7 @@ function createIssuedReservation(
           seat_assignment_id: "seat-assignment-1",
           seat_id: "seat-1",
           seat_status: "RESERVED",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
           seat: {
             seat_number: "A1",
           },
@@ -192,6 +202,7 @@ function createIssuedReservation(
           seat_assignment_id: "seat-assignment-2",
           seat_id: "seat-2",
           seat_status: "RESERVED",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
           seat: {
             seat_number: "A2",
           },
@@ -210,16 +221,18 @@ const ADMIN_CONTEXT: AdminContext = {
   isSuperadmin: false,
 };
 
-test("consumeIssuedTicket marks the reservation consumed and all linked seats CONSUMED", async () => {
+test("consumeIssuedTicket marks only the scanned seat CONSUMED and keeps the reservation open until all seats are consumed", async () => {
   const reservation = createIssuedReservation();
   const db = createMemoryTicketDb(reservation);
   const token = createSignedQrPayload(
     {
       reservationId: reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
+      seatAssignmentId: "seat-assignment-1",
     },
     { secret: TEST_SECRET },
   );
+  const finalConsumedAt = new Date("2026-03-28T12:15:00.000Z");
 
   const result = await consumeIssuedTicket(
     {
@@ -228,26 +241,25 @@ test("consumeIssuedTicket marks the reservation consumed and all linked seats CO
       schedId: "sched-123",
       adminContext: ADMIN_CONTEXT,
       secret: TEST_SECRET,
+      consumedAt: finalConsumedAt,
     },
     db,
   );
 
   assert.equal(result.status, "CONSUMED");
   assert.equal(result.verification.status, "CONSUMED");
-  assert.deepEqual(result.seatIds, ["seat-1", "seat-2"]);
+  assert.deepEqual(result.seatIds, ["seat-1"]);
+  assert.deepEqual(result.verification.seatLabels, ["A1"]);
 
   const snapshot = db.getSnapshot();
-  assert.equal(snapshot.reservation.ticket_consumed_by_admin_id, "admin-123");
-  assert.equal(
-    snapshot.reservation.ticket_consumed_at?.toISOString() ?? null,
-    result.verification.consumedAt,
-  );
+  assert.equal(snapshot.reservation.ticket_consumed_by_admin_id, null);
+  assert.equal(snapshot.reservation.ticket_consumed_at, null);
   assert.deepEqual(
     snapshot.reservation.reservedSeats.map((seat) => seat.seatAssignment.seat_status),
-    ["CONSUMED", "CONSUMED"],
+    ["CONSUMED", "RESERVED"],
   );
   assert.deepEqual(snapshot.mutationCounts, {
-    reservationUpdates: 1,
+    reservationUpdates: 0,
     seatAssignmentUpdates: 1,
   });
 });
@@ -262,6 +274,7 @@ test("consumeIssuedTicket returns an already-consumed invalid result without mut
           seat_assignment_id: "seat-assignment-1",
           seat_id: "seat-1",
           seat_status: "CONSUMED",
+          updatedAt: new Date("2026-03-28T20:15:00+08:00"),
           seat: {
             seat_number: "A1",
           },
@@ -271,7 +284,8 @@ test("consumeIssuedTicket returns an already-consumed invalid result without mut
         seatAssignment: {
           seat_assignment_id: "seat-assignment-2",
           seat_id: "seat-2",
-          seat_status: "CONSUMED",
+          seat_status: "RESERVED",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
           seat: {
             seat_number: "A2",
           },
@@ -284,9 +298,11 @@ test("consumeIssuedTicket returns an already-consumed invalid result without mut
     {
       reservationId: reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
+      seatAssignmentId: "seat-assignment-1",
     },
     { secret: TEST_SECRET },
   );
+  const finalConsumedAt = new Date("2026-03-28T12:15:00.000Z");
 
   const result = await consumeIssuedTicket(
     {
@@ -295,6 +311,7 @@ test("consumeIssuedTicket returns an already-consumed invalid result without mut
       schedId: "sched-123",
       adminContext: ADMIN_CONTEXT,
       secret: TEST_SECRET,
+      consumedAt: finalConsumedAt,
     },
     db,
   );
@@ -309,7 +326,7 @@ test("consumeIssuedTicket returns an already-consumed invalid result without mut
       venue: "Main Theater",
       scheduleDate: "Mar 28, 2026",
       scheduleTime: "7:30 PM",
-      seatLabels: ["A1", "A2"],
+      seatLabels: ["A1"],
       consumedAt: "2026-03-28T12:15:00.000Z",
     },
   });
@@ -339,6 +356,7 @@ test("consumeIssuedTicket rejects tickets from a different schedule with a sched
     {
       reservationId: reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
+      seatAssignmentId: "seat-assignment-1",
     },
     { secret: TEST_SECRET },
   );
@@ -368,5 +386,70 @@ test("consumeIssuedTicket rejects tickets from a different schedule with a sched
   assert.deepEqual(snapshot.mutationCounts, {
     reservationUpdates: 0,
     seatAssignmentUpdates: 0,
+  });
+});
+
+test("consumeIssuedTicket marks the reservation consumed once the final remaining seat is scanned", async () => {
+  const reservation = createIssuedReservation({
+    reservedSeats: [
+      {
+        seatAssignment: {
+          seat_assignment_id: "seat-assignment-1",
+          seat_id: "seat-1",
+          seat_status: "CONSUMED",
+          updatedAt: new Date("2026-03-28T20:15:00+08:00"),
+          seat: {
+            seat_number: "A1",
+          },
+        },
+      },
+      {
+        seatAssignment: {
+          seat_assignment_id: "seat-assignment-2",
+          seat_id: "seat-2",
+          seat_status: "RESERVED",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
+          seat: {
+            seat_number: "A2",
+          },
+        },
+      },
+    ],
+  });
+  const db = createMemoryTicketDb(reservation);
+  const token = createSignedQrPayload(
+    {
+      reservationId: reservation.reservation_id,
+      reservationNumber: reservation.reservation_number,
+      seatAssignmentId: "seat-assignment-2",
+    },
+    { secret: TEST_SECRET },
+  );
+  const finalConsumedAt = new Date("2026-03-28T12:15:00.000Z");
+
+  const result = await consumeIssuedTicket(
+    {
+      token,
+      showId: "show-123",
+      schedId: "sched-123",
+      adminContext: ADMIN_CONTEXT,
+      secret: TEST_SECRET,
+      consumedAt: finalConsumedAt,
+    },
+    db,
+  );
+
+  assert.equal(result.status, "CONSUMED");
+  assert.deepEqual(result.verification.seatLabels, ["A2"]);
+
+  const snapshot = db.getSnapshot();
+  assert.equal(snapshot.reservation.ticket_consumed_by_admin_id, "admin-123");
+  assert.equal(
+    snapshot.reservation.ticket_consumed_at?.toISOString() ?? null,
+    finalConsumedAt.toISOString(),
+  );
+  assert.deepEqual(snapshot.mutationCounts, {
+    reservationUpdates: 1,
+    seatAssignmentUpdates: 1,
   });
 });

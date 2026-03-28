@@ -71,8 +71,8 @@ export default function TicketVerifyPage() {
             Ticket Verification
           </h1>
           <p className="text-sm text-muted-foreground">
-            This page checks the signed QR token and shows a public-safe ticket
-            status only.
+            This page checks the signed QR token for a single e-ticket seat and
+            shows a public-safe status only.
           </p>
         </div>
 
@@ -80,7 +80,7 @@ export default function TicketVerifyPage() {
           result={result}
           loading={isLoading}
           title="Verification Result"
-          description="A fresh ticket shows VALID. A used ticket still resolves and shows CONSUMED."
+          description="A fresh seat ticket shows VALID. A scanned seat ticket still resolves and shows CONSUMED."
           emptyMessage="Open a ticket verification link to view its status."
         />
       </div>

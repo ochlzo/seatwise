@@ -29,6 +29,8 @@ type MemoryReservationRecord = {
     seatAssignment: {
       seat_assignment_id: string;
       seat_id: string;
+      seat_status?: string;
+      updatedAt?: Date;
       seat: {
         seat_number: string;
       };
@@ -70,6 +72,8 @@ function createIssuedReservation(
         seatAssignment: {
           seat_assignment_id: "seat-assignment-1",
           seat_id: "seat-1",
+          seat_status: "RESERVED",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
           seat: {
             seat_number: "A1",
           },
@@ -105,6 +109,9 @@ function createVerifyDb(record: MemoryReservationRecord) {
           reservedSeats: record.reservedSeats.map(({ seatAssignment }) => ({
             seatAssignment: {
               ...seatAssignment,
+              updatedAt: seatAssignment.updatedAt
+                ? new Date(seatAssignment.updatedAt)
+                : undefined,
               seat: { ...seatAssignment.seat },
             },
           })),
@@ -121,6 +128,7 @@ test("verifyScannedIssuedTicket returns a valid scoped result without consuming 
     {
       reservationId: reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
+      seatAssignmentId: "seat-assignment-1",
     },
     { secret: TEST_SECRET },
   );
@@ -165,6 +173,7 @@ test("verifyScannedIssuedTicket rejects tickets from a different schedule before
     {
       reservationId: reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
+      seatAssignmentId: "seat-assignment-1",
     },
     { secret: TEST_SECRET },
   );

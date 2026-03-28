@@ -24,7 +24,7 @@ export type TicketVerificationSuccessResult = {
   venue: string;
   scheduleDate: string;
   scheduleTime: string;
-  seatLabels: string[];
+  seatLabels: [string];
   consumedAt: string | null;
 };
 
@@ -55,6 +55,7 @@ export type LoadedIssuedTicketReservation = {
       seat_assignment_id: string;
       seat_id: string;
       seat_status?: string;
+      updatedAt?: Date;
       seat: {
         seat_number: string;
       };
@@ -78,10 +79,12 @@ type VerifyIssuedTicketOptions = {
 type LoadedIssuedTicketResult =
   | {
       reservation: LoadedIssuedTicketReservation;
+      seatAssignmentId: string;
       invalidResult: null;
     }
   | {
       reservation: null;
+      seatAssignmentId: null;
       invalidResult: TicketVerificationInvalidResult;
     };
 
@@ -118,18 +121,26 @@ function createInvalidResult(
 
 export function mapIssuedTicketToPublicResult(
   reservation: LoadedIssuedTicketReservation,
+  seatAssignmentId: string,
 ): TicketVerificationSuccessResult {
+  const matchedSeat = reservation.reservedSeats.find(
+    ({ seatAssignment }) => seatAssignment.seat_assignment_id === seatAssignmentId,
+  )?.seatAssignment;
+
+  if (!matchedSeat) {
+    throw new Error("Issued ticket seat assignment could not be resolved.");
+  }
+
+  const isConsumed = matchedSeat.seat_status === "CONSUMED";
   return {
-    status: reservation.ticket_consumed_at ? "CONSUMED" : "VALID",
+    status: isConsumed ? "CONSUMED" : "VALID",
     reservationNumber: reservation.reservation_number,
     showName: reservation.show.show_name,
     venue: reservation.show.venue,
     scheduleDate: formatScheduleDate(reservation.sched.sched_date),
     scheduleTime: formatScheduleTime(reservation.sched.sched_start_time),
-    seatLabels: reservation.reservedSeats.map(
-      ({ seatAssignment }) => seatAssignment.seat.seat_number,
-    ),
-    consumedAt: reservation.ticket_consumed_at?.toISOString() ?? null,
+    seatLabels: [matchedSeat.seat.seat_number],
+    consumedAt: isConsumed ? matchedSeat.updatedAt?.toISOString() ?? null : null,
   };
 }
 
@@ -143,6 +154,7 @@ export async function loadIssuedTicketReservation(
   if (!payload) {
     return {
       reservation: null,
+      seatAssignmentId: null,
       invalidResult: createInvalidResult(
         "INVALID_TOKEN",
         "Ticket token is invalid.",
@@ -183,6 +195,7 @@ export async function loadIssuedTicketReservation(
               seat_assignment_id: true,
               seat_id: true,
               seat_status: true,
+              updatedAt: true,
               seat: {
                 select: {
                   seat_number: true,
@@ -198,6 +211,23 @@ export async function loadIssuedTicketReservation(
   if (!reservation || reservation.reservation_number !== payload.reservationNumber) {
     return {
       reservation: null,
+      seatAssignmentId: null,
+      invalidResult: createInvalidResult(
+        "TICKET_NOT_FOUND",
+        "Ticket could not be found.",
+      ),
+    };
+  }
+
+  const matchedSeat = reservation.reservedSeats.find(
+    ({ seatAssignment }) =>
+      seatAssignment.seat_assignment_id === payload.seatAssignmentId,
+  );
+
+  if (!matchedSeat) {
+    return {
+      reservation: null,
+      seatAssignmentId: null,
       invalidResult: createInvalidResult(
         "TICKET_NOT_FOUND",
         "Ticket could not be found.",
@@ -208,6 +238,7 @@ export async function loadIssuedTicketReservation(
   if (!reservation.ticket_template_version_id || !reservation.ticket_issued_at) {
     return {
       reservation: null,
+      seatAssignmentId: null,
       invalidResult: createInvalidResult(
         "TICKET_NOT_ISSUED",
         "Ticket has not been issued.",
@@ -217,6 +248,7 @@ export async function loadIssuedTicketReservation(
 
   return {
     reservation,
+    seatAssignmentId: payload.seatAssignmentId,
     invalidResult: null,
   };
 }
@@ -232,5 +264,8 @@ export async function verifyIssuedTicket(
     return loaded.invalidResult;
   }
 
-  return mapIssuedTicketToPublicResult(loaded.reservation);
+  return mapIssuedTicketToPublicResult(
+    loaded.reservation,
+    loaded.seatAssignmentId,
+  );
 }

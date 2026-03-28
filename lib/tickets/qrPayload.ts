@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export type TicketQrPayload = {
   reservationId: string;
   reservationNumber: string;
+  seatAssignmentId: string;
 };
 
 type TicketQrSecretOptions = {
@@ -92,7 +93,9 @@ export function verifySignedQrPayload(
       typeof payload.reservationId !== "string" ||
       payload.reservationId.length === 0 ||
       typeof payload.reservationNumber !== "string" ||
-      payload.reservationNumber.length === 0
+      payload.reservationNumber.length === 0 ||
+      typeof payload.seatAssignmentId !== "string" ||
+      payload.seatAssignmentId.length === 0
     ) {
       return null;
     }
@@ -100,6 +103,7 @@ export function verifySignedQrPayload(
     return {
       reservationId: payload.reservationId,
       reservationNumber: payload.reservationNumber,
+      seatAssignmentId: payload.seatAssignmentId,
     };
   } catch {
     return null;

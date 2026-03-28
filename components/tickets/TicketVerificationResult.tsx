@@ -67,7 +67,7 @@ export function TicketVerificationResult({
 }: TicketVerificationResultProps) {
   if (loading) {
     return (
-      <Card className={cn("border-sidebar-border", className)}>
+      <Card className={cn("flex h-full flex-col border-sidebar-border", className)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -89,14 +89,14 @@ export function TicketVerificationResult({
             </div>
           </CardContent>
         ) : null}
-        {actions ? <CardContent className="pt-0">{actions}</CardContent> : null}
+        {actions ? <CardContent className="mt-auto pt-0">{actions}</CardContent> : null}
       </Card>
     );
   }
 
   if (!result) {
     return (
-      <Card className={cn("border-sidebar-border", className)}>
+      <Card className={cn("flex h-full flex-col border-sidebar-border", className)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Ticket className="h-4 w-4 text-primary" />
@@ -116,14 +116,14 @@ export function TicketVerificationResult({
             </div>
           </CardContent>
         ) : null}
-        {actions ? <CardContent className="pt-0">{actions}</CardContent> : null}
+        {actions ? <CardContent className="mt-auto pt-0">{actions}</CardContent> : null}
       </Card>
     );
   }
 
   if (result.status === "INVALID") {
     return (
-      <Card className={cn("border-destructive/40", className)}>
+      <Card className={cn("flex h-full flex-col border-destructive/40", className)}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base text-destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -143,7 +143,7 @@ export function TicketVerificationResult({
             </div>
           </CardContent>
         ) : null}
-        {actions ? <CardContent className="pt-0">{actions}</CardContent> : null}
+        {actions ? <CardContent className="mt-auto pt-0">{actions}</CardContent> : null}
       </Card>
     );
   }
@@ -152,7 +152,7 @@ export function TicketVerificationResult({
   const consumedAtLabel = formatConsumedAt(result.consumedAt);
 
   return (
-    <Card className={cn("border-sidebar-border", className)}>
+    <Card className={cn("flex h-full flex-col border-sidebar-border", className)}>
       <CardHeader className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
@@ -188,7 +188,7 @@ export function TicketVerificationResult({
           </div>
         </CardContent>
       ) : null}
-      <CardContent className="grid gap-4 sm:grid-cols-2">
+      <CardContent className="grid flex-1 content-start gap-4 sm:grid-cols-2">
         <div className="space-y-1">
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
             Booking Ref
@@ -234,7 +234,7 @@ export function TicketVerificationResult({
           </div>
         ) : null}
       </CardContent>
-      {actions ? <CardContent className="pt-0">{actions}</CardContent> : null}
+      {actions ? <CardContent className="mt-auto pt-0">{actions}</CardContent> : null}
     </Card>
   );
 }

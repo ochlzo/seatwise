@@ -28,6 +28,7 @@ type MemoryReservationRecord = {
     seatAssignment: {
       seat_assignment_id: string;
       seat_id: string;
+      updatedAt?: Date;
       seat: {
         seat_number: string;
       };
@@ -119,6 +120,7 @@ function createReservationRecord(
         seatAssignment: {
           seat_assignment_id: "seat-assignment-1",
           seat_id: "seat-1",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
           seat: { seat_number: "A1" },
         },
       },
@@ -126,6 +128,7 @@ function createReservationRecord(
         seatAssignment: {
           seat_assignment_id: "seat-assignment-2",
           seat_id: "seat-2",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
           seat: { seat_number: "A2" },
         },
       },
@@ -251,8 +254,19 @@ test("walk-in issuance uses the show's current template version and stores it on
   );
 
   assert.equal(result.ticketTemplateVersionId, "ticket-template-version-2");
-  assert.equal(result.ticketPdfFilename, "seatwise-ticket-4821.pdf");
   assert.deepEqual(result.seatLabels, ["A1", "A2"]);
+  assert.deepEqual(
+    result.ticketPdfs.map((ticket) => ticket.ticketPdfFilename),
+    ["seatwise-ticket-A1-4821.pdf", "seatwise-ticket-A2-4821.pdf"],
+  );
+  assert.deepEqual(
+    result.ticketPdfs.map((ticket) => ticket.seatLabel),
+    ["A1", "A2"],
+  );
+  assert.deepEqual(
+    result.ticketPdfs.map((ticket) => ticket.seatAssignmentId),
+    ["seat-assignment-1", "seat-assignment-2"],
+  );
   assert.equal(db.records.reservation.ticket_template_version_id, "ticket-template-version-2");
   assert.equal(
     db.records.reservation.ticket_issued_at?.toISOString(),
@@ -264,7 +278,13 @@ test("walk-in issuance uses the show's current template version and stores it on
     renderCalls[0]?.qrValue ?? "",
     /^https:\/\/seatwise\.test\/ticket\/verify\/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
   );
-  assert.deepEqual(buildPdfCalls, [Buffer.from("ticket-png")]);
+  assert.equal(renderCalls.length, 2);
+  assert.deepEqual(buildPdfCalls, [Buffer.from("ticket-png"), Buffer.from("ticket-png")]);
+  assert.match(
+    result.ticketPdfs[0]?.verificationUrl ?? "",
+    /^https:\/\/seatwise\.test\/ticket\/verify\/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
+  );
+  assert.notEqual(result.ticketPdfs[0]?.qrToken, result.ticketPdfs[1]?.qrToken);
 });
 
 test("online verification issuance also uses the show's current template version", async () => {

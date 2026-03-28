@@ -559,6 +559,8 @@ function SeatNodes({
   const [burgundyImage] = useImage("/vip-seat-4.svg");
   const [greenImage] = useImage("/vip-seat-5.svg");
   const [errorImage] = useImage("/seat-error.svg");
+  const [consumedImageLight] = useImage("/seat-consumed-black.svg");
+  const [consumedImageDark] = useImage("/seat-consumed.svg");
   const [takenImage] = useImage("/seat-taken.svg");
   const [selectedImage] = useImage("/seat-selected.svg");
 
@@ -589,6 +591,7 @@ function SeatNodes({
         const isSelected = selectedSeatIds.includes(seat.id);
         const isInCart = cartSeatIds.includes(seat.id);
         const seatStatus = seatStatusById[seat.id];
+        const isConsumed = seatStatus === "CONSUMED";
         const isUnavailable = !!seatStatus && seatStatus !== "OPEN";
         // Look up the category by ID to get the current color_code
         const categoryId = seatCategories[seat.id];
@@ -601,15 +604,23 @@ function SeatNodes({
 
         const isCategoryUnassigned = !categoryId || !category;
         const colorCode = category?.color_code ?? "NO_COLOR";
-        const textColor = isUnavailable
-          ? "#000000"
+        const textColor = isConsumed
+          ? isDark
+            ? "#e5e7eb"
+            : "#111827"
+          : isUnavailable
+            ? "#000000"
           : isInCart
             ? "#ffffff"
             : getContrastingTextColor(colorCode);
         const image =
           isInCart
             ? selectedImage
-            : isUnavailable
+            : isConsumed
+              ? isDark
+                ? consumedImageDark
+                : consumedImageLight
+              : isUnavailable
               ? takenImage
               : isCategoryUnassigned
                 ? errorImage

@@ -102,7 +102,7 @@ test("show detail opens a schedule-scoped ticket scanner flow instead of pushing
   );
 });
 
-test("scanner page is schedule scoped and removes the schedule selector and back button from the Figma layout", () => {
+test("scanner page is schedule scoped and keeps the mobile scanner controls aligned with the Figma layout", () => {
   const scannerPage = readRepoFile(
     "app/(admin-user)/(dashboard)/admin/shows/[showId]/scanner/page.tsx",
   );
@@ -113,7 +113,8 @@ test("scanner page is schedule scoped and removes the schedule selector and back
   assert.match(scannerPage, /searchParams/);
   assert.match(consumeRoute, /schedId/);
   assert.match(verifyRoute, /schedId/);
-  assert.doesNotMatch(scannerComponent, /Back To Show/);
+  assert.match(scannerComponent, /Back To Show/);
+  assert.match(scannerComponent, /View Seatmap Preview/);
   assert.doesNotMatch(scannerComponent, /Schedules/);
 });
 

@@ -27,6 +27,8 @@ type MemoryReservationRecord = {
     seatAssignment: {
       seat_assignment_id: string;
       seat_id: string;
+      seat_status?: string;
+      updatedAt?: Date;
       seat: {
         seat_number: string;
       };
@@ -52,6 +54,9 @@ function cloneReservation(record: MemoryReservationRecord): MemoryReservationRec
     reservedSeats: record.reservedSeats.map((seat) => ({
       seatAssignment: {
         ...seat.seatAssignment,
+        updatedAt: seat.seatAssignment.updatedAt
+          ? new Date(seat.seatAssignment.updatedAt)
+          : undefined,
         seat: { ...seat.seatAssignment.seat },
       },
     })),
@@ -97,6 +102,8 @@ function createIssuedReservation(
         seatAssignment: {
           seat_assignment_id: "seat-assignment-1",
           seat_id: "seat-1",
+          seat_status: "RESERVED",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
           seat: {
             seat_number: "A1",
           },
@@ -106,6 +113,8 @@ function createIssuedReservation(
         seatAssignment: {
           seat_assignment_id: "seat-assignment-2",
           seat_id: "seat-2",
+          seat_status: "RESERVED",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
           seat: {
             seat_number: "A2",
           },
@@ -123,6 +132,7 @@ test("verifyIssuedTicket returns a public-safe result for an issued ticket", asy
     {
       reservationId: reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
+      seatAssignmentId: "seat-assignment-1",
     },
     { secret: TEST_SECRET },
   );
@@ -136,22 +146,46 @@ test("verifyIssuedTicket returns a public-safe result for an issued ticket", asy
     venue: "Main Theater",
     scheduleDate: "Mar 28, 2026",
     scheduleTime: "7:30 PM",
-    seatLabels: ["A1", "A2"],
+    seatLabels: ["A1"],
     consumedAt: null,
   });
   assert.equal("reservationId" in result, false);
   assert.equal("customerName" in result, false);
 });
 
-test("verifyIssuedTicket still resolves consumed tickets as public-safe CONSUMED results", async () => {
+test("verifyIssuedTicket resolves the targeted seat as CONSUMED once that seat assignment is consumed", async () => {
   const reservation = createIssuedReservation({
-    ticket_consumed_at: new Date("2026-03-28T20:15:00+08:00"),
+    reservedSeats: [
+      {
+        seatAssignment: {
+          seat_assignment_id: "seat-assignment-1",
+          seat_id: "seat-1",
+          seat_status: "CONSUMED",
+          updatedAt: new Date("2026-03-28T20:15:00+08:00"),
+          seat: {
+            seat_number: "A1",
+          },
+        },
+      },
+      {
+        seatAssignment: {
+          seat_assignment_id: "seat-assignment-2",
+          seat_id: "seat-2",
+          seat_status: "RESERVED",
+          updatedAt: new Date("2026-03-28T18:00:00+08:00"),
+          seat: {
+            seat_number: "A2",
+          },
+        },
+      },
+    ],
   });
   const db = createMemoryTicketDb(reservation);
   const token = createSignedQrPayload(
     {
       reservationId: reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
+      seatAssignmentId: "seat-assignment-1",
     },
     { secret: TEST_SECRET },
   );
@@ -165,7 +199,7 @@ test("verifyIssuedTicket still resolves consumed tickets as public-safe CONSUMED
     venue: "Main Theater",
     scheduleDate: "Mar 28, 2026",
     scheduleTime: "7:30 PM",
-    seatLabels: ["A1", "A2"],
+    seatLabels: ["A1"],
     consumedAt: "2026-03-28T12:15:00.000Z",
   });
 });
