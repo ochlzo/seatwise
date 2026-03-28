@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildTicketVerificationUrl,
   createSignedQrPayload,
+  normalizeScannedTicketToken,
   verifySignedQrPayload,
 } from "./qrPayload.ts";
 
@@ -73,4 +74,22 @@ test("buildTicketVerificationUrl appends the signed token to the public route", 
   });
 
   assert.equal(url, `https://seatwise.test/ticket/verify/${token}`);
+});
+
+test("normalizeScannedTicketToken extracts the signed token from a verification URL", () => {
+  const token = createSignedQrPayload(
+    {
+      reservationId: "reservation-123",
+      reservationNumber: "SW-2026-0001",
+    },
+    {
+      secret: "seatwise-ticket-secret",
+    },
+  );
+
+  const url = buildTicketVerificationUrl(token, {
+    baseUrl: "https://seatwise.test",
+  });
+
+  assert.equal(normalizeScannedTicketToken(url), token);
 });

@@ -106,6 +106,27 @@ export function verifySignedQrPayload(
   }
 }
 
+export function normalizeScannedTicketToken(value: string) {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return "";
+  }
+
+  try {
+    const url = new URL(trimmedValue);
+    const pathSegments = url.pathname.split("/").filter(Boolean);
+    const verifyIndex = pathSegments.findIndex((segment) => segment === "verify");
+
+    if (verifyIndex >= 0 && pathSegments.length > verifyIndex + 1) {
+      return decodeURIComponent(pathSegments[verifyIndex + 1] ?? "").trim();
+    }
+  } catch {
+    // Non-URL scanner payloads should pass through unchanged.
+  }
+
+  return trimmedValue;
+}
+
 export function buildTicketVerificationUrl(
   token: string,
   options: TicketVerificationUrlOptions,

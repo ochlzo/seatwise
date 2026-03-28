@@ -8,6 +8,7 @@ import {
   consumeIssuedTicket,
   TicketConsumeAuthorizationError,
 } from "@/lib/tickets/consumeIssuedTicket";
+import { normalizeScannedTicketToken } from "@/lib/tickets/qrPayload";
 
 type ConsumeTicketRequestBody = {
   token?: string;
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as ConsumeTicketRequestBody;
-    const token = normalize(body.token);
+    const token = normalizeScannedTicketToken(normalize(body.token));
     const showId = normalize(body.showId);
 
     if (!token || !showId) {

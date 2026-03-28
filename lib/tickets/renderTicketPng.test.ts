@@ -95,3 +95,38 @@ test("renderTicketPng returns a 2550 x 825 PNG and preserves asset z-order", asy
   assert.equal(data[pixelIndex + 1], 0);
   assert.equal(data[pixelIndex + 2], 255);
 });
+
+test("renderTicketPng clips oversized overlays that extend beyond the ticket canvas", async () => {
+  const template = createEmptyTicketTemplate();
+
+  template.nodes.push(
+    {
+      id: "asset-oversized",
+      kind: "asset",
+      x: -30,
+      y: -20,
+      width: 2700,
+      height: 900,
+      src: await createSolidPngDataUrl({ r: 12, g: 34, b: 56, alpha: 1 }),
+      opacity: 1,
+    },
+    {
+      id: "qr-outside-right",
+      kind: "qr",
+      x: 2450,
+      y: 700,
+      size: 200,
+      opacity: 1,
+    },
+  );
+
+  const pngBuffer = await renderTicketPng({
+    template,
+    fields: {},
+    qrValue: "https://seatwise.test/ticket/verify/signed-token",
+  });
+
+  const metadata = await sharp(pngBuffer).metadata();
+  assert.equal(metadata.width, 2550);
+  assert.equal(metadata.height, 825);
+});

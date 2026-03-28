@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { TicketConsumeResult } from "@/lib/tickets/consumeIssuedTicket";
+import { normalizeScannedTicketToken } from "@/lib/tickets/qrPayload";
 import type { TicketVerificationResult as TicketVerificationResultData } from "@/lib/tickets/verifyIssuedTicket";
 
 export type TicketScannerSchedulePreview = {
@@ -154,7 +155,7 @@ export function AdminTicketScanner({
   );
 
   const processToken = React.useEffectEvent(async (token: string) => {
-    const normalizedToken = token.trim();
+    const normalizedToken = normalizeScannedTicketToken(token);
     if (!normalizedToken) return;
 
     const now = Date.now();

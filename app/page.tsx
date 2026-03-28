@@ -22,6 +22,7 @@ import ScrollReveal from "@/components/ui/scroll-reveal";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { useTheme } from "next-themes";
 import Image from "next/image";
+import Link from "next/link";
 
 // @ts-expect-error - types are not correctly resolved for this extension
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib";
@@ -487,18 +488,18 @@ export default function Home() {
       <footer className="relative py-10 px-6 md:px-32 border-t border-zinc-100 dark:border-zinc-800 z-20 flex flex-col md:flex-row justify-between items-center text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-widest gap-4">
         <p>&copy; 2026 SEATWISE • CHOLO CANDELARIA • SEAN ARMENTA • BUCAL</p>
         <div className="flex gap-8">
-          <a
+          <Link
             href="/privacy-policy"
             className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
             Privacy Policy
-          </a>
-          <a
+          </Link>
+          <Link
             href="/terms-of-service"
             className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
             Terms of Service
-          </a>
+          </Link>
         </div>
       </footer>
     </main>

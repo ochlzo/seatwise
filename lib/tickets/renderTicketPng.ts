@@ -13,6 +13,12 @@ type RenderTicketPngParams = {
   qrValue: string;
 };
 
+type FittedOverlay = {
+  input: Buffer;
+  left: number;
+  top: number;
+};
+
 function escapeXml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -85,6 +91,66 @@ async function applyOverlayOpacity(input: Buffer, opacity: number) {
     .toBuffer();
 }
 
+async function fitOverlayToCanvas(
+  input: Buffer,
+  left: number,
+  top: number,
+): Promise<FittedOverlay | null> {
+  const metadata = await sharp(input).metadata();
+  const inputWidth = metadata.width ?? null;
+  const inputHeight = metadata.height ?? null;
+
+  if (!inputWidth || !inputHeight) {
+    throw new Error("Ticket overlay dimensions could not be resolved.");
+  }
+
+  const sourceLeft = Math.max(0, -left);
+  const sourceTop = Math.max(0, -top);
+  const targetLeft = Math.max(0, left);
+  const targetTop = Math.max(0, top);
+  const extractWidth = Math.min(
+    inputWidth - sourceLeft,
+    TICKET_TEMPLATE_CANVAS_PX_WIDTH - targetLeft,
+  );
+  const extractHeight = Math.min(
+    inputHeight - sourceTop,
+    TICKET_TEMPLATE_CANVAS_PX_HEIGHT - targetTop,
+  );
+
+  if (extractWidth <= 0 || extractHeight <= 0) {
+    return null;
+  }
+
+  if (
+    sourceLeft === 0 &&
+    sourceTop === 0 &&
+    extractWidth === inputWidth &&
+    extractHeight === inputHeight
+  ) {
+    return {
+      input,
+      left: targetLeft,
+      top: targetTop,
+    };
+  }
+
+  const clippedInput = await sharp(input)
+    .extract({
+      left: sourceLeft,
+      top: sourceTop,
+      width: extractWidth,
+      height: extractHeight,
+    })
+    .png()
+    .toBuffer();
+
+  return {
+    input: clippedInput,
+    left: targetLeft,
+    top: targetTop,
+  };
+}
+
 function resolveTextAnchor(node: TicketTemplateFieldNode) {
   if (node.align === "center") {
     return {
@@ -147,11 +213,20 @@ export async function renderTicketPng({
         )
         .png()
         .toBuffer();
+      const fittedOverlay = await fitOverlayToCanvas(
+        await applyOverlayOpacity(resizedAsset, node.opacity ?? 1),
+        Math.round(node.x),
+        Math.round(node.y),
+      );
+
+      if (!fittedOverlay) {
+        continue;
+      }
 
       overlays.push({
-        input: await applyOverlayOpacity(resizedAsset, node.opacity ?? 1),
-        left: Math.round(node.x),
-        top: Math.round(node.y),
+        input: fittedOverlay.input,
+        left: fittedOverlay.left,
+        top: fittedOverlay.top,
       });
       continue;
     }
@@ -162,23 +237,35 @@ export async function renderTicketPng({
         continue;
       }
 
-      overlays.push({
-        input: buildFieldOverlay(node, value),
-        left: Math.round(node.x),
-        top: Math.round(node.y),
-      });
+      const fittedOverlay = await fitOverlayToCanvas(
+        buildFieldOverlay(node, value),
+        Math.round(node.x),
+        Math.round(node.y),
+      );
+
+      if (!fittedOverlay) {
+        continue;
+      }
+
+      overlays.push(fittedOverlay);
       continue;
     }
 
     if (node.kind === "qr") {
-      overlays.push({
-        input: await applyOverlayOpacity(
+      const fittedOverlay = await fitOverlayToCanvas(
+        await applyOverlayOpacity(
           await buildQrOverlay(Math.max(Math.round(node.size), 1), qrValue),
           node.opacity ?? 1,
         ),
-        left: Math.round(node.x),
-        top: Math.round(node.y),
-      });
+        Math.round(node.x),
+        Math.round(node.y),
+      );
+
+      if (!fittedOverlay) {
+        continue;
+      }
+
+      overlays.push(fittedOverlay);
     }
   }
 

@@ -49,6 +49,15 @@ test("ticket template navigation points to /ticket-builder", () => {
   });
 });
 
+test("ticket template file menu uses a stable trigger id for hydration", () => {
+  const contents = readRepoFile(
+    "components/ticket-template/TicketTemplateFileMenu.tsx",
+  );
+
+  assert.match(contents, /const triggerId = "ticket-template-file-menu-trigger"/);
+  assert.match(contents, /<DropdownMenuTrigger asChild id=\{triggerId\}>/);
+});
+
 test("ticket templates page keeps explicit admin access enforcement", () => {
   const pageContents = readRepoFile(
     "app/(admin-user)/(dashboard)/admin/ticket-templates/page.tsx",

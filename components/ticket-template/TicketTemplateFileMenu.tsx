@@ -43,6 +43,7 @@ function slugify(value: string) {
 }
 
 export function TicketTemplateFileMenu() {
+  const triggerId = "ticket-template-file-menu-trigger";
   const router = useRouter();
   const dispatch = useAppDispatch();
   const ticketTemplateState = useAppSelector((state) => state.ticketTemplate);
@@ -146,7 +147,7 @@ export function TicketTemplateFileMenu() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+      <DropdownMenuTrigger asChild id={triggerId}>
         <Button
           variant="outline"
           size="sm"
