@@ -5,6 +5,7 @@ import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminConte
 import cloudinary from "@/lib/cloudinary";
 import { sendIssuedTicketEmail } from "@/lib/email/sendIssuedTicketEmail";
 import { sendReservationSubmittedEmail } from "@/lib/email/sendReservationSubmittedEmail";
+import { sendTeamLeaderReservationNotificationEmail } from "@/lib/email/sendTeamLeaderReservationNotificationEmail";
 import { prisma } from "@/lib/prisma";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
@@ -166,6 +167,18 @@ export async function POST(request: NextRequest) {
           select: {
             show_name: true,
             venue: true,
+            team: {
+              select: {
+                team_leader: {
+                  select: {
+                    email: true,
+                    first_name: true,
+                    last_name: true,
+                    status: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -392,18 +405,46 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isWalkInMode) {
+      const scheduleLabel = new Date(schedule.sched_date).toLocaleDateString();
+      const customerName = `${contact.firstName} ${contact.lastName}`.trim();
+
       void sendReservationSubmittedEmail({
         to: contact.email,
-        customerName: `${contact.firstName} ${contact.lastName}`.trim(),
+        customerName,
         reservationNumber: reservation.reservationNumber,
         showName: schedule.show.show_name,
-        scheduleLabel: new Date(schedule.sched_date).toLocaleDateString(),
+        scheduleLabel,
         seatNumbers: reservation.seatNumbers,
         totalAmount: formatCurrency(reservation.totalAmount),
         proofImageUrl: uploadedScreenshotUrl,
       }).catch((error) => {
         console.error("[queue/complete] failed to send email:", error);
       });
+
+      const teamLeader = schedule.show.team?.team_leader;
+      if (teamLeader?.email && teamLeader.status === "ACTIVE") {
+        const leaderName =
+          `${teamLeader.first_name ?? ""} ${teamLeader.last_name ?? ""}`.trim() ||
+          teamLeader.email;
+
+        void sendTeamLeaderReservationNotificationEmail({
+          to: teamLeader.email,
+          leaderName,
+          reservationNumber: reservation.reservationNumber,
+          showName: schedule.show.show_name,
+          venue: schedule.show.venue,
+          scheduleLabel,
+          seatNumbers: reservation.seatNumbers,
+          totalAmount: formatCurrency(reservation.totalAmount),
+          guestName: customerName,
+          guestEmail: contact.email,
+          guestPhone: contact.phoneNumber,
+          guestAddress: contact.address,
+          proofImageUrl: uploadedScreenshotUrl,
+        }).catch((error) => {
+          console.error("[queue/complete] failed to notify team leader:", error);
+        });
+      }
     }
 
     return NextResponse.json({

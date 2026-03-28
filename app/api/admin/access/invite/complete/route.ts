@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { redis } from "@/lib/clients/redis";
@@ -91,9 +93,16 @@ export async function POST(request: NextRequest) {
     if (!doesInviteMatchSession(payload, session)) {
       return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
     }
-    if (session.targetRole === "TEAM_ADMIN") {
+    if (session.targetRole === "TEAM_ADMIN" && !session.teamId && !session.teamName?.trim()) {
+      return NextResponse.json(
+        { error: "Invite is missing a team name. Ask your superadmin for a new invite." },
+        { status: 400 },
+      );
+    }
+
+    if (session.targetRole === "TEAM_ADMIN" && session.teamId) {
       const team = await prisma.team.findUnique({
-        where: { team_id: session.teamId! },
+        where: { team_id: session.teamId },
         select: { team_id: true },
       });
       if (!team) {
@@ -145,17 +154,68 @@ export async function POST(request: NextRequest) {
     });
     createdUid = firebaseUser.uid;
 
-    await prisma.admin.create({
-      data: {
-        firebase_uid: firebaseUser.uid,
-        username,
-        email: session.email,
-        first_name: firstName,
-        last_name: lastName,
-        status: "ACTIVE",
-        team_id: session.targetRole === "SUPERADMIN" ? null : session.teamId,
-        is_superadmin: session.targetRole === "SUPERADMIN",
-      },
+    const createdAdmin = await prisma.$transaction(async (tx) => {
+      let resolvedTeamId: string | null = null;
+
+      if (session.targetRole === "TEAM_ADMIN") {
+        if (session.teamId) {
+          const existingTeam = await tx.team.findUnique({
+            where: { team_id: session.teamId },
+            select: { team_id: true },
+          });
+          if (!existingTeam) {
+            throw new Error("Assigned team no longer exists.");
+          }
+          resolvedTeamId = existingTeam.team_id;
+        } else {
+          const pendingTeamName = session.teamName?.trim();
+          if (!pendingTeamName) {
+            throw new Error("Invite is missing a team name.");
+          }
+
+          const createdTeam = await tx.team.create({
+            data: {
+              team_id: randomUUID(),
+              name: pendingTeamName,
+            },
+            select: {
+              team_id: true,
+            },
+          });
+
+          resolvedTeamId = createdTeam.team_id;
+        }
+      }
+
+      const admin = await tx.admin.create({
+        data: {
+          firebase_uid: firebaseUser.uid,
+          username,
+          email: session.email,
+          first_name: firstName,
+          last_name: lastName,
+          status: "ACTIVE",
+          team_id: session.targetRole === "SUPERADMIN" ? null : resolvedTeamId,
+          is_superadmin: session.targetRole === "SUPERADMIN",
+        },
+        select: {
+          user_id: true,
+        },
+      });
+
+      if (session.targetRole === "TEAM_ADMIN" && resolvedTeamId) {
+        await tx.team.updateMany({
+          where: {
+            team_id: resolvedTeamId,
+            team_leader_admin_id: null,
+          },
+          data: {
+            team_leader_admin_id: admin.user_id,
+          },
+        });
+      }
+
+      return admin;
     });
 
     await Promise.all([
@@ -165,7 +225,11 @@ export async function POST(request: NextRequest) {
       clearInviteClaim(session.inviteId),
     ]);
 
-    const response = NextResponse.json({ success: true, email: session.email });
+    const response = NextResponse.json({
+      success: true,
+      email: session.email,
+      teamLeaderAssigned: session.targetRole === "TEAM_ADMIN" ? createdAdmin.user_id : null,
+    });
     response.cookies.set({
       name: INVITE_CLAIM_COOKIE,
       value: "",
@@ -178,6 +242,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
+    console.error("[admin/access/invite/complete] Error:", error);
     let rollbackSucceeded = false;
     if (createdUid) {
       try {
@@ -199,6 +264,28 @@ export async function POST(request: NextRequest) {
     }
     if (lockKey) {
       await redis.del(lockKey);
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2022") {
+      return NextResponse.json(
+        { error: "Database schema is out of date. Run Prisma migrations and retry onboarding." },
+        { status: 500 },
+      );
+    }
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json(
+        { error: "Team name already exists. Ask your superadmin to send a new invite." },
+        { status: 409 },
+      );
+    }
+
+    const authCode = (error as { code?: string })?.code;
+    if (authCode === "auth/email-already-exists") {
+      return NextResponse.json(
+        { error: "An account with this email already exists. Use a different invite email." },
+        { status: 409 },
+      );
     }
 
     return NextResponse.json({ error: COMPLETE_FAILED_ERROR }, { status: 400 });

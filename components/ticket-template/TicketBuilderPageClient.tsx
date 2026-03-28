@@ -5,11 +5,13 @@ import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 
 import LoadingPage from "@/app/LoadingPage";
+import { TicketTemplateControlBar } from "@/components/ticket-template/TicketTemplateControlBar";
 import { TicketTemplateFileMenu } from "@/components/ticket-template/TicketTemplateFileMenu";
 import { TicketTemplateInspector } from "@/components/ticket-template/TicketTemplateInspector";
 import { TicketTemplateLayerPanel } from "@/components/ticket-template/TicketTemplateLayerPanel";
 import { TicketTemplatePageHeader } from "@/components/ticket-template/ticket-template-page-header";
 import { TicketTemplateSidebar } from "@/components/ticket-template/ticket-template-sidebar";
+import { TicketTemplateTitle } from "@/components/ticket-template/TicketTemplateTitle";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { toast } from "@/components/ui/sonner";
@@ -116,17 +118,22 @@ export function TicketBuilderPageClient() {
   }, [hasUnsavedChanges]);
 
   return (
-    <SidebarProvider className="h-svh overflow-hidden" suppressHydrationWarning>
+    <SidebarProvider
+      className="h-svh overflow-hidden"
+      style={{ "--sidebar-width": "18rem" } as React.CSSProperties}
+      suppressHydrationWarning
+    >
       <LoadingPage />
       <TicketTemplateSidebar />
 
       <SidebarInset className="overflow-hidden">
         <TicketTemplatePageHeader
           rightSlot={
-            <>
+            <div className="flex items-center gap-2">
               <ThemeSwithcer />
+              <TicketTemplateTitle />
               <TicketTemplateFileMenu />
-            </>
+            </div>
           }
         />
 
@@ -143,6 +150,7 @@ export function TicketBuilderPageClient() {
               </div>
             ) : null}
             <TicketTemplateCanvas />
+            <TicketTemplateControlBar />
           </div>
 
           <div className="min-h-0 overflow-y-auto bg-zinc-50/80 p-4 dark:bg-zinc-950">

@@ -5,14 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronDown,
-  Copy,
   Download,
   FilePlus2,
   FolderOpen,
-  RotateCcw,
-  RotateCw,
   Save,
-  Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,13 +23,9 @@ import { toast } from "@/components/ui/sonner";
 import { resolveTicketTemplateAssetRefsForSave } from "@/lib/clients/cloudinary-upload";
 import { saveTicketTemplateAction } from "@/lib/actions/saveTicketTemplate";
 import {
-  deleteSelectedNode,
-  duplicateSelectedNode,
   loadTicketTemplate,
-  redo,
   resetTicketTemplate,
   serializeTicketTemplateEditor,
-  undo,
 } from "@/lib/features/ticketTemplate/ticketTemplateSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -47,9 +39,6 @@ export function TicketTemplateFileMenu() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const ticketTemplateState = useAppSelector((state) => state.ticketTemplate);
-  const hasSelection = Boolean(ticketTemplateState.selectedNodeId);
-  const hasUndo = ticketTemplateState.history.past.length > 0;
-  const hasRedo = ticketTemplateState.history.future.length > 0;
   const [isSavingTemplate, setIsSavingTemplate] = React.useState(false);
   const uploadKeyRef = React.useRef(
     `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
@@ -170,41 +159,6 @@ export function TicketTemplateFileMenu() {
             <FolderOpen className="h-4 w-4 text-blue-600" />
             Open Templates List
           </Link>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuItem
-          onClick={() => dispatch(undo())}
-          disabled={!hasUndo}
-          className="gap-2"
-        >
-          <RotateCcw className="h-4 w-4 text-violet-600" />
-          Undo
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => dispatch(redo())}
-          disabled={!hasRedo}
-          className="gap-2"
-        >
-          <RotateCw className="h-4 w-4 text-violet-600" />
-          Redo
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => dispatch(duplicateSelectedNode())}
-          disabled={!hasSelection}
-          className="gap-2"
-        >
-          <Copy className="h-4 w-4 text-amber-600" />
-          Duplicate Selection
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => dispatch(deleteSelectedNode())}
-          disabled={!hasSelection}
-          className="gap-2"
-        >
-          <Trash2 className="h-4 w-4 text-rose-600" />
-          Delete Selection
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />

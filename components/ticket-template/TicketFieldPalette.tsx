@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { ImagePlus, Layers2, QrCode } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -89,7 +88,7 @@ export function TicketFieldPalette() {
   };
 
   return (
-    <Card className="gap-4 border-zinc-200/80 bg-white/90 py-4 dark:border-zinc-800 dark:bg-zinc-950/80">
+    <Card className="gap-4 border-0 bg-transparent py-4 shadow-none">
       <CardHeader className="px-4">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Layers2 className="h-4 w-4 text-blue-600" />
@@ -161,16 +160,6 @@ export function TicketFieldPalette() {
           </Button>
         </div>
 
-        <div className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/70 p-3 text-xs leading-5 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
-          Create and manage saved templates from{" "}
-          <Link
-            href="/admin/ticket-templates"
-            className="font-medium text-blue-600 hover:underline dark:text-blue-400"
-          >
-            the admin template list
-          </Link>
-          . Field nodes always stay above uploaded artwork on the exported ticket.
-        </div>
       </CardContent>
     </Card>
   );

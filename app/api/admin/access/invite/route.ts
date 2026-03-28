@@ -50,34 +50,69 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const adminContext = await getCurrentAdminContext();
-    const body = (await request.json()) as { teamId?: string; email?: string };
+    const body = (await request.json()) as {
+      teamId?: string;
+      teamName?: string;
+      email?: string;
+    };
     const teamId = body.teamId?.trim();
+    const teamName = body.teamName?.trim();
     const email = body.email?.trim().toLowerCase();
 
-    if (!teamId) {
-      return NextResponse.json({ error: "teamId is required." }, { status: 400 });
-    }
     if (!email) {
       return NextResponse.json({ error: "email is required." }, { status: 400 });
     }
+    if (!teamId && !teamName) {
+      return NextResponse.json({ error: "teamId or teamName is required." }, { status: 400 });
+    }
+    if (teamId && teamName) {
+      return NextResponse.json(
+        { error: "Provide either teamId or teamName, but not both." },
+        { status: 400 },
+      );
+    }
 
-    if (!adminContext.isSuperadmin && adminContext.teamId !== teamId) {
+    if (teamName && !adminContext.isSuperadmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (teamId && !adminContext.isSuperadmin && adminContext.teamId !== teamId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const [team, inviter] = await Promise.all([
-      prisma.team.findUnique({
-        where: { team_id: teamId },
-        select: { name: true },
-      }),
-      prisma.admin.findUnique({
+    const resolvedTeam = teamId
+      ? await prisma.team.findUnique({
+          where: { team_id: teamId },
+          select: {
+            team_id: true,
+            name: true,
+          },
+        })
+      : await prisma.team.findFirst({
+          where: {
+            name: {
+              equals: teamName!,
+              mode: "insensitive",
+            },
+          },
+          select: {
+            team_id: true,
+            name: true,
+          },
+        });
+
+    const inviter = await prisma.admin.findUnique({
         where: { firebase_uid: adminContext.firebaseUid },
         select: { first_name: true, last_name: true, email: true },
-      }),
-    ]);
+      });
 
-    if (!team) {
+    if (teamId && !resolvedTeam) {
       return NextResponse.json({ error: "Team not found." }, { status: 404 });
+    }
+    if (teamName && resolvedTeam) {
+      return NextResponse.json(
+        { error: "A team with that name already exists." },
+        { status: 409 },
+      );
     }
     if (!inviter) {
       return NextResponse.json({ error: "Inviter not found." }, { status: 403 });
@@ -85,10 +120,40 @@ export async function POST(request: NextRequest) {
 
     const existingAdmin = await prisma.admin.findUnique({
       where: { email },
-      select: { user_id: true },
+      select: {
+        user_id: true,
+        team_id: true,
+        is_superadmin: true,
+        team: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
     if (existingAdmin) {
-      return NextResponse.json({ success: true });
+      if (existingAdmin.team_id === teamId) {
+        return NextResponse.json(
+          { error: "This email is already a member of this team." },
+          { status: 409 },
+        );
+      }
+
+      if (existingAdmin.is_superadmin) {
+        return NextResponse.json(
+          { error: "This email already belongs to a superadmin account." },
+          { status: 409 },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: existingAdmin.team?.name
+            ? `This email is already assigned to admin team \"${existingAdmin.team.name}\".`
+            : "This email is already assigned to an admin account.",
+        },
+        { status: 409 },
+      );
     }
 
     const inviterName =
@@ -98,8 +163,8 @@ export async function POST(request: NextRequest) {
     const inviteSession: InviteSession = {
       inviteId,
       email,
-      teamId,
-      teamName: team.name,
+      teamId: teamId ?? null,
+      teamName: teamName ?? resolvedTeam?.name ?? null,
       targetRole: "TEAM_ADMIN",
       inviterName,
       expiresAt,
@@ -110,7 +175,7 @@ export async function POST(request: NextRequest) {
     const token = signInviteToken({
       inviteId,
       email,
-      teamId,
+      teamId: teamId ?? null,
       targetRole: "TEAM_ADMIN",
       exp: Math.floor(expiresAt / 1000),
     });
@@ -122,7 +187,7 @@ export async function POST(request: NextRequest) {
 
     await sendAdminInviteEmail({
       to: email,
-      teamName: team.name,
+      teamName: teamName ?? resolvedTeam?.name ?? null,
       inviterName,
       inviteLink,
       targetRole: "TEAM_ADMIN",

@@ -6,6 +6,11 @@ type Params = {
   params: Promise<{ teamId: string }>;
 };
 
+type TeamPatchBody = {
+  name?: string;
+  teamLeaderAdminId?: string | null;
+};
+
 export async function GET(_request: NextRequest, { params }: Params) {
   try {
     const adminContext = await getCurrentAdminContext();
@@ -18,6 +23,16 @@ export async function GET(_request: NextRequest, { params }: Params) {
     const team = await prisma.team.findUnique({
       where: { team_id: teamId },
       include: {
+        team_leader: {
+          select: {
+            user_id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            username: true,
+            status: true,
+          },
+        },
         admins: {
           select: {
             user_id: true,
@@ -65,16 +80,84 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const body = (await request.json()) as { name?: string };
-    const name = body.name?.trim();
-    if (!name) {
-      return NextResponse.json({ error: "Team name is required." }, { status: 400 });
+    const body = (await request.json()) as TeamPatchBody;
+    const hasName = typeof body.name === "string";
+    const hasTeamLeaderUpdate = Object.prototype.hasOwnProperty.call(body, "teamLeaderAdminId");
+
+    if (!hasName && !hasTeamLeaderUpdate) {
+      return NextResponse.json(
+        { error: "Nothing to update. Provide name and/or teamLeaderAdminId." },
+        { status: 400 },
+      );
+    }
+
+    const data: { name?: string; team_leader_admin_id?: string | null } = {};
+    if (hasName) {
+      const name = body.name?.trim();
+      if (!name) {
+        return NextResponse.json({ error: "Team name is required." }, { status: 400 });
+      }
+      data.name = name;
+    }
+
+    if (hasTeamLeaderUpdate) {
+      if (body.teamLeaderAdminId == null) {
+        data.team_leader_admin_id = null;
+      } else {
+        const candidateId = body.teamLeaderAdminId.trim();
+        if (!candidateId) {
+          return NextResponse.json({ error: "Team leader admin id is required." }, { status: 400 });
+        }
+
+        const leaderCandidate = await prisma.admin.findFirst({
+          where: {
+            user_id: candidateId,
+            team_id: teamId,
+            status: "ACTIVE",
+            is_superadmin: false,
+          },
+          select: { user_id: true },
+        });
+
+        if (!leaderCandidate) {
+          return NextResponse.json(
+            { error: "Team leader must be an active team admin." },
+            { status: 400 },
+          );
+        }
+
+        data.team_leader_admin_id = leaderCandidate.user_id;
+      }
     }
 
     const updated = await prisma.team.update({
       where: { team_id: teamId },
-      data: { name },
-      select: { team_id: true, name: true, updatedAt: true },
+      data,
+      include: {
+        team_leader: {
+          select: {
+            user_id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            username: true,
+            status: true,
+          },
+        },
+        admins: {
+          select: {
+            user_id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            username: true,
+            status: true,
+            is_superadmin: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
     });
 
     return NextResponse.json({ success: true, team: updated });

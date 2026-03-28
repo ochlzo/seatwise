@@ -22,7 +22,8 @@ model Admin {
   avatar_key   String?
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
-  team         Team?         @relation(fields: [team_id], references: [team_id])
+  team         Team?         @relation("TeamMembers", fields: [team_id], references: [team_id])
+  led_team     Team?         @relation("TeamLeader")
   ticket_consumed_reservations Reservation[] @relation("ReservationTicketConsumedByAdmin")
 
   @@index([team_id])
@@ -59,13 +60,15 @@ model Show {
 }
 
 model Team {
-  team_id    String   @id
-  name       String   @unique
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  admins     Admin[]
-  shows      Show[]
-  ticketTemplates TicketTemplate[]
+  team_id               String   @id
+  name                  String   @unique
+  team_leader_admin_id  String?  @unique
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  admins                Admin[]  @relation("TeamMembers")
+  team_leader           Admin?   @relation("TeamLeader", fields: [team_leader_admin_id], references: [user_id], onDelete: SetNull, onUpdate: Cascade)
+  shows                 Show[]
+  ticketTemplates       TicketTemplate[]
 }
 
 model Sched {

@@ -146,9 +146,6 @@ export const verifyInviteToken = (token: string): InviteTokenPayload => {
   if (!payload.inviteId || !payload.email || !payload.exp) {
     throw new Error("Invite token payload is invalid.");
   }
-  if (payload.targetRole === "TEAM_ADMIN" && !payload.teamId) {
-    throw new Error("Invite token payload is invalid.");
-  }
   if (Date.now() >= payload.exp * 1000) {
     throw new Error("Invite token has expired.");
   }
@@ -195,7 +192,7 @@ export const doesInviteMatchSession = (payload: InviteTokenPayload, session: Inv
   if (payload.targetRole !== session.targetRole) return false;
 
   if (payload.targetRole === "TEAM_ADMIN") {
-    return Boolean(payload.teamId && payload.teamId === session.teamId);
+    return payload.teamId === session.teamId;
   }
 
   return session.teamId === null;

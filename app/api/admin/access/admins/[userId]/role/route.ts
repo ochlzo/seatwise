@@ -46,28 +46,66 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       }
     }
 
-    const updated = await prisma.admin.update({
-      where: { user_id: userId },
-      data: body.isSuperadmin
-        ? {
-            is_superadmin: true,
-            team_id: null,
-          }
-        : {
-            is_superadmin: false,
-            team_id: body.teamId!.trim(),
+    const targetTeamId = body.isSuperadmin ? null : body.teamId!.trim();
+    const updated = await prisma.$transaction(async (tx) => {
+      const admin = await tx.admin.update({
+        where: { user_id: userId },
+        data: body.isSuperadmin
+          ? {
+              is_superadmin: true,
+              team_id: null,
+            }
+          : {
+              is_superadmin: false,
+              team_id: targetTeamId,
+            },
+        select: {
+          user_id: true,
+          email: true,
+          first_name: true,
+          last_name: true,
+          username: true,
+          status: true,
+          is_superadmin: true,
+          team_id: true,
+          updatedAt: true,
+        },
+      });
+
+      if (body.isSuperadmin) {
+        await tx.team.updateMany({
+          where: {
+            team_leader_admin_id: userId,
           },
-      select: {
-        user_id: true,
-        email: true,
-        first_name: true,
-        last_name: true,
-        username: true,
-        status: true,
-        is_superadmin: true,
-        team_id: true,
-        updatedAt: true,
-      },
+          data: {
+            team_leader_admin_id: null,
+          },
+        });
+      } else if (targetTeamId) {
+        await tx.team.updateMany({
+          where: {
+            team_leader_admin_id: userId,
+            NOT: {
+              team_id: targetTeamId,
+            },
+          },
+          data: {
+            team_leader_admin_id: null,
+          },
+        });
+
+        await tx.team.updateMany({
+          where: {
+            team_id: targetTeamId,
+            team_leader_admin_id: null,
+          },
+          data: {
+            team_leader_admin_id: userId,
+          },
+        });
+      }
+
+      return admin;
     });
 
     return NextResponse.json({

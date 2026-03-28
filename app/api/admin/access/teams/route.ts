@@ -13,6 +13,16 @@ export async function GET() {
     const teams = await prisma.team.findMany({
       where: adminContext.isSuperadmin ? undefined : { team_id: adminContext.teamId! },
       include: {
+        team_leader: {
+          select: {
+            user_id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            username: true,
+            status: true,
+          },
+        },
         admins: {
           select: {
             user_id: true,

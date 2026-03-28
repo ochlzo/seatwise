@@ -15,6 +15,22 @@ type ReservationSubmittedEmailPayload = {
   proofImageUrl?: string | null;
 };
 
+type TeamLeaderReservationNotificationPayload = {
+  to: string;
+  leaderName: string;
+  reservationNumber: string;
+  showName: string;
+  venue: string;
+  scheduleLabel: string;
+  seatNumbers: string[];
+  totalAmount: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone: string;
+  guestAddress: string;
+  proofImageUrl?: string | null;
+};
+
 type ReservationStatusEmailLineItem = {
   reservationNumber: string;
   showName: string;
@@ -155,6 +171,115 @@ export const buildReservationSubmittedEmailMessage = ({
   return rawParts.join(CRLF);
 };
 
+export const buildTeamLeaderReservationNotificationEmailMessage = ({
+  sender,
+  payload,
+  proofAttachment,
+}: {
+  sender: string;
+  payload: TeamLeaderReservationNotificationPayload;
+  proofAttachment: EmailImageAttachment | null;
+}) => {
+  const htmlBody = `
+    <div style="font-family:Segoe UI,Arial,sans-serif;color:#111827;line-height:1.6">
+      <p>Hi ${escapeHtml(payload.leaderName)},</p>
+      <p>A guest submitted a new reservation request that needs team review.</p>
+      <div style="border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#f9fafb">
+        <p><strong>Reservation Number:</strong> ${escapeHtml(payload.reservationNumber)}</p>
+        <p><strong>Show:</strong> ${escapeHtml(payload.showName)}</p>
+        <p><strong>Venue:</strong> ${escapeHtml(payload.venue)}</p>
+        <p><strong>Schedule:</strong> ${escapeHtml(payload.scheduleLabel)}</p>
+        <p><strong>Seats:</strong> ${escapeHtml(payload.seatNumbers.join(", "))}</p>
+        <p><strong>Total:</strong> ${escapeHtml(payload.totalAmount)}</p>
+      </div>
+      <div style="margin-top:16px;border:1px solid #e5e7eb;border-radius:14px;padding:16px;background:#ffffff">
+        <p style="margin:0 0 10px 0"><strong>Guest details</strong></p>
+        <p><strong>Name:</strong> ${escapeHtml(payload.guestName)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(payload.guestEmail)}</p>
+        <p><strong>Phone:</strong> ${escapeHtml(payload.guestPhone)}</p>
+        <p><strong>Address:</strong> ${escapeHtml(payload.guestAddress)}</p>
+      </div>
+      ${
+        payload.proofImageUrl
+          ? `<p style="margin-top:20px">GCash proof is attached and shown below.</p>
+             <img src="${escapeHtml(payload.proofImageUrl)}" alt="Guest payment proof" style="display:block;max-width:100%;border-radius:16px;border:1px solid #d1d5db" />`
+          : "<p style=\"margin-top:20px\">No payment proof image was attached.</p>"
+      }
+      <p style="margin-top:20px">Please review this reservation in the Seatwise admin dashboard.</p>
+      <p>Seatwise System</p>
+    </div>
+  `.trim();
+
+  const textBody = [
+    `Hi ${payload.leaderName},`,
+    "",
+    "A guest submitted a new reservation request that needs team review.",
+    "",
+    `Reservation Number: ${payload.reservationNumber}`,
+    `Show: ${payload.showName}`,
+    `Venue: ${payload.venue}`,
+    `Schedule: ${payload.scheduleLabel}`,
+    `Seats: ${payload.seatNumbers.join(", ")}`,
+    `Total: ${payload.totalAmount}`,
+    "",
+    "Guest details",
+    `Name: ${payload.guestName}`,
+    `Email: ${payload.guestEmail}`,
+    `Phone: ${payload.guestPhone}`,
+    `Address: ${payload.guestAddress}`,
+    "",
+    payload.proofImageUrl
+      ? `GCash proof image: ${payload.proofImageUrl}`
+      : "No payment proof image was attached.",
+    "",
+    "Please review this reservation in the Seatwise admin dashboard.",
+    "",
+    "Seatwise System",
+  ].join(CRLF);
+
+  const mixedBoundary = `seatwise-team-leader-mixed-${payload.reservationNumber}`;
+  const alternativeBoundary = `seatwise-team-leader-alt-${payload.reservationNumber}`;
+  const rawParts = [
+    `From: Seatwise <${sender}>`,
+    `To: ${payload.to}`,
+    `Subject: Seatwise Reservation Alert - ${payload.showName}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${mixedBoundary}"`,
+    "",
+    `--${mixedBoundary}`,
+    `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"`,
+    "",
+    `--${alternativeBoundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    textBody,
+    "",
+    `--${alternativeBoundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    htmlBody,
+    "",
+    `--${alternativeBoundary}--`,
+  ];
+
+  if (proofAttachment) {
+    rawParts.push(
+      "",
+      `--${mixedBoundary}`,
+      `Content-Type: ${proofAttachment.contentType}; name="${proofAttachment.filename}"`,
+      `Content-Disposition: attachment; filename="${proofAttachment.filename}"`,
+      "Content-Transfer-Encoding: base64",
+      "",
+      encodeAttachmentBody(proofAttachment.content),
+    );
+  }
+
+  rawParts.push("", `--${mixedBoundary}--`);
+  return rawParts.join(CRLF);
+};
+
 export const buildReservationStatusUpdateEmailMessage = ({
   sender,
   payload,
@@ -250,6 +375,7 @@ export const buildReservationStatusUpdateEmailMessage = ({
 
 export type {
   EmailImageAttachment,
+  TeamLeaderReservationNotificationPayload,
   ReservationStatusEmailLineItem,
   ReservationStatusUpdateEmailPayload,
   ReservationSubmittedEmailPayload,

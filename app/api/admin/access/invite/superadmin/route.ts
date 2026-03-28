@@ -83,12 +83,26 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      await prisma.admin.update({
-        where: { email },
-        data: {
-          is_superadmin: true,
-          team_id: null,
-        },
+      await prisma.$transaction(async (tx) => {
+        await tx.admin.update({
+          where: { email },
+          data: {
+            is_superadmin: true,
+            team_id: null,
+          },
+        });
+
+        if (existingAdmin.team_id) {
+          await tx.team.updateMany({
+            where: {
+              team_id: existingAdmin.team_id,
+              team_leader_admin_id: existingAdmin.user_id,
+            },
+            data: {
+              team_leader_admin_id: null,
+            },
+          });
+        }
       });
 
       return NextResponse.json({ success: true, promotedExistingAdmin: true });

@@ -381,18 +381,6 @@ export function TicketTemplateCanvas() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-200 bg-white/80 px-4 py-2 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-400">
-        <div className="font-medium uppercase tracking-[0.18em]">
-          Fixed Export Surface
-        </div>
-        <div className="flex items-center gap-3">
-          <span>
-            {canvas.width} x {canvas.height}
-          </span>
-          <span>{Math.round(displayScale * 100)}% preview scale</span>
-        </div>
-      </div>
-
       <div ref={containerRef} className="min-h-0 flex-1 overflow-auto bg-zinc-100 p-6 dark:bg-zinc-950">
         <div
           className="mx-auto flex min-h-full items-center justify-center"

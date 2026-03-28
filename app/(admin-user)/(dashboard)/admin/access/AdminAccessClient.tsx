@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "@/components/ui/sonner";
-import { ShieldCheck, Loader2, Plus, Search, Trash2, AlertTriangle, Pencil, Check, X } from "lucide-react";
+import { ShieldCheck, Loader2, Plus, Search, Trash2, AlertTriangle, Pencil, Check, X, MailPlus } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -51,6 +51,7 @@ type AdminAccessClientProps = {
 
 export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = React.useState(true);
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [isSuperadmin, setIsSuperadmin] = React.useState(false);
@@ -74,6 +75,18 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
   const [isDeletingTeam, setIsDeletingTeam] = React.useState(false);
   const [inlineEditTeamId, setInlineEditTeamId] = React.useState<string | null>(null);
   const [inlineEditDraft, setInlineEditDraft] = React.useState("");
+  const [assigningTeamLeaderId, setAssigningTeamLeaderId] = React.useState<string | null>(null);
+  const [setupInvitesSent, setSetupInvitesSent] = React.useState(0);
+  const [isCompletingSetup, setIsCompletingSetup] = React.useState(false);
+  const [createTeamFlowOpen, setCreateTeamFlowOpen] = React.useState(false);
+  const [createTeamFlowStep, setCreateTeamFlowStep] = React.useState<"confirm" | "invite">("confirm");
+  const [createTeamInviteEmail, setCreateTeamInviteEmail] = React.useState("");
+  const [createTeamInviteError, setCreateTeamInviteError] = React.useState("");
+  const [teamInviteConfirm, setTeamInviteConfirm] = React.useState<{
+    teamId: string;
+    teamName: string;
+    email: string;
+  } | null>(null);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
@@ -121,30 +134,84 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
     void loadData();
   }, [loadData]);
 
-  const createTeam = async () => {
+  const isSetupMode = React.useMemo(
+    () => Boolean(teamId && isSuperadmin && searchParams.get("setup") === "1"),
+    [isSuperadmin, searchParams, teamId],
+  );
+
+  React.useEffect(() => {
+    if (!isSetupMode) {
+      setSetupInvitesSent(0);
+      setIsCompletingSetup(false);
+    }
+  }, [isSetupMode, teamId]);
+
+  const openCreateTeamFlow = () => {
     const name = createName.trim();
     if (!name) {
       toast.error("Team name is required.");
       return;
     }
 
+    setCreateTeamInviteEmail("");
+    setCreateTeamInviteError("");
+    setCreateTeamFlowStep("confirm");
+    setCreateTeamFlowOpen(true);
+  };
+
+  const proceedCreateTeamInviteStep = () => {
+    const name = createName.trim();
+    if (!name) {
+      setCreateTeamFlowOpen(false);
+      toast.error("Team name is required.");
+      return;
+    }
+
+    setCreateTeamInviteError("");
+    setCreateTeamFlowStep("invite");
+  };
+
+  const sendCreateTeamInvite = async () => {
+    const name = createName.trim();
+    const email = createTeamInviteEmail.trim().toLowerCase();
+    if (!name) {
+      setCreateTeamInviteError("Team name is required.");
+      return;
+    }
+    if (!email) {
+      setCreateTeamInviteError("Admin email is required.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setCreateTeamInviteError("Enter a valid email address.");
+      return;
+    }
+
     setIsCreating(true);
     try {
-      const res = await fetch("/api/admin/access/teams", {
+      const res = await fetch("/api/admin/access/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ teamName: name, email }),
       });
-      const data = (await res.json()) as { success?: boolean; error?: string };
+      const data = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+      };
       if (!res.ok || !data.success) {
+        if (res.status === 409 || res.status === 400) {
+          setCreateTeamInviteError(data.error || "Unable to proceed with invite.");
+        }
         throw new Error(data.error || "Failed to create team.");
       }
 
+      setCreateTeamFlowOpen(false);
       setCreateName("");
-      toast.success("Team created.");
-      await loadData();
+      setCreateTeamInviteEmail("");
+      setCreateTeamInviteError("");
+      toast.success("Invite sent. Team will be created after the invited admin completes onboarding.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create team.");
+      toast.error(error instanceof Error ? error.message : "Failed to send team invite.");
     } finally {
       setIsCreating(false);
     }
@@ -178,7 +245,7 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
     }
   };
 
-  const sendInvite = async (targetTeamId: string) => {
+  const requestInviteConfirmation = (targetTeamId: string) => {
     const email = (inviteEmail[targetTeamId] ?? "").trim();
     if (!email) {
       setInviteEmailError((prev) => ({ ...prev, [targetTeamId]: "Email is required." }));
@@ -189,32 +256,20 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
       return;
     }
 
-    try {
-      const checkRes = await fetch(
-        `/api/admin/access/invite?teamId=${encodeURIComponent(targetTeamId)}&email=${encodeURIComponent(email)}`,
-      );
-      const checkData = (await checkRes.json()) as {
-        exists?: boolean;
-        isTeamMember?: boolean;
-        error?: string;
-      };
-      if (!checkRes.ok) {
-        toast.error(checkData.error ?? "Failed to check admin status.");
-        return;
-      }
-      if (checkData.exists && checkData.isTeamMember) {
-        setInviteEmailError((prev) => ({
-          ...prev,
-          [targetTeamId]: "This email is already a member of this team.",
-        }));
-        return;
-      }
-    } catch {
-      toast.error("Failed to check admin status.");
-      return;
-    }
-
     setInviteEmailError((prev) => ({ ...prev, [targetTeamId]: "" }));
+    const teamName =
+      teams.find((team) => team.team_id === targetTeamId)?.name ?? "this team";
+    setTeamInviteConfirm({
+      teamId: targetTeamId,
+      teamName,
+      email,
+    });
+  };
+
+  const sendInviteConfirmed = async () => {
+    if (!teamInviteConfirm) return;
+
+    const { teamId: targetTeamId, email } = teamInviteConfirm;
     setInvitingTeamId(targetTeamId);
     try {
       const res = await fetch("/api/admin/access/invite", {
@@ -224,12 +279,23 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
       });
       const data = (await res.json()) as { success?: boolean; error?: string };
       if (!res.ok || !data.success) {
+        if (res.status === 409) {
+          setInviteEmailError((prev) => ({
+            ...prev,
+            [targetTeamId]: data.error || "This email already belongs to an existing admin.",
+          }));
+        }
         throw new Error(data.error || "Failed to send invite.");
       }
 
       setInviteEmail((prev) => ({ ...prev, [targetTeamId]: "" }));
+      setTeamInviteConfirm(null);
       toast.success("Invite email sent.");
+      if (isSetupMode && teamId === targetTeamId) {
+        setSetupInvitesSent((prev) => prev + 1);
+      }
     } catch (error) {
+      setTeamInviteConfirm(null);
       toast.error(error instanceof Error ? error.message : "Failed to send invite.");
     } finally {
       setInvitingTeamId(null);
@@ -369,6 +435,44 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
     }
   };
 
+  const assignTeamLeader = async (targetTeamId: string, adminId: string) => {
+    if (!adminId) return;
+
+    setAssigningTeamLeaderId(adminId);
+    try {
+      const res = await fetch(`/api/admin/access/teams/${targetTeamId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamLeaderAdminId: adminId }),
+      });
+      const data = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to set team leader.");
+      }
+
+      toast.success("Team leader updated.");
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to set team leader.");
+    } finally {
+      setAssigningTeamLeaderId(null);
+    }
+  };
+
+  const completeSetupFlow = () => {
+    if (!teamId) return;
+    if (setupInvitesSent < 1) {
+      toast.error("Invite at least one admin before completing setup.");
+      return;
+    }
+
+    setIsCompletingSetup(true);
+    router.replace(`/admin/access/${teamId}`);
+    setSetupInvitesSent(0);
+    setIsCompletingSetup(false);
+    toast.success("Team setup completed.");
+  };
+
   const selectedTeam = React.useMemo(() => {
     if (teamId) {
       return teams.find((team) => team.team_id === teamId) ?? null;
@@ -441,7 +545,7 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
               <Button
                 onClick={() => void requestSuperadminInvite()}
                 disabled={isInvitingSuperadmin}
-                className="h-8 gap-2 px-3 text-xs md:h-9 md:text-sm"
+                className="h-8 gap-2 px-3 text-xs md:h-9 md:w-44 md:justify-center md:text-sm"
               >
                 {isInvitingSuperadmin ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -461,7 +565,9 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
         <Card className="border-0 bg-transparent py-0 shadow-none md:border md:bg-card md:py-6 md:shadow-sm">
           <CardHeader className="px-0 md:px-6">
             <CardTitle className="text-base md:text-lg">Create Team</CardTitle>
-            <CardDescription>Add a new admin team.</CardDescription>
+            <CardDescription>
+              Team is created only after the invited admin completes onboarding.
+            </CardDescription>
           </CardHeader>
           <CardContent className="px-0 md:px-6">
             <div className="flex items-end gap-2">
@@ -476,9 +582,9 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
                 />
               </div>
               <Button
-                onClick={createTeam}
+                onClick={openCreateTeamFlow}
                 disabled={isCreating}
-                className="h-8 gap-2 px-3 text-xs md:h-9 md:text-sm"
+                className="h-8 gap-2 px-3 text-xs md:h-9 md:w-44 md:justify-center md:text-sm"
               >
                 {isCreating ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -726,7 +832,13 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
           inviteError={inviteEmailError[selectedTeam.team_id] ?? ""}
           onAdminSearchChange={setAdminSearchQuery}
           onRename={() => renameTeam(selectedTeam.team_id)}
-          onInvite={() => void sendInvite(selectedTeam.team_id)}
+          onInvite={() => requestInviteConfirmation(selectedTeam.team_id)}
+          assigningTeamLeaderId={assigningTeamLeaderId}
+          onTeamLeaderChange={(adminId) => void assignTeamLeader(selectedTeam.team_id, adminId)}
+          isSetupMode={isSetupMode}
+          setupInvitesSent={setupInvitesSent}
+          onCompleteSetup={completeSetupFlow}
+          isCompletingSetup={isCompletingSetup}
         />
       ) : (
         <Card>
@@ -735,6 +847,136 @@ export function AdminAccessClient({ teamId }: AdminAccessClientProps) {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={createTeamFlowOpen}
+        onOpenChange={(open) => {
+          if (!isCreating) {
+            setCreateTeamFlowOpen(open);
+            if (!open) {
+              setCreateTeamFlowStep("confirm");
+              setCreateTeamInviteError("");
+              setCreateTeamInviteEmail("");
+            }
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              {createTeamFlowStep === "confirm" ? (
+                <Plus className="h-5 w-5 text-amber-600" />
+              ) : (
+                <MailPlus className="h-5 w-5 text-amber-600" />
+              )}
+            </div>
+            <DialogTitle>
+              {createTeamFlowStep === "confirm" ? "Confirm team name?" : "Invite initial team admin"}
+            </DialogTitle>
+            <DialogDescription>
+              {createTeamFlowStep === "confirm" ? (
+                <>
+                  Team name:{" "}
+                  <span className="font-semibold text-foreground">{createName.trim()}</span>
+                </>
+              ) : (
+                "Enter one admin email. The team will only be created after this invited admin completes onboarding."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {createTeamFlowStep === "invite" && (
+            <div className="space-y-2">
+              <Label htmlFor="create-team-invite-email">Admin email</Label>
+              <Input
+                id="create-team-invite-email"
+                type="email"
+                value={createTeamInviteEmail}
+                onChange={(event) => {
+                  setCreateTeamInviteEmail(event.target.value);
+                  if (createTeamInviteError) setCreateTeamInviteError("");
+                }}
+                placeholder="admin@email.com"
+                className={createTeamInviteError ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+              {createTeamInviteError && (
+                <p className="text-xs text-destructive">{createTeamInviteError}</p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateTeamFlowOpen(false)}
+              disabled={isCreating}
+            >
+              Cancel
+            </Button>
+            {createTeamFlowStep === "confirm" ? (
+              <Button onClick={proceedCreateTeamInviteStep} disabled={isCreating} className="gap-2">
+                <Plus className="h-4 w-4" />
+                OK
+              </Button>
+            ) : (
+              <Button onClick={() => void sendCreateTeamInvite()} disabled={isCreating} className="gap-2">
+                {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MailPlus className="h-4 w-4" />}
+                Send Invite
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(teamInviteConfirm)}
+        onOpenChange={(open) => {
+          if (!open && !invitingTeamId) {
+            setTeamInviteConfirm(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <MailPlus className="h-5 w-5 text-amber-600" />
+            </div>
+            <DialogTitle>Confirm team invite?</DialogTitle>
+            <DialogDescription>
+              Send an admin invite to{" "}
+              <span className="font-semibold text-foreground">
+                {teamInviteConfirm?.email}
+              </span>{" "}
+              for{" "}
+              <span className="font-semibold text-foreground">
+                {teamInviteConfirm?.teamName}
+              </span>
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={Boolean(invitingTeamId)}
+              onClick={() => setTeamInviteConfirm(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void sendInviteConfirmed()}
+              disabled={Boolean(invitingTeamId)}
+              className="gap-2"
+            >
+              {invitingTeamId ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MailPlus className="h-4 w-4" />
+              )}
+              Confirm & Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={showSuperadminConfirm}
