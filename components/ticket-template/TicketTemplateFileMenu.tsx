@@ -24,11 +24,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/components/ui/sonner";
+import { resolveTicketTemplateAssetRefsForSave } from "@/lib/clients/cloudinary-upload";
 import { saveTicketTemplateAction } from "@/lib/actions/saveTicketTemplate";
 import {
   deleteSelectedNode,
   duplicateSelectedNode,
-  registerSavedTicketTemplate,
+  loadTicketTemplate,
   redo,
   resetTicketTemplate,
   serializeTicketTemplateEditor,
@@ -49,6 +50,9 @@ export function TicketTemplateFileMenu() {
   const hasUndo = ticketTemplateState.history.past.length > 0;
   const hasRedo = ticketTemplateState.history.future.length > 0;
   const [isSavingTemplate, setIsSavingTemplate] = React.useState(false);
+  const uploadKeyRef = React.useRef(
+    `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+  );
 
   const exportEditorJson = React.useCallback(() => {
     const payload = {
@@ -98,7 +102,14 @@ export function TicketTemplateFileMenu() {
     setIsSavingTemplate(true);
 
     try {
-      const templateSchema = serializeTicketTemplateEditor(ticketTemplateState);
+      const templateSchema = await resolveTicketTemplateAssetRefsForSave(
+        serializeTicketTemplateEditor(ticketTemplateState),
+        {
+          ticketTemplateId: ticketTemplateState.ticketTemplateId,
+          uploadKey: uploadKeyRef.current,
+        },
+      );
+
       const result = await saveTicketTemplateAction({
         ticketTemplateId: ticketTemplateState.ticketTemplateId ?? undefined,
         templateName,
@@ -110,10 +121,11 @@ export function TicketTemplateFileMenu() {
       }
 
       dispatch(
-        registerSavedTicketTemplate({
+        loadTicketTemplate({
           ticketTemplateId: result.ticketTemplateId,
           loadedVersionId: result.ticketTemplateVersionId,
           title: templateName,
+          template: templateSchema,
         }),
       );
 

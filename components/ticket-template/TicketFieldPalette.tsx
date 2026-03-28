@@ -13,14 +13,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
-import { uploadImageToCloudinary } from "@/lib/clients/cloudinary-upload";
 import {
   TICKET_TEMPLATE_FIELD_OPTIONS,
   addAssetNode,
   addFieldNode,
   addQrNode,
 } from "@/lib/features/ticketTemplate/ticketTemplateSlice";
-import { useAppDispatch, useAppSelector } from "@/lib/hooks";
+import { useAppDispatch } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
 
 async function readPngFile(file: File) {
@@ -54,14 +53,7 @@ async function readPngFile(file: File) {
 
 export function TicketFieldPalette() {
   const dispatch = useAppDispatch();
-  const ticketTemplateId = useAppSelector(
-    (state) => state.ticketTemplate.ticketTemplateId,
-  );
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const uploadKeyRef = React.useRef(
-    `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-  );
-  const [isUploadingAsset, setIsUploadingAsset] = React.useState(false);
 
   const handleAssetUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -78,19 +70,12 @@ export function TicketFieldPalette() {
     }
 
     try {
-      setIsUploadingAsset(true);
       const asset = await readPngFile(file);
-      const uploaded = await uploadImageToCloudinary(file, "ticket-template-asset", {
-        ticketTemplateId,
-        uploadKey: uploadKeyRef.current,
-      });
-
       dispatch(
         addAssetNode({
-          src: uploaded.secureUrl,
+          src: asset.src,
           width: asset.width,
           height: asset.height,
-          assetKey: uploaded.publicId,
           name: file.name,
         }),
       );
@@ -98,8 +83,6 @@ export function TicketFieldPalette() {
       const message =
         error instanceof Error ? error.message : "Unable to import the PNG asset.";
       toast.error(message);
-    } finally {
-      setIsUploadingAsset(false);
     }
 
     event.target.value = "";
@@ -134,11 +117,10 @@ export function TicketFieldPalette() {
             type="button"
             variant="outline"
             className="w-full justify-start"
-            disabled={isUploadingAsset}
             onClick={() => fileInputRef.current?.click()}
           >
             <ImagePlus className="mr-2 h-4 w-4 text-blue-600" />
-            {isUploadingAsset ? "Uploading PNG Asset..." : "Upload PNG Asset"}
+            Upload PNG Asset
           </Button>
         </div>
 

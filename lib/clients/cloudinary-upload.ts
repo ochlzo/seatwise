@@ -3,6 +3,8 @@ export type UploadPurpose =
   | "avatar-custom"
   | "ticket-template-asset";
 
+import type { TicketTemplateVersion } from "@/lib/tickets/types";
+
 type SignedUploadResponse = {
   uploadUrl: string;
   apiKey: string;
@@ -82,5 +84,57 @@ export async function uploadImageToCloudinary(
   return {
     secureUrl: uploadData.secure_url,
     publicId: uploadData.public_id,
+  };
+}
+
+type ResolveTicketTemplateAssetRefsOptions = {
+  ticketTemplateId?: string | null;
+  uploadKey?: string | null;
+  uploadAsset?: (
+    file: File | string,
+    purpose: UploadPurpose,
+    options?: {
+      ticketTemplateId?: string | null;
+      uploadKey?: string | null;
+    },
+  ) => Promise<CloudinaryUploadResult>;
+};
+
+export async function resolveTicketTemplateAssetRefsForSave(
+  templateSchema: TicketTemplateVersion,
+  options?: ResolveTicketTemplateAssetRefsOptions,
+): Promise<TicketTemplateVersion> {
+  const uploadAsset = options?.uploadAsset ?? uploadImageToCloudinary;
+
+  const nodes = await Promise.all(
+    templateSchema.nodes.map(async (node) => {
+      if (node.kind !== "asset") {
+        return node;
+      }
+
+      if (node.assetKey) {
+        return node;
+      }
+
+      if (!node.src) {
+        throw new Error(`Asset "${node.name ?? node.id}" is missing local image data.`);
+      }
+
+      const uploaded = await uploadAsset(node.src, "ticket-template-asset", {
+        ticketTemplateId: options?.ticketTemplateId,
+        uploadKey: options?.uploadKey,
+      });
+
+      return {
+        ...node,
+        src: uploaded.secureUrl,
+        assetKey: uploaded.publicId,
+      };
+    }),
+  );
+
+  return {
+    canvas: templateSchema.canvas,
+    nodes,
   };
 }

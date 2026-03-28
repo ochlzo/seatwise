@@ -4,7 +4,7 @@
 
 **Goal:** Add an admin-managed ticket template system with a fixed-size editor, immutable template versions, server-side ticket rendering/PDF email delivery, and QR-based admin ticket consumption with public verification.
 
-**Architecture:** Reuse the existing admin/editor patterns already used by seatmaps: a dedicated builder route, Prisma-backed template storage, Cloudinary-hosted assets, and small service modules in `lib/`. Ticket templates will be assigned per show, every save will create an immutable template version, reservation records will store the exact version used, and QR scans will branch into an admin-only consume flow versus a public verification page. Consuming a ticket will mark its seat assignments as `CONSUMED` and reuse the current inactive gray seat visual in the seatmap preview.
+**Architecture:** Reuse the existing admin/editor patterns already used by seatmaps: a dedicated admin builder route, Prisma-backed template storage, Cloudinary-hosted assets, and small service modules in `lib/`. Ticket templates will be assigned per show, every save will create an immutable template version, reservation records will store the exact version used, and QR scans will branch into an admin-only consume flow versus a public verification page. Consuming a ticket will mark its seat assignments as `CONSUMED` and reuse the current inactive gray seat visual in the seatmap preview.
 
 **Tech Stack:** Next.js App Router, React, Redux Toolkit, react-konva, Prisma/PostgreSQL, Cloudinary uploads, `pdf-lib`, `qrcode`, `sharp`, `qr-scanner`, existing Gmail raw-message sender
 
@@ -94,7 +94,8 @@
 **Admin routes and pages**
 - Create: `app/(admin-user)/(dashboard)/admin/ticket-templates/page.tsx`
 - Create: `app/(admin-user)/(dashboard)/admin/ticket-templates/TicketTemplateTable.tsx`
-- Modify: `app/(admin-user)/ticket-builder/page.tsx`
+- Create: `app/(admin-user)/ticket-builder/page.tsx`
+- Create: `components/ticket-template/TicketBuilderPageClient.tsx`
 - Create: `app/(admin-user)/(dashboard)/admin/shows/[showId]/scanner/page.tsx`
 - Create: `app/ticket/verify/[token]/page.tsx`
 - Create: `app/api/ticket-templates/route.ts`
@@ -297,7 +298,8 @@
 ### Task 4: Replace the placeholder builder with a fixed-size ticket editor
 
 **Files:**
-- Modify: `app/(admin-user)/ticket-builder/page.tsx`
+- Create: `app/(admin-user)/ticket-builder/page.tsx`
+- Create: `components/ticket-template/TicketBuilderPageClient.tsx`
 - Create: `components/ticket-template/ticket-template-page-header.tsx`
 - Create: `components/ticket-template/ticket-template-sidebar.tsx`
 - Create: `components/ticket-template/TicketTemplateCanvas.tsx`
@@ -371,12 +373,14 @@
   - Add a `ticket-template-asset` purpose with admin-only access.
   - Store assets under a ticket-template-specific Cloudinary folder.
 
-- [ ] **Step 3: Wire direct uploads into the builder**
+- [ ] **Step 3: Wire save-time uploads into the builder**
   - Reuse the current signed-upload flow used elsewhere in the app.
   - Restrict uploads to PNG.
+  - Keep uploaded assets local in the editor first and only upload them to Cloudinary during Save.
 
 - [ ] **Step 4: Implement "Save Template"**
   - Serialize the normalized editor schema.
+  - Resolve local asset previews into Cloudinary refs during the save flow.
   - Call the save action.
   - Handle "new template" vs "new version of existing template".
 
@@ -591,7 +595,7 @@
 
 - [ ] **Step 2: Run critical manual flows**
   - Admin creates a ticket template from a blank editor.
-  - Admin uploads PNG assets, reorders them, and saves version 1.
+  - Admin adds PNG assets locally in the editor, reorders them, and saves version 1.
   - Admin edits the template and saves version 2.
   - Admin assigns the template to a show.
   - Admin opens the scanner from `ShowDetailForm.tsx`, scans a fresh ticket, and sees the seat update to the inactive gray state in the seatmap.

@@ -12,6 +12,7 @@ import {
   createEmptyTicketTemplate,
   normalizeTemplateVersion,
 } from "./templateSchema.ts";
+import { resolveTicketTemplateAssetRefsForSave } from "../clients/cloudinary-upload.ts";
 import { serializeTicketTemplateEditor } from "../features/ticketTemplate/ticketTemplateSlice.ts";
 
 type EditorSliceModule = {
@@ -23,10 +24,10 @@ type EditorSliceModule = {
 
 async function loadEditorReducer() {
   try {
-    const module = (await import(
+    const ticketTemplateModule = (await import(
       "../features/ticketTemplate/ticketTemplateSlice.ts"
     )) as EditorSliceModule;
-    return module.default;
+    return ticketTemplateModule.default;
   } catch {
     return null;
   }
@@ -232,6 +233,79 @@ test("serializeTicketTemplateEditor preserves editable node properties for save 
       y: 110,
       size: 220,
       opacity: 0.8,
+    },
+  ]);
+});
+
+test("resolveTicketTemplateAssetRefsForSave uploads only local asset previews during save", async () => {
+  const template = createEmptyTicketTemplate();
+  template.nodes.push(
+    {
+      id: "asset-local",
+      kind: "asset",
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 180,
+      src: "data:image/png;base64,LOCAL_PREVIEW",
+      name: "local.png",
+      opacity: 1,
+    },
+    {
+      id: "asset-cloudinary",
+      kind: "asset",
+      x: 320,
+      y: 0,
+      width: 120,
+      height: 120,
+      src: "https://res.cloudinary.com/demo/image/upload/v1/already.png",
+      assetKey: "seatwise/ticket_templates/template-1/assets/already",
+      name: "already.png",
+      opacity: 1,
+    },
+  );
+
+  const uploadCalls: Array<{ file: File | string; purpose: string }> = [];
+
+  const resolved = await resolveTicketTemplateAssetRefsForSave(template, {
+    ticketTemplateId: "template-1",
+    uploadKey: "draft-1",
+    uploadAsset: async (file, purpose) => {
+      uploadCalls.push({ file, purpose });
+      return {
+        secureUrl: "https://res.cloudinary.com/demo/image/upload/v1/local.png",
+        publicId: "seatwise/ticket_templates/template-1/assets/local",
+      };
+    },
+  });
+
+  assert.equal(uploadCalls.length, 1);
+  assert.equal(uploadCalls[0]?.file, "data:image/png;base64,LOCAL_PREVIEW");
+  assert.equal(uploadCalls[0]?.purpose, "ticket-template-asset");
+  assert.deepEqual(resolved.nodes, [
+    {
+      id: "asset-local",
+      kind: "asset",
+      x: 0,
+      y: 0,
+      width: 300,
+      height: 180,
+      src: "https://res.cloudinary.com/demo/image/upload/v1/local.png",
+      assetKey: "seatwise/ticket_templates/template-1/assets/local",
+      name: "local.png",
+      opacity: 1,
+    },
+    {
+      id: "asset-cloudinary",
+      kind: "asset",
+      x: 320,
+      y: 0,
+      width: 120,
+      height: 120,
+      src: "https://res.cloudinary.com/demo/image/upload/v1/already.png",
+      assetKey: "seatwise/ticket_templates/template-1/assets/already",
+      name: "already.png",
+      opacity: 1,
     },
   ]);
 });
