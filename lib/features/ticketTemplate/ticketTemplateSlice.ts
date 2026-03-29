@@ -151,7 +151,11 @@ function pushHistory(state: TicketTemplateState) {
   state.hasUnsavedChanges = true;
 }
 
-function clampNumber(value: unknown, fallback: number, minimum = 0) {
+function clampNumber(
+  value: unknown,
+  fallback: number,
+  minimum = Number.NEGATIVE_INFINITY,
+) {
   if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
     return fallback;
   }
@@ -678,8 +682,8 @@ const ticketTemplateSlice = createSlice({
       const pastedNodes = state.clipboard.map((node) => {
         const copy = JSON.parse(JSON.stringify(node)) as TicketTemplateEditorNode;
         copy.id = uuidv4();
-        copy.x = clampNumber(copy.x + offsetX, copy.x, 0);
-        copy.y = clampNumber(copy.y + offsetY, copy.y, 0);
+        copy.x = clampNumber(copy.x + offsetX, copy.x);
+        copy.y = clampNumber(copy.y + offsetY, copy.y);
         return copy;
       });
 
@@ -712,8 +716,8 @@ const ticketTemplateSlice = createSlice({
         const node = state.nodes[nodeIndex];
         state.nodes[nodeIndex] = {
           ...node,
-          x: clampNumber(node.x + dx, node.x, 0),
-          y: clampNumber(node.y + dy, node.y, 0),
+          x: clampNumber(node.x + dx, node.x),
+          y: clampNumber(node.y + dy, node.y),
         };
       });
     },

@@ -53,6 +53,7 @@ model Show {
   seatmap          Seatmap?      @relation(fields: [seatmap_id], references: [seatmap_id])
   team             Team          @relation(fields: [team_id], references: [team_id])
   ticketTemplate   TicketTemplate? @relation(fields: [ticket_template_id, team_id], references: [ticket_template_id, team_id], onDelete: Restrict)
+  ticketTemplateLinks ShowTicketTemplate[]
 
   @@index([team_id])
   @@index([ticket_template_id])
@@ -179,11 +180,25 @@ model TicketTemplate {
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   shows              Show[]
+  showLinks          ShowTicketTemplate[]
   team               Team                    @relation(fields: [team_id], references: [team_id])
   versions           TicketTemplateVersion[]
 
   @@unique([ticket_template_id, team_id])
   @@unique([team_id, template_name])
+  @@index([team_id])
+}
+
+model ShowTicketTemplate {
+  show_id             String
+  ticket_template_id  String
+  team_id             String
+  createdAt           DateTime        @default(now())
+  show                Show            @relation(fields: [show_id], references: [show_id], onDelete: Cascade)
+  ticketTemplate      TicketTemplate  @relation(fields: [ticket_template_id, team_id], references: [ticket_template_id, team_id], onDelete: Restrict)
+
+  @@id([show_id, ticket_template_id])
+  @@index([ticket_template_id])
   @@index([team_id])
 }
 

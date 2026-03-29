@@ -4,7 +4,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import type { ShowStatus } from "@prisma/client";
+import { Prisma, type ShowStatus } from "@prisma/client";
 import { validateShowPayload } from "@/lib/actions/showValidation";
 import {
   assertShowCanMoveToRestrictedStatus,
@@ -93,6 +93,7 @@ type UpdateShowPayload = {
   show_start_date: string | Date;
   show_end_date: string | Date;
   seatmap_id?: string | null;
+  ticket_template_ids?: string[] | null;
   ticket_template_id?: string | null;
   scheds?: UpdateShowSched[];
   category_sets?: UpdateCategorySet[];
@@ -359,13 +360,26 @@ export async function updateShowAction(
       show_start_date,
       show_end_date,
       seatmap_id,
+      ticket_template_ids = [],
       ticket_template_id,
       scheds = [],
       category_sets = [],
     } = data;
 
     const trimmedSeatmapId = seatmap_id?.trim() || null;
-    const trimmedTicketTemplateId = ticket_template_id?.trim() || null;
+    const normalizedTicketTemplateIds = Array.from(
+      new Set(
+        (Array.isArray(ticket_template_ids)
+          ? ticket_template_ids
+          : ticket_template_id
+            ? [ticket_template_id]
+            : []
+        )
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const legacyTicketTemplateId = normalizedTicketTemplateIds[0] ?? null;
     const seatmap = trimmedSeatmapId
       ? await prisma.seatmap.findUnique({
           where: { seatmap_id: trimmedSeatmapId },
@@ -442,17 +456,23 @@ export async function updateShowAction(
       throw new Error("Show not found.");
     }
 
-    const ticketTemplate = trimmedTicketTemplateId
-      ? await prisma.ticketTemplate.findFirst({
+    const ticketTemplates = normalizedTicketTemplateIds.length
+      ? await prisma.ticketTemplate.findMany({
           where: {
-            ticket_template_id: trimmedTicketTemplateId,
+            ticket_template_id: { in: normalizedTicketTemplateIds },
             team_id: currentShow.team_id,
           },
           select: {
             ticket_template_id: true,
           },
         })
-      : null;
+      : [];
+    const ticketTemplateIdSet = new Set(
+      ticketTemplates.map((template) => template.ticket_template_id),
+    );
+    const allTicketTemplatesExist = normalizedTicketTemplateIds.every((templateId) =>
+      ticketTemplateIdSet.has(templateId),
+    );
 
     const oldStatus = currentShow?.show_status;
     const newStatus = show_status;
@@ -500,12 +520,12 @@ export async function updateShowAction(
       gcash_number,
       gcash_account_name,
       seatmap_id: trimmedSeatmapId,
-      ticket_template_id: trimmedTicketTemplateId,
+      ticket_template_ids: normalizedTicketTemplateIds,
       scheds,
       categorySets: category_sets,
       seatIds: seatmap?.seats.map((seat) => seat.seat_id) ?? [],
       seatmapExists: Boolean(seatmap),
-      ticketTemplateExists: !trimmedTicketTemplateId || Boolean(ticketTemplate),
+      ticketTemplatesExist: allTicketTemplatesExist,
     });
 
     if (payloadValidation.hasValidationErrors) {
@@ -579,9 +599,21 @@ export async function updateShowAction(
             gcash_number: gcash_number?.trim() || undefined,
             gcash_account_name: gcash_account_name?.trim() || undefined,
             seatmap_id: trimmedSeatmapId || undefined,
-            ticket_template_id: trimmedTicketTemplateId,
+            ticket_template_id: legacyTicketTemplateId,
           },
         });
+        await tx.$executeRaw(
+          Prisma.sql`DELETE FROM "ShowTicketTemplate" WHERE "show_id" = ${showId}`,
+        );
+        for (const ticketTemplateId of normalizedTicketTemplateIds) {
+          await tx.$executeRaw(
+            Prisma.sql`
+              INSERT INTO "ShowTicketTemplate" ("show_id", "ticket_template_id", "team_id")
+              VALUES (${showId}, ${ticketTemplateId}, ${currentShow.team_id})
+              ON CONFLICT ("show_id", "ticket_template_id") DO NOTHING
+            `,
+          );
+        }
 
         if (hasReservationHistory) {
           currentShow.scheds.forEach((sched) => {

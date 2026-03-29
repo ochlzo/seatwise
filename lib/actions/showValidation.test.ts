@@ -16,6 +16,7 @@ function buildBasePayload() {
     gcash_number: "09171234567",
     gcash_account_name: "Seatwise Admin",
     seatmap_id: null,
+    ticket_template_ids: [],
     ticket_template_id: null,
     scheds: [
       {
@@ -40,6 +41,7 @@ function buildBasePayload() {
     categorySets: [],
     seatIds: [],
     seatmapExists: false,
+    ticketTemplatesExist: true,
     ticketTemplateExists: true,
   };
 }
@@ -47,20 +49,23 @@ function buildBasePayload() {
 test("validateShowPayload rejects an unknown ticket template selection", () => {
   const result = validateShowPayload({
     ...buildBasePayload(),
-    ticket_template_id: "ticket-template-missing",
-    ticketTemplateExists: false,
+    ticket_template_ids: ["ticket-template-missing"],
+    ticketTemplatesExist: false,
   });
 
   assert.equal(result.hasValidationErrors, true);
   assert.equal(result.validation.fieldErrors.ticket_template_id, true);
-  assert.equal(result.errorMessage, "Selected ticket template was not found.");
+  assert.equal(
+    result.errorMessage,
+    "One or more selected ticket templates were not found.",
+  );
 });
 
 test("validateShowPayload allows a valid ticket template selection", () => {
   const result = validateShowPayload({
     ...buildBasePayload(),
-    ticket_template_id: "ticket-template-1",
-    ticketTemplateExists: true,
+    ticket_template_ids: ["ticket-template-1"],
+    ticketTemplatesExist: true,
   });
 
   assert.equal(result.validation.fieldErrors.ticket_template_id, false);

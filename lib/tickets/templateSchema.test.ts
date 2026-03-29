@@ -239,6 +239,75 @@ test("serializeTicketTemplateEditor preserves editable node properties for save 
   ]);
 });
 
+test("ticket template save/load preserves off-canvas coordinates without clamping", async () => {
+  const reducer = await loadEditorReducer();
+  assert.ok(reducer, "ticket template reducer should exist");
+
+  let editorState = reducer(undefined, { type: "@@INIT" }) as
+    | {
+        canvas: { width: number; height: number };
+        nodes: Array<{
+          id: string;
+          kind: string;
+          x: number;
+          y: number;
+          width?: number;
+          height?: number;
+        }>;
+        selectedNodeId: string | null;
+      }
+    | undefined;
+
+  editorState = reducer(editorState, {
+    type: "ticketTemplate/addAssetNode",
+    payload: {
+      width: 640,
+      height: 280,
+      src: "data:image/png;base64,TEST_IMAGE",
+      x: 120,
+      y: 90,
+    },
+  }) as typeof editorState;
+
+  const assetId = editorState.selectedNodeId;
+  assert.ok(assetId);
+
+  editorState = reducer(editorState, {
+    type: "ticketTemplate/moveSelectedNodesBy",
+    payload: { dx: -240, dy: -180 },
+  }) as typeof editorState;
+
+  const movedAsset = editorState.nodes.find((node) => node.id === assetId);
+  assert.ok(movedAsset);
+  assert.equal(movedAsset.x, -120);
+  assert.equal(movedAsset.y, -90);
+  assert.equal(movedAsset.width, 640);
+  assert.equal(movedAsset.height, 280);
+
+  const serialized = serializeTicketTemplateEditor({
+    canvas: editorState.canvas,
+    nodes: editorState.nodes,
+  });
+  const serializedAsset = serialized.nodes.find((node) => node.id === assetId);
+  assert.ok(serializedAsset);
+  assert.equal(serializedAsset.x, -120);
+  assert.equal(serializedAsset.y, -90);
+
+  const reloadedState = reducer(editorState, {
+    type: "ticketTemplate/loadTicketTemplate",
+    payload: {
+      template: serialized,
+    },
+  }) as typeof editorState;
+
+  const reloadedAsset = reloadedState.nodes.find((node) => node.id === assetId);
+  assert.ok(reloadedAsset);
+  assert.equal(reloadedAsset.x, -120);
+  assert.equal(reloadedAsset.y, -90);
+  assert.equal(reloadedAsset.width, 640);
+  assert.equal(reloadedAsset.height, 280);
+});
+
 test("resolveTicketTemplateAssetRefsForSave uploads only local asset previews during save", async () => {
   const template = createEmptyTicketTemplate();
   template.nodes.push(

@@ -31,7 +31,7 @@ export function getReservationRoomModeConfig(
         "Review the selected seats and total before capturing the final admin confirmation for this walk-in sale.",
       finalConfirmationButtonLabel: "Finalize walk-in sale",
       paymentBadgeLabel: "Walk-In Review",
-      contactActionLabel: "Continue to Walk-In Payment",
+      contactActionLabel: "Continue to Ticket Design",
     };
   }
 
@@ -47,6 +47,6 @@ export function getReservationRoomModeConfig(
     finalConfirmationDescription: null,
     finalConfirmationButtonLabel: null,
     paymentBadgeLabel: "Payment",
-    contactActionLabel: "Continue to Payment",
+    contactActionLabel: "Continue to Ticket Design",
   };
 }

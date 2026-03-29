@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ReservationStatus, type Prisma, type ShowStatus } from "@prisma/client";
+import { Prisma, ReservationStatus, type ShowStatus } from "@prisma/client";
 import {
   getEffectiveSchedStatus,
   getEffectiveShowStatus,
@@ -155,8 +155,68 @@ export async function getShowById(showId: string) {
     return null;
   }
 
+  let linkedTemplateIds: string[] = [];
+  try {
+    const rows = await prisma.$queryRaw<Array<{ ticket_template_id: string }>>(
+      Prisma.sql`
+        SELECT "ticket_template_id"
+        FROM "ShowTicketTemplate"
+        WHERE "show_id" = ${showId}
+        ORDER BY "createdAt" ASC
+      `,
+    );
+    linkedTemplateIds = rows.map((row) => row.ticket_template_id);
+  } catch {
+    // Backward compatibility: older DB/client states may not have the join table yet.
+    linkedTemplateIds = [];
+  }
+
+  const orderedTemplateIds =
+    linkedTemplateIds.length > 0
+      ? linkedTemplateIds
+      : show.ticket_template_id
+        ? [show.ticket_template_id]
+        : [];
+
+  const templates = orderedTemplateIds.length
+    ? await prisma.ticketTemplate.findMany({
+        where: {
+          ticket_template_id: {
+            in: orderedTemplateIds,
+          },
+        },
+        select: {
+          ticket_template_id: true,
+          template_name: true,
+          versions: {
+            orderBy: { version_number: "desc" },
+            take: 1,
+            select: {
+              version_number: true,
+            },
+          },
+        },
+      })
+    : [];
+
+  const templateById = new Map(
+    templates.map((template) => [template.ticket_template_id, template]),
+  );
+  const ticket_templates = orderedTemplateIds
+    .map((templateId) => {
+      const template = templateById.get(templateId);
+      if (!template) return null;
+      return {
+        ticket_template_id: template.ticket_template_id,
+        template_name: template.template_name,
+        latestVersionNumber: template.versions[0]?.version_number ?? null,
+      };
+    })
+    .filter((template): template is NonNullable<typeof template> => Boolean(template));
+
   return {
     ...show,
+    ticket_templates,
     blockingReservationCount,
     show_status: getEffectiveShowStatus(show),
     scheds: show.scheds.map((sched) => ({

@@ -91,7 +91,7 @@ const createDefaultFormData = () => ({
   show_start_date: "",
   show_end_date: "",
   seatmap_id: "",
-  ticket_template_id: "",
+  ticket_template_ids: [] as string[],
 });
 
 const createDefaultTimeRange = (): TimeRangeDraft => ({
@@ -260,16 +260,10 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
   const filteredTicketTemplates = React.useMemo(() => {
     const query = ticketTemplateQuery.trim().toLowerCase();
     if (!query) return ticketTemplates;
-    const selected = ticketTemplates.find(
-      (template) => template.ticket_template_id === formData.ticket_template_id,
-    );
-    if (selected && selected.template_name.toLowerCase() === query) {
-      return ticketTemplates;
-    }
     return ticketTemplates.filter((template) =>
       template.template_name.toLowerCase().includes(query),
     );
-  }, [formData.ticket_template_id, ticketTemplateQuery, ticketTemplates]);
+  }, [ticketTemplateQuery, ticketTemplates]);
   const selectedTeam = React.useMemo(
     () => teams.find((team) => team.team_id === selectedTeamId) ?? null,
     [selectedTeamId, teams],
@@ -479,7 +473,17 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
 
       const parsed = JSON.parse(rawDraft) as Partial<CreateShowDraft>;
       if (parsed.formData) {
-        setFormData((prev) => ({ ...prev, ...parsed.formData }));
+        setFormData((prev) => {
+          const next = { ...prev, ...parsed.formData };
+          const legacyTicketTemplateId = (parsed.formData as { ticket_template_id?: string })
+            .ticket_template_id;
+          if (!Array.isArray(next.ticket_template_ids)) {
+            next.ticket_template_ids = legacyTicketTemplateId
+              ? [legacyTicketTemplateId]
+              : [];
+          }
+          return next;
+        });
       }
       if (typeof parsed.selectedTeamId === "string" || parsed.selectedTeamId === null) {
         setSelectedTeamId(parsed.selectedTeamId);
@@ -982,20 +986,25 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     }
   }, [formData.seatmap_id, seatmapQuery, seatmaps]);
 
-  React.useEffect(() => {
-    if (!formData.ticket_template_id) {
-      if (ticketTemplateQuery) {
-        setTicketTemplateQuery("");
-      }
-      return;
-    }
-    const match = ticketTemplates.find(
-      (template) => template.ticket_template_id === formData.ticket_template_id,
-    );
-    if (match && match.template_name !== ticketTemplateQuery) {
-      setTicketTemplateQuery(match.template_name);
-    }
-  }, [formData.ticket_template_id, ticketTemplateQuery, ticketTemplates]);
+  const selectedTicketTemplates = React.useMemo(
+    () =>
+      ticketTemplates.filter((template) =>
+        formData.ticket_template_ids.includes(template.ticket_template_id),
+      ),
+    [formData.ticket_template_ids, ticketTemplates],
+  );
+
+  const toggleTicketTemplateSelection = React.useCallback((templateId: string) => {
+    setFormData((prev) => {
+      const exists = prev.ticket_template_ids.includes(templateId);
+      return {
+        ...prev,
+        ticket_template_ids: exists
+          ? prev.ticket_template_ids.filter((id) => id !== templateId)
+          : [...prev.ticket_template_ids, templateId],
+      };
+    });
+  }, []);
 
   const removeSched = (id: string) => {
     setScheds((prev) => prev.filter((s) => s.id !== id));
@@ -1272,7 +1281,10 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
         ...formData,
         team_id: selectedTeamId || undefined,
         seatmap_id: formData.seatmap_id,
-        ticket_template_id: formData.ticket_template_id || undefined,
+        ticket_template_ids:
+          formData.ticket_template_ids.length > 0
+            ? formData.ticket_template_ids
+            : undefined,
         scheds: validScheds.map((sched) => ({
           client_id: sched.id,
           sched_date: sched.sched_date,
@@ -1749,7 +1761,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
               Presentation Setup
             </CardTitle>
             <CardDescription>
-              Select a seatmap template and optional ticket template for this production.
+              Select a seatmap template and optional ticket templates for this production.
             </CardDescription>
           </div>
         </CardHeader>
@@ -1819,7 +1831,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
                   htmlFor="ticket-template"
                   className="text-xs font-semibold text-muted-foreground"
                 >
-                  Ticket Template
+                  Ticket Templates
                 </Label>
                 <Button
                   type="button"
@@ -1831,55 +1843,62 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
                   Manage Ticket Templates
                 </Button>
               </div>
-              <Combobox
-                value={formData.ticket_template_id}
-                onValueChange={(value) => {
-                  const nextValue = value ?? "";
-                  setFormData({ ...formData, ticket_template_id: nextValue });
-                  const match = ticketTemplates.find(
-                    (template) => template.ticket_template_id === nextValue,
-                  );
-                  if (match) {
-                    setTicketTemplateQuery(match.template_name);
-                  }
-                }}
-              >
-                <ComboboxInput
-                  id="ticket-template"
-                  placeholder={
-                    isLoadingTicketTemplates
-                      ? "Loading ticket templates..."
-                      : "Select a ticket template"
-                  }
-                  disabled={isLoadingTicketTemplates}
-                  value={ticketTemplateQuery}
-                  onChange={(event) => setTicketTemplateQuery(event.target.value)}
-                />
-                <ComboboxContent>
-                  <ComboboxList>
-                    {isLoadingTicketTemplates ? (
-                      <ComboboxItem value="loading-ticket-templates" disabled>
-                        Loading ticket templates...
-                      </ComboboxItem>
-                    ) : (
-                      filteredTicketTemplates.map((template) => (
-                        <ComboboxItem
-                          key={template.ticket_template_id}
-                          value={template.ticket_template_id}
-                        >
+              <Input
+                id="ticket-template"
+                placeholder={
+                  isLoadingTicketTemplates
+                    ? "Loading ticket templates..."
+                    : "Search ticket templates"
+                }
+                disabled={isLoadingTicketTemplates}
+                value={ticketTemplateQuery}
+                onChange={(event) => setTicketTemplateQuery(event.target.value)}
+              />
+              <div className="max-h-48 overflow-auto rounded-md border border-sidebar-border/70 bg-muted/20 p-1.5">
+                {isLoadingTicketTemplates ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    Loading ticket templates...
+                  </div>
+                ) : filteredTicketTemplates.length === 0 ? (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    No ticket templates found.
+                  </div>
+                ) : (
+                  filteredTicketTemplates.map((template) => {
+                    const isSelected = formData.ticket_template_ids.includes(
+                      template.ticket_template_id,
+                    );
+                    return (
+                      <button
+                        key={template.ticket_template_id}
+                        type="button"
+                        onClick={() => toggleTicketTemplateSelection(template.ticket_template_id)}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
+                          isSelected
+                            ? "bg-primary/10 text-primary"
+                            : "hover:bg-accent hover:text-accent-foreground",
+                        )}
+                      >
+                        <span className="truncate">
                           {template.template_name}
                           {template.latestVersionNumber
                             ? ` (v${template.latestVersionNumber})`
                             : ""}
-                        </ComboboxItem>
-                      ))
-                    )}
-                    {!isLoadingTicketTemplates && ticketTemplates.length === 0 && (
-                      <ComboboxEmpty>No ticket templates found.</ComboboxEmpty>
-                    )}
-                  </ComboboxList>
-                </ComboboxContent>
-              </Combobox>
+                        </span>
+                        <span className="text-xs font-medium">
+                          {isSelected ? "Selected" : "Select"}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {selectedTicketTemplates.length === 0
+                  ? "No ticket templates selected. Customers must choose from selected designs during reservation."
+                  : `${selectedTicketTemplates.length} ticket template${selectedTicketTemplates.length === 1 ? "" : "s"} selected.`}
+              </p>
             </div>
           </div>
 

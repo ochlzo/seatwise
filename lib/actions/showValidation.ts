@@ -36,11 +36,13 @@ type ValidateShowPayloadArgs = {
   gcash_number?: string;
   gcash_account_name?: string;
   seatmap_id?: string | null;
+  ticket_template_ids?: string[] | null;
   ticket_template_id?: string | null;
   scheds: ShowSchedInput[];
   categorySets: ShowCategorySetInput[];
   seatIds: string[];
   seatmapExists: boolean;
+  ticketTemplatesExist?: boolean;
   ticketTemplateExists?: boolean;
 };
 
@@ -144,7 +146,7 @@ const buildValidationMessage = (validation: ValidationState) => {
   if (fieldErrors.show_start_date || fieldErrors.show_end_date) {
     return "A valid show date range is required.";
   }
-  if (fieldErrors.ticket_template_id) return "Selected ticket template was not found.";
+  if (fieldErrors.ticket_template_id) return "One or more selected ticket templates were not found.";
   if (fieldErrors.seatmap_id) return "A seatmap is required for UPCOMING or OPEN shows.";
   if (cardErrors.schedule) {
     return "Schedules must cover every show date without overlapping time ranges.";
@@ -170,13 +172,23 @@ export function validateShowPayload(args: ValidateShowPayloadArgs) {
     gcash_number,
     gcash_account_name,
     seatmap_id,
+    ticket_template_ids,
     ticket_template_id,
     scheds,
     categorySets,
     seatIds,
     seatmapExists,
+    ticketTemplatesExist,
     ticketTemplateExists = true,
   } = args;
+
+  const normalizedTicketTemplateIds = Array.isArray(ticket_template_ids)
+    ? ticket_template_ids.map((value) => value.trim()).filter(Boolean)
+    : [];
+  const hasTicketTemplateSelection =
+    normalizedTicketTemplateIds.length > 0 || !!ticket_template_id?.trim();
+  const templatesExist =
+    ticketTemplatesExist ?? ticketTemplateExists;
 
   const hasDateRange = !!show_start_date && !!show_end_date;
   const dateRangeInvalid = hasDateRange
@@ -212,7 +224,7 @@ export function validateShowPayload(args: ValidateShowPayloadArgs) {
     gcash_account_name: !gcash_account_name?.trim(),
     seatmap_id: requiresSeatmap && !seatmap_id?.trim(),
     ticket_template_id:
-      !!ticket_template_id?.trim() && !ticketTemplateExists,
+      hasTicketTemplateSelection && !templatesExist,
   };
 
   const allClientSchedIds = scheds.map((sched) => sched.client_id);

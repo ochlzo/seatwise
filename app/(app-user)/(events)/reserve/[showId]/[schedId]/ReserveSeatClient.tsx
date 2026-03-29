@@ -33,6 +33,7 @@ import { toast } from "@/components/ui/sonner";
 import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
 import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
 import { getOrCreateGuestId } from "@/lib/guest";
+import { cn } from "@/lib/utils";
 import {
   getReservationRoomModeConfig,
   type ReservationRoomMode,
@@ -102,7 +103,15 @@ const EMPTY_CONTACT_ERRORS: ContactFieldErrors = {
   phoneNumber: null,
 };
 
-type ReservationStep = "seats" | "contact" | "payment" | "success";
+type ReservationStep = "seats" | "contact" | "ticket_design" | "payment" | "success";
+
+type TicketDesignOption = {
+  ticketTemplateId: string;
+  ticketTemplateVersionId: string;
+  templateName: string;
+  versionNumber: number;
+  previewUrl: string | null;
+};
 
 const formatDuration = (ms: number) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -230,6 +239,11 @@ export function ReserveSeatClient({
   });
   const [contactFieldErrors, setContactFieldErrors] =
     React.useState<ContactFieldErrors>(EMPTY_CONTACT_ERRORS);
+  const [ticketDesigns, setTicketDesigns] = React.useState<TicketDesignOption[]>([]);
+  const [isLoadingTicketDesigns, setIsLoadingTicketDesigns] = React.useState(false);
+  const [ticketDesignsError, setTicketDesignsError] = React.useState<string | null>(null);
+  const [selectedTicketTemplateVersionId, setSelectedTicketTemplateVersionId] =
+    React.useState<string | null>(null);
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -364,7 +378,57 @@ export function ReserveSeatClient({
     setSelectedSeatIds([]);
     setPendingSeatId(null);
     setSelectionMessage(null);
+    setTicketDesigns([]);
+    setTicketDesignsError(null);
+    setSelectedTicketTemplateVersionId(null);
   }, [showId, schedId]);
+
+  React.useEffect(() => {
+    if (step !== "ticket_design") return;
+    if (ticketDesigns.length > 0 || isLoadingTicketDesigns) return;
+
+    let cancelled = false;
+    const loadTicketDesigns = async () => {
+      setIsLoadingTicketDesigns(true);
+      setTicketDesignsError(null);
+      try {
+        const response = await fetch(`/api/shows/${showId}/ticket-designs`);
+        const data = (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          designs?: TicketDesignOption[];
+        };
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to load ticket designs.");
+        }
+
+        if (cancelled) return;
+        const designs = data.designs ?? [];
+        setTicketDesigns(designs);
+      } catch (err) {
+        if (cancelled) return;
+        setTicketDesignsError(
+          err instanceof Error ? err.message : "Failed to load ticket designs.",
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoadingTicketDesigns(false);
+        }
+      }
+    };
+
+    void loadTicketDesigns();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isLoadingTicketDesigns,
+    showId,
+    step,
+    ticketDesigns.length,
+  ]);
 
   const terminateQueueSession = React.useCallback(
     async (preferBeacon: boolean) => {
@@ -648,7 +712,7 @@ export function ReserveSeatClient({
 
   const handleConfirmContactDetails = () => {
     setIsContactConfirmDialogOpen(false);
-    setStep("payment");
+    setStep("ticket_design");
   };
 
   const handleBackToSeats = () => {
@@ -658,6 +722,19 @@ export function ReserveSeatClient({
   const handleBackToContact = () => {
     setStep("contact");
     setWalkInConfirmationComplete(false);
+  };
+
+  const handleBackToTicketDesign = () => {
+    setStep("ticket_design");
+    setWalkInConfirmationComplete(false);
+  };
+
+  const handleProceedFromTicketDesign = () => {
+    if (!selectedTicketTemplateVersionId) {
+      toast.error("Please select a ticket design before continuing.");
+      return;
+    }
+    setStep("payment");
   };
 
   const handleLeaveDialogChange = (open: boolean) => {
@@ -724,6 +801,10 @@ export function ReserveSeatClient({
       toast.error("Please upload your GCash payment screenshot first.");
       return;
     }
+    if (!selectedTicketTemplateVersionId) {
+      toast.error("Please select a ticket design before submitting.");
+      return;
+    }
 
     const stored = getStoredSession(showScopeId);
     if (!stored) {
@@ -744,6 +825,7 @@ export function ReserveSeatClient({
           ticketId: stored.ticketId,
           activeToken: stored.activeToken,
           seatIds: selectedSeatIds,
+          ticketTemplateVersionId: selectedTicketTemplateVersionId,
           screenshotUrl,
           firstName: contactDetails.firstName,
           lastName: contactDetails.lastName,
@@ -927,6 +1009,15 @@ export function ReserveSeatClient({
                         className="w-fit gap-1 text-sm"
                       >
                         Contact Details
+                      </Badge>
+                    )}
+                    {step === "ticket_design" && (
+                      <Badge
+                        variant="secondary"
+                        className="w-fit gap-1 text-sm"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Select Ticket Design
                       </Badge>
                     )}
                     {step === "payment" && (
@@ -1280,7 +1371,7 @@ export function ReserveSeatClient({
                 <DialogTitle>Confirm contact details</DialogTitle>
                 <DialogDescription className="text-xs sm:text-sm">
                   Please make sure these details are correct before continuing
-                  to payment. Your confirmation and updates will be sent to{" "}
+                  to ticket design selection. Your confirmation and updates will be sent to{" "}
                   <span className="font-semibold text-foreground">
                     {contactDetails.email.trim()}
                   </span>{" "}
@@ -1475,6 +1566,136 @@ export function ReserveSeatClient({
                     >
                       <CreditCard className="h-4 w-4" />
                       {modeConfig.contactActionLabel}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-sidebar-border/70">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Selected Seats</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedSeatIds.map((seatId) => (
+                        <div
+                          key={seatId}
+                          className="inline-flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] font-medium"
+                        >
+                          {seatNumbersById[seatId] ?? seatId}
+                        </div>
+                      ))}
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <span>Total</span>
+                      <span>{formatCurrency(subtotal)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+          {!isSuccess &&
+            !isLoading &&
+            !error &&
+            expiresAt &&
+            step === "ticket_design" && (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <Card className="border-sidebar-border/70">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleBackToTicketDesign}
+                        className="h-8 w-8"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <CardTitle className="text-base">Select Ticket Design</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {isLoadingTicketDesigns ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading ticket designs...
+                      </div>
+                    ) : ticketDesignsError ? (
+                      <div className="space-y-3">
+                        <p className="text-sm text-destructive">{ticketDesignsError}</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setTicketDesigns([]);
+                            setTicketDesignsError(null);
+                          }}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    ) : ticketDesigns.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No ticket designs are available for this show. Please contact the organizer.
+                      </p>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {ticketDesigns.map((design) => {
+                          const isSelected =
+                            selectedTicketTemplateVersionId === design.ticketTemplateVersionId;
+                          return (
+                            <button
+                              key={design.ticketTemplateVersionId}
+                              type="button"
+                              onClick={() =>
+                                setSelectedTicketTemplateVersionId(
+                                  design.ticketTemplateVersionId,
+                                )
+                              }
+                              className={cn(
+                                "overflow-hidden rounded-xl border text-left transition-colors",
+                                isSelected
+                                  ? "border-primary bg-primary/5"
+                                  : "border-sidebar-border/70 hover:border-primary/40",
+                              )}
+                            >
+                              <div className="aspect-[2550/825] w-full bg-muted/30">
+                                {design.previewUrl ? (
+                                  <img
+                                    src={design.previewUrl}
+                                    alt={`${design.templateName} preview`}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                                    No preview image
+                                  </div>
+                                )}
+                              </div>
+                              <div className="space-y-1 px-3 py-2">
+                                <p className="text-sm font-medium">{design.templateName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Version {design.versionNumber}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <Button
+                      onClick={handleProceedFromTicketDesign}
+                      className="w-full gap-2"
+                      disabled={
+                        isLoadingTicketDesigns ||
+                        ticketDesigns.length === 0 ||
+                        !!ticketDesignsError ||
+                        !selectedTicketTemplateVersionId
+                      }
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Continue to Payment
                     </Button>
                   </CardContent>
                 </Card>

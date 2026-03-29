@@ -40,6 +40,7 @@ type CompletionRequestBody = {
   ticketId?: string;
   activeToken?: string;
   seatIds?: string[];
+  ticketTemplateVersionId?: string;
   screenshotUrl?: string;
   firstName?: string;
   lastName?: string;
@@ -110,6 +111,14 @@ export async function POST(request: NextRequest) {
     if (seatIds.length === 0) {
       return NextResponse.json(
         { success: false, error: "Please select at least one seat." },
+        { status: 400 },
+      );
+    }
+
+    const ticketTemplateVersionId = normalize(body.ticketTemplateVersionId);
+    if (!ticketTemplateVersionId) {
+      return NextResponse.json(
+        { success: false, error: "Please select a ticket design before checkout." },
         { status: 400 },
       );
     }
@@ -186,6 +195,48 @@ export async function POST(request: NextRequest) {
 
     if (!schedule) {
       return NextResponse.json({ success: false, error: "Schedule not found" }, { status: 404 });
+    }
+
+    const selectedTemplateVersion = await prisma.ticketTemplateVersion.findUnique({
+      where: { ticket_template_version_id: ticketTemplateVersionId },
+      select: { ticket_template_id: true },
+    });
+
+    if (!selectedTemplateVersion) {
+      return NextResponse.json(
+        { success: false, error: "Selected ticket design version was not found." },
+        { status: 400 },
+      );
+    }
+
+    let isTemplateAvailableForShow = false;
+    try {
+      const rows = await prisma.$queryRaw<Array<{ show_id: string }>>(
+        Prisma.sql`
+          SELECT "show_id"
+          FROM "ShowTicketTemplate"
+          WHERE "show_id" = ${showId}
+            AND "ticket_template_id" = ${selectedTemplateVersion.ticket_template_id}
+          LIMIT 1
+        `,
+      );
+      isTemplateAvailableForShow = rows.length > 0;
+    } catch {
+      isTemplateAvailableForShow = false;
+    }
+
+    if (!isTemplateAvailableForShow) {
+      const legacyShowTemplate = await prisma.show.findUnique({
+        where: { show_id: showId },
+        select: { ticket_template_id: true },
+      });
+
+      if (legacyShowTemplate?.ticket_template_id !== selectedTemplateVersion.ticket_template_id) {
+        return NextResponse.json(
+          { success: false, error: "Selected ticket design is not available for this show." },
+          { status: 400 },
+        );
+      }
     }
 
     if (!isSchedStatusReservable(getEffectiveSchedStatus(schedule))) {
@@ -295,6 +346,7 @@ export async function POST(request: NextRequest) {
               email: contact.email,
               phone_number: contact.phoneNumber,
               status: isWalkInMode ? "CONFIRMED" : "PENDING",
+              ticket_template_version_id: ticketTemplateVersionId,
             },
           })) as { reservation_id: string; reservation_number: string };
 

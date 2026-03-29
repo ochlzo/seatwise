@@ -24,6 +24,7 @@ type CreateShowPayload = {
   gcash_account_name?: string;
   image_base64?: string;
   seatmap_id?: string; // Optional for DRAFT shows
+  ticket_template_ids?: string[];
   ticket_template_id?: string;
   scheds?: Array<{
     client_id: string;
@@ -132,6 +133,7 @@ export async function createShowAction(data: CreateShowPayload) {
       gcash_account_name,
       image_base64,
       seatmap_id,
+      ticket_template_ids = [],
       ticket_template_id,
       scheds = [],
       category_sets = [],
@@ -173,7 +175,19 @@ export async function createShowAction(data: CreateShowPayload) {
     const uniqueCategories = Array.from(uniqueCategoryMap.values());
 
     const trimmedSeatmapId = seatmap_id?.trim();
-    const trimmedTicketTemplateId = ticket_template_id?.trim();
+    const normalizedTicketTemplateIds = Array.from(
+      new Set(
+        (Array.isArray(ticket_template_ids)
+          ? ticket_template_ids
+          : ticket_template_id
+            ? [ticket_template_id]
+            : []
+        )
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const legacyTicketTemplateId = normalizedTicketTemplateIds[0];
     const seatmap = trimmedSeatmapId
       ? await prisma.seatmap.findUnique({
           where: { seatmap_id: trimmedSeatmapId },
@@ -185,17 +199,23 @@ export async function createShowAction(data: CreateShowPayload) {
           },
         })
       : null;
-    const ticketTemplate = trimmedTicketTemplateId
-      ? await prisma.ticketTemplate.findFirst({
+    const ticketTemplates = normalizedTicketTemplateIds.length
+      ? await prisma.ticketTemplate.findMany({
           where: {
-            ticket_template_id: trimmedTicketTemplateId,
+            ticket_template_id: { in: normalizedTicketTemplateIds },
             team_id: adminTeamId,
           },
           select: {
             ticket_template_id: true,
           },
         })
-      : null;
+      : [];
+    const ticketTemplateIdSet = new Set(
+      ticketTemplates.map((template) => template.ticket_template_id),
+    );
+    const allTicketTemplatesExist = normalizedTicketTemplateIds.every((templateId) =>
+      ticketTemplateIdSet.has(templateId),
+    );
 
     const payloadValidation = validateShowPayload({
       show_name,
@@ -210,12 +230,12 @@ export async function createShowAction(data: CreateShowPayload) {
       gcash_number,
       gcash_account_name,
       seatmap_id: trimmedSeatmapId,
-      ticket_template_id: trimmedTicketTemplateId,
+      ticket_template_ids: normalizedTicketTemplateIds,
       scheds,
       categorySets: normalizedCategorySets,
       seatIds: seatmap?.seats.map((seat) => seat.seat_id) ?? [],
       seatmapExists: Boolean(seatmap),
-      ticketTemplateExists: !trimmedTicketTemplateId || Boolean(ticketTemplate),
+      ticketTemplatesExist: allTicketTemplatesExist,
     });
 
     if (payloadValidation.hasValidationErrors) {
@@ -301,9 +321,18 @@ export async function createShowAction(data: CreateShowPayload) {
             gcash_account_name: gcash_account_name?.trim() || undefined,
             team_id: adminTeamId,
             seatmap_id: trimmedSeatmapId || undefined, // Allow undefined for DRAFT shows
-            ticket_template_id: trimmedTicketTemplateId || undefined,
+            ticket_template_id: legacyTicketTemplateId || undefined,
           },
         });
+        for (const ticketTemplateId of normalizedTicketTemplateIds) {
+          await tx.$executeRaw(
+            Prisma.sql`
+              INSERT INTO "ShowTicketTemplate" ("show_id", "ticket_template_id", "team_id")
+              VALUES (${created.show_id}, ${ticketTemplateId}, ${adminTeamId})
+              ON CONFLICT ("show_id", "ticket_template_id") DO NOTHING
+            `,
+          );
+        }
 
         // Create Schedules
         const createdScheds = await Promise.all(
