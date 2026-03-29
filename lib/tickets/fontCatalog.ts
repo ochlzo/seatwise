@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-
 export type TicketTemplateFontOption = {
   label: string;
   family: string;
@@ -132,17 +130,15 @@ const LOCAL_FONT_SOURCE_BY_FAMILY = new Map(
   LOCAL_TICKET_FONT_SOURCES.map((source) => [source.family, source]),
 );
 
-const embeddedFontCssCache = new Map<string, Promise<string>>();
-
 function quoteFontFamily(family: string) {
   return family.includes(" ") ? `"${family}"` : family;
 }
 
-function getLocalTicketFontSource(family: string) {
+export function getLocalTicketFontSource(family: string) {
   return LOCAL_FONT_SOURCE_BY_FAMILY.get(family);
 }
 
-function buildFontFaceRule(
+export function buildFontFaceRule(
   family: string,
   src: string,
   weight: 400 | 700,
@@ -184,40 +180,6 @@ export function buildTicketTemplateFontFaceCss(family: string) {
     buildFontFaceRule(source.family, `/fonts/tickets/${source.files[400]}`, 400),
     buildFontFaceRule(source.family, `/fonts/tickets/${source.files[700]}`, 700),
   ].join("\n");
-}
-
-async function readEmbeddedFontData(fileName: string) {
-  const fontUrl = new URL(`../../public/fonts/tickets/${fileName}`, import.meta.url);
-  const fontBuffer = await readFile(fontUrl);
-  return `data:font/woff2;base64,${fontBuffer.toString("base64")}`;
-}
-
-export function buildEmbeddedTicketFontFaceCss(family: string) {
-  const trimmedFamily = family.trim();
-  const cached = embeddedFontCssCache.get(trimmedFamily);
-  if (cached) {
-    return cached;
-  }
-
-  const promise = (async () => {
-    const source = getLocalTicketFontSource(trimmedFamily);
-    if (!source?.files) {
-      return "";
-    }
-
-    const [regularSrc, boldSrc] = await Promise.all([
-      readEmbeddedFontData(source.files[400]),
-      readEmbeddedFontData(source.files[700]),
-    ]);
-
-    return [
-      buildFontFaceRule(source.family, regularSrc, 400),
-      buildFontFaceRule(source.family, boldSrc, 700),
-    ].join("\n");
-  })();
-
-  embeddedFontCssCache.set(trimmedFamily, promise);
-  return promise;
 }
 
 export function getTicketTemplateFontOptionByFamily(family: string) {

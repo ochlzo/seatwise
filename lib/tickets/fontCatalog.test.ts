@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 
 import {
-  buildEmbeddedTicketFontFaceCss,
   buildTicketTemplateFontFaceCss,
   resolveTicketRenderFontFamily,
   TICKET_TEMPLATE_FONT_OPTIONS,
 } from "./fontCatalog.ts";
+import { buildEmbeddedTicketFontFaceCss } from "./fontCatalog.server.ts";
+
+const repoRoot = resolve(import.meta.dirname, "..", "..");
 
 test("resolveTicketRenderFontFamily appends a sans-serif fallback stack for UI fonts", () => {
   assert.equal(
@@ -54,6 +58,16 @@ test("font catalog no longer exposes external css urls for downloadable families
 
   assert.ok(interOption);
   assert.equal("cssUrl" in interOption, false);
+});
+
+test("shared font catalog stays browser-safe for ticket builder client imports", () => {
+  const sharedFontCatalog = readFileSync(
+    resolve(repoRoot, "lib/tickets/fontCatalog.ts"),
+    "utf8",
+  );
+
+  assert.doesNotMatch(sharedFontCatalog, /node:fs\/promises/);
+  assert.doesNotMatch(sharedFontCatalog, /server-only/);
 });
 
 test("buildEmbeddedTicketFontFaceCss inlines local font data for server-side rendering", async () => {

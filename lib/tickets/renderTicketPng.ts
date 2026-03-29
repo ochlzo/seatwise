@@ -1,10 +1,8 @@
 import QRCode from "qrcode";
 import sharp from "sharp";
 
-import {
-  buildEmbeddedTicketFontFaceCss,
-  resolveTicketRenderFontFamily,
-} from "./fontCatalog.ts";
+import { resolveTicketRenderFontFamily } from "./fontCatalog.ts";
+import { buildEmbeddedTicketFontFaceCss } from "./fontCatalog.server.ts";
 import {
   TICKET_TEMPLATE_CANVAS_PX_HEIGHT,
   TICKET_TEMPLATE_CANVAS_PX_WIDTH,
@@ -420,10 +418,12 @@ export async function renderTicketPng({
   );
   const embeddedFontFaceCssByFamily = new Map(
     await Promise.all(
-      fieldFontFamilies.map(async (family) => [
-        family,
-        await buildEmbeddedTicketFontFaceCss(family),
-      ]),
+      fieldFontFamilies.map(
+        async (family): Promise<readonly [string, string]> => [
+          family,
+          await buildEmbeddedTicketFontFaceCss(family),
+        ],
+      ),
     ),
   );
 
