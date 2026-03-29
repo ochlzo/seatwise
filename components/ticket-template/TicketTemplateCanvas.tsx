@@ -4,7 +4,7 @@ import * as React from "react";
 import type { KonvaEventObject, Node as KonvaNode } from "konva/lib/Node";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
-import { Image as KonvaImage, Layer, Rect, Stage, Text, Transformer } from "react-konva";
+import { Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
 
 import {
   copySelectedNodes,
@@ -55,6 +55,15 @@ type NodeDragHandler = (
   nodeId: string,
   event: KonvaEventObject<DragEvent>,
 ) => boolean;
+
+type TicketNodeBounds = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+  centerX: number;
+  centerY: number;
+};
 
 function TicketAssetNode({
   node,
@@ -326,6 +335,10 @@ export function TicketTemplateCanvas() {
     height: 0,
     visible: false,
   });
+  const [snapGuides, setSnapGuides] = React.useState<{
+    x: number | null;
+    y: number | null;
+  }>({ x: null, y: null });
 
   const groupDragRef = React.useRef<{
     active: boolean;
@@ -399,6 +412,166 @@ export function TicketTemplateCanvas() {
     }
     return snaps;
   }, []);
+
+  const getNodeBounds = React.useCallback(
+    (node: TicketTemplateEditorNode, position?: { x: number; y: number }): TicketNodeBounds => {
+      const x = position?.x ?? node.x;
+      const y = position?.y ?? node.y;
+
+      let width = 0;
+      let height = 0;
+      if (node.kind === "asset") {
+        width = node.width;
+        height = node.height;
+      } else if (node.kind === "field") {
+        width = node.width;
+        height = node.fontSize;
+      } else {
+        width = node.size;
+        height = node.size;
+      }
+
+      return {
+        left: x,
+        right: x + width,
+        top: y,
+        bottom: y + height,
+        centerX: x + width / 2,
+        centerY: y + height / 2,
+      };
+    },
+    [],
+  );
+
+  const getCombinedBounds = React.useCallback((bounds: TicketNodeBounds[]) => {
+    if (!bounds.length) {
+      return null;
+    }
+
+    let left = bounds[0].left;
+    let right = bounds[0].right;
+    let top = bounds[0].top;
+    let bottom = bounds[0].bottom;
+
+    for (let index = 1; index < bounds.length; index += 1) {
+      const next = bounds[index];
+      if (next.left < left) left = next.left;
+      if (next.right > right) right = next.right;
+      if (next.top < top) top = next.top;
+      if (next.bottom > bottom) bottom = next.bottom;
+    }
+
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      centerX: left + (right - left) / 2,
+      centerY: top + (bottom - top) / 2,
+    };
+  }, []);
+
+  const getSnappedPositions = React.useCallback(
+    (
+      proposedTemplatePositions: Record<string, { x: number; y: number }>,
+      draggedIds: string[],
+    ) => {
+      const draggedSet = new Set(draggedIds);
+      const nodeMap = nodeMapRef.current;
+      const draggedBounds = draggedIds
+        .map((id) => {
+          const node = nodeMap.get(id);
+          const position = proposedTemplatePositions[id];
+          if (!node || !position) {
+            return null;
+          }
+          return getNodeBounds(node, position);
+        })
+        .filter((bounds): bounds is TicketNodeBounds => Boolean(bounds));
+
+      const combinedBounds = getCombinedBounds(draggedBounds);
+      if (!combinedBounds) {
+        return {
+          positions: proposedTemplatePositions,
+          guideX: null as number | null,
+          guideY: null as number | null,
+        };
+      }
+
+      const xTargets = new Set<number>([0, canvas.width / 2, canvas.width]);
+      const yTargets = new Set<number>([0, canvas.height / 2, canvas.height]);
+
+      nodeMap.forEach((node, id) => {
+        if (draggedSet.has(id)) {
+          return;
+        }
+
+        const bounds = getNodeBounds(node);
+        xTargets.add(bounds.left);
+        xTargets.add(bounds.centerX);
+        xTargets.add(bounds.right);
+        yTargets.add(bounds.top);
+        yTargets.add(bounds.centerY);
+        yTargets.add(bounds.bottom);
+      });
+
+      const xAnchors = [combinedBounds.left, combinedBounds.centerX, combinedBounds.right];
+      const yAnchors = [combinedBounds.top, combinedBounds.centerY, combinedBounds.bottom];
+      const snapThreshold = 8 / Math.max(displayScale, 0.01);
+
+      let snapXDelta = 0;
+      let snapYDelta = 0;
+      let guideX: number | null = null;
+      let guideY: number | null = null;
+      let bestXDistance = Number.POSITIVE_INFINITY;
+      let bestYDistance = Number.POSITIVE_INFINITY;
+
+      xAnchors.forEach((anchor) => {
+        xTargets.forEach((target) => {
+          const distance = Math.abs(target - anchor);
+          if (distance > snapThreshold || distance >= bestXDistance) {
+            return;
+          }
+
+          bestXDistance = distance;
+          snapXDelta = target - anchor;
+          guideX = target;
+        });
+      });
+
+      yAnchors.forEach((anchor) => {
+        yTargets.forEach((target) => {
+          const distance = Math.abs(target - anchor);
+          if (distance > snapThreshold || distance >= bestYDistance) {
+            return;
+          }
+
+          bestYDistance = distance;
+          snapYDelta = target - anchor;
+          guideY = target;
+        });
+      });
+
+      const snappedPositions: Record<string, { x: number; y: number }> = {};
+      draggedIds.forEach((id) => {
+        const next = proposedTemplatePositions[id];
+        if (!next) {
+          return;
+        }
+        snappedPositions[id] = {
+          x: next.x + snapXDelta,
+          y: next.y + snapYDelta,
+        };
+      });
+
+      return {
+        positions: snappedPositions,
+        guideX,
+        guideY,
+      };
+    },
+    [canvas.height, canvas.width, displayScale, getCombinedBounds, getNodeBounds],
+  );
 
   React.useEffect(() => {
     const transformer = transformerRef.current;
@@ -579,6 +752,7 @@ export function TicketTemplateCanvas() {
     const handleBlur = () => {
       setIsShiftDown(false);
       setIsAltDown(false);
+      setSnapGuides({ x: null, y: null });
       marqueeStartRef.current = null;
       setMarqueeRect((current) => ({ ...current, visible: false }));
       groupDragRef.current = {
@@ -644,12 +818,11 @@ export function TicketTemplateCanvas() {
 
   const handleGroupDragStart = React.useCallback<NodeDragHandler>((nodeId) => {
     const selectedIds = selectedNodeIdsRef.current;
-    if (!selectedIds.includes(nodeId) || selectedIds.length < 2) {
-      return false;
-    }
+    const draggedIds =
+      selectedIds.includes(nodeId) && selectedIds.length > 1 ? selectedIds : [nodeId];
 
     const startPositions: Record<string, { x: number; y: number }> = {};
-    selectedIds.forEach((selectedId) => {
+    draggedIds.forEach((selectedId) => {
       const ref = nodeRefs.current[selectedId];
       if (!ref) {
         return;
@@ -668,9 +841,10 @@ export function TicketTemplateCanvas() {
     groupDragRef.current = {
       active: true,
       anchorId: nodeId,
-      selectedIds,
+      selectedIds: draggedIds,
       startPositions,
     };
+    setSnapGuides({ x: null, y: null });
 
     return true;
   }, []);
@@ -689,24 +863,39 @@ export function TicketTemplateCanvas() {
     const dx = event.target.x() - anchorStart.x;
     const dy = event.target.y() - anchorStart.y;
 
+    const proposedTemplatePositions: Record<string, { x: number; y: number }> = {};
     dragState.selectedIds.forEach((selectedId) => {
-      if (selectedId === nodeId) {
-        return;
-      }
-
-      const ref = nodeRefs.current[selectedId];
       const start = dragState.startPositions[selectedId];
-      if (!ref || !start) {
+      if (!start) {
         return;
       }
 
-      ref.x(start.x + dx);
-      ref.y(start.y + dy);
+      proposedTemplatePositions[selectedId] = {
+        x: (start.x + dx) / displayScale,
+        y: (start.y + dy) / displayScale,
+      };
     });
 
+    const snapped = getSnappedPositions(
+      proposedTemplatePositions,
+      dragState.selectedIds,
+    );
+
+    dragState.selectedIds.forEach((selectedId) => {
+      const ref = nodeRefs.current[selectedId];
+      const next = snapped.positions[selectedId];
+      if (!ref || !next) {
+        return;
+      }
+
+      ref.x(next.x * displayScale);
+      ref.y(next.y * displayScale);
+    });
+
+    setSnapGuides({ x: snapped.guideX, y: snapped.guideY });
     event.target.getLayer()?.batchDraw();
     return true;
-  }, []);
+  }, [displayScale, getSnappedPositions]);
 
   const handleGroupDragEnd = React.useCallback<NodeDragHandler>(
     (nodeId) => {
@@ -739,6 +928,7 @@ export function TicketTemplateCanvas() {
         selectedIds: [],
         startPositions: {},
       };
+      setSnapGuides({ x: null, y: null });
 
       if (changes.length > 0) {
         dispatch(updateNodes({ changes }));
@@ -983,6 +1173,36 @@ export function TicketTemplateCanvas() {
                     strokeWidth={1}
                     dash={[5, 5]}
                     fill="rgba(37,99,235,0.12)"
+                    listening={false}
+                  />
+                ) : null}
+
+                {snapGuides.x !== null ? (
+                  <Line
+                    points={[
+                      snapGuides.x * displayScale,
+                      0,
+                      snapGuides.x * displayScale,
+                      stageDisplayHeight,
+                    ]}
+                    stroke="#3b82f6"
+                    strokeWidth={1}
+                    dash={[6, 4]}
+                    listening={false}
+                  />
+                ) : null}
+
+                {snapGuides.y !== null ? (
+                  <Line
+                    points={[
+                      0,
+                      snapGuides.y * displayScale,
+                      stageDisplayWidth,
+                      snapGuides.y * displayScale,
+                    ]}
+                    stroke="#3b82f6"
+                    strokeWidth={1}
+                    dash={[6, 4]}
                     listening={false}
                   />
                 ) : null}
