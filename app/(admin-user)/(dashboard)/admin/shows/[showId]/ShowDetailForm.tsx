@@ -69,7 +69,6 @@ import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "@/components/ui/sonner";
 import { useRouter } from "next/navigation";
 import type { SeatStatus, ShowStatus } from "@prisma/client";
-import Image from "next/image";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
 import type { SeatmapState } from "@/lib/seatmap/types";
