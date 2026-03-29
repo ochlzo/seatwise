@@ -1,22 +1,8 @@
-1. Prevent DDOS in login + OTP.
-2. Remove seatmap status and enable/disable features in template tables
-3. Calendar page (both admin and user)
-4. Dashboard Page (admin)
-5. Users page (admin)
-6. Admin access page (admin)
-7. Add a flag on edit in seatmappreview on create and update for easy identification all seats assigned.
-8. Add edit thumbnail on showdetail.tsx.
-9. The show details page does not display the seatmap name properly
+Reservation flow:
 
-FOCUS:
-
-1. Create Reservation Flow
-2. Create the schedule selection on clicking reserve now button.
-3. Create the page for waiting room with horizontal stepper at the top
-4. Create the page for reservation proper
-5. Create the queue line flow
-6. Create the page for seat selection proper (allow multiple seat selection)
-7. Create the modal for gcash payment
-8. Add email functionalities
-9. Data cleanup in redis and ably
-10. Testing
+1. Make the join queue waiting time be more faster and add into loading redux state
+2. Make redis service average be global across scheds and shows
+3. Back button from Ticket Design selection does not work
+4. Submit reservation took 12 seconds
+5. most of the api calls take 3+ seconds
+6. back to shows button does not have loading screen (or make it instant)
