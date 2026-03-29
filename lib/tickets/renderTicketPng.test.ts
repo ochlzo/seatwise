@@ -26,6 +26,48 @@ async function createSolidPngDataUrl(color: {
   return `data:image/png;base64,${buffer.toString("base64")}`;
 }
 
+function findInkBounds(
+  data: Buffer,
+  info: sharp.OutputInfo,
+  whiteThreshold = 245,
+) {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      const index = (y * info.width + x) * info.channels;
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+
+      if (r >= whiteThreshold && g >= whiteThreshold && b >= whiteThreshold) {
+        continue;
+      }
+
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (!Number.isFinite(minX)) {
+    return null;
+  }
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  };
+}
+
 test("renderTicketPng returns a 2550 x 825 PNG and preserves asset z-order", async () => {
   const template = createEmptyTicketTemplate();
 
@@ -183,4 +225,65 @@ test("renderTicketPng wraps overflowing field text and uses available vertical s
   }
 
   assert.equal(hasInkInLowerHalf, true);
+});
+
+test("renderTicketPng applies field-node rotation when rendering reservation values", async () => {
+  const baseTemplate = createEmptyTicketTemplate();
+  baseTemplate.nodes.push({
+    id: "field-seat",
+    kind: "field",
+    fieldKey: "seat",
+    x: 900,
+    y: 340,
+    width: 640,
+    height: 100,
+    fontSize: 72,
+    fontFamily: "Georgia",
+    fontWeight: 700,
+    fill: "#111827",
+    align: "left",
+    opacity: 1,
+  });
+
+  const rotatedTemplate = {
+    ...baseTemplate,
+    nodes: baseTemplate.nodes.map((node) =>
+      node.kind === "field" ? { ...node, rotation: 90 } : node,
+    ),
+  };
+
+  const [unrotatedPng, rotatedPng] = await Promise.all([
+    renderTicketPng({
+      template: baseTemplate,
+      fields: { seat: "A-12 VIP LEFT WING" },
+      qrValue: "https://seatwise.test/ticket/verify/signed-token",
+    }),
+    renderTicketPng({
+      template: rotatedTemplate,
+      fields: { seat: "A-12 VIP LEFT WING" },
+      qrValue: "https://seatwise.test/ticket/verify/signed-token",
+    }),
+  ]);
+
+  assert.notDeepEqual(unrotatedPng, rotatedPng);
+
+  const [unrotatedRaw, rotatedRaw] = await Promise.all([
+    sharp(unrotatedPng).raw().toBuffer({ resolveWithObject: true }),
+    sharp(rotatedPng).raw().toBuffer({ resolveWithObject: true }),
+  ]);
+
+  const unrotatedBounds = findInkBounds(unrotatedRaw.data, unrotatedRaw.info);
+  const rotatedBounds = findInkBounds(rotatedRaw.data, rotatedRaw.info);
+
+  assert.ok(unrotatedBounds, "Expected non-white text pixels for unrotated field.");
+  assert.ok(rotatedBounds, "Expected non-white text pixels for rotated field.");
+
+  assert.ok(
+    (unrotatedBounds?.width ?? 0) > (unrotatedBounds?.height ?? 0),
+    "Unrotated field text should render mostly horizontally.",
+  );
+  assert.ok(
+    (rotatedBounds?.height ?? 0) > (rotatedBounds?.width ?? 0),
+    "Rotated field text should render mostly vertically.",
+  );
 });

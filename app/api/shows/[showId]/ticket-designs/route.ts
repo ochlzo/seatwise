@@ -63,10 +63,10 @@ export async function GET(
       },
       select: {
         ticket_template_id: true,
+        live_ticket_template_version_id: true,
         template_name: true,
         versions: {
           orderBy: { version_number: "desc" },
-          take: 1,
           select: {
             ticket_template_version_id: true,
             version_number: true,
@@ -85,18 +85,24 @@ export async function GET(
     for (const templateId of orderedTemplateIds) {
       const template = templateById.get(templateId);
       if (!template) continue;
-      const latestVersion = template.versions[0];
-      if (!latestVersion) continue;
+      const latestVersion = template.versions[0] ?? null;
+      const liveVersion =
+        template.versions.find(
+          (version) =>
+            version.ticket_template_version_id ===
+            template.live_ticket_template_version_id,
+        ) ?? latestVersion;
+      if (!liveVersion) continue;
 
       const normalizedVersion = normalizeTemplateVersion(
-        latestVersion.template_schema as Record<string, unknown> | null | undefined,
+        liveVersion.template_schema as Record<string, unknown> | null | undefined,
       );
 
       designs.push({
         ticketTemplateId: template.ticket_template_id,
-        ticketTemplateVersionId: latestVersion.ticket_template_version_id,
+        ticketTemplateVersionId: liveVersion.ticket_template_version_id,
         templateName: template.template_name,
-        versionNumber: latestVersion.version_number,
+        versionNumber: liveVersion.version_number,
         previewUrl: normalizedVersion.previewUrl ?? null,
       });
     }

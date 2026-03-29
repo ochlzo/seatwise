@@ -21,6 +21,7 @@ type StoredTicketTemplate = {
   ticket_template_id: string;
   team_id: string;
   template_name: string;
+  live_ticket_template_version_id: string | null;
   createdAt: Date;
   updatedAt: Date;
   versions: StoredTicketTemplateVersion[];
@@ -37,8 +38,9 @@ type TicketTemplatePersistenceDb = {
     update(args: {
       where: { ticket_template_id: string };
       data: {
-        template_name: string;
-        updatedAt: Date;
+        template_name?: string;
+        live_ticket_template_version_id?: string | null;
+        updatedAt?: Date;
       };
     }): Promise<Omit<StoredTicketTemplate, "versions">>;
     findFirst(args: {
@@ -71,6 +73,14 @@ type TicketTemplatePersistenceDb = {
     }): Promise<StoredTicketTemplate[]>;
   };
   ticketTemplateVersion: {
+    update(args: {
+      where: {
+        ticket_template_version_id: string;
+      };
+      data: {
+        template_schema: TicketTemplateSchema;
+      };
+    }): Promise<StoredTicketTemplateVersion>;
     create(args: {
       data: {
         ticket_template_id: string;
@@ -96,6 +106,10 @@ export type TicketTemplateListItem = {
   template_name: string;
   createdAt: Date;
   updatedAt: Date;
+  liveTicketTemplateVersionId: string | null;
+  liveVersionNumber: number | null;
+  liveVersionCreatedAt: Date | null;
+  liveVersionPreviewUrl: string | null;
   latestVersionNumber: number | null;
   latestVersionCreatedAt: Date | null;
   versionCount: number;
@@ -108,6 +122,7 @@ export type TicketTemplateDetail = TicketTemplateListItem & {
 
 type SaveTicketTemplateVersionInput = {
   ticketTemplateId?: string;
+  ticketTemplateVersionId?: string;
   teamId: string;
   templateName: string;
   templateSchema: TicketTemplateSchema;
@@ -135,6 +150,11 @@ function mapVersion(version: StoredTicketTemplateVersion): TicketTemplateVersion
 function mapTemplateDetail(template: StoredTicketTemplate): TicketTemplateDetail {
   const versions = template.versions.map(mapVersion);
   const latestVersion = versions[0] ?? null;
+  const liveVersion =
+    versions.find(
+      (version) =>
+        version.ticket_template_version_id === template.live_ticket_template_version_id,
+    ) ?? latestVersion;
 
   return {
     ticket_template_id: template.ticket_template_id,
@@ -142,6 +162,13 @@ function mapTemplateDetail(template: StoredTicketTemplate): TicketTemplateDetail
     template_name: template.template_name,
     createdAt: template.createdAt,
     updatedAt: template.updatedAt,
+    liveTicketTemplateVersionId: liveVersion?.ticket_template_version_id ?? null,
+    liveVersionNumber: liveVersion?.version_number ?? null,
+    liveVersionCreatedAt: liveVersion?.createdAt ?? null,
+    liveVersionPreviewUrl:
+      typeof liveVersion?.template_schema.previewUrl === "string"
+        ? liveVersion.template_schema.previewUrl
+        : null,
     latestVersionNumber: latestVersion?.version_number ?? null,
     latestVersionCreatedAt: latestVersion?.createdAt ?? null,
     versionCount: versions.length,
@@ -204,6 +231,10 @@ export async function getTicketTemplates(
       template_name: detail.template_name,
       createdAt: detail.createdAt,
       updatedAt: detail.updatedAt,
+      liveTicketTemplateVersionId: detail.liveTicketTemplateVersionId,
+      liveVersionNumber: detail.liveVersionNumber,
+      liveVersionCreatedAt: detail.liveVersionCreatedAt,
+      liveVersionPreviewUrl: detail.liveVersionPreviewUrl,
       latestVersionNumber: detail.latestVersionNumber,
       latestVersionCreatedAt: detail.latestVersionCreatedAt,
       versionCount: detail.versionCount,
@@ -255,10 +286,12 @@ export async function saveTicketTemplateVersionRecord(
   }
 
   const normalizedTemplateSchema = normalizeTemplateVersion(input.templateSchema);
+  const targetVersionId = input.ticketTemplateVersionId?.trim() || undefined;
 
   return db.$transaction(async (tx) => {
     let template: Omit<StoredTicketTemplate, "versions">;
-    let nextVersionNumber = 1;
+    let shouldSetLiveVersion = false;
+    let version: TicketTemplateVersionSummary | null = null;
 
     if (input.ticketTemplateId?.trim()) {
       const existingTemplate = await tx.ticketTemplate.findFirst({
@@ -277,7 +310,7 @@ export async function saveTicketTemplateVersionRecord(
         throw new Error("Ticket template not found.");
       }
 
-      nextVersionNumber = (existingTemplate.versions[0]?.version_number ?? 0) + 1;
+      shouldSetLiveVersion = !existingTemplate.live_ticket_template_version_id;
       template = await tx.ticketTemplate.update({
         where: {
           ticket_template_id: existingTemplate.ticket_template_id,
@@ -287,28 +320,153 @@ export async function saveTicketTemplateVersionRecord(
           updatedAt: new Date(),
         },
       });
+
+      if (targetVersionId) {
+        const targetVersion = existingTemplate.versions.find(
+          (candidate) => candidate.ticket_template_version_id === targetVersionId,
+        );
+        if (!targetVersion) {
+          throw new Error("Selected ticket version was not found.");
+        }
+
+        version = mapVersion(
+          await tx.ticketTemplateVersion.update({
+            where: {
+              ticket_template_version_id: targetVersion.ticket_template_version_id,
+            },
+            data: {
+              template_schema: normalizedTemplateSchema,
+            },
+          }),
+        );
+      } else {
+        const nextVersionNumber = (existingTemplate.versions[0]?.version_number ?? 0) + 1;
+        version = mapVersion(
+          await tx.ticketTemplateVersion.create({
+            data: {
+              ticket_template_id: template.ticket_template_id,
+              version_number: nextVersionNumber,
+              template_schema: normalizedTemplateSchema,
+            },
+          }),
+        );
+      }
     } else {
+      shouldSetLiveVersion = true;
       template = await tx.ticketTemplate.create({
         data: {
           team_id: teamId,
           template_name: templateName,
         },
       });
+
+      version = mapVersion(
+        await tx.ticketTemplateVersion.create({
+          data: {
+            ticket_template_id: template.ticket_template_id,
+            version_number: 1,
+            template_schema: normalizedTemplateSchema,
+          },
+        }),
+      );
     }
 
-    const version = mapVersion(
-      await tx.ticketTemplateVersion.create({
-        data: {
+    if (!version) {
+      throw new Error("Ticket version could not be resolved.");
+    }
+
+    if (shouldSetLiveVersion) {
+      template = await tx.ticketTemplate.update({
+        where: {
           ticket_template_id: template.ticket_template_id,
-          version_number: nextVersionNumber,
-          template_schema: normalizedTemplateSchema,
         },
-      }),
-    );
+        data: {
+          live_ticket_template_version_id: version.ticket_template_version_id,
+          updatedAt: new Date(),
+        },
+      });
+    }
 
     return {
       template,
       version,
     };
+  });
+}
+
+export async function setTicketTemplateLiveVersionRecord(
+  input: {
+    ticketTemplateId: string;
+    ticketTemplateVersionId: string;
+    adminScope: TicketTemplateAdminScope;
+  },
+  db: TicketTemplatePersistenceDb = DEFAULT_DB,
+): Promise<TicketTemplateDetail> {
+  const ticketTemplateId = input.ticketTemplateId.trim();
+  const ticketTemplateVersionId = input.ticketTemplateVersionId.trim();
+
+  if (!ticketTemplateId) {
+    throw new Error("Ticket template is required.");
+  }
+  if (!ticketTemplateVersionId) {
+    throw new Error("Ticket template version is required.");
+  }
+  if (!input.adminScope.isSuperadmin && !input.adminScope.teamId) {
+    throw new Error("Team scope is required.");
+  }
+
+  return db.$transaction(async (tx) => {
+    const template = await tx.ticketTemplate.findFirst({
+      where: {
+        ticket_template_id: ticketTemplateId,
+        ...(input.adminScope.isSuperadmin
+          ? {}
+          : { team_id: input.adminScope.teamId ?? undefined }),
+      },
+      include: {
+        versions: {
+          orderBy: { version_number: "desc" },
+        },
+      },
+    });
+
+    if (!template) {
+      throw new Error("Ticket template not found.");
+    }
+
+    const hasVersion = template.versions.some(
+      (version) =>
+        version.ticket_template_version_id === ticketTemplateVersionId,
+    );
+    if (!hasVersion) {
+      throw new Error("Selected version does not belong to this template.");
+    }
+
+    await tx.ticketTemplate.update({
+      where: {
+        ticket_template_id: template.ticket_template_id,
+      },
+      data: {
+        live_ticket_template_version_id: ticketTemplateVersionId,
+        updatedAt: new Date(),
+      },
+    });
+
+    const updated = await tx.ticketTemplate.findFirst({
+      where: {
+        ticket_template_id: ticketTemplateId,
+      },
+      include: {
+        versions: {
+          orderBy: { version_number: "desc" },
+        },
+      },
+    });
+
+    if (!updated) {
+      throw new Error("Ticket template not found after update.");
+    }
+
+    return mapTemplateDetail(updated);
   });
 }

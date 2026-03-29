@@ -61,6 +61,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import MultipleSelector, {
+  type Option as MultipleSelectorOption,
+} from "@/components/ui/multiple-selector";
 import { updateShowAction } from "@/lib/actions/updateShow";
 import { toast } from "@/components/ui/sonner";
 import { useRouter } from "next/navigation";
@@ -324,7 +327,6 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
   const [seatmapQuery, setSeatmapQuery] = React.useState("");
   const [ticketTemplates, setTicketTemplates] = React.useState<TicketTemplateOption[]>([]);
-  const [ticketTemplateQuery, setTicketTemplateQuery] = React.useState("");
   const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
   const [timeRanges, setTimeRanges] = React.useState([
     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
@@ -403,13 +405,16 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       seatmap.seatmap_name.toLowerCase().includes(query),
     );
   }, [seatmapQuery, seatmaps]);
-  const filteredTicketTemplates = React.useMemo(() => {
-    const query = ticketTemplateQuery.trim().toLowerCase();
-    if (!query) return ticketTemplates;
-    return ticketTemplates.filter((template) =>
-      template.template_name.toLowerCase().includes(query),
-    );
-  }, [ticketTemplateQuery, ticketTemplates]);
+  const ticketTemplateSelectorOptions = React.useMemo<MultipleSelectorOption[]>(
+    () =>
+      ticketTemplates.map((template) => ({
+        value: template.ticket_template_id,
+        label: template.latestVersionNumber
+          ? `${template.template_name} (v${template.latestVersionNumber})`
+          : template.template_name,
+      })),
+    [ticketTemplates],
+  );
 
   const [formData, setFormData] = React.useState<{
     show_name: string;
@@ -617,6 +622,41 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
         formData.ticket_template_ids.includes(template.ticket_template_id),
       ),
     [formData.ticket_template_ids, ticketTemplates],
+  );
+
+  const selectedTicketTemplateOptions = React.useMemo<MultipleSelectorOption[]>(
+    () =>
+      formData.ticket_template_ids.map((templateId) => {
+        const match = ticketTemplateSelectorOptions.find(
+          (option) => option.value === templateId,
+        );
+        return match ?? { value: templateId, label: templateId };
+      }),
+    [formData.ticket_template_ids, ticketTemplateSelectorOptions],
+  );
+
+  const handleTicketTemplateSelectionChange = React.useCallback(
+    (nextOptions: MultipleSelectorOption[]) => {
+      setFormData((prev) => ({
+        ...prev,
+        ticket_template_ids: nextOptions.map((option) => option.value),
+      }));
+    },
+    [],
+  );
+
+  const handleTicketTemplateSearch = React.useCallback(
+    (value: string) => {
+      const query = value.trim().toLowerCase();
+      if (!query) {
+        return ticketTemplateSelectorOptions;
+      }
+
+      return ticketTemplateSelectorOptions.filter((option) =>
+        option.label.toLowerCase().includes(query),
+      );
+    },
+    [ticketTemplateSelectorOptions],
   );
 
   // Fetch seatmap data when seatmap is selected
@@ -1123,18 +1163,6 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     setIsScheduleOpen(false);
     if (!isEditing) setIsEditing(true);
   };
-
-  const toggleTicketTemplateSelection = React.useCallback((templateId: string) => {
-    setFormData((prev) => {
-      const exists = prev.ticket_template_ids.includes(templateId);
-      return {
-        ...prev,
-        ticket_template_ids: exists
-          ? prev.ticket_template_ids.filter((id) => id !== templateId)
-          : [...prev.ticket_template_ids, templateId],
-      };
-    });
-  }, []);
 
   const handleSave = async () => {
     if (!isFormValid) return;
@@ -2087,48 +2115,26 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                 </Label>
                 {isEditing ? (
                   <div className="space-y-2">
-                    <Input
-                      id="ticket-template"
+                    <MultipleSelector
+                      value={selectedTicketTemplateOptions}
+                      options={ticketTemplateSelectorOptions}
+                      onSearchSync={handleTicketTemplateSearch}
+                      onChange={handleTicketTemplateSelectionChange}
                       placeholder="Search ticket templates"
-                      value={ticketTemplateQuery}
-                      onChange={(event) => setTicketTemplateQuery(event.target.value)}
-                    />
-                    <div className="max-h-48 overflow-auto rounded-md border border-sidebar-border/70 bg-muted/20 p-1.5">
-                      {filteredTicketTemplates.length === 0 ? (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      delay={200}
+                      emptyIndicator={
+                        <p className="px-2 py-1.5 text-sm text-muted-foreground">
                           No ticket templates found.
-                        </div>
-                      ) : (
-                        filteredTicketTemplates.map((template) => {
-                          const isSelected = formData.ticket_template_ids.includes(
-                            template.ticket_template_id,
-                          );
-                          return (
-                            <button
-                              key={template.ticket_template_id}
-                              type="button"
-                              onClick={() => toggleTicketTemplateSelection(template.ticket_template_id)}
-                              className={cn(
-                                "flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
-                                isSelected
-                                  ? "bg-primary/10 text-primary"
-                                  : "hover:bg-accent hover:text-accent-foreground",
-                              )}
-                            >
-                              <span className="truncate">
-                                {template.template_name}
-                                {template.latestVersionNumber
-                                  ? ` (v${template.latestVersionNumber})`
-                                  : ""}
-                              </span>
-                              <span className="text-xs font-medium">
-                                {isSelected ? "Selected" : "Select"}
-                              </span>
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
+                        </p>
+                      }
+                      className="min-h-10 border-sidebar-border/70 bg-muted/20"
+                      commandProps={{
+                        label: "Ticket template selector",
+                      }}
+                      inputProps={{
+                        id: "ticket-template",
+                      }}
+                    />
                     <p className="text-[11px] text-muted-foreground">
                       {selectedTicketTemplates.length === 0
                         ? "No ticket templates selected."

@@ -177,16 +177,19 @@ model TicketTemplate {
   ticket_template_id String                  @id @default(cuid())
   team_id            String
   template_name      String
+  live_ticket_template_version_id String?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
   shows              Show[]
   showLinks          ShowTicketTemplate[]
+  liveVersion        TicketTemplateVersion?  @relation("TicketTemplateLiveVersion", fields: [live_ticket_template_version_id], references: [ticket_template_version_id], onDelete: SetNull)
   team               Team                    @relation(fields: [team_id], references: [team_id])
-  versions           TicketTemplateVersion[]
+  versions           TicketTemplateVersion[] @relation("TicketTemplateVersions")
 
   @@unique([ticket_template_id, team_id])
   @@unique([team_id, template_name])
   @@index([team_id])
+  @@index([live_ticket_template_version_id])
 }
 
 model ShowTicketTemplate {
@@ -209,7 +212,8 @@ model TicketTemplateVersion {
   template_schema            Json
   createdAt                  DateTime        @default(now())
   reservations               Reservation[]
-  ticketTemplate             TicketTemplate  @relation(fields: [ticket_template_id], references: [ticket_template_id])
+  ticketTemplate             TicketTemplate  @relation("TicketTemplateVersions", fields: [ticket_template_id], references: [ticket_template_id])
+  liveForTemplates           TicketTemplate[] @relation("TicketTemplateLiveVersion")
 
   @@unique([ticket_template_id, version_number])
   @@index([ticket_template_id])

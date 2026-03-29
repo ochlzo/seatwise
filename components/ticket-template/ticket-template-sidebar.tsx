@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import Link from "next/link";
 
 import { TicketFieldPalette } from "@/components/ticket-template/TicketFieldPalette";
 import {
@@ -53,6 +54,12 @@ export function TicketTemplateSidebar(
           <p className="break-words">The canvas stays locked to a white 2550 x 825 export surface.</p>
           <p className="break-words">Artwork layers can be reordered among themselves only.</p>
           <p className="break-words">Fields and QR always render on the dedicated top layer.</p>
+          <Link
+            href="/ticket-builder"
+            className="inline-block pt-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Ticket Builder
+          </Link>
         </div>
       </SidebarFooter>
 

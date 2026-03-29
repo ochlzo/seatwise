@@ -8,10 +8,19 @@ import {
   Download,
   FilePlus2,
   FolderOpen,
+  Loader2,
   Save,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,17 +45,56 @@ function slugify(value: string) {
 
 export function TicketTemplateFileMenu({
   selectedTeamId,
+  availableVersions,
+  liveVersionId,
 }: {
   selectedTeamId?: string | null;
+  availableVersions?: Array<{
+    ticket_template_version_id: string;
+    version_number: number;
+    createdAt: string;
+  }>;
+  liveVersionId?: string | null;
 }) {
   const triggerId = "ticket-template-file-menu-trigger";
   const router = useRouter();
   const dispatch = useAppDispatch();
   const ticketTemplateState = useAppSelector((state) => state.ticketTemplate);
   const [isSavingTemplate, setIsSavingTemplate] = React.useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = React.useState(false);
   const uploadKeyRef = React.useRef(
     `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
   );
+  const saveTargets = React.useMemo(() => {
+    if ((availableVersions?.length ?? 0) > 0) {
+      return (availableVersions ?? []).map((version) => ({
+        value: version.ticket_template_version_id,
+        label:
+          version.ticket_template_version_id === liveVersionId
+            ? `v${version.version_number} (Live)`
+            : `v${version.version_number}`,
+      }));
+    }
+
+    return [
+      {
+        value: "__create_v1__",
+        label: "v1 (Live)",
+      },
+    ];
+  }, [availableVersions, liveVersionId]);
+  const [targetVersionId, setTargetVersionId] = React.useState<string>(
+    saveTargets[0]?.value ?? "__create_v1__",
+  );
+
+  React.useEffect(() => {
+    const currentVersionId = ticketTemplateState.loadedVersionId;
+    const defaultTarget =
+      saveTargets.find((target) => target.value === currentVersionId)?.value ??
+      saveTargets[0]?.value ??
+      "__create_v1__";
+    setTargetVersionId(defaultTarget);
+  }, [saveTargets, ticketTemplateState.loadedVersionId]);
 
   const exportEditorJson = React.useCallback(() => {
     const payload = {
@@ -145,6 +193,8 @@ export function TicketTemplateFileMenu({
 
       const result = await saveTicketTemplateAction({
         ticketTemplateId: ticketTemplateState.ticketTemplateId ?? undefined,
+        ticketTemplateVersionId:
+          targetVersionId === "__create_v1__" ? undefined : targetVersionId,
         teamId: selectedTeamId ?? undefined,
         templateName,
         templateSchema,
@@ -163,7 +213,10 @@ export function TicketTemplateFileMenu({
         }),
       );
 
-      router.replace(`/ticket-builder?ticketTemplateId=${result.ticketTemplateId}`);
+      router.replace(
+        `/ticket-builder?ticketTemplateId=${result.ticketTemplateId}&ticketTemplateVersionId=${result.ticketTemplateVersionId}`,
+      );
+      setIsSaveDialogOpen(false);
       toast.success(
         result.versionNumber === 1
           ? "Saved template version 1."
@@ -181,6 +234,7 @@ export function TicketTemplateFileMenu({
     dispatch,
     router,
     selectedTeamId,
+    targetVersionId,
     ticketTemplateState,
   ]);
 
@@ -214,12 +268,12 @@ export function TicketTemplateFileMenu({
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
-          onClick={() => void saveTemplate()}
+          onClick={() => setIsSaveDialogOpen(true)}
           disabled={isSavingTemplate}
           className="gap-2"
         >
           <Save className="h-4 w-4 text-emerald-600" />
-          {isSavingTemplate ? "Saving Template..." : "Save Template"}
+          Save Template
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -233,6 +287,75 @@ export function TicketTemplateFileMenu({
           Export Preview PNG
         </DropdownMenuItem>
       </DropdownMenuContent>
+      <Dialog
+        open={isSaveDialogOpen}
+        onOpenChange={(open) => {
+          if (isSavingTemplate) {
+            return;
+          }
+          setIsSaveDialogOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Save</DialogTitle>
+            <DialogDescription>
+              Choose which version to save into. This will not change the live version used for reservations.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label
+              htmlFor="ticket-template-save-version"
+              className="text-sm font-medium text-foreground"
+            >
+              Save target
+            </label>
+            <select
+              id="ticket-template-save-version"
+              value={targetVersionId}
+              onChange={(event) => setTargetVersionId(event.target.value)}
+              disabled={isSavingTemplate}
+              className="border-input h-10 w-full rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {saveTargets.map((target) => (
+                <option key={target.value} value={target.value}>
+                  {target.label}
+                </option>
+              ))}
+            </select>
+            {isSavingTemplate ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving template...
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsSaveDialogOpen(false)}
+              disabled={isSavingTemplate}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void saveTemplate()}
+              disabled={isSavingTemplate}
+            >
+              {isSavingTemplate ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Confirm"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DropdownMenu>
   );
 }

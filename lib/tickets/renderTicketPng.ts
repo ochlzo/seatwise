@@ -356,7 +356,6 @@ function fitFieldTextToBounds(node: TicketTemplateFieldNode, value: string) {
 function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
   const fittedText = fitFieldTextToBounds(node, value);
   const width = fittedText.width;
-  const height = fittedText.height;
   const { anchor, x } = resolveTextAnchor({
     ...node,
     width,
@@ -367,6 +366,16 @@ function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
   const fill = node.fill ?? "#111827";
   const fontFamily = node.fontFamily ?? "Georgia";
   const fontWeight = node.fontWeight ?? 700;
+  const rotation =
+    typeof node.rotation === "number" && Number.isFinite(node.rotation)
+      ? node.rotation
+      : 0;
+  const xPosition = Math.round(node.x);
+  const yPosition = Math.round(node.y);
+  const groupTransform =
+    rotation === 0
+      ? `translate(${xPosition} ${yPosition})`
+      : `translate(${xPosition} ${yPosition}) rotate(${rotation})`;
   const textSpans = fittedText.lines
     .map((line, index) => {
       const lineY = fontSize + index * lineHeight;
@@ -377,8 +386,10 @@ function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
 
   return Buffer.from(
     [
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${TICKET_TEMPLATE_CANVAS_PX_WIDTH}" height="${TICKET_TEMPLATE_CANVAS_PX_HEIGHT}" viewBox="0 0 ${TICKET_TEMPLATE_CANVAS_PX_WIDTH} ${TICKET_TEMPLATE_CANVAS_PX_HEIGHT}">`,
+      `<g transform="${groupTransform}">`,
       `<text font-size="${fontSize}" font-family="${escapeXml(fontFamily)}" font-weight="${fontWeight}" fill="${escapeXml(fill)}" fill-opacity="${opacity}" text-anchor="${anchor}">${textSpans}</text>`,
+      "</g>",
       "</svg>",
     ].join(""),
     "utf8",
@@ -430,17 +441,11 @@ export async function renderTicketPng({
         continue;
       }
 
-      const fittedOverlay = await fitOverlayToCanvas(
-        buildFieldOverlay(node, value),
-        Math.round(node.x),
-        Math.round(node.y),
-      );
-
-      if (!fittedOverlay) {
-        continue;
-      }
-
-      overlays.push(fittedOverlay);
+      overlays.push({
+        input: buildFieldOverlay(node, value),
+        left: 0,
+        top: 0,
+      });
       continue;
     }
 

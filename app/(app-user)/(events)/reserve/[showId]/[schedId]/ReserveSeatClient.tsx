@@ -385,14 +385,16 @@ export function ReserveSeatClient({
 
   React.useEffect(() => {
     if (step !== "ticket_design") return;
-    if (ticketDesigns.length > 0 || isLoadingTicketDesigns) return;
+    if (ticketDesigns.length > 0) return;
 
-    let cancelled = false;
+    const abortController = new AbortController();
     const loadTicketDesigns = async () => {
       setIsLoadingTicketDesigns(true);
       setTicketDesignsError(null);
       try {
-        const response = await fetch(`/api/shows/${showId}/ticket-designs`);
+        const response = await fetch(`/api/shows/${showId}/ticket-designs`, {
+          signal: abortController.signal,
+        });
         const data = (await response.json()) as {
           success?: boolean;
           error?: string;
@@ -403,16 +405,20 @@ export function ReserveSeatClient({
           throw new Error(data.error || "Failed to load ticket designs.");
         }
 
-        if (cancelled) return;
         const designs = data.designs ?? [];
         setTicketDesigns(designs);
       } catch (err) {
-        if (cancelled) return;
+        if (
+          err instanceof DOMException &&
+          err.name === "AbortError"
+        ) {
+          return;
+        }
         setTicketDesignsError(
           err instanceof Error ? err.message : "Failed to load ticket designs.",
         );
       } finally {
-        if (!cancelled) {
+        if (!abortController.signal.aborted) {
           setIsLoadingTicketDesigns(false);
         }
       }
@@ -421,10 +427,9 @@ export function ReserveSeatClient({
     void loadTicketDesigns();
 
     return () => {
-      cancelled = true;
+      abortController.abort();
     };
   }, [
-    isLoadingTicketDesigns,
     showId,
     step,
     ticketDesigns.length,

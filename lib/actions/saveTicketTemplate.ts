@@ -11,6 +11,7 @@ import type { TicketTemplateVersion } from "@/lib/tickets/types";
 
 type SaveTicketTemplatePayload = {
   ticketTemplateId?: string;
+  ticketTemplateVersionId?: string;
   teamId?: string;
   templateName: string;
   templateSchema: TicketTemplateVersion;
@@ -30,6 +31,7 @@ export async function saveTicketTemplateAction(payload: SaveTicketTemplatePayloa
 
     const saved = await saveTicketTemplateVersionRecord({
       ticketTemplateId: payload.ticketTemplateId?.trim() || undefined,
+      ticketTemplateVersionId: payload.ticketTemplateVersionId?.trim() || undefined,
       teamId: scopedTeamId,
       templateName: payload.templateName,
       templateSchema: payload.templateSchema,

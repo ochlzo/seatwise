@@ -417,7 +417,7 @@ const ticketTemplateSlice = createSlice({
     },
     setTitle(state, action: PayloadAction<string>) {
       pushHistory(state);
-      state.title = action.payload.trim() || TICKET_TEMPLATE_DEFAULT_TITLE;
+      state.title = action.payload;
     },
     updateCanvasSize(state) {
       state.canvas.width = TICKET_TEMPLATE_CANVAS_PX_WIDTH;

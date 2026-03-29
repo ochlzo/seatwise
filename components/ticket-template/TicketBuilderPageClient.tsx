@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import LoadingPage from "@/app/LoadingPage";
 import { TicketTemplateControlBar } from "@/components/ticket-template/TicketTemplateControlBar";
@@ -38,14 +38,24 @@ const TicketTemplateCanvas = dynamic(
 );
 
 export function TicketBuilderPageClient() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const ticketTemplateId = searchParams.get("ticketTemplateId");
+  const requestedTicketTemplateVersionId = searchParams.get("ticketTemplateVersionId");
   const dispatch = useAppDispatch();
   const hasUnsavedChanges = useAppSelector(
     (state) => state.ticketTemplate.hasUnsavedChanges,
   );
   const [isLoadingTemplate, setIsLoadingTemplate] = React.useState(false);
   const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
+  const [availableVersions, setAvailableVersions] = React.useState<
+    Array<{
+      ticket_template_version_id: string;
+      version_number: number;
+      createdAt: string;
+    }>
+  >([]);
+  const [liveVersionId, setLiveVersionId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -53,6 +63,8 @@ export function TicketBuilderPageClient() {
     const loadTemplate = async () => {
       if (!ticketTemplateId) {
         dispatch(resetTicketTemplate());
+        setAvailableVersions([]);
+        setLiveVersionId(null);
         return;
       }
 
@@ -70,16 +82,43 @@ export function TicketBuilderPageClient() {
           return;
         }
 
+        const versions = Array.isArray(data.ticketTemplate.versions)
+          ? data.ticketTemplate.versions
+          : [];
+        const requestedVersion = requestedTicketTemplateVersionId
+          ? versions.find(
+              (version: { ticket_template_version_id: string }) =>
+                version.ticket_template_version_id === requestedTicketTemplateVersionId,
+            )
+          : null;
+        const liveVersionId =
+          typeof data.ticketTemplate.liveTicketTemplateVersionId === "string"
+            ? data.ticketTemplate.liveTicketTemplateVersionId
+            : null;
+        const liveVersion =
+          liveVersionId &&
+          versions.find(
+            (version: { ticket_template_version_id: string }) =>
+              version.ticket_template_version_id === liveVersionId,
+          );
+        const selectedVersion =
+          requestedVersion ??
+          liveVersion ??
+          data.ticketTemplate.latestVersion ??
+          versions[0] ??
+          null;
+
         dispatch(
           loadTicketTemplate({
             ticketTemplateId: data.ticketTemplate.ticket_template_id,
-            loadedVersionId:
-              data.ticketTemplate.latestVersion?.ticket_template_version_id ?? null,
+            loadedVersionId: selectedVersion?.ticket_template_version_id ?? null,
             title: data.ticketTemplate.template_name,
-            template: data.ticketTemplate.latestVersion?.template_schema,
+            template: selectedVersion?.template_schema,
           }),
         );
         setSelectedTeamId(data.ticketTemplate.team_id ?? null);
+        setAvailableVersions(versions);
+        setLiveVersionId(liveVersionId);
       } catch (error) {
         if (!isMounted) {
           return;
@@ -91,6 +130,8 @@ export function TicketBuilderPageClient() {
             : "Unable to load ticket template.";
         toast.error(message);
         dispatch(resetTicketTemplate());
+        setAvailableVersions([]);
+        setLiveVersionId(null);
       } finally {
         if (isMounted) {
           setIsLoadingTemplate(false);
@@ -103,7 +144,24 @@ export function TicketBuilderPageClient() {
     return () => {
       isMounted = false;
     };
-  }, [dispatch, ticketTemplateId]);
+  }, [dispatch, requestedTicketTemplateVersionId, ticketTemplateId]);
+
+  const selectedVersionId = useAppSelector(
+    (state) => state.ticketTemplate.loadedVersionId,
+  );
+
+  const handleVersionSelect = React.useCallback(
+    (ticketTemplateVersionId: string) => {
+      if (!ticketTemplateId) {
+        return;
+      }
+
+      router.replace(
+        `/ticket-builder?ticketTemplateId=${ticketTemplateId}&ticketTemplateVersionId=${ticketTemplateVersionId}`,
+      );
+    },
+    [router, ticketTemplateId],
+  );
 
   React.useEffect(() => {
     if (!hasUnsavedChanges) {
@@ -135,12 +193,32 @@ export function TicketBuilderPageClient() {
             <div className="flex items-center gap-2">
               <ThemeSwithcer />
               <TicketTemplateTitle />
+              {ticketTemplateId && availableVersions.length > 0 ? (
+                <select
+                  value={selectedVersionId ?? ""}
+                  onChange={(event) => handleVersionSelect(event.target.value)}
+                  className="border-input h-8 rounded-md border bg-background px-2 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  {availableVersions.map((version) => (
+                    <option
+                      key={version.ticket_template_version_id}
+                      value={version.ticket_template_version_id}
+                    >
+                      {`v${version.version_number}${version.ticket_template_version_id === liveVersionId ? " (Live)" : ""}`}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               <TicketTemplateTeamSelector
                 selectedTeamId={selectedTeamId}
                 onSelectedTeamIdChange={setSelectedTeamId}
                 className="w-[220px] border-zinc-200 dark:border-zinc-800 bg-background"
               />
-              <TicketTemplateFileMenu selectedTeamId={selectedTeamId} />
+              <TicketTemplateFileMenu
+                selectedTeamId={selectedTeamId}
+                availableVersions={availableVersions}
+                liveVersionId={liveVersionId}
+              />
             </div>
           }
         />

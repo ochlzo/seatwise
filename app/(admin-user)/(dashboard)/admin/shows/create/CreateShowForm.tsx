@@ -42,6 +42,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import MultipleSelector, {
+  type Option as MultipleSelectorOption,
+} from "@/components/ui/multiple-selector";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { CategoryAssignPanel } from "@/components/seatmap/CategoryAssignPanel";
 import type { SeatmapState } from "@/lib/seatmap/types";
@@ -257,13 +260,16 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       seatmap.seatmap_name.toLowerCase().includes(query)
     );
   }, [seatmapQuery, seatmaps, formData.seatmap_id]);
-  const filteredTicketTemplates = React.useMemo(() => {
-    const query = ticketTemplateQuery.trim().toLowerCase();
-    if (!query) return ticketTemplates;
-    return ticketTemplates.filter((template) =>
-      template.template_name.toLowerCase().includes(query),
-    );
-  }, [ticketTemplateQuery, ticketTemplates]);
+  const ticketTemplateSelectorOptions = React.useMemo<MultipleSelectorOption[]>(
+    () =>
+      ticketTemplates.map((template) => ({
+        value: template.ticket_template_id,
+        label: template.latestVersionNumber
+          ? `${template.template_name} (v${template.latestVersionNumber})`
+          : template.template_name,
+      })),
+    [ticketTemplates],
+  );
   const selectedTeam = React.useMemo(
     () => teams.find((team) => team.team_id === selectedTeamId) ?? null,
     [selectedTeamId, teams],
@@ -994,17 +1000,41 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     [formData.ticket_template_ids, ticketTemplates],
   );
 
-  const toggleTicketTemplateSelection = React.useCallback((templateId: string) => {
-    setFormData((prev) => {
-      const exists = prev.ticket_template_ids.includes(templateId);
-      return {
+  const selectedTicketTemplateOptions = React.useMemo<MultipleSelectorOption[]>(
+    () =>
+      formData.ticket_template_ids.map((templateId) => {
+        const match = ticketTemplateSelectorOptions.find(
+          (option) => option.value === templateId,
+        );
+        return match ?? { value: templateId, label: templateId };
+      }),
+    [formData.ticket_template_ids, ticketTemplateSelectorOptions],
+  );
+
+  const handleTicketTemplateSelectionChange = React.useCallback(
+    (nextOptions: MultipleSelectorOption[]) => {
+      setFormData((prev) => ({
         ...prev,
-        ticket_template_ids: exists
-          ? prev.ticket_template_ids.filter((id) => id !== templateId)
-          : [...prev.ticket_template_ids, templateId],
-      };
-    });
-  }, []);
+        ticket_template_ids: nextOptions.map((option) => option.value),
+      }));
+    },
+    [],
+  );
+
+  const handleTicketTemplateSearch = React.useCallback(
+    (value: string) => {
+      setTicketTemplateQuery(value);
+      const query = value.trim().toLowerCase();
+      if (!query) {
+        return ticketTemplateSelectorOptions;
+      }
+
+      return ticketTemplateSelectorOptions.filter((option) =>
+        option.label.toLowerCase().includes(query),
+      );
+    },
+    [ticketTemplateSelectorOptions],
+  );
 
   const removeSched = (id: string) => {
     setScheds((prev) => prev.filter((s) => s.id !== id));
@@ -1843,57 +1873,32 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
                   Manage Ticket Templates
                 </Button>
               </div>
-              <Input
-                id="ticket-template"
+              <MultipleSelector
+                value={selectedTicketTemplateOptions}
+                options={ticketTemplateSelectorOptions}
+                onSearchSync={handleTicketTemplateSearch}
+                onChange={handleTicketTemplateSelectionChange}
                 placeholder={
                   isLoadingTicketTemplates
                     ? "Loading ticket templates..."
                     : "Search ticket templates"
                 }
                 disabled={isLoadingTicketTemplates}
-                value={ticketTemplateQuery}
-                onChange={(event) => setTicketTemplateQuery(event.target.value)}
-              />
-              <div className="max-h-48 overflow-auto rounded-md border border-sidebar-border/70 bg-muted/20 p-1.5">
-                {isLoadingTicketTemplates ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                    Loading ticket templates...
-                  </div>
-                ) : filteredTicketTemplates.length === 0 ? (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                delay={200}
+                emptyIndicator={
+                  <p className="px-2 py-1.5 text-sm text-muted-foreground">
                     No ticket templates found.
-                  </div>
-                ) : (
-                  filteredTicketTemplates.map((template) => {
-                    const isSelected = formData.ticket_template_ids.includes(
-                      template.ticket_template_id,
-                    );
-                    return (
-                      <button
-                        key={template.ticket_template_id}
-                        type="button"
-                        onClick={() => toggleTicketTemplateSelection(template.ticket_template_id)}
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
-                          isSelected
-                            ? "bg-primary/10 text-primary"
-                            : "hover:bg-accent hover:text-accent-foreground",
-                        )}
-                      >
-                        <span className="truncate">
-                          {template.template_name}
-                          {template.latestVersionNumber
-                            ? ` (v${template.latestVersionNumber})`
-                            : ""}
-                        </span>
-                        <span className="text-xs font-medium">
-                          {isSelected ? "Selected" : "Select"}
-                        </span>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
+                  </p>
+                }
+                className="min-h-10 border-sidebar-border/70 bg-muted/20"
+                commandProps={{
+                  label: "Ticket template selector",
+                }}
+                inputProps={{
+                  id: "ticket-template",
+                  onValueChange: setTicketTemplateQuery,
+                }}
+              />
               <p className="text-[11px] text-muted-foreground">
                 {selectedTicketTemplates.length === 0
                   ? "No ticket templates selected. Customers must choose from selected designs during reservation."

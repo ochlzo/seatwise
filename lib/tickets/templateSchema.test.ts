@@ -109,6 +109,21 @@ test("ticket template editor initializes with a fixed empty canvas", async () =>
   assert.equal(editorState.hasUnsavedChanges, false);
 });
 
+test("ticket template title field allows temporarily empty values while typing", async () => {
+  const reducer = await loadEditorReducer();
+  assert.ok(reducer, "ticket template reducer should exist");
+  const editorState = reducer?.(undefined, {
+    type: "ticketTemplate/setTitle",
+    payload: "",
+  }) as
+    | {
+        title: string;
+      }
+    | undefined;
+
+  assert.equal(editorState?.title, "");
+});
+
 test("ticket template editor ignores canvas resize mutations", async () => {
   const reducer = await loadEditorReducer();
   assert.ok(reducer, "ticket template reducer should exist");
