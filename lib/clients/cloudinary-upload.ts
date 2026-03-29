@@ -1,7 +1,8 @@
 export type UploadPurpose =
   | "show-thumbnail"
   | "avatar-custom"
-  | "ticket-template-asset";
+  | "ticket-template-asset"
+  | "ticket-template-preview";
 
 import type { TicketTemplateVersion } from "@/lib/tickets/types";
 
@@ -90,6 +91,7 @@ export async function uploadImageToCloudinary(
 type ResolveTicketTemplateAssetRefsOptions = {
   ticketTemplateId?: string | null;
   uploadKey?: string | null;
+  previewDataUrl?: string | null;
   uploadAsset?: (
     file: File | string,
     purpose: UploadPurpose,
@@ -133,8 +135,28 @@ export async function resolveTicketTemplateAssetRefsForSave(
     }),
   );
 
+  let previewUrl = templateSchema.previewUrl ?? undefined;
+  let previewAssetKey = templateSchema.previewAssetKey ?? undefined;
+
+  const previewDataUrl = options?.previewDataUrl?.trim();
+  if (previewDataUrl) {
+    const uploadedPreview = await uploadAsset(
+      previewDataUrl,
+      "ticket-template-preview",
+      {
+        ticketTemplateId: options?.ticketTemplateId,
+        uploadKey: options?.uploadKey,
+      },
+    );
+
+    previewUrl = uploadedPreview.secureUrl;
+    previewAssetKey = uploadedPreview.publicId;
+  }
+
   return {
     canvas: templateSchema.canvas,
     nodes,
+    ...(previewUrl ? { previewUrl } : {}),
+    ...(previewAssetKey ? { previewAssetKey } : {}),
   };
 }

@@ -311,3 +311,33 @@ test("resolveTicketTemplateAssetRefsForSave uploads only local asset previews du
     },
   ]);
 });
+
+test("resolveTicketTemplateAssetRefsForSave uploads the rendered preview PNG when provided", async () => {
+  const template = createEmptyTicketTemplate();
+  const uploadCalls: Array<{ file: File | string; purpose: string }> = [];
+
+  const resolved = await resolveTicketTemplateAssetRefsForSave(template, {
+    ticketTemplateId: "template-42",
+    uploadKey: "draft-42",
+    previewDataUrl: "data:image/png;base64,PREVIEW_CAPTURE",
+    uploadAsset: async (file, purpose) => {
+      uploadCalls.push({ file, purpose });
+      return {
+        secureUrl: "https://res.cloudinary.com/demo/image/upload/v1/template-preview.png",
+        publicId: "seatwise/ticket_templates/template-42/previews/template-preview",
+      };
+    },
+  });
+
+  assert.equal(uploadCalls.length, 1);
+  assert.equal(uploadCalls[0]?.file, "data:image/png;base64,PREVIEW_CAPTURE");
+  assert.equal(uploadCalls[0]?.purpose, "ticket-template-preview");
+  assert.equal(
+    resolved.previewUrl,
+    "https://res.cloudinary.com/demo/image/upload/v1/template-preview.png",
+  );
+  assert.equal(
+    resolved.previewAssetKey,
+    "seatwise/ticket_templates/template-42/previews/template-preview",
+  );
+});

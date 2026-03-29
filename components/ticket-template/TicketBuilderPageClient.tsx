@@ -157,7 +157,7 @@ export function TicketBuilderPageClient() {
                 </div>
               </div>
             ) : null}
-            <TicketTemplateCanvas />
+            <TicketTemplateCanvas workspacePadding={96} />
             <TicketTemplateControlBar />
           </div>
 

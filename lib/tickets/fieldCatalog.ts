@@ -22,11 +22,8 @@ export function getTicketFieldLabel(fieldKey: string) {
 }
 
 export function createEmptyTicketFieldValueMap(): TicketFieldValueMap {
-  return TICKET_FIELD_CATALOG.reduce(
-    (fields, field) => {
-      fields[field.key] = "";
-      return fields;
-    },
-    {} as TicketFieldValueMap,
-  );
+  return TICKET_FIELD_CATALOG.reduce((fields, field) => {
+    fields[field.key] = "";
+    return fields;
+  }, {} as TicketFieldValueMap);
 }

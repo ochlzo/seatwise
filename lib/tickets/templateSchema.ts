@@ -160,11 +160,20 @@ export function normalizeTemplateVersion(
         .map(({ node }) => node)
     : [];
 
+  const normalizedPreviewUrl = toNullableStringValue(input?.previewUrl);
+  const normalizedPreviewAssetKey = toNullableStringValue(input?.previewAssetKey);
+
   return {
     canvas: {
       width: TICKET_TEMPLATE_CANVAS_PX_WIDTH,
       height: TICKET_TEMPLATE_CANVAS_PX_HEIGHT,
     },
     nodes,
+    ...(normalizedPreviewUrl !== undefined
+      ? { previewUrl: normalizedPreviewUrl }
+      : {}),
+    ...(normalizedPreviewAssetKey !== undefined
+      ? { previewAssetKey: normalizedPreviewAssetKey }
+      : {}),
   };
 }

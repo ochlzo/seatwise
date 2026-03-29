@@ -23,6 +23,12 @@ import { updateNode } from "@/lib/features/ticketTemplate/ticketTemplateSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { TICKET_TEMPLATE_FONT_OPTIONS } from "@/lib/tickets/fontCatalog";
 
+const FONT_SIZE_OPTIONS = [
+  12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 44, 48, 50, 56, 64, 72,
+] as const;
+
+const FONT_WEIGHT_OPTIONS = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
+
 function NumericInput({
   id,
   label,
@@ -85,6 +91,16 @@ export function TicketTemplateInspector() {
     selectedNode?.kind === "field"
       ? TICKET_TEMPLATE_FONT_OPTIONS.some(
           (option) => option.family === selectedNode.fontFamily,
+        )
+      : true;
+  const hasSelectedFontSizeOption =
+    selectedNode?.kind === "field"
+      ? FONT_SIZE_OPTIONS.includes(selectedNode.fontSize as (typeof FONT_SIZE_OPTIONS)[number])
+      : true;
+  const hasSelectedFontWeightOption =
+    selectedNode?.kind === "field"
+      ? FONT_WEIGHT_OPTIONS.includes(
+          selectedNode.fontWeight as (typeof FONT_WEIGHT_OPTIONS)[number],
         )
       : true;
 
@@ -226,26 +242,56 @@ export function TicketTemplateInspector() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <NumericInput
-                    id="ticket-field-size"
-                    label="Font Size"
-                    value={selectedNode.fontSize}
-                    min={12}
-                    onCommit={(nextValue) =>
-                      updateSelectedNode({ fontSize: nextValue })
-                    }
-                  />
-                  <NumericInput
-                    id="ticket-field-weight"
-                    label="Font Weight"
-                    value={selectedNode.fontWeight}
-                    min={100}
-                    max={900}
-                    step={100}
-                    onCommit={(nextValue) =>
-                      updateSelectedNode({ fontWeight: nextValue })
-                    }
-                  />
+                  <div className="grid gap-2">
+                    <Label htmlFor="ticket-field-size" className="text-[11px] leading-4">Font Size</Label>
+                    <Select
+                      value={String(selectedNode.fontSize)}
+                      onValueChange={(nextValue) =>
+                        updateSelectedNode({ fontSize: Number(nextValue) })
+                      }
+                    >
+                      <SelectTrigger id="ticket-field-size" className="h-8 w-full text-xs">
+                        <SelectValue placeholder="Choose size" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {!hasSelectedFontSizeOption ? (
+                          <SelectItem value={String(selectedNode.fontSize)}>
+                            {selectedNode.fontSize}px
+                          </SelectItem>
+                        ) : null}
+                        {FONT_SIZE_OPTIONS.map((size) => (
+                          <SelectItem key={size} value={String(size)}>
+                            {size}px
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="ticket-field-weight" className="text-[11px] leading-4">Font Weight</Label>
+                    <Select
+                      value={String(selectedNode.fontWeight)}
+                      onValueChange={(nextValue) =>
+                        updateSelectedNode({ fontWeight: Number(nextValue) })
+                      }
+                    >
+                      <SelectTrigger id="ticket-field-weight" className="h-8 w-full text-xs">
+                        <SelectValue placeholder="Choose weight" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {!hasSelectedFontWeightOption ? (
+                          <SelectItem value={String(selectedNode.fontWeight)}>
+                            {selectedNode.fontWeight}
+                          </SelectItem>
+                        ) : null}
+                        {FONT_WEIGHT_OPTIONS.map((weight) => (
+                          <SelectItem key={weight} value={String(weight)}>
+                            {weight}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
                   <div className="grid gap-2">
                     <Label htmlFor="ticket-field-align" className="text-[11px] leading-4">Alignment</Label>

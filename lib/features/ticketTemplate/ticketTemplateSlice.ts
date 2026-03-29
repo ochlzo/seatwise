@@ -292,7 +292,7 @@ function hydrateAssetNode(node: TicketTemplateAssetNode): TicketTemplateAssetEdi
 }
 
 function hydrateFieldNode(node: TicketTemplateFieldNode): TicketTemplateFieldEditorNode {
-  const fontSize = clampNumber(node.fontSize, 64, 12);
+  const fontSize = clampNumber(node.fontSize, 50, 12);
   return {
     ...node,
     kind: "field",
@@ -303,7 +303,7 @@ function hydrateFieldNode(node: TicketTemplateFieldNode): TicketTemplateFieldEdi
     height: clampNumber(node.height, Math.ceil(fontSize * 1.4), 24),
     fontSize,
     fontFamily: node.fontFamily ?? "Georgia",
-    fontWeight: clampNumber(node.fontWeight, 700, 100),
+    fontWeight: clampNumber(node.fontWeight, 100, 100),
     fill: node.fill ?? "#111827",
     align: node.align ?? "left",
   };
@@ -356,7 +356,7 @@ function createInitialState(): TicketTemplateState {
 }
 
 function createFieldNode(fieldKey: string): TicketTemplateFieldEditorNode {
-  const fontSize = 64;
+  const fontSize = 50;
   return {
     id: uuidv4(),
     kind: "field",
@@ -369,7 +369,7 @@ function createFieldNode(fieldKey: string): TicketTemplateFieldEditorNode {
     height: Math.ceil(fontSize * 1.4),
     fontSize,
     fontFamily: "Georgia",
-    fontWeight: 700,
+    fontWeight: 100,
     fill: "#111827",
     align: "left",
     opacity: 1,

@@ -4,7 +4,16 @@ import * as React from "react";
 import type { KonvaEventObject, Node as KonvaNode } from "konva/lib/Node";
 import type { Stage as KonvaStage } from "konva/lib/Stage";
 import type { Transformer as KonvaTransformer } from "konva/lib/shapes/Transformer";
-import { Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from "react-konva";
+import {
+  Group,
+  Image as KonvaImage,
+  Layer,
+  Line,
+  Rect,
+  Stage,
+  Text,
+  Transformer,
+} from "react-konva";
 
 import {
   copySelectedNodes,
@@ -318,7 +327,11 @@ function TicketQrNode({
   );
 }
 
-export function TicketTemplateCanvas() {
+export function TicketTemplateCanvas({
+  workspacePadding = 96,
+}: {
+  workspacePadding?: number;
+}) {
   const dispatch = useAppDispatch();
   const canvas = useAppSelector((state) => state.ticketTemplate.canvas);
   const nodes = useAppSelector((state) => state.ticketTemplate.nodes);
@@ -407,6 +420,10 @@ export function TicketTemplateCanvas() {
 
   const stageDisplayWidth = canvas.width * displayScale;
   const stageDisplayHeight = canvas.height * displayScale;
+  const stageViewportWidth = stageDisplayWidth + workspacePadding * 2;
+  const stageViewportHeight = stageDisplayHeight + workspacePadding * 2;
+  const canvasOffsetX = workspacePadding;
+  const canvasOffsetY = workspacePadding;
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
   const fieldFontFamilies = React.useMemo(
@@ -631,14 +648,24 @@ export function TicketTemplateCanvas() {
     });
   }, [fieldFontFamilies]);
 
+  const getPreviewDataUrl = React.useCallback(() => {
+    return (
+      stageRef.current?.toDataURL({
+        x: canvasOffsetX,
+        y: canvasOffsetY,
+        width: stageDisplayWidth,
+        height: stageDisplayHeight,
+        pixelRatio: 2,
+        mimeType: "image/png",
+      }) ?? null
+    );
+  }, [canvasOffsetX, canvasOffsetY, stageDisplayHeight, stageDisplayWidth]);
+
   React.useEffect(() => {
     const handleExport = (event: Event) => {
       const detail = (event as CustomEvent<{ fileName?: string }>).detail;
       const fileName = detail?.fileName ?? "ticket-template.png";
-      const dataUrl = stageRef.current?.toDataURL({
-        pixelRatio: 2,
-        mimeType: "image/png",
-      });
+      const dataUrl = getPreviewDataUrl();
 
       if (!dataUrl) {
         return;
@@ -652,9 +679,25 @@ export function TicketTemplateCanvas() {
       document.body.removeChild(link);
     };
 
+    const handleCapture = (
+      event: Event,
+    ) => {
+      const detail = (
+        event as CustomEvent<{
+          onCaptured?: (dataUrl: string | null) => void;
+        }>
+      ).detail;
+
+      detail?.onCaptured?.(getPreviewDataUrl());
+    };
+
     window.addEventListener(
       "ticket-template-export-png",
       handleExport as EventListener,
+    );
+    window.addEventListener(
+      "ticket-template-capture-png",
+      handleCapture as EventListener,
     );
 
     return () => {
@@ -662,8 +705,12 @@ export function TicketTemplateCanvas() {
         "ticket-template-export-png",
         handleExport as EventListener,
       );
+      window.removeEventListener(
+        "ticket-template-capture-png",
+        handleCapture as EventListener,
+      );
     };
-  }, []);
+  }, [getPreviewDataUrl]);
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -705,8 +752,8 @@ export function TicketTemplateCanvas() {
           const pointer = lastPointerPositionRef.current;
           const position = pointer
             ? {
-                x: pointer.x / displayScale,
-                y: pointer.y / displayScale,
+                x: (pointer.x - canvasOffsetX) / displayScale,
+                y: (pointer.y - canvasOffsetY) / displayScale,
               }
             : {
                 x: canvas.width / 2,
@@ -789,7 +836,7 @@ export function TicketTemplateCanvas() {
       window.removeEventListener("keyup", handleKeyUp);
       window.removeEventListener("blur", handleBlur);
     };
-  }, [canvas.height, canvas.width, dispatch, displayScale]);
+  }, [canvas.height, canvas.width, canvasOffsetX, canvasOffsetY, dispatch, displayScale]);
 
   const updateCanvasNode = React.useCallback(
     (id: string, changes: Partial<TicketTemplateEditorNode>) => {
@@ -1157,34 +1204,25 @@ export function TicketTemplateCanvas() {
       <div ref={containerRef} className="min-h-0 flex-1 overflow-auto bg-zinc-100 p-6 dark:bg-zinc-950">
         <div
           className="mx-auto flex min-h-full items-center justify-center"
-          style={{ minWidth: stageDisplayWidth + 32 }}
+          style={{ minWidth: stageViewportWidth + 32 }}
         >
           <div
-            className="rounded-[28px] border border-zinc-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.14)] dark:border-zinc-700"
+            className="relative"
             style={{
-              width: stageDisplayWidth,
-              height: stageDisplayHeight,
+              width: stageViewportWidth,
+              height: stageViewportHeight,
             }}
           >
             <Stage
               ref={stageRef}
-              width={stageDisplayWidth}
-              height={stageDisplayHeight}
+              width={stageViewportWidth}
+              height={stageViewportHeight}
               onMouseDown={handleStageMouseDown}
               onMouseMove={handleStageMouseMove}
               onMouseUp={finishMarqueeSelection}
               onMouseLeave={finishMarqueeSelection}
             >
               <Layer>
-                <Rect
-                  x={0}
-                  y={0}
-                  width={stageDisplayWidth}
-                  height={stageDisplayHeight}
-                  fill="#ffffff"
-                  listening={false}
-                />
-
                 {marqueeRect.visible ? (
                   <Rect
                     x={marqueeRect.x}
@@ -1202,10 +1240,10 @@ export function TicketTemplateCanvas() {
                 {snapGuides.x !== null ? (
                   <Line
                     points={[
-                      snapGuides.x * displayScale,
-                      0,
-                      snapGuides.x * displayScale,
-                      stageDisplayHeight,
+                      canvasOffsetX + snapGuides.x * displayScale,
+                      canvasOffsetY,
+                      canvasOffsetX + snapGuides.x * displayScale,
+                      canvasOffsetY + stageDisplayHeight,
                     ]}
                     stroke="#3b82f6"
                     strokeWidth={1}
@@ -1217,10 +1255,10 @@ export function TicketTemplateCanvas() {
                 {snapGuides.y !== null ? (
                   <Line
                     points={[
-                      0,
-                      snapGuides.y * displayScale,
-                      stageDisplayWidth,
-                      snapGuides.y * displayScale,
+                      canvasOffsetX,
+                      canvasOffsetY + snapGuides.y * displayScale,
+                      canvasOffsetX + stageDisplayWidth,
+                      canvasOffsetY + snapGuides.y * displayScale,
                     ]}
                     stroke="#3b82f6"
                     strokeWidth={1}
@@ -1229,12 +1267,64 @@ export function TicketTemplateCanvas() {
                   />
                 ) : null}
 
-                {nodes.map((node) => {
-                  const isSelected = selectedNodeIds.includes(node.id);
+                <Group
+                  x={canvasOffsetX}
+                  y={canvasOffsetY}
+                  clipX={0}
+                  clipY={0}
+                  clipWidth={stageDisplayWidth}
+                  clipHeight={stageDisplayHeight}
+                >
+                  <Rect
+                    x={0}
+                    y={0}
+                    width={stageDisplayWidth}
+                    height={stageDisplayHeight}
+                    fill="#ffffff"
+                    listening={false}
+                  />
 
-                  if (node.kind === "asset") {
+                  {nodes.map((node) => {
+                    const isSelected = selectedNodeIds.includes(node.id);
+
+                    if (node.kind === "asset") {
+                      return (
+                        <TicketAssetNode
+                          key={node.id}
+                          node={node}
+                          displayScale={displayScale}
+                          selected={isSelected}
+                          registerRef={registerRef}
+                          onPointerDown={handleNodePointerDown}
+                          onSelect={handleNodeTapSelect}
+                          onChange={updateCanvasNode}
+                          onGroupDragStart={handleGroupDragStart}
+                          onGroupDragMove={handleGroupDragMove}
+                          onGroupDragEnd={handleGroupDragEnd}
+                        />
+                      );
+                    }
+
+                    if (node.kind === "field") {
+                      return (
+                        <TicketFieldNode
+                          key={node.id}
+                          node={node}
+                          displayScale={displayScale}
+                          selected={isSelected}
+                          registerRef={registerRef}
+                          onPointerDown={handleNodePointerDown}
+                          onSelect={handleNodeTapSelect}
+                          onChange={updateCanvasNode}
+                          onGroupDragStart={handleGroupDragStart}
+                          onGroupDragMove={handleGroupDragMove}
+                          onGroupDragEnd={handleGroupDragEnd}
+                        />
+                      );
+                    }
+
                     return (
-                      <TicketAssetNode
+                      <TicketQrNode
                         key={node.id}
                         node={node}
                         displayScale={displayScale}
@@ -1248,42 +1338,8 @@ export function TicketTemplateCanvas() {
                         onGroupDragEnd={handleGroupDragEnd}
                       />
                     );
-                  }
-
-                  if (node.kind === "field") {
-                    return (
-                      <TicketFieldNode
-                        key={node.id}
-                        node={node}
-                        displayScale={displayScale}
-                        selected={isSelected}
-                        registerRef={registerRef}
-                        onPointerDown={handleNodePointerDown}
-                        onSelect={handleNodeTapSelect}
-                        onChange={updateCanvasNode}
-                        onGroupDragStart={handleGroupDragStart}
-                        onGroupDragMove={handleGroupDragMove}
-                        onGroupDragEnd={handleGroupDragEnd}
-                      />
-                    );
-                  }
-
-                  return (
-                    <TicketQrNode
-                      key={node.id}
-                      node={node}
-                      displayScale={displayScale}
-                      selected={isSelected}
-                      registerRef={registerRef}
-                      onPointerDown={handleNodePointerDown}
-                      onSelect={handleNodeTapSelect}
-                      onChange={updateCanvasNode}
-                      onGroupDragStart={handleGroupDragStart}
-                      onGroupDragMove={handleGroupDragMove}
-                      onGroupDragEnd={handleGroupDragEnd}
-                    />
-                  );
-                })}
+                  })}
+                </Group>
 
                 <Transformer
                   ref={transformerRef}

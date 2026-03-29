@@ -8,7 +8,8 @@ type UploadPurpose =
   | "show-thumbnail"
   | "avatar-custom"
   | "gcash-receipt"
-  | "ticket-template-asset";
+  | "ticket-template-asset"
+  | "ticket-template-preview";
 
 const PURPOSES: Record<
   UploadPurpose,
@@ -41,6 +42,17 @@ const PURPOSES: Record<
         .replace(/^-+|-+$/g, "");
 
       return `seatwise/ticket_templates/${folderKey || "draft"}/assets`;
+    },
+    allowedFormats: "png",
+  },
+  "ticket-template-preview": {
+    requiresAdmin: true,
+    buildFolder: ({ ticketTemplateId, uploadKey }) => {
+      const folderKey = (ticketTemplateId?.trim() || uploadKey?.trim() || "draft")
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
+      return `seatwise/ticket_templates/${folderKey || "draft"}/previews`;
     },
     allowedFormats: "png",
   },

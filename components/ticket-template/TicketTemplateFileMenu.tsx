@@ -86,6 +86,43 @@ export function TicketTemplateFileMenu({
     router.push("/ticket-builder");
   }, [dispatch, router]);
 
+  const capturePreviewPngDataUrl = React.useCallback(() => {
+    return new Promise<string>((resolve, reject) => {
+      let settled = false;
+
+      const timeout = window.setTimeout(() => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        reject(new Error("Timed out while capturing the ticket preview image."));
+      }, 3000);
+
+      window.dispatchEvent(
+        new CustomEvent("ticket-template-capture-png", {
+          detail: {
+            onCaptured: (dataUrl: string | null) => {
+              if (settled) {
+                return;
+              }
+
+              settled = true;
+              window.clearTimeout(timeout);
+
+              if (!dataUrl) {
+                reject(new Error("Failed to capture the ticket preview image."));
+                return;
+              }
+
+              resolve(dataUrl);
+            },
+          },
+        }),
+      );
+    });
+  }, []);
+
   const saveTemplate = React.useCallback(async () => {
     const templateName = ticketTemplateState.title.trim();
     if (!templateName) {
@@ -96,11 +133,13 @@ export function TicketTemplateFileMenu({
     setIsSavingTemplate(true);
 
     try {
+      const previewDataUrl = await capturePreviewPngDataUrl();
       const templateSchema = await resolveTicketTemplateAssetRefsForSave(
         serializeTicketTemplateEditor(ticketTemplateState),
         {
           ticketTemplateId: ticketTemplateState.ticketTemplateId,
           uploadKey: uploadKeyRef.current,
+          previewDataUrl,
         },
       );
 
@@ -137,7 +176,13 @@ export function TicketTemplateFileMenu({
     } finally {
       setIsSavingTemplate(false);
     }
-  }, [dispatch, router, selectedTeamId, ticketTemplateState]);
+  }, [
+    capturePreviewPngDataUrl,
+    dispatch,
+    router,
+    selectedTeamId,
+    ticketTemplateState,
+  ]);
 
   return (
     <DropdownMenu>

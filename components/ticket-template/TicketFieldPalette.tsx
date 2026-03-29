@@ -80,7 +80,9 @@ export function TicketFieldPalette() {
       );
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unable to import the PNG asset.";
+        error instanceof Error
+          ? error.message
+          : "Unable to import the PNG asset.";
       toast.error(message);
     }
 
@@ -159,7 +161,6 @@ export function TicketFieldPalette() {
             Add QR Block
           </Button>
         </div>
-
       </CardContent>
     </Card>
   );

@@ -65,6 +65,7 @@ const ACCEPTED_POSTER_TYPES: Record<string, string[]> = {
 };
 
 const MANILA_TZ = "Asia/Manila";
+const CREATE_SHOW_DRAFT_STORAGE_KEY = "seatwise:create-show:draft:v1";
 
 type SchedDraft = {
   id: string;
@@ -79,6 +80,26 @@ type TimeRangeDraft = {
   end: string;
 };
 
+const createDefaultFormData = () => ({
+  show_name: "",
+  show_description: "",
+  venue: "",
+  address: "",
+  gcash_number: "",
+  gcash_account_name: "",
+  show_status: "DRAFT",
+  show_start_date: "",
+  show_end_date: "",
+  seatmap_id: "",
+  ticket_template_id: "",
+});
+
+const createDefaultTimeRange = (): TimeRangeDraft => ({
+  id: `time-${uuidv4()}`,
+  start: "19:00",
+  end: "21:00",
+});
+
 type SeatmapOption = {
   seatmap_id: string;
   seatmap_name: string;
@@ -90,6 +111,22 @@ type TicketTemplateOption = {
   template_name: string;
   latestVersionNumber: number | null;
   updatedAt: string;
+};
+
+type TeamOption = {
+  team_id: string;
+  name: string;
+};
+
+type TeamsResponse = {
+  success?: boolean;
+  error?: string;
+  teams?: TeamOption[];
+  currentAdmin?: {
+    teamId: string | null;
+    teamName: string | null;
+    isSuperadmin: boolean;
+  };
 };
 
 type CategoryDraft = {
@@ -108,6 +145,22 @@ type CategorySetDraft = {
   categories: CategoryDraft[];
   /** Maps seat ID -> category ID for this set */
   seatAssignments: Record<string, string>;
+};
+
+type CreateShowDraft = {
+  version: 1;
+  formData: ReturnType<typeof createDefaultFormData>;
+  selectedTeamId: string | null;
+  teamQuery: string;
+  scheds: SchedDraft[];
+  selectedDates: string[];
+  applyToAllDates: boolean;
+  seatmapQuery: string;
+  ticketTemplateQuery: string;
+  timeRanges: TimeRangeDraft[];
+  categorySets: CategorySetDraft[];
+  selectedSeatIds: string[];
+  activeSetId: string | null;
 };
 
 const COLOR_OPTIONS: Array<{ value: CategoryDraft["color_code"]; label: string; swatch: string | null }> = [
@@ -130,19 +183,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
   const [isStatusConfirmOpen, setIsStatusConfirmOpen] = React.useState(false);
   const [pendingStatus, setPendingStatus] = React.useState<ShowStatusOption | null>(null);
-  const [formData, setFormData] = React.useState({
-    show_name: "",
-    show_description: "",
-    venue: "",
-    address: "",
-    gcash_number: "",
-    gcash_account_name: "",
-    show_status: "DRAFT",
-    show_start_date: "",
-    show_end_date: "",
-    seatmap_id: "",
-    ticket_template_id: "",
-  });
+  const [formData, setFormData] = React.useState(createDefaultFormData);
   const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
   const [posterUploadError, setPosterUploadError] = React.useState<string | null>(null);
@@ -159,14 +200,27 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
   const [ticketTemplates, setTicketTemplates] = React.useState<TicketTemplateOption[]>([]);
   const [isLoadingTicketTemplates, setIsLoadingTicketTemplates] = React.useState(false);
   const [ticketTemplateQuery, setTicketTemplateQuery] = React.useState("");
+  const [teams, setTeams] = React.useState<TeamOption[]>([]);
+  const [isLoadingTeams, setIsLoadingTeams] = React.useState(false);
+  const [isSuperadmin, setIsSuperadmin] = React.useState(false);
+  const [currentAdminTeamName, setCurrentAdminTeamName] = React.useState<string | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(teamId ?? null);
+  const [teamQuery, setTeamQuery] = React.useState("");
+  const [isTeamComboboxOpen, setIsTeamComboboxOpen] = React.useState(false);
   const [timeRanges, setTimeRanges] = React.useState<TimeRangeDraft[]>([
-    { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
+    createDefaultTimeRange(),
   ]);
   const [categorySets, setCategorySets] = React.useState<CategorySetDraft[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
   const [seatmapData, setSeatmapData] = React.useState<SeatmapState | null>(null); // Store seatmap JSON
   /** Active category set ID for tabs */
   const [activeSetId, setActiveSetId] = React.useState<string | null>(null);
+  const selectedTeamIdRef = React.useRef<string | null>(teamId ?? null);
+  const hasHydratedDraftRef = React.useRef(false);
+
+  React.useEffect(() => {
+    selectedTeamIdRef.current = selectedTeamId;
+  }, [selectedTeamId]);
   const unassignedSchedCount = React.useMemo(() => {
     if (scheds.length === 0) return 0;
     const used = new Set<string>();
@@ -216,6 +270,21 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       template.template_name.toLowerCase().includes(query),
     );
   }, [formData.ticket_template_id, ticketTemplateQuery, ticketTemplates]);
+  const selectedTeam = React.useMemo(
+    () => teams.find((team) => team.team_id === selectedTeamId) ?? null,
+    [selectedTeamId, teams],
+  );
+  const filteredTeams = React.useMemo(() => {
+    const query = teamQuery.trim().toLowerCase();
+    if (!query) return teams;
+    return teams.filter((team) => team.name.toLowerCase().includes(query));
+  }, [teamQuery, teams]);
+  const isTeamComboboxInteractive =
+    isSuperadmin && teams.length > 0 && !isLoadingTeams;
+  const teamDisplayValue =
+    selectedTeam?.name ??
+    currentAdminTeamName ??
+    (isLoadingTeams ? "Loading team..." : "No team assigned");
   const hasSeatmapSelected = Boolean(formData.seatmap_id);
 
   React.useEffect(() => {
@@ -329,6 +398,175 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       isMounted = false;
     };
   }, []);
+
+  React.useEffect(() => {
+    let isMounted = true;
+
+    const loadTeams = async () => {
+      try {
+        setIsLoadingTeams(true);
+        const response = await fetch("/api/admin/access/teams");
+        const data = (await response.json()) as TeamsResponse;
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to load teams.");
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        const scopedTeams = data.teams ?? [];
+        const isScopedSuperadmin = Boolean(data.currentAdmin?.isSuperadmin);
+        const adminTeamName = data.currentAdmin?.teamName ?? null;
+        setTeams(scopedTeams);
+        setIsSuperadmin(isScopedSuperadmin);
+        setCurrentAdminTeamName(adminTeamName);
+
+        const requestedTeamId = teamId?.trim() || null;
+        const hasRequestedTeam =
+          requestedTeamId &&
+          scopedTeams.some((team) => team.team_id === requestedTeamId);
+        const currentSelection = selectedTeamIdRef.current;
+        const hasCurrentSelection =
+          currentSelection &&
+          scopedTeams.some((team) => team.team_id === currentSelection);
+
+        const preferredTeamId =
+          (hasCurrentSelection ? currentSelection : null) ??
+          (hasRequestedTeam ? requestedTeamId : null) ??
+          data.currentAdmin?.teamId ??
+          scopedTeams[0]?.team_id ??
+          null;
+        setSelectedTeamId(preferredTeamId);
+
+        const selectedTeamName =
+          scopedTeams.find((team) => team.team_id === preferredTeamId)?.name ??
+          adminTeamName ??
+          "";
+        setTeamQuery(selectedTeamName);
+      } catch (error: unknown) {
+        if (!isMounted) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : "Unable to load teams";
+        toast.error(message);
+        setTeams([]);
+        setIsSuperadmin(false);
+        setCurrentAdminTeamName(null);
+        setSelectedTeamId(teamId ?? null);
+        setTeamQuery("");
+      } finally {
+        if (isMounted) {
+          setIsLoadingTeams(false);
+        }
+      }
+    };
+
+    void loadTeams();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [teamId]);
+
+  React.useEffect(() => {
+    try {
+      const rawDraft = window.localStorage.getItem(CREATE_SHOW_DRAFT_STORAGE_KEY);
+      if (!rawDraft) {
+        return;
+      }
+
+      const parsed = JSON.parse(rawDraft) as Partial<CreateShowDraft>;
+      if (parsed.formData) {
+        setFormData((prev) => ({ ...prev, ...parsed.formData }));
+      }
+      if (typeof parsed.selectedTeamId === "string" || parsed.selectedTeamId === null) {
+        setSelectedTeamId(parsed.selectedTeamId);
+      }
+      if (typeof parsed.teamQuery === "string") {
+        setTeamQuery(parsed.teamQuery);
+      }
+      if (Array.isArray(parsed.scheds)) {
+        setScheds(parsed.scheds);
+      }
+      if (Array.isArray(parsed.selectedDates)) {
+        const restoredDates = parsed.selectedDates
+          .map((value) => new Date(value))
+          .filter((value) => !Number.isNaN(value.getTime()));
+        setSelectedDates(restoredDates);
+      }
+      if (typeof parsed.applyToAllDates === "boolean") {
+        setApplyToAllDates(parsed.applyToAllDates);
+      }
+      if (typeof parsed.seatmapQuery === "string") {
+        setSeatmapQuery(parsed.seatmapQuery);
+      }
+      if (typeof parsed.ticketTemplateQuery === "string") {
+        setTicketTemplateQuery(parsed.ticketTemplateQuery);
+      }
+      if (Array.isArray(parsed.timeRanges) && parsed.timeRanges.length > 0) {
+        setTimeRanges(parsed.timeRanges);
+      }
+      if (Array.isArray(parsed.categorySets)) {
+        setCategorySets(parsed.categorySets);
+      }
+      if (Array.isArray(parsed.selectedSeatIds)) {
+        setSelectedSeatIds(parsed.selectedSeatIds);
+      }
+      if (typeof parsed.activeSetId === "string" || parsed.activeSetId === null) {
+        setActiveSetId(parsed.activeSetId);
+      }
+    } catch (error) {
+      console.error("Failed to restore create show draft:", error);
+    } finally {
+      hasHydratedDraftRef.current = true;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!hasHydratedDraftRef.current) {
+      return;
+    }
+
+    const draft: CreateShowDraft = {
+      version: 1,
+      formData,
+      selectedTeamId,
+      teamQuery,
+      scheds,
+      selectedDates: selectedDates.map((value) => value.toISOString()),
+      applyToAllDates,
+      seatmapQuery,
+      ticketTemplateQuery,
+      timeRanges,
+      categorySets,
+      selectedSeatIds,
+      activeSetId,
+    };
+
+    try {
+      window.localStorage.setItem(
+        CREATE_SHOW_DRAFT_STORAGE_KEY,
+        JSON.stringify(draft),
+      );
+    } catch (error) {
+      console.error("Failed to persist create show draft:", error);
+    }
+  }, [
+    activeSetId,
+    applyToAllDates,
+    categorySets,
+    formData,
+    scheds,
+    seatmapQuery,
+    selectedDates,
+    selectedSeatIds,
+    selectedTeamId,
+    teamQuery,
+    ticketTemplateQuery,
+    timeRanges,
+  ]);
 
   // Fetch seatmap data when seatmap is selected
   React.useEffect(() => {
@@ -572,6 +810,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     );
 
     const fieldErrors = {
+      team: isSuperadmin && !selectedTeamId,
       showName: !formData.show_name.trim(),
       description: !formData.show_description.trim(),
       venue: !formData.venue.trim(),
@@ -604,6 +843,8 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     return { fieldErrors, cardErrors, hasValidationErrors };
   }, [
     formData,
+    isSuperadmin,
+    selectedTeamId,
     gcashQrImageBase64,
     isDateRangeValid,
     categorySets,
@@ -957,12 +1198,62 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
 
     setScheds((prev) => [...prev, ...newEntries]);
     setSelectedDates([]);
-    setTimeRanges([{ id: `time-${uuidv4()}`, start: "19:00", end: "21:00" }]);
+    setTimeRanges([createDefaultTimeRange()]);
     setIsScheduleOpen(false);
   };
 
+  const handleClearDraft = React.useCallback(() => {
+    window.localStorage.removeItem(CREATE_SHOW_DRAFT_STORAGE_KEY);
+
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setFormData(createDefaultFormData());
+    setImageFile(null);
+    setImagePreview(null);
+    setPosterUploadError(null);
+    setGcashQrImageBase64("");
+    setGcashQrPreview(null);
+    setGcashQrUploadError(null);
+    setIsGcashQrProcessing(false);
+    setScheds([]);
+    setSelectedDates([]);
+    setApplyToAllDates(false);
+    setSeatmapQuery("");
+    setTicketTemplateQuery("");
+    setTimeRanges([createDefaultTimeRange()]);
+    setCategorySets([]);
+    setSelectedSeatIds([]);
+    setSeatmapData(null);
+    setActiveSetId(null);
+    setIsScheduleOpen(false);
+    setIsStatusConfirmOpen(false);
+    setPendingStatus(null);
+    setIsTeamComboboxOpen(false);
+
+    const requestedTeamId = teamId?.trim() || null;
+    const hasRequestedTeam =
+      requestedTeamId && teams.some((team) => team.team_id === requestedTeamId);
+    const fallbackTeamId = isSuperadmin
+      ? (hasRequestedTeam ? requestedTeamId : null) ?? teams[0]?.team_id ?? null
+      : selectedTeamIdRef.current ?? requestedTeamId;
+    const fallbackTeamName =
+      teams.find((team) => team.team_id === fallbackTeamId)?.name ??
+      currentAdminTeamName ??
+      "";
+
+    setSelectedTeamId(fallbackTeamId);
+    setTeamQuery(fallbackTeamName);
+    toast.success("Create show draft cleared.");
+  }, [currentAdminTeamName, imagePreview, isSuperadmin, teamId, teams]);
+
   const handleSave = async () => {
     if (!isFormValid) return;
+    if (isSuperadmin && !selectedTeamId) {
+      toast.error("Select a team before creating the show.");
+      return;
+    }
 
     setIsSaving(true);
     const validScheds = scheds.filter(
@@ -979,7 +1270,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       // @ts-expect-error server action typing isn't compatible with direct client invocation
       const result = await createShowAction({
         ...formData,
-        team_id: teamId || undefined,
+        team_id: selectedTeamId || undefined,
         seatmap_id: formData.seatmap_id,
         ticket_template_id: formData.ticket_template_id || undefined,
         scheds: validScheds.map((sched) => ({
@@ -1021,6 +1312,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
         return;
       }
 
+      window.localStorage.removeItem(CREATE_SHOW_DRAFT_STORAGE_KEY);
       toast.success("Show created successfully");
       dispatch(setLoading(true));
       router.push(`/admin/shows/${result.showId}`);
@@ -1031,13 +1323,94 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20 px-0 md:px-0">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleClearDraft}
+          className="gap-2"
+        >
+          <Trash2 className="h-4 w-4" />
+          Clear Draft
+        </Button>
+      </div>
       <div className="h-px bg-border/60 md:hidden" />
       <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
-        <CardHeader>
-          <CardTitle className="text-lg md:text-xl font-semibold">
-            Show Details
-          </CardTitle>
-          <CardDescription>Set up a new production.</CardDescription>
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <CardTitle className="text-lg md:text-xl font-semibold">
+              Show Details
+            </CardTitle>
+            <CardDescription>Set up a new production.</CardDescription>
+          </div>
+          <div className="w-full md:w-[240px] space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground">
+              Team
+            </Label>
+            <Combobox
+              open={isTeamComboboxInteractive ? isTeamComboboxOpen : false}
+              onOpenChange={(nextOpen) => {
+                if (!isTeamComboboxInteractive) {
+                  return;
+                }
+                setIsTeamComboboxOpen(nextOpen);
+              }}
+              openOnInputClick
+              autoHighlight
+              value={selectedTeamId ?? ""}
+              onValueChange={(value) => {
+                if (!isTeamComboboxInteractive) {
+                  return;
+                }
+                const nextTeamId = value && value.length > 0 ? value : null;
+                setSelectedTeamId(nextTeamId);
+                const nextTeam = teams.find((team) => team.team_id === nextTeamId);
+                setTeamQuery(nextTeam?.name ?? "");
+                setIsTeamComboboxOpen(false);
+              }}
+            >
+              <ComboboxInput
+                aria-label="Select team"
+                placeholder="Select team"
+                disabled={!isTeamComboboxInteractive}
+                value={isTeamComboboxInteractive ? teamQuery : teamDisplayValue}
+                onFocus={() => {
+                  if (isTeamComboboxInteractive) {
+                    setIsTeamComboboxOpen(true);
+                  }
+                }}
+                onChange={(event) => {
+                  if (!isTeamComboboxInteractive) {
+                    return;
+                  }
+                  setTeamQuery(event.target.value);
+                  setIsTeamComboboxOpen(true);
+                }}
+                className={cn(
+                  "h-9 w-full",
+                  validationState.fieldErrors.team && "border-red-500 focus-visible:ring-red-500/30",
+                )}
+              />
+              <ComboboxContent>
+                <ComboboxList className="max-h-72">
+                  {isLoadingTeams ? (
+                    <ComboboxItem value="loading-teams" disabled>
+                      Loading teams...
+                    </ComboboxItem>
+                  ) : filteredTeams.length > 0 ? (
+                    filteredTeams.map((team) => (
+                      <ComboboxItem key={team.team_id} value={team.team_id}>
+                        {team.name}
+                      </ComboboxItem>
+                    ))
+                  ) : (
+                    <ComboboxEmpty>No teams found.</ComboboxEmpty>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
@@ -1371,31 +1744,32 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
 
       <Card className="border-0 shadow-none rounded-none md:border md:shadow-sm md:rounded-lg">
         <CardHeader>
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-1">
-              <CardTitle className="text-lg md:text-xl font-semibold">
-                Presentation Setup
-              </CardTitle>
-              <CardDescription>
-                Select a seatmap template and optional ticket template for this production.
-              </CardDescription>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => router.push("/admin/ticket-templates")}
-            >
-              Manage Ticket Templates
-            </Button>
+          <div className="space-y-1">
+            <CardTitle className="text-lg md:text-xl font-semibold">
+              Presentation Setup
+            </CardTitle>
+            <CardDescription>
+              Select a seatmap template and optional ticket template for this production.
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
-                Seatmap
-              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="seatmap" className="text-xs font-semibold text-muted-foreground">
+                  Seatmap
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push("/admin/templates")}
+                  className="h-7 px-2.5 text-[11px]"
+                >
+                  Manage Seatmap Templates
+                </Button>
+              </div>
               <Combobox
                 value={formData.seatmap_id}
                 onValueChange={(value) => {
@@ -1440,12 +1814,23 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
               </Combobox>
             </div>
             <div className="space-y-2">
-              <Label
-                htmlFor="ticket-template"
-                className="text-xs font-semibold text-muted-foreground"
-              >
-                Ticket Template
-              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label
+                  htmlFor="ticket-template"
+                  className="text-xs font-semibold text-muted-foreground"
+                >
+                  Ticket Template
+                </Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push("/admin/ticket-templates")}
+                  className="h-7 px-2.5 text-[11px]"
+                >
+                  Manage Ticket Templates
+                </Button>
+              </div>
               <Combobox
                 value={formData.ticket_template_id}
                 onValueChange={(value) => {

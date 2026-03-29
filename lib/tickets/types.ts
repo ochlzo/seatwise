@@ -51,4 +51,6 @@ export type TicketTemplateNode =
 export type TicketTemplateVersion = {
   canvas: TicketTemplateCanvas;
   nodes: TicketTemplateNode[];
+  previewUrl?: string | null;
+  previewAssetKey?: string | null;
 };
