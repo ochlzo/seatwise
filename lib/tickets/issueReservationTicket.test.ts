@@ -29,6 +29,11 @@ type MemoryReservationRecord = {
       seat_assignment_id: string;
       seat_id: string;
       updatedAt?: Date;
+      set?: {
+        seatCategory?: {
+          category_name: string;
+        };
+      };
       seat: {
         seat_number: string;
       };
@@ -121,6 +126,11 @@ function createReservationRecord(
           seat_assignment_id: "seat-assignment-1",
           seat_id: "seat-1",
           updatedAt: new Date("2026-03-28T18:00:00+08:00"),
+          set: {
+            seatCategory: {
+              category_name: "VIP",
+            },
+          },
           seat: { seat_number: "A1" },
         },
       },
@@ -129,6 +139,11 @@ function createReservationRecord(
           seat_assignment_id: "seat-assignment-2",
           seat_id: "seat-2",
           updatedAt: new Date("2026-03-28T18:00:00+08:00"),
+          set: {
+            seatCategory: {
+              category_name: "VIP",
+            },
+          },
           seat: { seat_number: "A2" },
         },
       },
@@ -227,7 +242,11 @@ test("walk-in issuance uses the show's current template version and stores it on
       }),
     ],
   });
-  const renderCalls: Array<{ qrValue: string; templateVersionNumber: number }> = [];
+  const renderCalls: Array<{
+    qrValue: string;
+    templateVersionNumber: number;
+    seatCategory: string | undefined;
+  }> = [];
   const buildPdfCalls: Uint8Array[] = [];
 
   const result = await issueReservationTicket(
@@ -239,10 +258,11 @@ test("walk-in issuance uses the show's current template version and stores it on
     },
     {
       db: db.db,
-      renderTicketPng: async ({ template, qrValue }) => {
+      renderTicketPng: async ({ template, qrValue, fields }) => {
         renderCalls.push({
           qrValue,
           templateVersionNumber: template.version_number,
+          seatCategory: fields.seat_category,
         });
         return Buffer.from("ticket-png");
       },
@@ -278,6 +298,7 @@ test("walk-in issuance uses the show's current template version and stores it on
     renderCalls[0]?.qrValue ?? "",
     /^https:\/\/seatwise\.test\/ticket\/verify\/[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
   );
+  assert.equal(renderCalls[0]?.seatCategory, "VIP");
   assert.equal(renderCalls.length, 2);
   assert.deepEqual(buildPdfCalls, [Buffer.from("ticket-png"), Buffer.from("ticket-png")]);
   assert.match(

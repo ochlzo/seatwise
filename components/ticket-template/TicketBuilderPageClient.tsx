@@ -10,6 +10,7 @@ import { TicketTemplateFileMenu } from "@/components/ticket-template/TicketTempl
 import { TicketTemplateInspector } from "@/components/ticket-template/TicketTemplateInspector";
 import { TicketTemplateLayerPanel } from "@/components/ticket-template/TicketTemplateLayerPanel";
 import { TicketTemplatePageHeader } from "@/components/ticket-template/ticket-template-page-header";
+import { TicketTemplateTeamSelector } from "@/components/ticket-template/TicketTemplateTeamSelector";
 import { TicketTemplateSidebar } from "@/components/ticket-template/ticket-template-sidebar";
 import { TicketTemplateTitle } from "@/components/ticket-template/TicketTemplateTitle";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
@@ -44,6 +45,7 @@ export function TicketBuilderPageClient() {
     (state) => state.ticketTemplate.hasUnsavedChanges,
   );
   const [isLoadingTemplate, setIsLoadingTemplate] = React.useState(false);
+  const [selectedTeamId, setSelectedTeamId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -77,6 +79,7 @@ export function TicketBuilderPageClient() {
             template: data.ticketTemplate.latestVersion?.template_schema,
           }),
         );
+        setSelectedTeamId(data.ticketTemplate.team_id ?? null);
       } catch (error) {
         if (!isMounted) {
           return;
@@ -132,7 +135,12 @@ export function TicketBuilderPageClient() {
             <div className="flex items-center gap-2">
               <ThemeSwithcer />
               <TicketTemplateTitle />
-              <TicketTemplateFileMenu />
+              <TicketTemplateTeamSelector
+                selectedTeamId={selectedTeamId}
+                onSelectedTeamIdChange={setSelectedTeamId}
+                className="w-[220px] border-zinc-200 dark:border-zinc-800 bg-background"
+              />
+              <TicketTemplateFileMenu selectedTeamId={selectedTeamId} />
             </div>
           }
         />

@@ -36,6 +36,11 @@ type LoadedReservation = {
       seat_assignment_id: string;
       seat_id: string;
       updatedAt?: Date;
+      set?: {
+        seatCategory?: {
+          category_name: string;
+        };
+      };
       seat: {
         seat_number: string;
       };
@@ -213,6 +218,15 @@ async function loadReservation(
                   seat_number: true,
                 },
               },
+              set: {
+                select: {
+                  seatCategory: {
+                    select: {
+                      category_name: true,
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -312,6 +326,7 @@ export async function issueReservationTicket(
       schedStartTime: reservation.sched.sched_start_time,
     },
     seats: reservation.reservedSeats.map(({ seatAssignment }) => ({
+      seatCategory: seatAssignment.set?.seatCategory?.category_name,
       seat: seatAssignment.seat.seat_number,
     })),
     qrToken: "",

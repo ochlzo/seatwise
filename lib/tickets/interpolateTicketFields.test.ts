@@ -21,13 +21,11 @@ test("interpolateTicketFields maps reservation, seat, and schedule data into tic
     },
     seats: [
       {
-        section: "Orchestra",
-        row: "A",
+        seatCategory: "VIP",
         seat: "12",
       },
       {
-        section: "Orchestra",
-        row: "A",
+        seatCategory: "VIP",
         seat: "13",
       },
     ],
@@ -35,10 +33,7 @@ test("interpolateTicketFields maps reservation, seat, and schedule data into tic
     verificationUrl: "https://seatwise.test/ticket/verify/signed-token",
   });
 
-  assert.deepEqual(interpolated.seatLabels, [
-    "Orchestra / A / 12",
-    "Orchestra / A / 13",
-  ]);
+  assert.deepEqual(interpolated.seatLabels, ["12", "13"]);
   assert.equal(interpolated.qrToken, "signed-token");
   assert.equal(
     interpolated.verificationUrl,
@@ -49,8 +44,7 @@ test("interpolateTicketFields maps reservation, seat, and schedule data into tic
     venue: "Seatwise Theater",
     show_date: "Apr 10, 2026",
     show_time: "7:30 PM",
-    section: "Orchestra",
-    row: "A",
+    seat_category: "VIP",
     seat: "12, 13",
     reservation_number: "SW-2026-0001",
     customer_name: "Alex Rivera",

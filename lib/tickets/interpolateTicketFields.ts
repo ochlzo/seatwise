@@ -6,8 +6,7 @@ import {
 const MANILA_TIME_ZONE = "Asia/Manila";
 
 type TicketInterpolationSeat = {
-  section?: string | null;
-  row?: string | null;
+  seatCategory?: string | null;
   seat?: string | null;
 };
 
@@ -67,7 +66,7 @@ function joinUnique(values: Array<string | null | undefined>) {
 }
 
 function buildSeatLabel(seat: TicketInterpolationSeat) {
-  return [seat.section, seat.row, seat.seat]
+  return [seat.seat]
     .map((value) => toTrimmedValue(value))
     .filter(Boolean)
     .join(" / ");
@@ -83,8 +82,7 @@ export function interpolateTicketFields(
   fields.venue = input.show.venue.trim();
   fields.show_date = formatShowDate(input.schedule.schedDate);
   fields.show_time = formatShowTime(input.schedule.schedStartTime);
-  fields.section = joinUnique(input.seats.map((seat) => seat.section));
-  fields.row = joinUnique(input.seats.map((seat) => seat.row));
+  fields.seat_category = joinUnique(input.seats.map((seat) => seat.seatCategory));
   fields.seat = joinUnique(input.seats.map((seat) => seat.seat));
   fields.reservation_number = input.reservation.reservationNumber.trim();
   fields.customer_name = [input.reservation.firstName, input.reservation.lastName]

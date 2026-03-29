@@ -34,7 +34,11 @@ function slugify(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-export function TicketTemplateFileMenu() {
+export function TicketTemplateFileMenu({
+  selectedTeamId,
+}: {
+  selectedTeamId?: string | null;
+}) {
   const triggerId = "ticket-template-file-menu-trigger";
   const router = useRouter();
   const dispatch = useAppDispatch();
@@ -102,6 +106,7 @@ export function TicketTemplateFileMenu() {
 
       const result = await saveTicketTemplateAction({
         ticketTemplateId: ticketTemplateState.ticketTemplateId ?? undefined,
+        teamId: selectedTeamId ?? undefined,
         templateName,
         templateSchema,
       });
@@ -132,7 +137,7 @@ export function TicketTemplateFileMenu() {
     } finally {
       setIsSavingTemplate(false);
     }
-  }, [dispatch, router, ticketTemplateState]);
+  }, [dispatch, router, selectedTeamId, ticketTemplateState]);
 
   return (
     <DropdownMenu>
