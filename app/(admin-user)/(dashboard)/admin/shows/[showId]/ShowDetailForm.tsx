@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 
 import {
   CalendarIcon,
@@ -2367,12 +2368,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                               <div className="mt-2 hidden md:flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                                 <span>Use</span>
                                 <span className="inline-flex items-center gap-1">
-                                  <img src="/shift.svg" alt="Shift key" className="h-4.5 w-4.5 object-contain" />
+                                  <Image src="/shift.svg" alt="Shift key" width={18} height={18} className="h-4.5 w-4.5 object-contain" />
                                   <span>Shift</span>
                                 </span>
                                 <span>or</span>
                                 <span className="inline-flex items-center gap-1">
-                                  <img src="/control.svg" alt="Control key" className="h-4.5 w-4.5 object-contain" />
+                                  <Image src="/control.svg" alt="Control key" width={18} height={18} className="h-4.5 w-4.5 object-contain" />
                                   <span>Ctrl</span>
                                 </span>
                                 <span>to multi-select.</span>

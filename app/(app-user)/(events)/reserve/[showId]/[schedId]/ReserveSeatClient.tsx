@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { SeatStatus } from "@prisma/client";
 import {
@@ -353,7 +354,7 @@ export function ReserveSeatClient({
     }
     clearStoredSession(showScopeId);
     setError(EXPIRED_WINDOW_MESSAGE);
-  }, [expiresAt, now, notifyExpiry, showScopeId]);
+  }, [expiresAt, now, notifyExpiry, showScopeId, step]);
 
   React.useEffect(() => {
     if (step === "success" || !expiresAt || isLoading || !!error) return;
@@ -372,7 +373,7 @@ export function ReserveSeatClient({
       hasShownOneMinuteToastRef.current = true;
       toast.warning("1 minute left");
     }
-  }, [error, expiresAt, isLoading, now]);
+  }, [error, expiresAt, isLoading, now, step]);
 
   React.useEffect(() => {
     setSelectedSeatIds([]);
@@ -1667,9 +1668,12 @@ export function ReserveSeatClient({
                             >
                               <div className="aspect-[2550/825] w-full bg-muted/30">
                                 {design.previewUrl ? (
-                                  <img
+                                  <Image
                                     src={design.previewUrl}
                                     alt={`${design.templateName} preview`}
+                                    width={2550}
+                                    height={825}
+                                    unoptimized
                                     className="h-full w-full object-cover"
                                   />
                                 ) : (

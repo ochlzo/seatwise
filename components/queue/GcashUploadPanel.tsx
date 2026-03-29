@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Expand, Download, Copy } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
@@ -169,9 +170,12 @@ export function GcashUploadPanel({
                             <div className="flex justify-center">
                                 <div className="overflow-hidden rounded-xl border-2 border-blue-200 bg-white shadow-sm dark:border-blue-800">
                                     {qrImageUrl ? (
-                                        <img
+                                        <Image
                                             src={qrImageUrl}
                                             alt="GCash Payment QR Code"
+                                            width={240}
+                                            height={240}
+                                            unoptimized
                                             className="h-auto w-full max-w-[240px] object-contain"
                                         />
                                     ) : (
@@ -259,9 +263,12 @@ export function GcashUploadPanel({
                     <DialogTitle className="sr-only">GCash Payment QR Code</DialogTitle>
                     <div className="flex h-full w-full items-center justify-center p-3 sm:p-6">
                         {qrImageUrl ? (
-                            <img
+                            <Image
                                 src={qrImageUrl}
                                 alt="GCash Payment QR Code"
+                                width={1600}
+                                height={1600}
+                                unoptimized
                                 className="max-h-full max-w-full object-contain"
                             />
                         ) : (

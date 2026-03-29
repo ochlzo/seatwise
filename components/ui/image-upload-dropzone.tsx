@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { useDropzone, type Accept, type FileRejection } from "react-dropzone";
 import { Upload, Trash2, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -143,7 +144,7 @@ export function ImageUploadDropzone({
           )}
 
           <div className="relative flex items-center justify-center">
-            <img src={previewUrl} alt={previewAlt} className={cn("rounded-lg object-contain", previewMaxHeightClassName)} />
+            <Image src={previewUrl} alt={previewAlt} width={1200} height={1200} unoptimized className={cn("rounded-lg object-contain", previewMaxHeightClassName)} />
             {!isProcessing && showRemoveButton && (
               <Button
                 type="button"

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import type { SeatStatus } from "@prisma/client";
+import Image from "next/image";
 import {
   Stage,
   Layer,
@@ -450,7 +451,7 @@ export function SeatmapPreview({
       {!showReservationOverlay && hasUnassignedSeat && (
         <div className="pointer-events-none absolute bottom-2 right-2 z-10 hidden md:block text-[10px] text-zinc-700 dark:text-zinc-200">
           <div className="inline-flex items-center gap-1">
-            <img src="/seat-error.svg" alt="Unassigned seat" className="h-3 w-3 object-contain" />
+            <Image src="/seat-error.svg" alt="Unassigned seat" width={12} height={12} className="h-3 w-3 object-contain" />
             <span>Unassigned</span>
           </div>
         </div>

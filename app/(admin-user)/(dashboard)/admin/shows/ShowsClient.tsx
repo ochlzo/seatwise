@@ -176,7 +176,7 @@ export default function ShowsPage({
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, searchParams, statusGroup, visibility]);
+  }, [mode, searchQuery, searchParams, statusGroup, visibility]);
 
   const hasFilters =
     searchParams.get("status") ||
@@ -233,7 +233,7 @@ export default function ShowsPage({
     setTeamSearchQuery("");
     setIsTeamComboboxOpen(false);
     setIsAssignTeamDialogOpen(true);
-  }, [createPath, isSuperadmin, router]);
+  }, [createPath, isSuperadmin, loadTeams, router, teams.length]);
 
   React.useEffect(() => {
     if (!isSuperadmin || !isAssignTeamDialogOpen || hasLoadedTeams || isLoadingTeams) {

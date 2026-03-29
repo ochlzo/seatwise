@@ -42,6 +42,33 @@ type MemoryReservationRecord = {
   }>;
 };
 
+type MemoryTicketDb = {
+  reservation: {
+    findUnique(args: { where: { reservation_id: string } }): Promise<MemoryReservationRecord | null>;
+    update(args: {
+      where: { reservation_id: string };
+      data: Partial<{
+        ticket_consumed_at: Date;
+        ticket_consumed_by_admin_id: string;
+      }>;
+    }): Promise<MemoryReservationRecord>;
+  };
+  seatAssignment: {
+    update(args: {
+      where: { seat_assignment_id: string };
+      data: { seat_status: SeatStatus };
+    }): Promise<MemorySeatAssignmentRecord>;
+  };
+  $transaction<T>(callback: (tx: MemoryTicketDb) => Promise<T>): Promise<T>;
+  getSnapshot(): {
+    reservation: MemoryReservationRecord;
+    mutationCounts: {
+      reservationUpdates: number;
+      seatAssignmentUpdates: number;
+    };
+  };
+};
+
 function cloneReservation(record: MemoryReservationRecord): MemoryReservationRecord {
   return {
     ...record,
@@ -67,7 +94,7 @@ function cloneReservation(record: MemoryReservationRecord): MemoryReservationRec
   };
 }
 
-function createMemoryTicketDb(record: MemoryReservationRecord) {
+function createMemoryTicketDb(record: MemoryReservationRecord): MemoryTicketDb {
   const seatAssignments = new Map(
     record.reservedSeats.map(({ seatAssignment }) => [
       seatAssignment.seat_assignment_id,
@@ -143,7 +170,7 @@ function createMemoryTicketDb(record: MemoryReservationRecord) {
         };
       },
     },
-    async $transaction<T>(callback: (tx: any) => Promise<T>) {
+    async $transaction<T>(callback: (tx: MemoryTicketDb) => Promise<T>) {
       return callback(db);
     },
     getSnapshot() {

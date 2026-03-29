@@ -34,6 +34,7 @@ import {
   Ticket,
   XCircle,
 } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -1861,11 +1862,14 @@ export function ReservationsClient() {
                         <div className="relative flex min-h-[60vh] items-center justify-center overflow-hidden bg-background">
                           {primaryPayment?.screenshot_url ? (
                             <>
-                              <img
+                              <Image
                                 src={primaryPayment.screenshot_url}
                                 alt={selectedPaymentDisplay.imageAlt(
                                   `${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`,
                                 )}
+                                width={1600}
+                                height={1600}
+                                unoptimized
                                 className="max-h-[85vh] w-full cursor-zoom-in object-contain"
                                 onClick={() => setIsImageExpanded(true)}
                               />
@@ -1912,11 +1916,14 @@ export function ReservationsClient() {
             </button>
           </div>
           <div className="flex h-full w-full items-center justify-center p-4 sm:p-8">
-            <img
+            <Image
               src={primaryPayment.screenshot_url}
               alt={selectedPaymentDisplay.expandedImageAlt(
                 `${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`,
               )}
+              width={2000}
+              height={2000}
+              unoptimized
               className="max-h-full max-w-full object-contain"
               onClick={(event) => event.stopPropagation()}
             />

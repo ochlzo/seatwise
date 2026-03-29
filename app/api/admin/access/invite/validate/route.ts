@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: INVITE_UNAVAILABLE_ERROR }, { status: 400 });
   }
 }
