@@ -2852,14 +2852,24 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
           )}
 
           {!isEditing && allowEdit ? (
-            <Button
-              variant="outline"
-              onClick={handleOpenTicketScanner}
-              className="w-full h-12 font-semibold uppercase tracking-widest text-base"
-            >
-              <Ticket className="w-5 h-5 mr-2" />
-              Open Ticket Scanner
-            </Button>
+            <div className="grid gap-3">
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/admin/shows/${show.show_id}/tickets`)}
+                className="w-full h-12 font-semibold uppercase tracking-widest text-base"
+              >
+                <Ticket className="w-5 h-5 mr-2" />
+                Open Ticket Manager
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleOpenTicketScanner}
+                className="w-full h-12 font-semibold uppercase tracking-widest text-base"
+              >
+                <Ticket className="w-5 h-5 mr-2" />
+                Open Ticket Scanner
+              </Button>
+            </div>
           ) : null}
 
           {allowEdit && isEditing ? (

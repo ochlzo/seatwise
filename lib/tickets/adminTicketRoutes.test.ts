@@ -127,3 +127,35 @@ test("scanner flow pauses after scan, verifies first, and exposes consume or con
   assert.match(scannerComponent, /pauseScanner/);
   assert.match(scannerComponent, /resumeScanner/);
 });
+
+test("ticket manager page is show scoped and keeps explicit admin access enforcement", () => {
+  const pageContents = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/shows/[showId]/tickets/page.tsx",
+  );
+
+  assert.match(pageContents, /getCurrentAdminContext/);
+  assert.match(pageContents, /notFound/);
+  assert.match(pageContents, /TicketManagerPageClient/);
+});
+
+test("show detail exposes ticket manager navigation alongside the ticket scanner", () => {
+  const showDetailForm = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/shows/[showId]/ShowDetailForm.tsx",
+  );
+
+  assert.match(showDetailForm, /Open Ticket Scanner/);
+  assert.match(showDetailForm, /Open Ticket Manager/);
+  assert.match(showDetailForm, /\/admin\/shows\/\$\{show\.show_id\}\/tickets/);
+});
+
+test("ticket builder loads ticket fonts from local public assets instead of external Google font stylesheets", () => {
+  const canvasContents = readRepoFile(
+    "components/ticket-template/TicketTemplateCanvas.tsx",
+  );
+  const fontCatalogContents = readRepoFile("lib/tickets/fontCatalog.ts");
+
+  assert.doesNotMatch(canvasContents, /createElement\("link"\)/);
+  assert.doesNotMatch(canvasContents, /fonts\.googleapis\.com/);
+  assert.match(canvasContents, /buildTicketTemplateFontFaceCss/);
+  assert.doesNotMatch(fontCatalogContents, /fonts\.googleapis\.com/);
+});

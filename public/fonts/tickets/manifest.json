@@ -1,0 +1,272 @@
+{
+  "generatedAt": "2026-03-29T09:35:36.038Z",
+  "note": "Georgia is intentionally excluded because it is proprietary and is not redistributed into this repo.",
+  "fonts": [
+    {
+      "family": "Inter",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/inter-400.woff2",
+      "source": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf"
+    },
+    {
+      "family": "Inter",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/inter-700.woff2",
+      "source": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf"
+    },
+    {
+      "family": "Poppins",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/poppins-400.woff2",
+      "source": "https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrFJA.ttf"
+    },
+    {
+      "family": "Poppins",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/poppins-700.woff2",
+      "source": "https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLCz7V1s.ttf"
+    },
+    {
+      "family": "Montserrat",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/montserrat-400.woff2",
+      "source": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Ew-.ttf"
+    },
+    {
+      "family": "Montserrat",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/montserrat-700.woff2",
+      "source": "https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCuM70w-.ttf"
+    },
+    {
+      "family": "Lato",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/lato-400.woff2",
+      "source": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHvxk.ttf"
+    },
+    {
+      "family": "Lato",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/lato-700.woff2",
+      "source": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVew8.ttf"
+    },
+    {
+      "family": "Open Sans",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/open-sans-400.woff2",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0C4n.ttf"
+    },
+    {
+      "family": "Open Sans",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/open-sans-700.woff2",
+      "source": "https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsg-1y4n.ttf"
+    },
+    {
+      "family": "Roboto",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/roboto-400.woff2",
+      "source": "https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbWmT.ttf"
+    },
+    {
+      "family": "Roboto",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/roboto-700.woff2",
+      "source": "https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWuYjammT.ttf"
+    },
+    {
+      "family": "Source Sans 3",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/source-sans-3-400.woff2",
+      "source": "https://fonts.gstatic.com/s/sourcesans3/v19/nwpBtKy2OAdR1K-IwhWudF-R9QMylBJAV3Bo8Ky461EN.ttf"
+    },
+    {
+      "family": "Source Sans 3",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/source-sans-3-700.woff2",
+      "source": "https://fonts.gstatic.com/s/sourcesans3/v19/nwpBtKy2OAdR1K-IwhWudF-R9QMylBJAV3Bo8Kxf7FEN.ttf"
+    },
+    {
+      "family": "Merriweather",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/merriweather-400.woff2",
+      "source": "https://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDr3icqEw.ttf"
+    },
+    {
+      "family": "Merriweather",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/merriweather-700.woff2",
+      "source": "https://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDrOSAqEw.ttf"
+    },
+    {
+      "family": "Playfair Display",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/playfair-display-400.woff2",
+      "source": "https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdFvUDQ.ttf"
+    },
+    {
+      "family": "Playfair Display",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/playfair-display-700.woff2",
+      "source": "https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKeiukDQ.ttf"
+    },
+    {
+      "family": "Bebas Neue",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/bebas-neue-400.woff2",
+      "source": "https://fonts.gstatic.com/s/bebasneue/v16/JTUSjIg69CK48gW7PXooxW4.ttf"
+    },
+    {
+      "family": "Bebas Neue",
+      "requestedWeight": 700,
+      "resolvedWeight": null,
+      "file": "public/fonts/tickets/bebas-neue-700.woff2",
+      "source": "https://fonts.gstatic.com/s/bebasneue/v16/JTUSjIg69CK48gW7PXooxW4.ttf"
+    },
+    {
+      "family": "Oswald",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/oswald-400.woff2",
+      "source": "https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvgUE.ttf"
+    },
+    {
+      "family": "Oswald",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/oswald-700.woff2",
+      "source": "https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1xZogUE.ttf"
+    },
+    {
+      "family": "Raleway",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/raleway-400.woff2",
+      "source": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaooCP.ttf"
+    },
+    {
+      "family": "Raleway",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/raleway-700.woff2",
+      "source": "https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pYCP.ttf"
+    },
+    {
+      "family": "Nunito",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/nunito-400.woff2",
+      "source": "https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDLshRTM.ttf"
+    },
+    {
+      "family": "Nunito",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/nunito-700.woff2",
+      "source": "https://fonts.gstatic.com/s/nunito/v32/XRXI3I6Li01BKofiOc5wtlZ2di8HDFwmRTM.ttf"
+    },
+    {
+      "family": "Rubik",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/rubik-400.woff2",
+      "source": "https://fonts.gstatic.com/s/rubik/v31/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-B4i1UA.ttf"
+    },
+    {
+      "family": "Rubik",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/rubik-700.woff2",
+      "source": "https://fonts.gstatic.com/s/rubik/v31/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-4I-1UA.ttf"
+    },
+    {
+      "family": "DM Sans",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/dm-sans-400.woff2",
+      "source": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAopxhTg.ttf"
+    },
+    {
+      "family": "DM Sans",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/dm-sans-700.woff2",
+      "source": "https://fonts.gstatic.com/s/dmsans/v17/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwARZthTg.ttf"
+    },
+    {
+      "family": "Archivo",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/archivo-400.woff2",
+      "source": "https://fonts.gstatic.com/s/archivo/v25/k3k6o8UDI-1M0wlSV9XAw6lQkqWY8Q82sJaRE-NWIDdgffTTNDNp8A.ttf"
+    },
+    {
+      "family": "Archivo",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/archivo-700.woff2",
+      "source": "https://fonts.gstatic.com/s/archivo/v25/k3k6o8UDI-1M0wlSV9XAw6lQkqWY8Q82sJaRE-NWIDdgffTT0zRp8A.ttf"
+    },
+    {
+      "family": "Manrope",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/manrope-400.woff2",
+      "source": "https://fonts.gstatic.com/s/manrope/v20/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk79FO_F.ttf"
+    },
+    {
+      "family": "Manrope",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/manrope-700.woff2",
+      "source": "https://fonts.gstatic.com/s/manrope/v20/xn7_YHE41ni1AdIRqAuZuw1Bx9mbZk4aE-_F.ttf"
+    },
+    {
+      "family": "Space Grotesk",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/space-grotesk-400.woff2",
+      "source": "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj7oUUsj.ttf"
+    },
+    {
+      "family": "Space Grotesk",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/space-grotesk-700.woff2",
+      "source": "https://fonts.gstatic.com/s/spacegrotesk/v22/V8mQoQDjQSkFtoMM3T6r8E7mF71Q-gOoraIAEj4PVksj.ttf"
+    },
+    {
+      "family": "Lora",
+      "requestedWeight": 400,
+      "resolvedWeight": 400,
+      "file": "public/fonts/tickets/lora-400.woff2",
+      "source": "https://fonts.gstatic.com/s/lora/v37/0QI6MX1D_JOuGQbT0gvTJPa787weuyJG.ttf"
+    },
+    {
+      "family": "Lora",
+      "requestedWeight": 700,
+      "resolvedWeight": 700,
+      "file": "public/fonts/tickets/lora-700.woff2",
+      "source": "https://fonts.gstatic.com/s/lora/v37/0QI6MX1D_JOuGQbT0gvTJPa787z5vCJG.ttf"
+    }
+  ]
+}

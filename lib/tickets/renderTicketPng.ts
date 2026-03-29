@@ -2,6 +2,10 @@ import QRCode from "qrcode";
 import sharp from "sharp";
 
 import {
+  buildEmbeddedTicketFontFaceCss,
+  resolveTicketRenderFontFamily,
+} from "./fontCatalog.ts";
+import {
   TICKET_TEMPLATE_CANVAS_PX_HEIGHT,
   TICKET_TEMPLATE_CANVAS_PX_WIDTH,
 } from "./constants.ts";
@@ -353,7 +357,11 @@ function fitFieldTextToBounds(node: TicketTemplateFieldNode, value: string) {
   };
 }
 
-function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
+function buildFieldOverlay(
+  node: TicketTemplateFieldNode,
+  value: string,
+  embeddedFontFaceCss: string,
+) {
   const fittedText = fitFieldTextToBounds(node, value);
   const width = fittedText.width;
   const { anchor, x } = resolveTextAnchor({
@@ -364,7 +372,7 @@ function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const opacity = node.opacity ?? 1;
   const fill = node.fill ?? "#111827";
-  const fontFamily = node.fontFamily ?? "Georgia";
+  const fontFamily = resolveTicketRenderFontFamily(node.fontFamily ?? "Georgia");
   const fontWeight = node.fontWeight ?? 700;
   const rotation =
     typeof node.rotation === "number" && Number.isFinite(node.rotation)
@@ -387,6 +395,7 @@ function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
   return Buffer.from(
     [
       `<svg xmlns="http://www.w3.org/2000/svg" width="${TICKET_TEMPLATE_CANVAS_PX_WIDTH}" height="${TICKET_TEMPLATE_CANVAS_PX_HEIGHT}" viewBox="0 0 ${TICKET_TEMPLATE_CANVAS_PX_WIDTH} ${TICKET_TEMPLATE_CANVAS_PX_HEIGHT}">`,
+      embeddedFontFaceCss ? `<style>${embeddedFontFaceCss}</style>` : "",
       `<g transform="${groupTransform}">`,
       `<text font-size="${fontSize}" font-family="${escapeXml(fontFamily)}" font-weight="${fontWeight}" fill="${escapeXml(fill)}" fill-opacity="${opacity}" text-anchor="${anchor}">${textSpans}</text>`,
       "</g>",
@@ -402,6 +411,21 @@ export async function renderTicketPng({
   qrValue,
 }: RenderTicketPngParams) {
   const overlays: sharp.OverlayOptions[] = [];
+  const fieldFontFamilies = Array.from(
+    new Set(
+      template.nodes
+        .filter((node): node is TicketTemplateFieldNode => node.kind === "field")
+        .map((node) => node.fontFamily?.trim() || "Georgia"),
+    ),
+  );
+  const embeddedFontFaceCssByFamily = new Map(
+    await Promise.all(
+      fieldFontFamilies.map(async (family) => [
+        family,
+        await buildEmbeddedTicketFontFaceCss(family),
+      ]),
+    ),
+  );
 
   for (const node of template.nodes) {
     if (node.kind === "asset") {
@@ -440,9 +464,14 @@ export async function renderTicketPng({
       if (!value) {
         continue;
       }
+      const fontFamily = node.fontFamily?.trim() || "Georgia";
 
       overlays.push({
-        input: buildFieldOverlay(node, value),
+        input: buildFieldOverlay(
+          node,
+          value,
+          embeddedFontFaceCssByFamily.get(fontFamily) ?? "",
+        ),
         left: 0,
         top: 0,
       });
