@@ -130,3 +130,57 @@ test("renderTicketPng clips oversized overlays that extend beyond the ticket can
   assert.equal(metadata.width, 2550);
   assert.equal(metadata.height, 825);
 });
+
+test("renderTicketPng wraps overflowing field text and uses available vertical space", async () => {
+  const template = createEmptyTicketTemplate();
+
+  template.nodes.push({
+    id: "field-show-name",
+    kind: "field",
+    fieldKey: "show_name",
+    x: 120,
+    y: 140,
+    width: 260,
+    height: 160,
+    fontSize: 72,
+    fontFamily: "Georgia",
+    fontWeight: 700,
+    fill: "#111827",
+    align: "left",
+    opacity: 1,
+  });
+
+  const pngBuffer = await renderTicketPng({
+    template,
+    fields: {
+      show_name:
+        "Seatwise International Grand Symphony Anniversary Gala Performance Night",
+    },
+    qrValue: "https://seatwise.test/ticket/verify/signed-token",
+  });
+
+  const { data, info } = await sharp(pngBuffer)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const lowerHalfStartY = 220;
+  const lowerHalfEndY = 300;
+  const startX = 120;
+  const endX = 380;
+
+  let hasInkInLowerHalf = false;
+  for (let y = lowerHalfStartY; y < lowerHalfEndY && !hasInkInLowerHalf; y += 1) {
+    for (let x = startX; x < endX; x += 1) {
+      const index = (y * info.width + x) * info.channels;
+      const r = data[index];
+      const g = data[index + 1];
+      const b = data[index + 2];
+      if (r < 245 || g < 245 || b < 245) {
+        hasInkInLowerHalf = true;
+        break;
+      }
+    }
+  }
+
+  assert.equal(hasInkInLowerHalf, true);
+});

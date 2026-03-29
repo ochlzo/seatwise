@@ -163,15 +163,6 @@ export function TicketTemplateInspector() {
                   />
                 </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="ticket-asset-ref" className="text-[11px] leading-4">Cloudinary Ref</Label>
-                  <Input
-                    id="ticket-asset-ref"
-                    value={selectedNode.assetKey ?? ""}
-                    className="h-8 text-[10px]"
-                    readOnly
-                  />
-                </div>
               </>
             ) : null}
 
@@ -226,6 +217,16 @@ export function TicketTemplateInspector() {
                     onCommit={(nextValue) => updateSelectedNode({ width: nextValue })}
                   />
                   <NumericInput
+                    id="ticket-field-height"
+                    label="Text Height"
+                    value={selectedNode.height}
+                    min={24}
+                    onCommit={(nextValue) => updateSelectedNode({ height: nextValue })}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <NumericInput
                     id="ticket-field-size"
                     label="Font Size"
                     value={selectedNode.fontSize}
@@ -234,9 +235,6 @@ export function TicketTemplateInspector() {
                       updateSelectedNode({ fontSize: nextValue })
                     }
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
                   <NumericInput
                     id="ticket-field-weight"
                     label="Font Weight"

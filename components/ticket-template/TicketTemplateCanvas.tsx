@@ -158,6 +158,7 @@ function TicketAssetNode({
 function TicketFieldNode({
   node,
   displayScale,
+  selected,
   registerRef,
   onPointerDown,
   onSelect,
@@ -168,6 +169,7 @@ function TicketFieldNode({
 }: {
   node: TicketTemplateFieldEditorNode;
   displayScale: number;
+  selected: boolean;
   registerRef: (nodeId: string, nextNode: KonvaNode | null) => void;
   onPointerDown: NodePointerHandler;
   onSelect: (nodeId: string) => void;
@@ -181,7 +183,7 @@ function TicketFieldNode({
 }) {
   return (
     <>
-      <Text
+      <Rect
         id={node.id}
         name="ticket-selectable"
         ref={(nextNode) => registerRef(node.id, nextNode)}
@@ -189,13 +191,11 @@ function TicketFieldNode({
         y={node.y * displayScale}
         rotation={node.rotation}
         width={node.width * displayScale}
-        text={node.label}
-        fontSize={node.fontSize * displayScale}
-        fontFamily={node.fontFamily}
-        fontStyle={node.fontWeight >= 700 ? "bold" : "normal"}
-        fill={node.fill}
-        opacity={node.opacity}
-        align={node.align}
+        height={node.height * displayScale}
+        fill="rgba(0,0,0,0.001)"
+        stroke={selected ? "#2563eb" : "#64748b"}
+        strokeWidth={selected ? 2 : 1}
+        dash={[12, 6]}
         draggable
         onMouseDown={(event) => onPointerDown(node.id, event)}
         onTap={() => onSelect(node.id)}
@@ -216,6 +216,23 @@ function TicketFieldNode({
             y: event.target.y() / displayScale,
           });
         }}
+      />
+      <Text
+        x={node.x * displayScale}
+        y={node.y * displayScale}
+        rotation={node.rotation}
+        width={node.width * displayScale}
+        height={node.height * displayScale}
+        text={node.label}
+        fontSize={node.fontSize * displayScale}
+        fontFamily={node.fontFamily}
+        fontStyle={node.fontWeight >= 700 ? "bold" : "normal"}
+        fill={node.fill}
+        opacity={node.opacity}
+        align={node.align}
+        wrap="word"
+        ellipsis={false}
+        listening={false}
       />
     </>
   );
@@ -425,7 +442,7 @@ export function TicketTemplateCanvas() {
         height = node.height;
       } else if (node.kind === "field") {
         width = node.width;
-        height = node.fontSize;
+        height = node.height;
       } else {
         width = node.size;
         height = node.size;
@@ -1092,6 +1109,10 @@ export function TicketTemplateCanvas() {
           80,
           (ref.width() * ref.scaleX()) / displayScale,
         );
+        const nextHeight = Math.max(
+          24,
+          (ref.height() * ref.scaleY()) / displayScale,
+        );
 
         ref.scaleX(1);
         ref.scaleY(1);
@@ -1101,6 +1122,7 @@ export function TicketTemplateCanvas() {
           changes: {
             ...baseChanges,
             width: nextWidth,
+            height: nextHeight,
           },
         });
         return;
@@ -1234,6 +1256,7 @@ export function TicketTemplateCanvas() {
                         key={node.id}
                         node={node}
                         displayScale={displayScale}
+                        selected={isSelected}
                         registerRef={registerRef}
                         onPointerDown={handleNodePointerDown}
                         onSelect={handleNodeTapSelect}
@@ -1265,20 +1288,16 @@ export function TicketTemplateCanvas() {
                 <Transformer
                   ref={transformerRef}
                   rotateEnabled={selectedNodeIds.length > 0}
-                  resizeEnabled={
-                    selectedNodeIds.length === 1 && selectedNode?.kind !== "field"
-                  }
-                  enabledAnchors={
-                    selectedNodeIds.length === 1 && selectedNode?.kind === "field"
-                      ? []
-                      : undefined
-                  }
+                  resizeEnabled={selectedNodeIds.length === 1}
                   rotationSnaps={isShiftDown || isAltDown ? rotationSnaps : []}
                   rotateAnchorOffset={24}
                   onTransformEnd={handleTransformerTransformEnd}
                   boundBoxFunc={(_, nextBox) => ({
                     ...nextBox,
-                    width: Math.max(24 * displayScale, nextBox.width),
+                    width: Math.max(
+                      (selectedNode?.kind === "field" ? 80 : 24) * displayScale,
+                      nextBox.width,
+                    ),
                     height: Math.max(24 * displayScale, nextBox.height),
                   })}
                 />

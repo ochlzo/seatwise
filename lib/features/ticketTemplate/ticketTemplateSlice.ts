@@ -61,6 +61,7 @@ export type TicketTemplateFieldEditorNode = TicketTemplateEditorNodeBase & {
   fieldKey: string;
   label: string;
   width: number;
+  height: number;
   fontSize: number;
   fontFamily: string;
   fontWeight: number;
@@ -264,6 +265,7 @@ function applyNodeChanges(
 
   if (nextNode.kind === "field" && currentNode.kind === "field") {
     nextNode.width = clampNumber(nextNode.width, currentNode.width, 80);
+    nextNode.height = clampNumber(nextNode.height, currentNode.height, 24);
     nextNode.fontSize = clampNumber(nextNode.fontSize, currentNode.fontSize, 12);
     nextNode.fontWeight = clampNumber(
       nextNode.fontWeight,
@@ -291,6 +293,7 @@ function hydrateAssetNode(node: TicketTemplateAssetNode): TicketTemplateAssetEdi
 }
 
 function hydrateFieldNode(node: TicketTemplateFieldNode): TicketTemplateFieldEditorNode {
+  const fontSize = clampNumber(node.fontSize, 64, 12);
   return {
     ...node,
     kind: "field",
@@ -298,7 +301,8 @@ function hydrateFieldNode(node: TicketTemplateFieldNode): TicketTemplateFieldEdi
     rotation: clampRotation(node.rotation, 0),
     label: node.label ?? getFieldLabel(node.fieldKey),
     width: clampNumber(node.width, 420, 80),
-    fontSize: clampNumber(node.fontSize, 64, 12),
+    height: clampNumber(node.height, Math.ceil(fontSize * 1.4), 24),
+    fontSize,
     fontFamily: node.fontFamily ?? "Georgia",
     fontWeight: clampNumber(node.fontWeight, 700, 100),
     fill: node.fill ?? "#111827",
@@ -353,6 +357,7 @@ function createInitialState(): TicketTemplateState {
 }
 
 function createFieldNode(fieldKey: string): TicketTemplateFieldEditorNode {
+  const fontSize = 64;
   return {
     id: uuidv4(),
     kind: "field",
@@ -362,7 +367,8 @@ function createFieldNode(fieldKey: string): TicketTemplateFieldEditorNode {
     y: 120,
     rotation: 0,
     width: 420,
-    fontSize: 64,
+    height: Math.ceil(fontSize * 1.4),
+    fontSize,
     fontFamily: "Georgia",
     fontWeight: 700,
     fill: "#111827",
@@ -825,6 +831,7 @@ export function serializeTicketTemplateEditor(
             y: node.y,
             ...(node.rotation ? { rotation: node.rotation } : {}),
             width: node.width,
+            height: node.height,
             fontSize: node.fontSize,
             fontFamily: node.fontFamily,
             fontWeight: node.fontWeight,

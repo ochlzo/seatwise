@@ -77,6 +77,7 @@ function normalizeFieldNode(
   index: number,
 ): TicketTemplateFieldNode {
   const rotation = toFiniteNumber(node.rotation, 0);
+  const fontSize = toFiniteNumber(node.fontSize, 64);
   return {
     id: toStringValue(node.id, `field-${index}`),
     kind: "field",
@@ -86,7 +87,8 @@ function normalizeFieldNode(
     y: toFiniteNumber(node.y),
     ...(rotation ? { rotation } : {}),
     width: toFiniteNumber(node.width, 420),
-    fontSize: toFiniteNumber(node.fontSize, 64),
+    height: toFiniteNumber(node.height, Math.ceil(fontSize * 1.4)),
+    fontSize,
     fontFamily: toStringValue(node.fontFamily, "Georgia"),
     fontWeight: toFiniteNumber(node.fontWeight, 700),
     fill: toStringValue(node.fill, "#111827"),

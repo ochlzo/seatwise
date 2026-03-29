@@ -172,20 +172,213 @@ function resolveTextAnchor(node: TicketTemplateFieldNode) {
   };
 }
 
-function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
+const LINE_HEIGHT_RATIO = 1.2;
+const DESCENDER_RATIO = 0.2;
+const MIN_FIELD_FONT_SIZE = 1;
+
+function estimateTextWidth(text: string, fontSize: number, fontWeight: number) {
+  let widthUnits = 0;
+
+  for (const character of text) {
+    if (character === " ") {
+      widthUnits += 0.33;
+      continue;
+    }
+
+    if ("ilI1|`'.,:;!".includes(character)) {
+      widthUnits += 0.28;
+      continue;
+    }
+
+    if ("MW@#%&".includes(character)) {
+      widthUnits += 0.92;
+      continue;
+    }
+
+    if (/[A-Z]/.test(character)) {
+      widthUnits += 0.68;
+      continue;
+    }
+
+    if (/[0-9]/.test(character)) {
+      widthUnits += 0.58;
+      continue;
+    }
+
+    widthUnits += 0.56;
+  }
+
+  const weightMultiplier = fontWeight >= 700 ? 1.04 : 1;
+  return widthUnits * fontSize * weightMultiplier;
+}
+
+function splitLongToken(
+  token: string,
+  maxWidth: number,
+  fontSize: number,
+  fontWeight: number,
+) {
+  const parts: string[] = [];
+  let current = "";
+
+  for (const character of token) {
+    const next = `${current}${character}`;
+    if (!current || estimateTextWidth(next, fontSize, fontWeight) <= maxWidth) {
+      current = next;
+      continue;
+    }
+
+    parts.push(current);
+    current = character;
+  }
+
+  if (current) {
+    parts.push(current);
+  }
+
+  return parts;
+}
+
+function wrapParagraph(
+  paragraph: string,
+  maxWidth: number,
+  fontSize: number,
+  fontWeight: number,
+) {
+  const tokens = paragraph.trim().split(/\s+/).filter(Boolean);
+  if (!tokens.length) {
+    return [""];
+  }
+
+  const lines: string[] = [];
+  let currentLine = "";
+
+  const pushCurrentLine = () => {
+    if (currentLine) {
+      lines.push(currentLine);
+      currentLine = "";
+    }
+  };
+
+  tokens.forEach((token) => {
+    const candidateLine = currentLine ? `${currentLine} ${token}` : token;
+    if (estimateTextWidth(candidateLine, fontSize, fontWeight) <= maxWidth) {
+      currentLine = candidateLine;
+      return;
+    }
+
+    if (currentLine) {
+      pushCurrentLine();
+    }
+
+    if (estimateTextWidth(token, fontSize, fontWeight) <= maxWidth) {
+      currentLine = token;
+      return;
+    }
+
+    const brokenToken = splitLongToken(token, maxWidth, fontSize, fontWeight);
+    if (!brokenToken.length) {
+      return;
+    }
+
+    if (brokenToken.length === 1) {
+      currentLine = brokenToken[0] ?? "";
+      return;
+    }
+
+    lines.push(...brokenToken.slice(0, -1));
+    currentLine = brokenToken[brokenToken.length - 1] ?? "";
+  });
+
+  pushCurrentLine();
+  return lines.length ? lines : [""];
+}
+
+function wrapTextLines(
+  value: string,
+  maxWidth: number,
+  fontSize: number,
+  fontWeight: number,
+) {
+  const normalizedValue = value.replace(/\r\n?/g, "\n");
+  const paragraphs = normalizedValue.split("\n");
+  const lines: string[] = [];
+
+  paragraphs.forEach((paragraph) => {
+    lines.push(...wrapParagraph(paragraph, maxWidth, fontSize, fontWeight));
+  });
+
+  return lines.length ? lines : [""];
+}
+
+function measureTextBlockHeight(lineCount: number, fontSize: number) {
+  if (lineCount <= 0) {
+    return 0;
+  }
+
+  const lineHeight = fontSize * LINE_HEIGHT_RATIO;
+  return (
+    fontSize +
+    Math.max(lineCount - 1, 0) * lineHeight +
+    fontSize * DESCENDER_RATIO
+  );
+}
+
+function fitFieldTextToBounds(node: TicketTemplateFieldNode, value: string) {
   const width = Math.max(Math.round(node.width ?? 420), 1);
-  const height = Math.max(Math.ceil((node.fontSize ?? 64) * 1.4), 1);
-  const { anchor, x } = resolveTextAnchor(node);
-  const fontSize = node.fontSize ?? 64;
+  const height = Math.max(
+    Math.round(node.height ?? Math.ceil((node.fontSize ?? 64) * 1.4)),
+    1,
+  );
+  const initialFontSize = Math.max(Math.round(node.fontSize ?? 64), MIN_FIELD_FONT_SIZE);
+  const fontWeight = node.fontWeight ?? 700;
+
+  for (let fontSize = initialFontSize; fontSize >= MIN_FIELD_FONT_SIZE; fontSize -= 1) {
+    const lines = wrapTextLines(value, width, fontSize, fontWeight);
+    if (measureTextBlockHeight(lines.length, fontSize) <= height) {
+      return {
+        width,
+        height,
+        fontSize,
+        lines,
+      };
+    }
+  }
+
+  return {
+    width,
+    height,
+    fontSize: MIN_FIELD_FONT_SIZE,
+    lines: wrapTextLines(value, width, MIN_FIELD_FONT_SIZE, fontWeight),
+  };
+}
+
+function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
+  const fittedText = fitFieldTextToBounds(node, value);
+  const width = fittedText.width;
+  const height = fittedText.height;
+  const { anchor, x } = resolveTextAnchor({
+    ...node,
+    width,
+  });
+  const fontSize = fittedText.fontSize;
+  const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const opacity = node.opacity ?? 1;
   const fill = node.fill ?? "#111827";
   const fontFamily = node.fontFamily ?? "Georgia";
   const fontWeight = node.fontWeight ?? 700;
+  const textSpans = fittedText.lines
+    .map((line, index) => {
+      const lineY = fontSize + index * lineHeight;
+      const lineText = line.length > 0 ? escapeXml(line) : "&#160;";
+      return `<tspan x="${x}" y="${lineY}">${lineText}</tspan>`;
+    })
+    .join("");
 
   return Buffer.from(
     [
       `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`,
-      `<text x="${x}" y="${fontSize}" font-size="${fontSize}" font-family="${escapeXml(fontFamily)}" font-weight="${fontWeight}" fill="${escapeXml(fill)}" fill-opacity="${opacity}" text-anchor="${anchor}">${escapeXml(value)}</text>`,
+      `<text font-size="${fontSize}" font-family="${escapeXml(fontFamily)}" font-weight="${fontWeight}" fill="${escapeXml(fill)}" fill-opacity="${opacity}" text-anchor="${anchor}">${textSpans}</text>`,
       "</svg>",
     ].join(""),
     "utf8",

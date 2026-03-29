@@ -29,6 +29,7 @@ export type TicketTemplateFieldNode = TicketTemplateNodeBase<"field"> & {
   fieldKey: string;
   label?: string;
   width?: number;
+  height?: number;
   fontSize?: number;
   fontFamily?: string;
   fontWeight?: number;
