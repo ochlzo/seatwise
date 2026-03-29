@@ -6,27 +6,10 @@ import { TicketManagerPageClient } from "@/components/tickets/TicketManagerPageC
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { getCurrentAdminContext } from "@/lib/auth/adminContext";
 import { prisma } from "@/lib/prisma";
-import { getTicketManagerStatus, type TicketManagerRow } from "@/lib/tickets/ticketManager";
-
-const MANILA_TIME_ZONE = "Asia/Manila";
-
-function formatScheduleLabel(dateValue: Date, startTimeValue: Date) {
-  const dateLabel = new Intl.DateTimeFormat("en-US", {
-    timeZone: MANILA_TIME_ZONE,
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(dateValue));
-
-  const timeLabel = new Intl.DateTimeFormat("en-US", {
-    timeZone: MANILA_TIME_ZONE,
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(new Date(startTimeValue));
-
-  return `${dateLabel} at ${timeLabel}`;
-}
+import {
+  buildTicketManagerRows,
+  buildTicketManagerSchedules,
+} from "@/lib/tickets/ticketManager";
 
 export default async function AdminShowTicketManagerPage({
   params,
@@ -99,40 +82,16 @@ export default async function AdminShowTicketManagerPage({
     notFound();
   }
 
-  const schedules = show.scheds.map((schedule) => ({
-    schedId: schedule.sched_id,
-    label: formatScheduleLabel(schedule.sched_date, schedule.sched_start_time),
-  }));
-
-  const rows: TicketManagerRow[] = show.reservations.flatMap((reservation) => {
-    const guestName = `${reservation.first_name} ${reservation.last_name}`.trim();
-    const scheduleLabel = formatScheduleLabel(
-      reservation.sched.sched_date,
-      reservation.sched.sched_start_time,
-    );
-
-    return reservation.reservedSeats.map(({ seatAssignment }) => ({
-      reservationId: reservation.reservation_id,
-      reservationNumber: reservation.reservation_number,
-      schedId: reservation.sched_id,
-      scheduleLabel,
-      seatAssignmentId: seatAssignment.seat_assignment_id,
-      seatLabel: seatAssignment.seat.seat_number,
-      guestName,
-      guestEmail: reservation.email,
-      guestPhoneNumber: reservation.phone_number,
-      ticketStatus: getTicketManagerStatus(
-        reservation.ticket_issued_at,
-        seatAssignment.seat_status,
-      ),
-      issuedAt: reservation.ticket_issued_at?.toISOString() ?? null,
-    }));
-  });
+  const schedules = buildTicketManagerSchedules(show.scheds);
+  const rows = buildTicketManagerRows(show.reservations);
 
   return (
     <>
       <PageHeader
         title="Ticket Manager"
+        breadcrumbLabelOverrides={{
+          [show.show_id]: show.show_name,
+        }}
         rightSlot={
           <>
             <ThemeSwithcer />

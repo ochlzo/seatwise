@@ -38,6 +38,7 @@ type PageHeaderProps = {
   title: string;
   parentLabel?: string;
   parentHref?: string;
+  breadcrumbLabelOverrides?: Record<string, string>;
   rightSlot?: React.ReactNode;
   className?: string;
 };
@@ -46,6 +47,7 @@ export function PageHeader({
   title,
   parentLabel,
   parentHref,
+  breadcrumbLabelOverrides,
   rightSlot,
   className,
 }: PageHeaderProps) {
@@ -101,13 +103,13 @@ export function PageHeader({
     segments.forEach((segment) => {
       currentHref += `/${segment}`;
       crumbs.push({
-        label: formatSegment(segment),
+        label: breadcrumbLabelOverrides?.[segment] ?? formatSegment(segment),
         href: currentHref,
       });
     });
 
     return crumbs;
-  }, [pathname, parentHref, parentLabel]);
+  }, [breadcrumbLabelOverrides, pathname, parentHref, parentLabel]);
 
   return (
     <StickyHeader

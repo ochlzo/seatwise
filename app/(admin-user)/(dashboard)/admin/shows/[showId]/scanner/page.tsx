@@ -5,9 +5,13 @@ import { AdminTicketScanner } from "@/components/tickets/AdminTicketScanner";
 import { PageHeader } from "@/components/page-header";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { getCurrentAdminContext } from "@/lib/auth/adminContext";
-import { getShowById } from "@/lib/db/Shows";
+import { prisma } from "@/lib/prisma";
+import {
+  buildTicketManagerRows,
+  buildTicketManagerSchedules,
+} from "@/lib/tickets/ticketManager";
 
-const formatScheduleLabel = (dateValue: Date, startValue: Date) => {
+const formatSchedulePreviewLabel = (dateValue: Date, startValue: Date) => {
   const dateLabel = new Intl.DateTimeFormat("en-PH", {
     month: "short",
     day: "numeric",
@@ -29,7 +33,66 @@ export default async function AdminShowScannerPage({
 }) {
   const { showId } = await params;
   const { schedId } = await searchParams;
-  const show = await getShowById(showId);
+  const show = await prisma.show.findUnique({
+    where: { show_id: showId },
+    select: {
+      show_id: true,
+      show_name: true,
+      team_id: true,
+      seatmap_id: true,
+      scheds: {
+        select: {
+          sched_id: true,
+          sched_date: true,
+          sched_start_time: true,
+          seatAssignments: {
+            include: {
+              set: {
+                include: {
+                  seatCategory: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { sched_start_time: "asc" },
+      },
+      reservations: {
+        orderBy: [{ createdAt: "desc" }],
+        select: {
+          reservation_id: true,
+          reservation_number: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          phone_number: true,
+          sched_id: true,
+          ticket_issued_at: true,
+          sched: {
+            select: {
+              sched_date: true,
+              sched_start_time: true,
+            },
+          },
+          reservedSeats: {
+            select: {
+              seatAssignment: {
+                select: {
+                  seat_assignment_id: true,
+                  seat_status: true,
+                  seat: {
+                    select: {
+                      seat_number: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
 
   if (!show) {
     notFound();
@@ -79,7 +142,7 @@ export default async function AdminShowScannerPage({
 
   const schedule = {
     schedId: selectedSchedule.sched_id,
-    label: formatScheduleLabel(
+    label: formatSchedulePreviewLabel(
       selectedSchedule.sched_date,
       selectedSchedule.sched_start_time,
     ),
@@ -88,10 +151,16 @@ export default async function AdminShowScannerPage({
     seatStatusById,
   };
 
+  const ticketManagerSchedules = buildTicketManagerSchedules(show.scheds);
+  const ticketManagerRows = buildTicketManagerRows(show.reservations);
+
   return (
     <>
       <PageHeader
         title="Ticket Scanner"
+        breadcrumbLabelOverrides={{
+          [show.show_id]: show.show_name,
+        }}
         rightSlot={
           <>
             <ThemeSwithcer />
@@ -105,6 +174,8 @@ export default async function AdminShowScannerPage({
           schedId={schedule.schedId}
           seatmapId={show.seatmap_id}
           schedule={schedule}
+          ticketManagerRows={ticketManagerRows}
+          ticketManagerSchedules={ticketManagerSchedules}
         />
       </div>
     </>

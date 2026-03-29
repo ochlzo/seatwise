@@ -3,10 +3,11 @@
 import * as React from "react";
 import Link from "next/link";
 import type { SeatStatus } from "@prisma/client";
-import { ImageUp, Loader2, ScanQrCode } from "lucide-react";
+import { ImageUp, LayoutGrid, Loader2, Rows3, ScanQrCode } from "lucide-react";
 
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import type { SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
+import { TicketManagerPageClient } from "@/components/tickets/TicketManagerPageClient";
 import { TicketVerificationResult } from "@/components/tickets/TicketVerificationResult";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -30,11 +31,16 @@ import type {
   TicketConsumeInvalidReason,
   TicketConsumeResult,
 } from "@/lib/tickets/consumeIssuedTicket";
+import {
+  applyConsumedTicketRows,
+  type TicketManagerRow,
+} from "@/lib/tickets/ticketManager";
 import type {
   TicketVerificationInvalidResult,
   TicketVerificationSuccessResult,
 } from "@/lib/tickets/verifyIssuedTicket";
 import type { VerifyScannedIssuedTicketResult } from "@/lib/tickets/verifyScannedIssuedTicket";
+import { cn } from "@/lib/utils";
 
 export type TicketScannerSchedulePreview = {
   schedId: string;
@@ -53,7 +59,14 @@ type AdminTicketScannerProps = {
   schedId: string;
   seatmapId?: string | null;
   schedule: TicketScannerSchedulePreview;
+  ticketManagerRows: TicketManagerRow[];
+  ticketManagerSchedules: Array<{
+    schedId: string;
+    label: string;
+  }>;
 };
+
+type PreviewPanelMode = "seatmap" | "table";
 
 type ScannerOutcome =
   | {
@@ -182,6 +195,8 @@ export function AdminTicketScanner({
   schedId,
   seatmapId,
   schedule,
+  ticketManagerRows,
+  ticketManagerSchedules,
 }: AdminTicketScannerProps) {
   const isMobile = useIsMobile();
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -203,8 +218,20 @@ export function AdminTicketScanner({
     null,
   );
   const [isSeatmapPreviewOpen, setIsSeatmapPreviewOpen] = React.useState(false);
+  const [isTicketManagerOpen, setIsTicketManagerOpen] = React.useState(false);
   const [previewSchedule, setPreviewSchedule] = React.useState(schedule);
+  const [previewPanelMode, setPreviewPanelMode] =
+    React.useState<PreviewPanelMode>("seatmap");
+  const [tableRows, setTableRows] = React.useState(ticketManagerRows);
   const isBusy = isVerifying || isConsuming;
+
+  React.useEffect(() => {
+    setPreviewSchedule(schedule);
+  }, [schedule]);
+
+  React.useEffect(() => {
+    setTableRows(ticketManagerRows);
+  }, [ticketManagerRows]);
 
   const scannerNotice = React.useMemo(
     () => getScannerNotice(cameraState, cameraMessage, scannerOutcome),
@@ -372,6 +399,9 @@ export function AdminTicketScanner({
 
       if (data.status === "CONSUMED") {
         applyConsumedSeatsToPreview(data.seatIds);
+        setTableRows((currentRows) =>
+          applyConsumedTicketRows(currentRows, data.seatAssignmentIds),
+        );
         setScannerOutcome({
           kind: "consumed",
           verification: data.verification,
@@ -609,6 +639,50 @@ export function AdminTicketScanner({
     </div>
   );
 
+  const ticketManagerContent = (
+    <div className="min-w-0">
+      <TicketManagerPageClient
+        rows={tableRows}
+        schedules={ticketManagerSchedules}
+        embedded
+        initialSchedId={schedId}
+      />
+    </div>
+  );
+
+  const previewToggle = (
+    <div className="flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 p-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn(
+          "h-8 gap-2 px-3 text-xs",
+          previewPanelMode === "seatmap" && "bg-background shadow-sm hover:bg-background",
+        )}
+        onClick={() => setPreviewPanelMode("seatmap")}
+        aria-pressed={previewPanelMode === "seatmap"}
+      >
+        <LayoutGrid className="h-3.5 w-3.5" />
+        Preview
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className={cn(
+          "h-8 gap-2 px-3 text-xs",
+          previewPanelMode === "table" && "bg-background shadow-sm hover:bg-background",
+        )}
+        onClick={() => setPreviewPanelMode("table")}
+        aria-pressed={previewPanelMode === "table"}
+      >
+        <Rows3 className="h-3.5 w-3.5" />
+        Ticket Manager
+      </Button>
+    </div>
+  );
+
   return (
     <div className="flex flex-1 flex-col gap-4 py-4">
       <div className="flex items-center justify-between gap-3 md:hidden">
@@ -695,32 +769,54 @@ export function AdminTicketScanner({
         )}
 
         <Card className="hidden gap-0 border-sidebar-border md:block lg:col-span-2">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base">Seatmap Preview</CardTitle>
-            <CardDescription>{previewSchedule.label}</CardDescription>
+          <CardHeader className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 pb-4">
+            <div>
+              <CardTitle className="text-base">
+                {previewPanelMode === "seatmap" ? "Seatmap Preview" : "Ticket Manager"}
+              </CardTitle>
+              <CardDescription>{previewSchedule.label}</CardDescription>
+            </div>
+            {previewToggle}
           </CardHeader>
-          <CardContent className="space-y-4">{seatmapPreviewContent}</CardContent>
+          <CardContent className="space-y-4">
+            {previewPanelMode === "seatmap" ? seatmapPreviewContent : ticketManagerContent}
+          </CardContent>
         </Card>
       </div>
 
-      <Dialog open={isSeatmapPreviewOpen} onOpenChange={setIsSeatmapPreviewOpen}>
-        <DialogTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            className="ml-auto w-full max-w-[16rem] md:hidden"
-          >
-            View Seatmap Preview
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="w-[calc(100%-1rem)] max-w-[25rem] rounded-2xl p-4 sm:max-w-lg">
-          <DialogHeader className="pr-8">
-            <DialogTitle>Seatmap Preview</DialogTitle>
-            <DialogDescription>{previewSchedule.label}</DialogDescription>
-          </DialogHeader>
-          {seatmapPreviewContent}
-        </DialogContent>
-      </Dialog>
+      <div className="grid gap-3 md:hidden">
+        <Dialog open={isSeatmapPreviewOpen} onOpenChange={setIsSeatmapPreviewOpen}>
+          <DialogTrigger asChild>
+            <Button type="button" variant="outline" className="w-full">
+              View Seatmap Preview
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="w-[calc(100%-1rem)] max-w-[25rem] rounded-2xl p-4 sm:max-w-lg">
+            <DialogHeader className="pr-8">
+              <DialogTitle>Seatmap Preview</DialogTitle>
+              <DialogDescription>{previewSchedule.label}</DialogDescription>
+            </DialogHeader>
+            {seatmapPreviewContent}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={isTicketManagerOpen} onOpenChange={setIsTicketManagerOpen}>
+          <DialogTrigger asChild>
+            <Button type="button" variant="outline" className="w-full">
+              View Ticket Manager
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-[25rem] flex-col rounded-2xl p-4 sm:max-w-3xl">
+            <DialogHeader className="pr-8">
+              <DialogTitle>Ticket Manager</DialogTitle>
+              <DialogDescription>{previewSchedule.label}</DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto pb-1">
+              {ticketManagerContent}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }

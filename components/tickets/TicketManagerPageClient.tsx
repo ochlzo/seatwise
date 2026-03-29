@@ -17,13 +17,15 @@ import { filterTicketManagerRows, type TicketManagerRow, type TicketManagerStatu
 import { cn } from "@/lib/utils";
 
 type TicketManagerPageClientProps = {
-  showName: string;
-  description: string;
+  showName?: string;
+  description?: string;
   rows: TicketManagerRow[];
   schedules: Array<{
     schedId: string;
     label: string;
   }>;
+  embedded?: boolean;
+  initialSchedId?: string;
 };
 
 const STATUS_OPTIONS: Array<{
@@ -53,11 +55,19 @@ export function TicketManagerPageClient({
   description,
   rows,
   schedules,
+  embedded = false,
+  initialSchedId = "ALL",
 }: TicketManagerPageClientProps) {
   const [query, setQuery] = React.useState("");
-  const [selectedSchedId, setSelectedSchedId] = React.useState("ALL");
+  const [selectedSchedId, setSelectedSchedId] = React.useState(initialSchedId);
   const [selectedStatus, setSelectedStatus] = React.useState<"ALL" | TicketManagerStatus>("ALL");
   const deferredQuery = React.useDeferredValue(query);
+
+  React.useEffect(() => {
+    React.startTransition(() => {
+      setSelectedSchedId(initialSchedId);
+    });
+  }, [initialSchedId]);
 
   const filteredRows = React.useMemo(
     () =>
@@ -70,17 +80,31 @@ export function TicketManagerPageClient({
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 pb-8 pt-0 md:px-8">
-      <div className="mb-6 space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-          {showName}
-        </h1>
-        <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
-          {description}
-        </p>
-      </div>
+    <div
+      className={cn(
+        "flex w-full flex-1 flex-col",
+        embedded
+          ? "min-w-0"
+          : "mx-auto max-w-7xl px-4 pb-8 pt-0 md:px-8",
+      )}
+    >
+      {!embedded && showName && description ? (
+        <div className="mb-6 space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+            {showName}
+          </h1>
+          <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
+            {description}
+          </p>
+        </div>
+      ) : null}
 
-      <Card className="overflow-hidden border-sidebar-border/70">
+      <Card
+        className={cn(
+          "overflow-hidden border-sidebar-border/70",
+          embedded && "border-0 shadow-none",
+        )}
+      >
         <CardHeader className="gap-4 border-b bg-card/80">
           <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
             <div className="space-y-1">
@@ -89,7 +113,9 @@ export function TicketManagerPageClient({
                 Ticket Manager
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Review seat-level ticket issuance and entry status across schedules.
+                {embedded
+                  ? "Review seat-level issuance and entry updates while scanning."
+                  : "Review seat-level ticket issuance and entry status across schedules."}
               </p>
             </div>
             <div className="grid gap-3 md:min-w-[28rem] md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">

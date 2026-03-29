@@ -15,6 +15,7 @@ import {
   isSchedStatusReservable,
   syncScheduleCapacityStatuses,
 } from "@/lib/shows/effectiveStatus";
+import { autoConsumeIssuedReservationTickets } from "@/lib/tickets/autoConsumeIssuedReservationTickets";
 import { issueReservationTicket } from "@/lib/tickets/issueReservationTicket";
 
 const formatCurrency = (value: number) =>
@@ -419,6 +420,12 @@ export async function POST(request: NextRequest) {
             process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
             request.nextUrl.origin ||
             "http://localhost:3000",
+        });
+        await autoConsumeIssuedReservationTickets({
+          issuedTicket,
+          showId,
+          schedId,
+          adminContext: adminContext!,
         });
 
         await sendIssuedTicketEmail({

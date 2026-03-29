@@ -31,6 +31,7 @@ export type TicketConsumeResult =
       showId: string;
       schedId: string;
       seatIds: string[];
+      seatAssignmentIds: string[];
       verification: TicketVerificationSuccessResult;
     }
   | {
@@ -195,6 +196,7 @@ export async function consumeIssuedTicket(
 
   const consumedAt = input.consumedAt ?? new Date();
   const seatIds = [targetSeatAssignment.seat_id];
+  const seatAssignmentIds = [targetSeatAssignment.seat_assignment_id];
 
   const consumedSeatAssignment = await db.$transaction(async (tx) => {
     const updatedSeatAssignment = await tx.seatAssignment.update({
@@ -268,6 +270,7 @@ export async function consumeIssuedTicket(
     showId: consumedReservation.show.show_id,
     schedId: consumedReservation.sched.sched_id,
     seatIds,
+    seatAssignmentIds,
     verification: mapIssuedTicketToPublicResult(
       consumedReservation,
       loaded.seatAssignmentId,

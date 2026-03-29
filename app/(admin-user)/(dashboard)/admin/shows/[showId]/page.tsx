@@ -59,6 +59,9 @@ export default async function ShowIdPage({
             <StopLoadingOnMount />
             <PageHeader
                 title={show.show_name}
+                breadcrumbLabelOverrides={{
+                    [show.show_id]: show.show_name,
+                }}
                 className="z-20"
                 rightSlot={
                     <>

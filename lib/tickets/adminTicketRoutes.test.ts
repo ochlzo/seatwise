@@ -115,7 +115,9 @@ test("scanner page is schedule scoped and keeps the mobile scanner controls alig
   assert.match(verifyRoute, /schedId/);
   assert.match(scannerComponent, /Back To Show/);
   assert.match(scannerComponent, /View Seatmap Preview/);
-  assert.doesNotMatch(scannerComponent, /Schedules/);
+  assert.match(scannerComponent, /View Ticket Manager/);
+  assert.match(scannerComponent, /Ticket Manager/);
+  assert.match(scannerComponent, /Preview/);
 });
 
 test("scanner flow pauses after scan, verifies first, and exposes consume or continue actions from the result card", () => {
@@ -146,6 +148,43 @@ test("show detail exposes ticket manager navigation alongside the ticket scanner
   assert.match(showDetailForm, /Open Ticket Scanner/);
   assert.match(showDetailForm, /Open Ticket Manager/);
   assert.match(showDetailForm, /\/admin\/shows\/\$\{show\.show_id\}\/tickets/);
+});
+
+test("dynamic admin show routes override breadcrumb IDs with show names", () => {
+  const showDetailPage = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/shows/[showId]/page.tsx",
+  );
+  const scannerPage = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/shows/[showId]/scanner/page.tsx",
+  );
+  const ticketManagerPage = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/shows/[showId]/tickets/page.tsx",
+  );
+
+  assert.match(showDetailPage, /breadcrumbLabelOverrides/);
+  assert.match(scannerPage, /breadcrumbLabelOverrides/);
+  assert.match(ticketManagerPage, /breadcrumbLabelOverrides/);
+});
+
+test("walk-in routes override breadcrumb IDs with show and schedule labels", () => {
+  const walkInPage = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/walk-in/[showId]/[schedId]/page.tsx",
+  );
+  const walkInRoomPage = readRepoFile(
+    "app/(admin-user)/(dashboard)/admin/walk-in/[showId]/[schedId]/room/page.tsx",
+  );
+
+  assert.match(walkInPage, /breadcrumbLabelOverrides/);
+  assert.match(walkInPage, /scheduleLabel/);
+  assert.match(walkInRoomPage, /breadcrumbLabelOverrides/);
+  assert.match(walkInRoomPage, /scheduleLabel/);
+});
+
+test("walk-in completion auto-consumes newly issued tickets before delivery", () => {
+  const queueCompleteRoute = readRepoFile("app/api/queue/complete/route.ts");
+
+  assert.match(queueCompleteRoute, /autoConsumeIssuedReservationTickets/);
+  assert.match(queueCompleteRoute, /await autoConsumeIssuedReservationTickets\(\{/);
 });
 
 test("ticket builder loads ticket fonts from local public assets instead of external Google font stylesheets", () => {
