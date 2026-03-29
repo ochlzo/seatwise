@@ -4,6 +4,10 @@ import { Prisma } from "@prisma/client";
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 import { setTicketTemplateLiveVersionRecord } from "@/lib/db/TicketTemplates";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 type LiveVersionBody = {
   ticketTemplateVersionId?: string;
 };

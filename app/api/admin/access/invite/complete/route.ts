@@ -18,6 +18,10 @@ import {
   verifyInviteToken,
 } from "@/lib/invite/adminInvite";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 type CompleteBody = {
   token?: string;
   firstName?: string;

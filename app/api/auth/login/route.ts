@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { resolveAvatarUrl } from "@/lib/db/Users";
 import { getDefaultAvatarsFromCloudinary } from "@/lib/avatars/defaultAvatars";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 export async function POST(req: NextRequest) {
   try {
     const { idToken } = (await req.json()) as { idToken?: string };

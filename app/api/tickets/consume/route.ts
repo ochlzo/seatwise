@@ -10,6 +10,10 @@ import {
 } from "@/lib/tickets/consumeIssuedTicket";
 import { normalizeScannedTicketToken } from "@/lib/tickets/qrPayload";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 type ConsumeTicketRequestBody = {
   token?: string;
   showId?: string;

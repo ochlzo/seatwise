@@ -8,6 +8,10 @@ import {
   getEffectiveShowStatus,
 } from "@/lib/shows/effectiveStatus";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 export async function GET(request: NextRequest) {
   try {
     const showId = request.nextUrl.searchParams.get("showId");

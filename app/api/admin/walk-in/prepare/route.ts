@@ -13,6 +13,10 @@ import {
   isSchedStatusReservable,
 } from "@/lib/shows/effectiveStatus";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 const WALK_IN_PRIORITY_SCORE = 0;
 
 const buildAdminQueueName = (teamName: string | null) =>

@@ -6,6 +6,10 @@ import { sendReservationStatusUpdateEmail } from "@/lib/email/sendReservationSta
 import { prisma } from "@/lib/prisma";
 import { syncScheduleCapacityStatuses } from "@/lib/shows/effectiveStatus";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 type StageTargetStatus = "CONFIRMED" | "CANCELLED";
 
 const normalizeIds = (value: unknown) =>

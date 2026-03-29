@@ -10,6 +10,10 @@ import {
 } from "@/lib/tickets/verifyScannedIssuedTicket";
 import { TicketConsumeAuthorizationError } from "@/lib/tickets/consumeIssuedTicket";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 type VerifyTicketRequestBody = {
   token?: string;
   showId?: string;

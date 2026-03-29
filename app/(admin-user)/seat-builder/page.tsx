@@ -6,6 +6,9 @@ import {
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
 
 export default async function SeatBuilderPage() {
   try {

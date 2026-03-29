@@ -11,6 +11,10 @@ import {
   buildTicketManagerSchedules,
 } from "@/lib/tickets/ticketManager";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 const formatSchedulePreviewLabel = (dateValue: Date, startValue: Date) => {
   const dateLabel = new Intl.DateTimeFormat("en-PH", {
     month: "short",

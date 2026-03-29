@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 // GET /api/reservations — Admin-only: fetch all reservations grouped by show
 export async function GET() {
     try {

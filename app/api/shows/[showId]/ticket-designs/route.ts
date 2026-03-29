@@ -4,6 +4,10 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { normalizeTemplateVersion } from "@/lib/tickets/templateSchema";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 type ShowTicketDesign = {
   ticketTemplateId: string;
   ticketTemplateVersionId: string;

@@ -7,6 +7,10 @@ import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { getCurrentAdminContext } from "@/lib/auth/adminContext";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 export default async function AdminWalkInSchedulePage({
   params,
 }: {

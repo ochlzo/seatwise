@@ -10,6 +10,10 @@ import {
   serializeSchedulesForPicker,
 } from "@/lib/shows/schedulePicker";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 export default async function ShowIdPage({
   params,
 }: {

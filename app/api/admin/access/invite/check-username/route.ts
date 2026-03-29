@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyInviteToken } from "@/lib/invite/adminInvite";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as { token?: string; username?: string };

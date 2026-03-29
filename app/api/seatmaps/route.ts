@@ -4,6 +4,10 @@ import { adminAuth } from "@/lib/firebaseAdmin";
 import { prisma } from "@/lib/prisma";
 import { getActiveSeatmaps } from "@/lib/db/Seatmaps";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 export async function GET() {
   try {
     const cookieStore = await cookies();

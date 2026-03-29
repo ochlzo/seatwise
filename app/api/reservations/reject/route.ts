@@ -5,6 +5,10 @@ import { buildReservationStatusEmailGroups } from "@/lib/email/reservationStatus
 import { sendReservationStatusUpdateEmail } from "@/lib/email/sendReservationStatusUpdateEmail";
 import { syncScheduleCapacityStatuses } from "@/lib/shows/effectiveStatus";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 // POST /api/reservations/reject - Admin-only: reject a reservation and release seats
 export async function POST(request: NextRequest) {
   try {

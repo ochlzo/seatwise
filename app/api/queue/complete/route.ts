@@ -18,6 +18,10 @@ import {
 import { autoConsumeIssuedReservationTickets } from "@/lib/tickets/autoConsumeIssuedReservationTickets";
 import { issueReservationTicket } from "@/lib/tickets/issueReservationTicket";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("en-PH", {
     style: "currency",

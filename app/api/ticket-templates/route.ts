@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
 import { getTicketTemplates } from "@/lib/db/TicketTemplates";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 export async function GET(request: NextRequest) {
   try {
     const adminContext = await getCurrentAdminContext();

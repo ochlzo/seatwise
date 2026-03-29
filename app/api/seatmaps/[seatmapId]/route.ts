@@ -3,6 +3,10 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import type { ShowStatus } from "@prisma/client";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 const PUBLIC_SHOW_STATUSES: ShowStatus[] = ["DRAFT", "CANCELLED"];
 
 export async function GET(

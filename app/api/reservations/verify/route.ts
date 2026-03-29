@@ -4,6 +4,10 @@ import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminConte
 import { sendIssuedTicketEmail } from "@/lib/email/sendIssuedTicketEmail";
 import { issueReservationTicket } from "@/lib/tickets/issueReservationTicket";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 // POST /api/reservations/verify - Admin-only: verify a reservation + payment
 export async function POST(request: NextRequest) {
   try {

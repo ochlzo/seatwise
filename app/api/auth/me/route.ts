@@ -3,6 +3,10 @@ import { cookies } from "next/headers";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { getUserByFirebaseUid, resolveAvatarUrl } from "@/lib/db/Users";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 export async function GET() {
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get("session")?.value;

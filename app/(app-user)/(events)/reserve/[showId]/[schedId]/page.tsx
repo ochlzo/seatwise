@@ -5,6 +5,10 @@ import { notFound } from "next/navigation";
 import type { SeatStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
+export const runtime = "nodejs";
+// Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
+export const preferredRegion = "sin1";
+
 type SeatmapCategoryPayload = {
   category_id: string;
   name: string;
