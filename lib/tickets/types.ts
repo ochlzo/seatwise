@@ -13,6 +13,7 @@ type TicketTemplateNodeBase<TKind extends TicketTemplateNodeKind> = {
   kind: TKind;
   x: number;
   y: number;
+  rotation?: number;
 };
 
 export type TicketTemplateAssetNode = TicketTemplateNodeBase<"asset"> & {

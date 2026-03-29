@@ -137,7 +137,7 @@ export function TicketBuilderPageClient() {
           }
         />
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,360px)]">
           <div className="relative min-h-0 overflow-hidden border-b border-zinc-200 xl:border-r xl:border-b-0 dark:border-zinc-800">
             {isLoadingTemplate ? (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 backdrop-blur-sm dark:bg-zinc-950/70">
@@ -153,8 +153,8 @@ export function TicketBuilderPageClient() {
             <TicketTemplateControlBar />
           </div>
 
-          <div className="min-h-0 overflow-y-auto bg-zinc-50/80 p-4 dark:bg-zinc-950">
-            <div className="grid gap-4">
+          <div className="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden bg-zinc-50/80 p-3 dark:bg-zinc-950">
+            <div className="grid min-w-0 gap-3">
               <TicketTemplateLayerPanel />
               <TicketTemplateInspector />
             </div>

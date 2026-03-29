@@ -53,11 +53,13 @@ function normalizeAssetNode(
   node: Record<string, unknown>,
   index: number,
 ): TicketTemplateAssetNode {
+  const rotation = toFiniteNumber(node.rotation, 0);
   return {
     id: toStringValue(node.id, `asset-${index}`),
     kind: "asset",
     x: toFiniteNumber(node.x),
     y: toFiniteNumber(node.y),
+    ...(rotation ? { rotation } : {}),
     width: toFiniteNumber(node.width),
     height: toFiniteNumber(node.height),
     opacity: toFiniteNumber(node.opacity, 1),
@@ -74,6 +76,7 @@ function normalizeFieldNode(
   node: Record<string, unknown>,
   index: number,
 ): TicketTemplateFieldNode {
+  const rotation = toFiniteNumber(node.rotation, 0);
   return {
     id: toStringValue(node.id, `field-${index}`),
     kind: "field",
@@ -81,6 +84,7 @@ function normalizeFieldNode(
     label: toStringValue(node.label, toStringValue(node.fieldKey, "")),
     x: toFiniteNumber(node.x),
     y: toFiniteNumber(node.y),
+    ...(rotation ? { rotation } : {}),
     width: toFiniteNumber(node.width, 420),
     fontSize: toFiniteNumber(node.fontSize, 64),
     fontFamily: toStringValue(node.fontFamily, "Georgia"),
@@ -95,11 +99,13 @@ function normalizeQrNode(
   node: Record<string, unknown>,
   index: number,
 ): TicketTemplateQrNode {
+  const rotation = toFiniteNumber(node.rotation, 0);
   return {
     id: toStringValue(node.id, `qr-${index}`),
     kind: "qr",
     x: toFiniteNumber(node.x),
     y: toFiniteNumber(node.y),
+    ...(rotation ? { rotation } : {}),
     size: toFiniteNumber(node.size),
     opacity: toFiniteNumber(node.opacity, 1),
   };

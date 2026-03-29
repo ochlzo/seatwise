@@ -88,18 +88,18 @@ export function TicketFieldPalette() {
   };
 
   return (
-    <Card className="gap-4 border-0 bg-transparent py-4 shadow-none">
-      <CardHeader className="px-4">
-        <CardTitle className="flex items-center gap-2 text-sm">
+    <Card className="min-w-0 gap-3 overflow-hidden border-0 bg-transparent py-3 shadow-none">
+      <CardHeader className="px-3">
+        <CardTitle className="flex items-center gap-2 text-xs">
           <Layers2 className="h-4 w-4 text-blue-600" />
           Ticket Elements
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-[11px] leading-4 break-words">
           Add PNG artwork, dynamic fields, and the fixed QR surface.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4 px-4">
+      <CardContent className="min-w-0 space-y-3 overflow-x-hidden px-3">
         <input
           ref={fileInputRef}
           type="file"
@@ -109,13 +109,13 @@ export function TicketFieldPalette() {
         />
 
         <div className="space-y-2">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+          <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
             Artwork
           </div>
           <Button
             type="button"
             variant="outline"
-            className="w-full justify-start"
+            className="h-8 w-full justify-start text-xs"
             onClick={() => fileInputRef.current?.click()}
           >
             <ImagePlus className="mr-2 h-4 w-4 text-blue-600" />
@@ -124,7 +124,7 @@ export function TicketFieldPalette() {
         </div>
 
         <div className="space-y-2">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+          <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
             Reservation Fields
           </div>
           <div className="grid gap-2">
@@ -134,25 +134,25 @@ export function TicketFieldPalette() {
                 type="button"
                 variant="ghost"
                 className={cn(
-                  "justify-between rounded-lg border border-zinc-200/80 bg-zinc-50/70 px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-900",
+                  "min-w-0 justify-between rounded-lg border border-zinc-200/80 bg-zinc-50/70 px-2.5 py-1.5 text-left text-xs hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:bg-zinc-900",
                 )}
                 onClick={() => dispatch(addFieldNode({ fieldKey: field.key }))}
               >
-                <span>{field.label}</span>
-                <span className="text-xs text-zinc-400">Add</span>
+                <span className="truncate pr-2">{field.label}</span>
+                <span className="shrink-0 text-[10px] text-zinc-400">Add</span>
               </Button>
             ))}
           </div>
         </div>
 
         <div className="space-y-2">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+          <div className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
             Secure Code
           </div>
           <Button
             type="button"
             variant="outline"
-            className="w-full justify-start"
+            className="h-8 w-full justify-start text-xs"
             onClick={() => dispatch(addQrNode(undefined))}
           >
             <QrCode className="mr-2 h-4 w-4 text-emerald-600" />

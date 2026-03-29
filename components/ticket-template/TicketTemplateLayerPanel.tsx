@@ -14,6 +14,7 @@ import {
 import {
   moveAssetLayer,
   selectNode,
+  toggleNodeInSelection,
 } from "@/lib/features/ticketTemplate/ticketTemplateSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
@@ -27,32 +28,32 @@ const KIND_LABELS = {
 export function TicketTemplateLayerPanel() {
   const dispatch = useAppDispatch();
   const nodes = useAppSelector((state) => state.ticketTemplate.nodes);
-  const selectedNodeId = useAppSelector(
-    (state) => state.ticketTemplate.selectedNodeId,
+  const selectedNodeIds = useAppSelector(
+    (state) => state.ticketTemplate.selectedNodeIds,
   );
 
   const orderedNodes = [...nodes].reverse();
 
   return (
-    <Card className="gap-4 border-zinc-200/80 bg-white/90 py-4 dark:border-zinc-800 dark:bg-zinc-950/80">
-      <CardHeader className="px-4">
-        <CardTitle className="flex items-center gap-2 text-sm">
+    <Card className="min-w-0 gap-3 overflow-hidden border-zinc-200/80 bg-white/90 py-3 dark:border-zinc-800 dark:bg-zinc-950/80">
+      <CardHeader className="px-3">
+        <CardTitle className="flex items-center gap-2 text-xs">
           <Layers3 className="h-4 w-4 text-violet-600" />
           Layer Stack
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-[11px] leading-4 break-words">
           Overlay content stays above artwork even while you drag it around.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-2 px-4">
+      <CardContent className="min-w-0 space-y-2 overflow-x-hidden px-3">
         {orderedNodes.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-zinc-200 px-3 py-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+          <div className="rounded-lg border border-dashed border-zinc-200 px-3 py-3 text-xs leading-4 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
             Add an artwork block, dynamic field, or QR node to start composing the ticket.
           </div>
         ) : (
           orderedNodes.map((node) => {
-            const selected = node.id === selectedNodeId;
+            const selected = selectedNodeIds.includes(node.id);
             const assetIndex = nodes.filter((item) => item.kind === "asset").findIndex(
               (item) => item.id === node.id,
             );
@@ -73,19 +74,26 @@ export function TicketTemplateLayerPanel() {
               >
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  onClick={() => dispatch(selectNode(node.id))}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                  onClick={(event) => {
+                    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                      dispatch(toggleNodeInSelection(node.id));
+                      return;
+                    }
+
+                    dispatch(selectNode(node.id));
+                  }}
                 >
                   <MousePointer2 className="h-4 w-4 shrink-0 text-zinc-400" />
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">
+                    <div className="truncate text-xs font-medium">
                       {node.kind === "field"
                         ? node.label
                         : node.kind === "asset"
                           ? node.name ?? "PNG Asset"
                           : "QR Code"}
                     </div>
-                    <div className="text-xs text-zinc-500">
+                    <div className="truncate text-[10px] text-zinc-500">
                       {node.kind === "field"
                         ? node.fieldKey
                         : node.kind === "asset"
@@ -95,7 +103,7 @@ export function TicketTemplateLayerPanel() {
                   </div>
                 </button>
 
-                <Badge variant="outline" className="shrink-0">
+                <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
                   {KIND_LABELS[node.kind]}
                 </Badge>
 
@@ -105,25 +113,25 @@ export function TicketTemplateLayerPanel() {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-7 w-7"
                       onClick={() =>
                         dispatch(moveAssetLayer({ id: node.id, direction: "up" }))
                       }
                       disabled={!canMoveUp}
                     >
-                      <ArrowUp className="h-4 w-4" />
+                      <ArrowUp className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-7 w-7"
                       onClick={() =>
                         dispatch(moveAssetLayer({ id: node.id, direction: "down" }))
                       }
                       disabled={!canMoveDown}
                     >
-                      <ArrowDown className="h-4 w-4" />
+                      <ArrowDown className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 ) : null}

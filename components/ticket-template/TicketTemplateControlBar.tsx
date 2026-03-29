@@ -14,10 +14,10 @@ import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 
 export function TicketTemplateControlBar() {
   const dispatch = useAppDispatch();
-  const selectedNodeId = useAppSelector((state) => state.ticketTemplate.selectedNodeId);
+  const selectedNodeIds = useAppSelector((state) => state.ticketTemplate.selectedNodeIds);
   const hasUndo = useAppSelector((state) => state.ticketTemplate.history.past.length > 0);
   const hasRedo = useAppSelector((state) => state.ticketTemplate.history.future.length > 0);
-  const hasSelection = Boolean(selectedNodeId);
+  const hasSelection = selectedNodeIds.length > 0;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-5 z-10 flex justify-center px-4">

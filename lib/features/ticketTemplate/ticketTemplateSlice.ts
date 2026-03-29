@@ -43,6 +43,7 @@ type TicketTemplateEditorNodeBase = {
   kind: TicketTemplateNode["kind"];
   x: number;
   y: number;
+  rotation: number;
   opacity: number;
 };
 
@@ -81,6 +82,7 @@ type TicketTemplateHistorySnapshot = {
   title: string;
   nodes: TicketTemplateEditorNode[];
   selectedNodeId: string | null;
+  selectedNodeIds: string[];
 };
 
 export type TicketTemplateState = {
@@ -93,6 +95,8 @@ export type TicketTemplateState = {
   };
   nodes: TicketTemplateEditorNode[];
   selectedNodeId: string | null;
+  selectedNodeIds: string[];
+  clipboard: TicketTemplateEditorNode[];
   hasUnsavedChanges: boolean;
   history: {
     past: TicketTemplateHistorySnapshot[];
@@ -115,12 +119,16 @@ function cloneNodes(nodes: TicketTemplateEditorNode[]) {
 }
 
 function createHistorySnapshot(
-  state: Pick<TicketTemplateState, "title" | "nodes" | "selectedNodeId">,
+  state: Pick<
+    TicketTemplateState,
+    "title" | "nodes" | "selectedNodeId" | "selectedNodeIds"
+  >,
 ): TicketTemplateHistorySnapshot {
   return {
     title: state.title,
     nodes: cloneNodes(state.nodes),
     selectedNodeId: state.selectedNodeId,
+    selectedNodeIds: [...state.selectedNodeIds],
   };
 }
 
@@ -131,6 +139,7 @@ function restoreHistorySnapshot(
   state.title = snapshot.title;
   state.nodes = cloneNodes(snapshot.nodes);
   state.selectedNodeId = snapshot.selectedNodeId;
+  state.selectedNodeIds = [...snapshot.selectedNodeIds];
 }
 
 function pushHistory(state: TicketTemplateState) {
@@ -154,6 +163,15 @@ function clampOpacity(value: unknown) {
   return Math.min(1, clampNumber(value, 1, 0));
 }
 
+function clampRotation(value: unknown, fallback = 0) {
+  if (typeof value !== "number" || Number.isNaN(value) || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const normalized = ((value % 360) + 360) % 360;
+  return normalized > 180 ? normalized - 360 : normalized;
+}
+
 function sortEditorNodes(nodes: TicketTemplateEditorNode[]) {
   return nodes
     .map((node, index) => ({ node, index }))
@@ -170,11 +188,103 @@ function sortEditorNodes(nodes: TicketTemplateEditorNode[]) {
     .map(({ node }) => node);
 }
 
+function normalizeSelectionIds(nodes: TicketTemplateEditorNode[], ids: string[]) {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const deduped: string[] = [];
+
+  ids.forEach((id) => {
+    if (!nodeIds.has(id)) {
+      return;
+    }
+    if (deduped.includes(id)) {
+      return;
+    }
+    deduped.push(id);
+  });
+
+  return deduped;
+}
+
+function syncSelection(
+  state: TicketTemplateState,
+  ids: string[],
+  preferredPrimaryId?: string | null,
+) {
+  const selectedNodeIds = normalizeSelectionIds(state.nodes, ids);
+  state.selectedNodeIds = selectedNodeIds;
+
+  if (!selectedNodeIds.length) {
+    state.selectedNodeId = null;
+    return;
+  }
+
+  if (preferredPrimaryId && selectedNodeIds.includes(preferredPrimaryId)) {
+    state.selectedNodeId = preferredPrimaryId;
+    return;
+  }
+
+  if (state.selectedNodeId && selectedNodeIds.includes(state.selectedNodeId)) {
+    return;
+  }
+
+  state.selectedNodeId = selectedNodeIds[selectedNodeIds.length - 1] ?? null;
+}
+
+function getEffectiveSelectionIds(state: TicketTemplateState) {
+  const selectedFromState = normalizeSelectionIds(state.nodes, state.selectedNodeIds);
+  if (selectedFromState.length > 0) {
+    return selectedFromState;
+  }
+
+  if (!state.selectedNodeId) {
+    return [];
+  }
+
+  return normalizeSelectionIds(state.nodes, [state.selectedNodeId]);
+}
+
+function applyNodeChanges(
+  currentNode: TicketTemplateEditorNode,
+  changes: Partial<TicketTemplateEditorNode>,
+) {
+  const nextNode = {
+    ...currentNode,
+    ...changes,
+  } as TicketTemplateEditorNode;
+
+  nextNode.x = clampNumber(nextNode.x, currentNode.x);
+  nextNode.y = clampNumber(nextNode.y, currentNode.y);
+  nextNode.rotation = clampRotation(nextNode.rotation, currentNode.rotation);
+  nextNode.opacity = clampOpacity(nextNode.opacity);
+
+  if (nextNode.kind === "asset" && currentNode.kind === "asset") {
+    nextNode.width = clampNumber(nextNode.width, currentNode.width, 24);
+    nextNode.height = clampNumber(nextNode.height, currentNode.height, 24);
+  }
+
+  if (nextNode.kind === "field" && currentNode.kind === "field") {
+    nextNode.width = clampNumber(nextNode.width, currentNode.width, 80);
+    nextNode.fontSize = clampNumber(nextNode.fontSize, currentNode.fontSize, 12);
+    nextNode.fontWeight = clampNumber(
+      nextNode.fontWeight,
+      currentNode.fontWeight,
+      100,
+    );
+  }
+
+  if (nextNode.kind === "qr" && currentNode.kind === "qr") {
+    nextNode.size = clampNumber(nextNode.size, currentNode.size, 48);
+  }
+
+  return nextNode;
+}
+
 function hydrateAssetNode(node: TicketTemplateAssetNode): TicketTemplateAssetEditorNode {
   return {
     ...node,
     kind: "asset",
     opacity: clampOpacity(node.opacity),
+    rotation: clampRotation(node.rotation, 0),
     src: node.src ?? node.assetKey ?? null,
     name: node.name ?? node.assetKey ?? null,
   };
@@ -185,6 +295,7 @@ function hydrateFieldNode(node: TicketTemplateFieldNode): TicketTemplateFieldEdi
     ...node,
     kind: "field",
     opacity: clampOpacity(node.opacity),
+    rotation: clampRotation(node.rotation, 0),
     label: node.label ?? getFieldLabel(node.fieldKey),
     width: clampNumber(node.width, 420, 80),
     fontSize: clampNumber(node.fontSize, 64, 12),
@@ -200,6 +311,7 @@ function hydrateQrNode(node: TicketTemplateQrNode): TicketTemplateQrEditorNode {
     ...node,
     kind: "qr",
     opacity: clampOpacity(node.opacity),
+    rotation: clampRotation(node.rotation, 0),
   };
 }
 
@@ -230,6 +342,8 @@ function createInitialState(): TicketTemplateState {
     canvas: emptyTemplate.canvas,
     nodes: [],
     selectedNodeId: null,
+    selectedNodeIds: [],
+    clipboard: [],
     hasUnsavedChanges: false,
     history: {
       past: [],
@@ -246,6 +360,7 @@ function createFieldNode(fieldKey: string): TicketTemplateFieldEditorNode {
     label: getFieldLabel(fieldKey),
     x: 180,
     y: 120,
+    rotation: 0,
     width: 420,
     fontSize: 64,
     fontFamily: "Georgia",
@@ -262,6 +377,7 @@ function createQrNode(): TicketTemplateQrEditorNode {
     kind: "qr",
     x: 2140,
     y: 120,
+    rotation: 0,
     size: 240,
     opacity: 1,
   };
@@ -321,7 +437,8 @@ const ticketTemplateSlice = createSlice({
     replaceNodes(state, action: PayloadAction<TicketTemplateNode[]>) {
       pushHistory(state);
       state.nodes = sortEditorNodes(hydrateTemplateNodes({ nodes: action.payload }));
-      state.selectedNodeId = state.nodes[0]?.id ?? null;
+      const firstId = state.nodes[0]?.id ?? null;
+      syncSelection(state, firstId ? [firstId] : [], firstId);
     },
     addFieldNode(
       state,
@@ -332,7 +449,7 @@ const ticketTemplateSlice = createSlice({
       node.x = clampNumber(action.payload.x, node.x);
       node.y = clampNumber(action.payload.y, node.y);
       state.nodes = sortEditorNodes([...state.nodes, node]);
-      state.selectedNodeId = node.id;
+      syncSelection(state, [node.id], node.id);
     },
     addQrNode(
       state,
@@ -343,7 +460,7 @@ const ticketTemplateSlice = createSlice({
       node.x = clampNumber(action.payload?.x, node.x);
       node.y = clampNumber(action.payload?.y, node.y);
       state.nodes = sortEditorNodes([...state.nodes, node]);
-      state.selectedNodeId = node.id;
+      syncSelection(state, [node.id], node.id);
     },
     addAssetNode(
       state,
@@ -363,6 +480,7 @@ const ticketTemplateSlice = createSlice({
         kind: "asset",
         x: clampNumber(action.payload.x, 180),
         y: clampNumber(action.payload.y, 120),
+        rotation: 0,
         width: clampNumber(action.payload.width, 320, 24),
         height: clampNumber(action.payload.height, 180, 24),
         opacity: 1,
@@ -372,13 +490,38 @@ const ticketTemplateSlice = createSlice({
       };
 
       state.nodes = sortEditorNodes([...state.nodes, node]);
-      state.selectedNodeId = node.id;
+      syncSelection(state, [node.id], node.id);
     },
     selectNode(state, action: PayloadAction<string | null>) {
-      state.selectedNodeId = action.payload;
+      if (!action.payload) {
+        syncSelection(state, []);
+        return;
+      }
+
+      syncSelection(state, [action.payload], action.payload);
+    },
+    selectNodes(state, action: PayloadAction<string[]>) {
+      const preferred = action.payload[action.payload.length - 1] ?? null;
+      syncSelection(state, action.payload, preferred);
+    },
+    toggleNodeInSelection(state, action: PayloadAction<string>) {
+      const id = action.payload;
+      const selected = getEffectiveSelectionIds(state);
+      const isSelected = selected.includes(id);
+
+      if (isSelected) {
+        const remaining = selected.filter((selectedId) => selectedId !== id);
+        syncSelection(state, remaining);
+        return;
+      }
+
+      syncSelection(state, [...selected, id], id);
     },
     clearSelectedNode(state) {
-      state.selectedNodeId = null;
+      syncSelection(state, []);
+    },
+    clearSelectedNodes(state) {
+      syncSelection(state, []);
     },
     updateNode(
       state,
@@ -393,65 +536,181 @@ const ticketTemplateSlice = createSlice({
       }
 
       pushHistory(state);
-
-      const currentNode = state.nodes[nodeIndex];
-      const nextNode = {
-        ...currentNode,
-        ...action.payload.changes,
-      } as TicketTemplateEditorNode;
-
-      nextNode.x = clampNumber(nextNode.x, currentNode.x);
-      nextNode.y = clampNumber(nextNode.y, currentNode.y);
-      nextNode.opacity = clampOpacity(nextNode.opacity);
-
-      if (nextNode.kind === "asset" && currentNode.kind === "asset") {
-        nextNode.width = clampNumber(nextNode.width, currentNode.width, 24);
-        nextNode.height = clampNumber(nextNode.height, currentNode.height, 24);
+      state.nodes[nodeIndex] = applyNodeChanges(
+        state.nodes[nodeIndex],
+        action.payload.changes,
+      );
+      state.nodes = sortEditorNodes(state.nodes);
+    },
+    updateNodes(
+      state,
+      action: PayloadAction<{
+        changes: Array<{ id: string; changes: Partial<TicketTemplateEditorNode> }>;
+      }>,
+    ) {
+      if (!action.payload.changes.length) {
+        return;
       }
 
-      if (nextNode.kind === "field" && currentNode.kind === "field") {
-        nextNode.width = clampNumber(nextNode.width, currentNode.width, 80);
-        nextNode.fontSize = clampNumber(nextNode.fontSize, currentNode.fontSize, 12);
-        nextNode.fontWeight = clampNumber(
-          nextNode.fontWeight,
-          currentNode.fontWeight,
-          100,
+      let hasUpdate = false;
+      action.payload.changes.forEach((entry) => {
+        if (state.nodes.some((node) => node.id === entry.id)) {
+          hasUpdate = true;
+        }
+      });
+
+      if (!hasUpdate) {
+        return;
+      }
+
+      pushHistory(state);
+
+      action.payload.changes.forEach((entry) => {
+        const nodeIndex = state.nodes.findIndex((node) => node.id === entry.id);
+        if (nodeIndex === -1) {
+          return;
+        }
+
+        state.nodes[nodeIndex] = applyNodeChanges(
+          state.nodes[nodeIndex],
+          entry.changes,
         );
-      }
+      });
 
-      if (nextNode.kind === "qr" && currentNode.kind === "qr") {
-        nextNode.size = clampNumber(nextNode.size, currentNode.size, 48);
-      }
-
-      state.nodes[nodeIndex] = nextNode;
       state.nodes = sortEditorNodes(state.nodes);
     },
     duplicateSelectedNode(state) {
-      const currentNode = state.nodes.find((node) => node.id === state.selectedNodeId);
-      if (!currentNode) {
+      const selectedIds = getEffectiveSelectionIds(state);
+      if (!selectedIds.length) {
         return;
       }
 
       pushHistory(state);
 
-      const duplicate = {
-        ...JSON.parse(JSON.stringify(currentNode)),
-        id: uuidv4(),
-        x: currentNode.x + 36,
-        y: currentNode.y + 36,
-      } as TicketTemplateEditorNode;
+      const duplicatedNodes: TicketTemplateEditorNode[] = [];
+      const duplicateIds: string[] = [];
 
-      state.nodes = sortEditorNodes([...state.nodes, duplicate]);
-      state.selectedNodeId = duplicate.id;
+      selectedIds.forEach((selectedId) => {
+        const currentNode = state.nodes.find((node) => node.id === selectedId);
+        if (!currentNode) {
+          return;
+        }
+
+        const duplicate = {
+          ...JSON.parse(JSON.stringify(currentNode)),
+          id: uuidv4(),
+          x: currentNode.x + 36,
+          y: currentNode.y + 36,
+        } as TicketTemplateEditorNode;
+
+        duplicatedNodes.push(duplicate);
+        duplicateIds.push(duplicate.id);
+      });
+
+      if (!duplicatedNodes.length) {
+        return;
+      }
+
+      state.nodes = sortEditorNodes([...state.nodes, ...duplicatedNodes]);
+      syncSelection(state, duplicateIds, duplicateIds[duplicateIds.length - 1] ?? null);
     },
     deleteSelectedNode(state) {
-      if (!state.selectedNodeId) {
+      const selectedIds = getEffectiveSelectionIds(state);
+      if (!selectedIds.length) {
         return;
       }
 
       pushHistory(state);
-      state.nodes = state.nodes.filter((node) => node.id !== state.selectedNodeId);
-      state.selectedNodeId = state.nodes.at(-1)?.id ?? null;
+      const toDelete = new Set(selectedIds);
+      state.nodes = state.nodes.filter((node) => !toDelete.has(node.id));
+      syncSelection(state, []);
+    },
+    copySelectedNodes(state) {
+      const selectedIds = getEffectiveSelectionIds(state);
+      state.clipboard = selectedIds
+        .map((id) => state.nodes.find((node) => node.id === id))
+        .filter((node): node is TicketTemplateEditorNode => Boolean(node))
+        .map((node) => JSON.parse(JSON.stringify(node)) as TicketTemplateEditorNode);
+    },
+    cutSelectedNodes(state) {
+      const selectedIds = getEffectiveSelectionIds(state);
+      if (!selectedIds.length) {
+        return;
+      }
+
+      state.clipboard = selectedIds
+        .map((id) => state.nodes.find((node) => node.id === id))
+        .filter((node): node is TicketTemplateEditorNode => Boolean(node))
+        .map((node) => JSON.parse(JSON.stringify(node)) as TicketTemplateEditorNode);
+
+      pushHistory(state);
+      const toDelete = new Set(selectedIds);
+      state.nodes = state.nodes.filter((node) => !toDelete.has(node.id));
+      syncSelection(state, []);
+    },
+    pasteNodesAt(state, action: PayloadAction<{ x: number; y: number }>) {
+      if (!state.clipboard.length) {
+        return;
+      }
+
+      pushHistory(state);
+
+      const center = state.clipboard.reduce(
+        (acc, node) => {
+          acc.x += node.x;
+          acc.y += node.y;
+          return acc;
+        },
+        { x: 0, y: 0 },
+      );
+
+      center.x /= state.clipboard.length;
+      center.y /= state.clipboard.length;
+
+      const offsetX = action.payload.x - center.x;
+      const offsetY = action.payload.y - center.y;
+
+      const pastedNodes = state.clipboard.map((node) => {
+        const copy = JSON.parse(JSON.stringify(node)) as TicketTemplateEditorNode;
+        copy.id = uuidv4();
+        copy.x = clampNumber(copy.x + offsetX, copy.x, 0);
+        copy.y = clampNumber(copy.y + offsetY, copy.y, 0);
+        return copy;
+      });
+
+      state.nodes = sortEditorNodes([...state.nodes, ...pastedNodes]);
+      const pastedIds = pastedNodes.map((node) => node.id);
+      syncSelection(state, pastedIds, pastedIds[pastedIds.length - 1] ?? null);
+    },
+    moveSelectedNodesBy(
+      state,
+      action: PayloadAction<{ dx: number; dy: number }>,
+    ) {
+      const { dx, dy } = action.payload;
+      if (dx === 0 && dy === 0) {
+        return;
+      }
+
+      const selectedIds = getEffectiveSelectionIds(state);
+      if (!selectedIds.length) {
+        return;
+      }
+
+      pushHistory(state);
+
+      selectedIds.forEach((selectedId) => {
+        const nodeIndex = state.nodes.findIndex((node) => node.id === selectedId);
+        if (nodeIndex === -1) {
+          return;
+        }
+
+        const node = state.nodes[nodeIndex];
+        state.nodes[nodeIndex] = {
+          ...node,
+          x: clampNumber(node.x + dx, node.x, 0),
+          y: clampNumber(node.y + dy, node.y, 0),
+        };
+      });
     },
     moveAssetLayer(
       state,
@@ -478,6 +737,7 @@ const ticketTemplateSlice = createSlice({
 
       const overlayNodes = state.nodes.filter((node) => node.kind !== "asset");
       state.nodes = [...reorderedAssets, ...overlayNodes];
+      syncSelection(state, state.selectedNodeIds, state.selectedNodeId);
     },
     undo(state) {
       const previous = state.history.past.pop();
@@ -507,20 +767,28 @@ export const {
   addFieldNode,
   addQrNode,
   clearSelectedNode,
+  clearSelectedNodes,
+  copySelectedNodes,
+  cutSelectedNodes,
   deleteSelectedNode,
   duplicateSelectedNode,
   loadTicketTemplate,
   markTicketTemplateSaved,
   moveAssetLayer,
+  moveSelectedNodesBy,
+  pasteNodesAt,
   redo,
   registerSavedTicketTemplate,
   replaceNodes,
   resetTicketTemplate,
   selectNode,
+  selectNodes,
   setTitle,
+  toggleNodeInSelection,
   undo,
   updateCanvasSize,
   updateNode,
+  updateNodes,
 } = ticketTemplateSlice.actions;
 
 export function serializeTicketTemplateEditor(
@@ -539,6 +807,7 @@ export function serializeTicketTemplateEditor(
             kind: "asset",
             x: node.x,
             y: node.y,
+            ...(node.rotation ? { rotation: node.rotation } : {}),
             width: node.width,
             height: node.height,
             opacity: node.opacity,
@@ -554,6 +823,7 @@ export function serializeTicketTemplateEditor(
             label: node.label,
             x: node.x,
             y: node.y,
+            ...(node.rotation ? { rotation: node.rotation } : {}),
             width: node.width,
             fontSize: node.fontSize,
             fontFamily: node.fontFamily,
@@ -568,6 +838,7 @@ export function serializeTicketTemplateEditor(
             kind: "qr",
             x: node.x,
             y: node.y,
+            ...(node.rotation ? { rotation: node.rotation } : {}),
             size: node.size,
             opacity: node.opacity,
           };

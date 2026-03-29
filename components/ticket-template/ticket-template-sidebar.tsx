@@ -11,12 +11,17 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
 export function TicketTemplateSidebar(
-  props: React.ComponentProps<typeof Sidebar>,
+  { className, ...props }: React.ComponentProps<typeof Sidebar>,
 ) {
   return (
-    <Sidebar collapsible="offcanvas" {...props}>
+    <Sidebar
+      collapsible="offcanvas"
+      className={cn("overflow-x-hidden", className)}
+      {...props}
+    >
       <SidebarHeader className="border-b border-zinc-200 p-0 dark:border-zinc-800">
         <div className="flex h-14 items-center justify-center px-2">
           <Image
@@ -38,16 +43,16 @@ export function TicketTemplateSidebar(
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="gap-4 px-2 pb-2">
+      <SidebarContent className="min-w-0 gap-3 overflow-x-hidden px-2 pb-2">
         <TicketFieldPalette />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-zinc-200/90 px-3 py-3 dark:border-zinc-800">
-        <div className="space-y-1 text-xs text-zinc-500">
+      <SidebarFooter className="overflow-x-hidden border-t border-zinc-200/90 px-3 py-3 dark:border-zinc-800">
+        <div className="space-y-1 text-[11px] leading-4 text-zinc-500">
           <p className="font-medium text-zinc-700 dark:text-zinc-200">Editor notes</p>
-          <p>The canvas stays locked to a white 2550 x 825 export surface.</p>
-          <p>Artwork layers can be reordered among themselves only.</p>
-          <p>Fields and QR always render on the dedicated top layer.</p>
+          <p className="break-words">The canvas stays locked to a white 2550 x 825 export surface.</p>
+          <p className="break-words">Artwork layers can be reordered among themselves only.</p>
+          <p className="break-words">Fields and QR always render on the dedicated top layer.</p>
         </div>
       </SidebarFooter>
 

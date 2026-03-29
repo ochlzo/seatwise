@@ -41,8 +41,8 @@ function NumericInput({
   onCommit: (nextValue: number) => void;
 }) {
   return (
-    <div className="grid gap-2">
-      <Label htmlFor={id}>{label}</Label>
+    <div className="grid gap-1.5">
+      <Label htmlFor={id} className="text-[11px] leading-4">{label}</Label>
       <Input
         id={id}
         type="number"
@@ -50,6 +50,7 @@ function NumericInput({
         max={max}
         step={step}
         value={Number.isFinite(value) ? value : 0}
+        className="h-8 text-xs"
         onChange={(event) => onCommit(Number(event.target.value))}
       />
     </div>
@@ -88,20 +89,20 @@ export function TicketTemplateInspector() {
       : true;
 
   return (
-    <Card className="gap-4 border-zinc-200/80 bg-white/90 py-4 dark:border-zinc-800 dark:bg-zinc-950/80">
-      <CardHeader className="px-4">
-        <CardTitle className="flex items-center gap-2 text-sm">
+    <Card className="min-w-0 gap-3 overflow-hidden border-zinc-200/80 bg-white/90 py-3 dark:border-zinc-800 dark:bg-zinc-950/80">
+      <CardHeader className="px-3">
+        <CardTitle className="flex items-center gap-2 text-xs">
           <SlidersHorizontal className="h-4 w-4 text-amber-600" />
           Inspector
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-[11px] leading-4 break-words">
           Fine-tune the selected element without changing the fixed canvas size.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4 px-4">
+      <CardContent className="min-w-0 space-y-3 overflow-x-hidden px-3">
         {!selectedNode ? (
-          <div className="rounded-lg border border-dashed border-zinc-200 px-3 py-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+          <div className="rounded-lg border border-dashed border-zinc-200 px-3 py-3 text-xs leading-4 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
             Select an element on the canvas or in the layer stack to edit its properties.
           </div>
         ) : (
@@ -153,19 +154,21 @@ export function TicketTemplateInspector() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="ticket-asset-name">Asset Name</Label>
+                  <Label htmlFor="ticket-asset-name" className="text-[11px] leading-4">Asset Name</Label>
                   <Input
                     id="ticket-asset-name"
                     value={selectedNode.name ?? ""}
+                    className="h-8 text-xs"
                     readOnly
                   />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="ticket-asset-ref">Cloudinary Ref</Label>
+                  <Label htmlFor="ticket-asset-ref" className="text-[11px] leading-4">Cloudinary Ref</Label>
                   <Input
                     id="ticket-asset-ref"
                     value={selectedNode.assetKey ?? ""}
+                    className="h-8 text-[10px]"
                     readOnly
                   />
                 </div>
@@ -175,10 +178,11 @@ export function TicketTemplateInspector() {
             {selectedNode.kind === "field" ? (
               <>
                 <div className="grid gap-2">
-                  <Label htmlFor="ticket-field-label">Display Label</Label>
+                  <Label htmlFor="ticket-field-label" className="text-[11px] leading-4">Display Label</Label>
                   <Input
                     id="ticket-field-label"
                     value={selectedNode.label}
+                    className="h-8 text-xs"
                     onChange={(event) =>
                       updateSelectedNode({ label: event.target.value })
                     }
@@ -186,14 +190,14 @@ export function TicketTemplateInspector() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="ticket-field-font-family">Font Family</Label>
+                  <Label htmlFor="ticket-field-font-family" className="text-[11px] leading-4">Font Family</Label>
                   <Select
                     value={selectedNode.fontFamily}
                     onValueChange={(nextValue) =>
                       updateSelectedNode({ fontFamily: nextValue })
                     }
                   >
-                    <SelectTrigger id="ticket-field-font-family" className="w-full">
+                    <SelectTrigger id="ticket-field-font-family" className="h-8 w-full text-xs">
                       <SelectValue placeholder="Choose font family" />
                     </SelectTrigger>
                     <SelectContent>
@@ -246,14 +250,14 @@ export function TicketTemplateInspector() {
                   />
 
                   <div className="grid gap-2">
-                    <Label htmlFor="ticket-field-align">Alignment</Label>
+                    <Label htmlFor="ticket-field-align" className="text-[11px] leading-4">Alignment</Label>
                     <Select
                       value={selectedNode.align}
                       onValueChange={(nextValue) =>
                         updateSelectedNode({ align: nextValue })
                       }
                     >
-                      <SelectTrigger id="ticket-field-align" className="w-full">
+                      <SelectTrigger id="ticket-field-align" className="h-8 w-full text-xs">
                         <SelectValue placeholder="Choose alignment" />
                       </SelectTrigger>
                       <SelectContent>
@@ -266,7 +270,7 @@ export function TicketTemplateInspector() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="ticket-field-color">Text Color</Label>
+                  <Label htmlFor="ticket-field-color" className="text-[11px] leading-4">Text Color</Label>
                   <Input
                     id="ticket-field-color"
                     type="color"
@@ -274,7 +278,7 @@ export function TicketTemplateInspector() {
                     onChange={(event) =>
                       updateSelectedNode({ fill: event.target.value })
                     }
-                    className="h-10 w-full cursor-pointer"
+                    className="h-8 w-full cursor-pointer"
                   />
                 </div>
               </>
