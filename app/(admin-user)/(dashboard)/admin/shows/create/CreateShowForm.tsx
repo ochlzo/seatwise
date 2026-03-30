@@ -406,7 +406,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     const loadTeams = async () => {
       try {
         setIsLoadingTeams(true);
-        const response = await fetch("/api/admin/access/teams");
+        const response = await fetch("/api/admin/access/teams?lite=1");
         const data = (await response.json()) as TeamsResponse;
 
         if (!response.ok || !data.success) {

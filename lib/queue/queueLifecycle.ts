@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto";
 import { redis } from "@/lib/clients/redis";
 import { ably } from "@/lib/clients/ably";
 import { clearWalkInPauseState } from "@/lib/queue/closeQueue";
+import {
+  getActiveSessionKey,
+  getActiveSessionPointerKey,
+  getQueueKey,
+  getTicketKey,
+  getUserTicketKey,
+} from "@/lib/queue/queueKeys";
 import type {
   ActiveSession,
   QueueActiveEvent,
@@ -53,6 +60,7 @@ const parseJson = <T>(value: unknown): T | null => {
 };
 
 const EXPIRED_SESSION_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
+const ACTIVE_SESSION_TTL_SECONDS = Math.ceil(ACTIVE_WINDOW_MS / 1000);
 
 const resolveUserIdForTicket = async ({
   showScopeId,
@@ -67,10 +75,42 @@ const resolveUserIdForTicket = async ({
     return userId;
   }
 
-  const ticketKey = `seatwise:ticket:${showScopeId}:${ticketId}`;
+  const ticketKey = getTicketKey(showScopeId, ticketId);
   const ticketRaw = await redis.get(ticketKey);
   const ticket = parseJson<TicketData>(ticketRaw);
   return ticket?.userId ?? null;
+};
+
+const setCurrentActiveSession = async ({
+  showScopeId,
+  session,
+}: {
+  showScopeId: string;
+  session: ActiveSession;
+}) => {
+  const activeKey = getActiveSessionKey(showScopeId, session.ticketId);
+  const pointerKey = getActiveSessionPointerKey(showScopeId);
+
+  await redis.set(activeKey, JSON.stringify(session));
+  await redis.expire(activeKey, ACTIVE_SESSION_TTL_SECONDS);
+  await redis.set(pointerKey, session.ticketId, {
+    ex: ACTIVE_SESSION_TTL_SECONDS,
+  });
+};
+
+const clearCurrentActiveSessionPointer = async ({
+  showScopeId,
+  ticketId,
+}: {
+  showScopeId: string;
+  ticketId: string;
+}) => {
+  const pointerKey = getActiveSessionPointerKey(showScopeId);
+  const pointedTicketId = (await redis.get(pointerKey)) as string | null;
+
+  if (pointedTicketId === ticketId) {
+    await redis.del(pointerKey);
+  }
 };
 
 const cleanupQueueTicketArtifacts = async ({
@@ -88,11 +128,12 @@ const cleanupQueueTicketArtifacts = async ({
     userId,
   });
 
-  const activeKey = `seatwise:active:${showScopeId}:${ticketId}`;
-  const ticketKey = `seatwise:ticket:${showScopeId}:${ticketId}`;
-  const userTicketKey = `seatwise:user_ticket:${showScopeId}`;
+  const activeKey = getActiveSessionKey(showScopeId, ticketId);
+  const ticketKey = getTicketKey(showScopeId, ticketId);
+  const userTicketKey = getUserTicketKey(showScopeId);
 
   await redis.del(activeKey, ticketKey);
+  await clearCurrentActiveSessionPointer({ showScopeId, ticketId });
   if (resolvedUserId) {
     const currentlyMappedTicketId = (await redis.hget(userTicketKey, resolvedUserId)) as string | null;
     if (currentlyMappedTicketId === ticketId) {
@@ -126,16 +167,6 @@ const publishSessionExpiredEvent = async ({
   }
 };
 
-const extractTicketIdFromActiveKey = (showScopeId: string, activeKey: string): string | null => {
-  const prefix = `seatwise:active:${showScopeId}:`;
-  if (!activeKey.startsWith(prefix)) {
-    return null;
-  }
-
-  const ticketId = activeKey.slice(prefix.length).trim();
-  return ticketId.length > 0 ? ticketId : null;
-};
-
 export async function expireQueueSession({
   showScopeId,
   ticketId,
@@ -157,51 +188,39 @@ export async function expireQueueSession({
 export const getCurrentActiveSession = async (
   showScopeId: string,
 ): Promise<ActiveSession | null> => {
-  const activePattern = `seatwise:active:${showScopeId}:*`;
-  const activeKeys = (await redis.keys(activePattern)) as string[];
-  if (!Array.isArray(activeKeys) || activeKeys.length === 0) {
+  const pointerKey = getActiveSessionPointerKey(showScopeId);
+  const pointedTicketId = (await redis.get(pointerKey)) as string | null;
+
+  if (!pointedTicketId) {
     return null;
   }
 
   const now = Date.now();
+  const activeKey = getActiveSessionKey(showScopeId, pointedTicketId);
+  const raw = await redis.get(activeKey);
+  const active = parseJson<ActiveSession>(raw);
 
-  for (const activeKey of activeKeys) {
-    const ticketIdFromKey = extractTicketIdFromActiveKey(showScopeId, activeKey);
-    const raw = await redis.get(activeKey);
-    const active = parseJson<ActiveSession>(raw);
-
-    if (!active) {
-      if (ticketIdFromKey) {
-        await cleanupQueueTicketArtifacts({
-          showScopeId,
-          ticketId: ticketIdFromKey,
-        });
-      } else {
-        await redis.del(activeKey);
-      }
-      continue;
-    }
-
-    if (active.expiresAt <= now) {
-      const expiredTicketId = active.ticketId || ticketIdFromKey;
-      if (!expiredTicketId) {
-        await redis.del(activeKey);
-        continue;
-      }
-
-      await expireQueueSession({
-        showScopeId,
-        ticketId: expiredTicketId,
-        userId: active.userId,
-        promoteNext: false,
-      });
-      continue;
-    }
-
-    return active;
+  if (!active) {
+    await cleanupQueueTicketArtifacts({
+      showScopeId,
+      ticketId: pointedTicketId,
+    });
+    return null;
   }
 
-  return null;
+  if (active.expiresAt <= now) {
+    const expiredTicketId = active.ticketId || pointedTicketId;
+
+    await expireQueueSession({
+      showScopeId,
+      ticketId: expiredTicketId,
+      userId: active.userId,
+      promoteNext: false,
+    });
+    return null;
+  }
+
+  return active;
 };
 
 const publishQueueMoveEvent = async (showScopeId: string) => {
@@ -264,7 +283,7 @@ export async function promoteNextInQueue({
       return { promoted: false };
     }
 
-    const queueKey = `seatwise:queue:${showScopeId}`;
+      const queueKey = getQueueKey(showScopeId);
 
     for (let attempts = 0; attempts < 10; attempts += 1) {
       const head = (await redis.zrange(queueKey, 0, 0)) as string[];
@@ -273,7 +292,7 @@ export async function promoteNextInQueue({
         return { promoted: false };
       }
 
-      const ticketKey = `seatwise:ticket:${showScopeId}:${ticketId}`;
+      const ticketKey = getTicketKey(showScopeId, ticketId);
       const ticketRaw = await redis.get(ticketKey);
       const ticket = parseJson<TicketData>(ticketRaw);
 
@@ -292,9 +311,10 @@ export async function promoteNextInQueue({
         expiresAt: now + ACTIVE_WINDOW_MS,
       };
 
-      const activeKey = `seatwise:active:${showScopeId}:${ticketId}`;
-      await redis.set(activeKey, JSON.stringify(activeSession));
-      await redis.expire(activeKey, Math.ceil(ACTIVE_WINDOW_MS / 1000));
+      await setCurrentActiveSession({
+        showScopeId,
+        session: activeSession,
+      });
       await redis.zrem(queueKey, ticketId);
 
       await publishQueueMoveEvent(showScopeId);

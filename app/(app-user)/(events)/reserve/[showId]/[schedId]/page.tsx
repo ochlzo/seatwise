@@ -2,8 +2,9 @@ import { PageHeader } from "@/components/page-header";
 import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { ReserveSeatClient } from "./ReserveSeatClient";
 import { notFound } from "next/navigation";
-import type { SeatStatus } from "@prisma/client";
+import type { SeatStatus, ShowStatus, SchedStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getShowTicketDesigns, type ShowTicketDesign } from "@/lib/tickets/getShowTicketDesigns";
 
 export const runtime = "nodejs";
 // Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
@@ -18,6 +19,16 @@ type SeatmapCategoryPayload = {
 
 type SeatStatusPayload = SeatStatus;
 
+type ReserveScheduleSnapshot = {
+  schedId: string;
+  schedDate: string;
+  schedStartTime: string;
+  schedEndTime: string;
+  schedStatus: SchedStatus | null;
+  showName: string;
+  showStatus: ShowStatus;
+};
+
 export default async function ReserveSeatPage({
   params,
 }: {
@@ -25,46 +36,50 @@ export default async function ReserveSeatPage({
 }) {
   const { showId, schedId } = await params;
 
-  const schedule = await prisma.sched.findFirst({
-    where: {
-      sched_id: schedId,
-      show_id: showId,
-    },
-    include: {
-      show: {
-        select: {
-          show_name: true,
-          seatmap_id: true,
-          gcash_qr_image_key: true,
-          gcash_number: true,
-          gcash_account_name: true,
-        },
+  const [schedule, initialTicketDesigns] = await Promise.all([
+    prisma.sched.findFirst({
+      where: {
+        sched_id: schedId,
+        show_id: showId,
       },
-      seatAssignments: {
-        select: {
-          seat_id: true,
-          seat_status: true,
-          seat: {
-            select: {
-              seat_number: true,
-            },
+      include: {
+        show: {
+          select: {
+            show_name: true,
+            show_status: true,
+            seatmap_id: true,
+            gcash_qr_image_key: true,
+            gcash_number: true,
+            gcash_account_name: true,
           },
-          set: {
-            select: {
-              seat_category_id: true,
-              seatCategory: {
-                select: {
-                  category_name: true,
-                  color_code: true,
-                  price: true,
+        },
+        seatAssignments: {
+          select: {
+            seat_id: true,
+            seat_status: true,
+            seat: {
+              select: {
+                seat_number: true,
+              },
+            },
+            set: {
+              select: {
+                seat_category_id: true,
+                seatCategory: {
+                  select: {
+                    category_name: true,
+                    color_code: true,
+                    price: true,
+                  },
                 },
               },
             },
           },
         },
       },
-    },
-  });
+    }),
+    getShowTicketDesigns(showId),
+  ]);
 
   if (!schedule) {
     notFound();
@@ -92,6 +107,15 @@ export default async function ReserveSeatPage({
   }
 
   const seatmapCategories = Array.from(categoriesById.values());
+  const scheduleSnapshot: ReserveScheduleSnapshot = {
+    schedId: schedule.sched_id,
+    schedDate: schedule.sched_date.toISOString(),
+    schedStartTime: schedule.sched_start_time.toISOString(),
+    schedEndTime: schedule.sched_end_time.toISOString(),
+    schedStatus: schedule.status,
+    showName: schedule.show.show_name,
+    showStatus: schedule.show.show_status,
+  };
 
   return (
     <>
@@ -104,16 +128,19 @@ export default async function ReserveSeatPage({
       <div className="relative flex flex-1 flex-col bg-background">
         <ReserveSeatClient
           showId={showId}
-        schedId={schedId}
+          schedId={schedId}
           seatmapId={schedule.show.seatmap_id}
-        gcashQrImageKey={schedule.show.gcash_qr_image_key}
-        gcashNumber={schedule.show.gcash_number}
-        gcashAccountName={schedule.show.gcash_account_name}
-        seatmapCategories={seatmapCategories}
-        seatCategoryAssignments={seatCategoryAssignments}
-        seatNumbersById={seatNumbersById}
-        seatStatusById={seatStatusById}
-      />
+          gcashQrImageKey={schedule.show.gcash_qr_image_key}
+          gcashNumber={schedule.show.gcash_number}
+          gcashAccountName={schedule.show.gcash_account_name}
+          seatmapCategories={seatmapCategories}
+          seatCategoryAssignments={seatCategoryAssignments}
+          seatNumbersById={seatNumbersById}
+          seatStatusById={seatStatusById}
+          initialShowName={schedule.show.show_name}
+          initialScheduleSnapshot={scheduleSnapshot}
+          initialTicketDesigns={initialTicketDesigns as ShowTicketDesign[]}
+        />
       </div>
     </>
   );

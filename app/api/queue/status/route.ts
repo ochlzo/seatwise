@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getQueueStatus } from "@/lib/queue/getQueueStatus";
-import { promoteNextInQueue } from "@/lib/queue/queueLifecycle";
+import { createRouteTimer, isRouteTimingEnabled } from "@/lib/server/timing";
 import {
   isSchedStatusReservable,
   getEffectiveSchedStatus,
@@ -13,6 +13,10 @@ export const runtime = "nodejs";
 export const preferredRegion = "sin1";
 
 export async function GET(request: NextRequest) {
+  const timer = createRouteTimer("/api/queue/status", {
+    enabled: isRouteTimingEnabled(request),
+  });
+
   try {
     const showId = request.nextUrl.searchParams.get("showId");
     const schedId = request.nextUrl.searchParams.get("schedId");
@@ -25,25 +29,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const schedule = await prisma.sched.findFirst({
-      where: {
-        sched_id: schedId,
-        show_id: showId,
-      },
-      select: {
-        sched_id: true,
-        sched_date: true,
-        sched_start_time: true,
-        sched_end_time: true,
-        status: true,
-        show: {
-          select: {
-            show_status: true,
-            show_name: true,
+    const schedule = await timer.time("postgres.schedule_lookup", () =>
+      prisma.sched.findFirst({
+        where: {
+          sched_id: schedId,
+          show_id: showId,
+        },
+        select: {
+          sched_id: true,
+          sched_date: true,
+          sched_start_time: true,
+          sched_end_time: true,
+          status: true,
+          show: {
+            select: {
+              show_status: true,
+              show_name: true,
+            },
           },
         },
-      },
-    });
+      }),
+    );
 
     if (!schedule) {
       return NextResponse.json(
@@ -80,11 +86,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    await promoteNextInQueue({ showScopeId });
+    const status = await timer.time("redis.get_queue_status", () =>
+      getQueueStatus({
+        showScopeId,
+        userId: guestId,
+      }),
+    );
 
-    const status = await getQueueStatus({
+    timer.flush({
       showScopeId,
-      userId: guestId,
+      status: status.status,
+      promotedFromHeartbeat: false,
     });
 
     return NextResponse.json({
@@ -93,6 +105,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error in /api/queue/status:", error);
+    timer.flush({ error: error instanceof Error ? error.message : "unknown" });
     return NextResponse.json(
       {
         success: false,

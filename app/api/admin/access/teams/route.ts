@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 // Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
 export const preferredRegion = "sin1";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const adminContext = await getCurrentAdminContext();
 
@@ -14,35 +14,47 @@ export async function GET() {
       return NextResponse.json({ error: "Admin team is not assigned." }, { status: 403 });
     }
 
-    const teams = await prisma.team.findMany({
-      where: adminContext.isSuperadmin ? undefined : { team_id: adminContext.teamId! },
-      include: {
-        team_leader: {
+    const url = new URL(request.url);
+    const lite = url.searchParams.get("lite") === "1";
+
+    const teams = lite
+      ? await prisma.team.findMany({
+          where: adminContext.isSuperadmin ? undefined : { team_id: adminContext.teamId! },
           select: {
-            user_id: true,
-            first_name: true,
-            last_name: true,
-            email: true,
-            username: true,
-            status: true,
+            team_id: true,
+            name: true,
           },
-        },
-        admins: {
-          select: {
-            user_id: true,
-            first_name: true,
-            last_name: true,
-            email: true,
-            username: true,
-            status: true,
-            is_superadmin: true,
-            createdAt: true,
+          orderBy: { name: "asc" },
+        })
+      : await prisma.team.findMany({
+          where: adminContext.isSuperadmin ? undefined : { team_id: adminContext.teamId! },
+          include: {
+            team_leader: {
+              select: {
+                user_id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+                username: true,
+                status: true,
+              },
+            },
+            admins: {
+              select: {
+                user_id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+                username: true,
+                status: true,
+                is_superadmin: true,
+                createdAt: true,
+              },
+              orderBy: { createdAt: "asc" },
+            },
           },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-      orderBy: { name: "asc" },
-    });
+          orderBy: { name: "asc" },
+        });
 
     return NextResponse.json({
       success: true,

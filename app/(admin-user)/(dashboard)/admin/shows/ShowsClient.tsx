@@ -196,7 +196,7 @@ export default function ShowsPage({
   const loadTeams = React.useCallback(async () => {
     setIsLoadingTeams(true);
     try {
-      const response = await fetch("/api/admin/access/teams");
+      const response = await fetch("/api/admin/access/teams?lite=1");
       const data = (await response.json()) as {
         success?: boolean;
         error?: string;

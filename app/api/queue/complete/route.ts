@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { buildCompletionPaymentRecord } from "@/lib/reservations/completionPayment";
+import { createRouteTimer, isRouteTimingEnabled } from "@/lib/server/timing";
 import {
   getEffectiveSchedStatus,
   isSchedStatusReservable,
@@ -79,6 +80,10 @@ const buildContact = (body: CompletionRequestBody) => ({
 });
 
 export async function POST(request: NextRequest) {
+  const timer = createRouteTimer("/api/queue/complete", {
+    enabled: isRouteTimingEnabled(request),
+  });
+
   try {
     const body = (await request.json()) as CompletionRequestBody;
     const mode = normalizeMode(body.mode);
@@ -98,9 +103,11 @@ export async function POST(request: NextRequest) {
         participantId = adminContext.userId;
       } catch (error) {
         if (error instanceof AdminContextError) {
+          timer.flush({ status: error.status, error: error.message });
           return NextResponse.json({ success: false, error: error.message }, { status: error.status });
         }
 
+        timer.flush({ status: 401, error: "Unauthorized" });
         return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
       }
     }
@@ -162,50 +169,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const schedule = await prisma.sched.findFirst({
-      where: {
-        sched_id: schedId,
-        show_id: showId,
-        show:
-          isWalkInMode && adminContext && !adminContext.isSuperadmin
-            ? { team_id: adminContext.teamId ?? "__NO_TEAM__" }
-            : undefined,
-      },
-      select: {
-        sched_id: true,
-        sched_date: true,
-        sched_start_time: true,
-        sched_end_time: true,
-        status: true,
-        show: {
-          select: {
-            show_name: true,
-            venue: true,
-            team: {
-              select: {
-                team_leader: {
-                  select: {
-                    email: true,
-                    first_name: true,
-                    last_name: true,
-                    status: true,
+    const schedule = await timer.time("postgres.schedule_lookup", () =>
+      prisma.sched.findFirst({
+        where: {
+          sched_id: schedId,
+          show_id: showId,
+          show:
+            isWalkInMode && adminContext && !adminContext.isSuperadmin
+              ? { team_id: adminContext.teamId ?? "__NO_TEAM__" }
+              : undefined,
+        },
+        select: {
+          sched_id: true,
+          sched_date: true,
+          sched_start_time: true,
+          sched_end_time: true,
+          status: true,
+          show: {
+            select: {
+              show_name: true,
+              venue: true,
+              team: {
+                select: {
+                  team_leader: {
+                    select: {
+                      email: true,
+                      first_name: true,
+                      last_name: true,
+                      status: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    });
+      }),
+    );
 
     if (!schedule) {
       return NextResponse.json({ success: false, error: "Schedule not found" }, { status: 404 });
     }
 
-    const selectedTemplateVersion = await prisma.ticketTemplateVersion.findUnique({
-      where: { ticket_template_version_id: ticketTemplateVersionId },
-      select: { ticket_template_id: true },
-    });
+    const selectedTemplateVersion = await timer.time("postgres.load_ticket_template", () =>
+      prisma.ticketTemplateVersion.findUnique({
+        where: { ticket_template_version_id: ticketTemplateVersionId },
+        select: { ticket_template_id: true },
+      }),
+    );
 
     if (!selectedTemplateVersion) {
       return NextResponse.json(
@@ -216,14 +227,16 @@ export async function POST(request: NextRequest) {
 
     let isTemplateAvailableForShow = false;
     try {
-      const rows = await prisma.$queryRaw<Array<{ show_id: string }>>(
-        Prisma.sql`
-          SELECT "show_id"
-          FROM "ShowTicketTemplate"
-          WHERE "show_id" = ${showId}
-            AND "ticket_template_id" = ${selectedTemplateVersion.ticket_template_id}
-          LIMIT 1
-        `,
+      const rows = await timer.time("postgres.check_show_ticket_template_link", () =>
+        prisma.$queryRaw<Array<{ show_id: string }>>(
+          Prisma.sql`
+            SELECT "show_id"
+            FROM "ShowTicketTemplate"
+            WHERE "show_id" = ${showId}
+              AND "ticket_template_id" = ${selectedTemplateVersion.ticket_template_id}
+            LIMIT 1
+          `,
+        ),
       );
       isTemplateAvailableForShow = rows.length > 0;
     } catch {
@@ -231,10 +244,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isTemplateAvailableForShow) {
-      const legacyShowTemplate = await prisma.show.findUnique({
-        where: { show_id: showId },
-        select: { ticket_template_id: true },
-      });
+      const legacyShowTemplate = await timer.time("postgres.load_legacy_show_ticket_template", () =>
+        prisma.show.findUnique({
+          where: { show_id: showId },
+          select: { ticket_template_id: true },
+        }),
+      );
 
       if (legacyShowTemplate?.ticket_template_id !== selectedTemplateVersion.ticket_template_id) {
         return NextResponse.json(
@@ -252,12 +267,14 @@ export async function POST(request: NextRequest) {
     }
 
     const showScopeId = `${showId}:${schedId}`;
-    const validation = await validateActiveSession({
-      showScopeId,
-      ticketId,
-      userId: participantId,
-      activeToken,
-    });
+    const validation = await timer.time("redis.validate_active_session", () =>
+      validateActiveSession({
+        showScopeId,
+        ticketId,
+        userId: participantId,
+        activeToken,
+      }),
+    );
 
     if (!validation.valid || !validation.session) {
       return NextResponse.json(
@@ -266,20 +283,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const assignments = await prisma.seatAssignment.findMany({
-      where: {
-        sched_id: schedId,
-        seat_id: { in: seatIds },
-      },
-      include: {
-        seat: { select: { seat_number: true } },
-        set: {
-          select: {
-            seatCategory: { select: { price: true } },
+    const assignments = await timer.time("postgres.load_seat_assignments", () =>
+      prisma.seatAssignment.findMany({
+        where: {
+          sched_id: schedId,
+          seat_id: { in: seatIds },
+        },
+        include: {
+          seat: { select: { seat_number: true } },
+          set: {
+            select: {
+              seatCategory: { select: { price: true } },
+            },
           },
         },
-      },
-    });
+      }),
+    );
 
     if (assignments.length !== seatIds.length) {
       return NextResponse.json(
@@ -298,10 +317,12 @@ export async function POST(request: NextRequest) {
     let uploadedScreenshotUrl: string | null = null;
     if (!isWalkInMode) {
       try {
-        const upload = await cloudinary.uploader.upload(body.screenshotUrl!, {
-          folder: "seatwise/settings/payment_submissions",
-          resource_type: "image",
-        });
+        const upload = await timer.time("cloudinary.upload_payment_screenshot", () =>
+          cloudinary.uploader.upload(body.screenshotUrl!, {
+            folder: "seatwise/settings/payment_submissions",
+            resource_type: "image",
+          }),
+        );
         uploadedScreenshotUrl = upload.secure_url;
       } catch (error) {
         console.error("[queue/complete] failed to upload payment screenshot:", error);
@@ -326,59 +347,61 @@ export async function POST(request: NextRequest) {
           paidAt: paymentRecordedAt,
         });
 
-        reservation = await prisma.$transaction(async (tx) => {
-          const reservedSeats = await tx.seatAssignment.updateMany({
-            where: {
-              seat_assignment_id: { in: seatAssignmentIds },
-              seat_status: "OPEN",
-            },
-            data: { seat_status: "RESERVED" },
-          });
+        reservation = await timer.time("postgres.create_reservation_transaction", () =>
+          prisma.$transaction(async (tx) => {
+            const reservedSeats = await tx.seatAssignment.updateMany({
+              where: {
+                seat_assignment_id: { in: seatAssignmentIds },
+                seat_status: "OPEN",
+              },
+              data: { seat_status: "RESERVED" },
+            });
 
-          if (reservedSeats.count !== seatAssignmentIds.length) {
-            throw new Error("One or more selected seats are already reserved.");
-          }
+            if (reservedSeats.count !== seatAssignmentIds.length) {
+              throw new Error("One or more selected seats are already reserved.");
+            }
 
-          const created = (await tx.reservation.create({
-            data: {
-              reservation_number: reservationNumber,
-              guest_id: participantId,
-              show_id: showId,
-              sched_id: schedId,
-              first_name: contact.firstName,
-              last_name: contact.lastName,
-              address: contact.address,
-              email: contact.email,
-              phone_number: contact.phoneNumber,
-              status: isWalkInMode ? "CONFIRMED" : "PENDING",
-              ticket_template_version_id: ticketTemplateVersionId,
-            },
-          })) as { reservation_id: string; reservation_number: string };
+            const created = (await tx.reservation.create({
+              data: {
+                reservation_number: reservationNumber,
+                guest_id: participantId,
+                show_id: showId,
+                sched_id: schedId,
+                first_name: contact.firstName,
+                last_name: contact.lastName,
+                address: contact.address,
+                email: contact.email,
+                phone_number: contact.phoneNumber,
+                status: isWalkInMode ? "CONFIRMED" : "PENDING",
+                ticket_template_version_id: ticketTemplateVersionId,
+              },
+            })) as { reservation_id: string; reservation_number: string };
 
-          await tx.reservedSeat.createMany({
-            data: seatAssignmentIds.map((seatAssignmentId) => ({
-              reservation_id: created.reservation_id,
-              seat_assignment_id: seatAssignmentId,
-            })),
-          });
+            await tx.reservedSeat.createMany({
+              data: seatAssignmentIds.map((seatAssignmentId) => ({
+                reservation_id: created.reservation_id,
+                seat_assignment_id: seatAssignmentId,
+              })),
+            });
 
-          await tx.payment.create({
-            data: {
-              reservation_id: created.reservation_id,
-              amount: totalAmount,
-              ...paymentRecord,
-            },
-          });
+            await tx.payment.create({
+              data: {
+                reservation_id: created.reservation_id,
+                amount: totalAmount,
+                ...paymentRecord,
+              },
+            });
 
-          await syncScheduleCapacityStatuses(tx, [schedId]);
+            await syncScheduleCapacityStatuses(tx, [schedId]);
 
-          return {
-            reservationId: created.reservation_id,
-            reservationNumber: created.reservation_number,
-            seatNumbers,
-            totalAmount,
-          };
-        }, { timeout: RESERVATION_TRANSACTION_TIMEOUT_MS });
+            return {
+              reservationId: created.reservation_id,
+              reservationNumber: created.reservation_number,
+              seatNumbers,
+              totalAmount,
+            };
+          }, { timeout: RESERVATION_TRANSACTION_TIMEOUT_MS }),
+        );
 
         break;
       } catch (error) {
@@ -409,106 +432,133 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to generate a unique reservation number. Please try again.");
     }
 
-    const promotion = await completeActiveSessionAndPromoteNext({
-      showScopeId,
-      session: validation.session,
-    });
+    const promotion = await timer.time("redis.complete_and_promote_next", () =>
+      completeActiveSessionAndPromoteNext({
+        showScopeId,
+        session: validation.session!,
+      }),
+    );
 
-    let warning: string | null = null;
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+      request.nextUrl.origin ||
+      "http://localhost:3000";
+    const scheduleLabel = new Date(schedule.sched_date).toLocaleDateString();
+    const customerName = `${contact.firstName} ${contact.lastName}`.trim();
+    const teamLeader = schedule.show.team?.team_leader;
 
-    if (isWalkInMode) {
-      try {
-        const issuedTicket = await issueReservationTicket({
+    after(async () => {
+      const followUpTimer = createRouteTimer("/api/queue/complete:after", {
+        enabled: isRouteTimingEnabled(request),
+        context: {
+          mode,
           reservationId: reservation.reservationId,
-          baseUrl:
-            process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
-            request.nextUrl.origin ||
-            "http://localhost:3000",
-        });
-        await autoConsumeIssuedReservationTickets({
-          issuedTicket,
-          showId,
-          schedId,
-          adminContext: adminContext!,
-        });
-
-        await sendIssuedTicketEmail({
-          to: issuedTicket.email,
-          customerName: issuedTicket.customerName,
-          reservationNumber: issuedTicket.reservationNumber,
-          showName: issuedTicket.showName,
-          venue: issuedTicket.venue,
-          scheduleLabel: issuedTicket.scheduleLabel,
-          seatLabels: issuedTicket.seatLabels,
-          ticketAttachments: issuedTicket.ticketPdfs.map((ticket) => ({
-            filename: ticket.ticketPdfFilename,
-            contentType: "application/pdf",
-            content: ticket.ticketPdf,
-          })),
-        });
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Ticket delivery failed.";
-        console.error("[queue/complete] failed to issue walk-in ticket:", error);
-        warning = "Walk-in sale was saved, but the PDF ticket could not be delivered.";
-        await prisma.reservation
-          .update({
-            where: { reservation_id: reservation.reservationId },
-            data: {
-              ticket_delivery_error: errorMessage,
-            },
-          })
-          .catch((updateError) => {
-            console.error(
-              "[queue/complete] failed to persist walk-in ticket delivery error:",
-              updateError,
-            );
-          });
-      }
-    }
-
-    if (!isWalkInMode) {
-      const scheduleLabel = new Date(schedule.sched_date).toLocaleDateString();
-      const customerName = `${contact.firstName} ${contact.lastName}`.trim();
-
-      void sendReservationSubmittedEmail({
-        to: contact.email,
-        customerName,
-        reservationNumber: reservation.reservationNumber,
-        showName: schedule.show.show_name,
-        scheduleLabel,
-        seatNumbers: reservation.seatNumbers,
-        totalAmount: formatCurrency(reservation.totalAmount),
-        proofImageUrl: uploadedScreenshotUrl,
-      }).catch((error) => {
-        console.error("[queue/complete] failed to send email:", error);
+        },
       });
 
-      const teamLeader = schedule.show.team?.team_leader;
-      if (teamLeader?.email && teamLeader.status === "ACTIVE") {
-        const leaderName =
-          `${teamLeader.first_name ?? ""} ${teamLeader.last_name ?? ""}`.trim() ||
-          teamLeader.email;
+      if (isWalkInMode) {
+        try {
+          const issuedTicket = await followUpTimer.time("ticket.issue", () =>
+            issueReservationTicket({
+              reservationId: reservation.reservationId,
+              baseUrl,
+            }),
+          );
+          await followUpTimer.time("ticket.auto_consume", () =>
+            autoConsumeIssuedReservationTickets({
+              issuedTicket,
+              showId,
+              schedId,
+              adminContext: adminContext!,
+            }),
+          );
 
-        void sendTeamLeaderReservationNotificationEmail({
-          to: teamLeader.email,
-          leaderName,
-          reservationNumber: reservation.reservationNumber,
-          showName: schedule.show.show_name,
-          venue: schedule.show.venue,
-          scheduleLabel,
-          seatNumbers: reservation.seatNumbers,
-          totalAmount: formatCurrency(reservation.totalAmount),
-          guestName: customerName,
-          guestEmail: contact.email,
-          guestPhone: contact.phoneNumber,
-          guestAddress: contact.address,
-          proofImageUrl: uploadedScreenshotUrl,
-        }).catch((error) => {
-          console.error("[queue/complete] failed to notify team leader:", error);
+          await followUpTimer.time("email.send_issued_ticket", () =>
+            sendIssuedTicketEmail({
+              to: issuedTicket.email,
+              customerName: issuedTicket.customerName,
+              reservationNumber: issuedTicket.reservationNumber,
+              showName: issuedTicket.showName,
+              venue: issuedTicket.venue,
+              scheduleLabel: issuedTicket.scheduleLabel,
+              seatLabels: issuedTicket.seatLabels,
+              ticketAttachments: issuedTicket.ticketPdfs.map((ticket) => ({
+                filename: ticket.ticketPdfFilename,
+                contentType: "application/pdf",
+                content: ticket.ticketPdf,
+              })),
+            }),
+          );
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : "Ticket delivery failed.";
+          console.error("[queue/complete] failed to issue walk-in ticket:", error);
+          await prisma.reservation
+            .update({
+              where: { reservation_id: reservation.reservationId },
+              data: {
+                ticket_delivery_error: errorMessage,
+              },
+            })
+            .catch((updateError) => {
+              console.error(
+                "[queue/complete] failed to persist walk-in ticket delivery error:",
+                updateError,
+              );
+            });
+        }
+      } else {
+        await followUpTimer.time("email.send_reservation_submitted", () =>
+          sendReservationSubmittedEmail({
+            to: contact.email,
+            customerName,
+            reservationNumber: reservation.reservationNumber,
+            showName: schedule.show.show_name,
+            scheduleLabel,
+            seatNumbers: reservation.seatNumbers,
+            totalAmount: formatCurrency(reservation.totalAmount),
+            proofImageUrl: uploadedScreenshotUrl,
+          }),
+        ).catch((error) => {
+          console.error("[queue/complete] failed to send email:", error);
         });
+
+        if (teamLeader?.email && teamLeader.status === "ACTIVE") {
+          const leaderName =
+            `${teamLeader.first_name ?? ""} ${teamLeader.last_name ?? ""}`.trim() ||
+            teamLeader.email;
+
+          await followUpTimer.time("email.notify_team_leader", () =>
+            sendTeamLeaderReservationNotificationEmail({
+              to: teamLeader.email,
+              leaderName,
+              reservationNumber: reservation.reservationNumber,
+              showName: schedule.show.show_name,
+              venue: schedule.show.venue,
+              scheduleLabel,
+              seatNumbers: reservation.seatNumbers,
+              totalAmount: formatCurrency(reservation.totalAmount),
+              guestName: customerName,
+              guestEmail: contact.email,
+              guestPhone: contact.phoneNumber,
+              guestAddress: contact.address,
+              proofImageUrl: uploadedScreenshotUrl,
+            }),
+          ).catch((error) => {
+            console.error("[queue/complete] failed to notify team leader:", error);
+          });
+        }
       }
-    }
+
+      followUpTimer.flush();
+    });
+
+    timer.flush({
+      mode,
+      showScopeId,
+      reservedCount: reservation.seatNumbers.length,
+      followUpQueued: true,
+    });
 
     return NextResponse.json({
       success: true,
@@ -517,8 +567,8 @@ export async function POST(request: NextRequest) {
       showScopeId,
       showName: schedule.show.show_name,
       reservedCount: reservation.seatNumbers.length,
-      emailSent: isWalkInMode ? warning == null : true,
-      warning,
+      emailSent: false,
+      warning: null,
       promoted: promotion.promoted,
       next: promotion.activeSession
         ? {
@@ -530,6 +580,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("[queue/complete] Error:", error);
+    timer.flush({ error: error instanceof Error ? error.message : "unknown" });
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 },

@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import type { SeatStatus } from "@prisma/client";
+import type { SeatStatus, ShowStatus, SchedStatus } from "@prisma/client";
 import {
   AlertTriangle,
   Clock3,
@@ -62,6 +62,16 @@ type ActiveValidationResponse = {
   };
 };
 
+type ScheduleSnapshot = {
+  schedId: string;
+  schedDate: string;
+  schedStartTime: string;
+  schedEndTime: string;
+  schedStatus: SchedStatus | null;
+  showName: string;
+  showStatus: ShowStatus;
+};
+
 type ReserveSeatCategory = SeatmapPreviewCategory & {
   price: string;
 };
@@ -89,6 +99,9 @@ type ReserveSeatClientProps = {
   seatCategoryAssignments: Record<string, string>;
   seatNumbersById: Record<string, string>;
   seatStatusById: Record<string, SeatStatus>;
+  initialShowName?: string;
+  initialScheduleSnapshot?: ScheduleSnapshot;
+  initialTicketDesigns?: TicketDesignOption[];
 };
 
 const EXPIRED_WINDOW_MESSAGE =
@@ -113,6 +126,12 @@ type TicketDesignOption = {
   templateName: string;
   versionNumber: number;
   previewUrl: string | null;
+};
+
+type TicketDesignResponse = {
+  success?: boolean;
+  error?: string;
+  designs?: TicketDesignOption[];
 };
 
 const formatDuration = (ms: number) => {
@@ -192,6 +211,9 @@ export function ReserveSeatClient({
   seatCategoryAssignments,
   seatNumbersById,
   seatStatusById,
+  initialShowName = "",
+  initialScheduleSnapshot,
+  initialTicketDesigns = [],
 }: ReserveSeatClientProps) {
   const router = useRouter();
   const participantId = React.useMemo(
@@ -210,7 +232,7 @@ export function ReserveSeatClient({
   const [isCompleting, setIsCompleting] = React.useState(false);
   const [isLeaving, setIsLeaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [showName, setShowName] = React.useState<string>("");
+  const [showName, setShowName] = React.useState<string>(initialShowName);
   const [expiresAt, setExpiresAt] = React.useState<number | null>(null);
   const [now, setNow] = React.useState<number>(0);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
@@ -241,7 +263,9 @@ export function ReserveSeatClient({
   });
   const [contactFieldErrors, setContactFieldErrors] =
     React.useState<ContactFieldErrors>(EMPTY_CONTACT_ERRORS);
-  const [ticketDesigns, setTicketDesigns] = React.useState<TicketDesignOption[]>([]);
+  const [ticketDesigns, setTicketDesigns] = React.useState<TicketDesignOption[]>(
+    initialTicketDesigns,
+  );
   const [isLoadingTicketDesigns, setIsLoadingTicketDesigns] = React.useState(false);
   const [ticketDesignsError, setTicketDesignsError] = React.useState<string | null>(null);
   const [selectedTicketTemplateVersionId, setSelectedTicketTemplateVersionId] =
@@ -285,13 +309,14 @@ export function ReserveSeatClient({
             guestId: participantId,
             ticketId: stored.ticketId,
             activeToken: stored.activeToken,
+            scheduleSnapshot: initialScheduleSnapshot,
           }),
         });
       } catch {
         // Best effort cleanup request; UI fallback still handles local session reset.
       }
     },
-    [participantId, schedId, showId],
+    [initialScheduleSnapshot, participantId, schedId, showId],
   );
 
   React.useEffect(() => {
@@ -316,6 +341,7 @@ export function ReserveSeatClient({
             guestId: participantId,
             ticketId: stored.ticketId,
             activeToken: stored.activeToken,
+            scheduleSnapshot: initialScheduleSnapshot,
           }),
         });
 
@@ -345,7 +371,7 @@ export function ReserveSeatClient({
     };
 
     void verify();
-  }, [participantId, schedId, showId, showScopeId]);
+  }, [initialScheduleSnapshot, participantId, schedId, showId, showScopeId]);
 
   React.useEffect(() => {
     if (step === "success" || !expiresAt) return;
@@ -401,11 +427,7 @@ export function ReserveSeatClient({
         const response = await fetch(`/api/shows/${showId}/ticket-designs`, {
           signal: abortController.signal,
         });
-        const data = (await response.json()) as {
-          success?: boolean;
-          error?: string;
-          designs?: TicketDesignOption[];
-        };
+        const data = (await response.json()) as TicketDesignResponse;
 
         if (!response.ok || !data.success) {
           throw new Error(data.error || "Failed to load ticket designs.");

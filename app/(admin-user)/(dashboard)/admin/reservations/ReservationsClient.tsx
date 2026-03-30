@@ -796,7 +796,7 @@ export function ReservationsClient() {
 
     const fetchTeams = async () => {
       try {
-        const response = await fetch("/api/admin/access/teams");
+        const response = await fetch("/api/admin/access/teams?lite=1");
         const data = (await response.json()) as {
           success?: boolean;
           error?: string;
@@ -870,33 +870,27 @@ export function ReservationsClient() {
             ? "/api/reservations/verify"
             : "/api/reservations/reject";
 
-        const results = await Promise.all(
-          reservationIds.map(async (reservationId) => {
-            const response = await fetch(endpoint, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reservationId }),
-            });
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reservationIds }),
+        });
 
-            let data: StageUpdateResponse | null = null;
-            try {
-              data = (await response.json()) as StageUpdateResponse;
-            } catch {
-              data = null;
-            }
+        let data: StageUpdateResponse | null = null;
+        try {
+          data = (await response.json()) as StageUpdateResponse;
+        } catch {
+          data = null;
+        }
 
-            const fallbackError =
-              targetStatus === "CONFIRMED"
-                ? "Failed to verify reservations"
-                : "Failed to reject reservations";
+        const fallbackError =
+          targetStatus === "CONFIRMED"
+            ? "Failed to verify reservations"
+            : "Failed to reject reservations";
 
-            if (!response.ok || !data?.success) {
-              throw new Error(getApiErrorMessage(data, fallbackError));
-            }
-
-            return data;
-          }),
-        );
+        if (!response.ok || !data?.success) {
+          throw new Error(getApiErrorMessage(data, fallbackError));
+        }
 
         const paidAt = new Date().toISOString();
         setShows((prev) =>
@@ -932,7 +926,6 @@ export function ReservationsClient() {
 
         const actionLabel =
           targetStatus === "CONFIRMED" ? "approved" : "rejected";
-        void results;
         toast.success(
           reservationIds.length === 1
             ? `Reservation ${actionLabel} successfully.`
