@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from "@/components/ui/sonner";
 import { ScheduleSelectionDialog } from '@/components/queue/ScheduleSelectionDialog';
 import { getOrCreateGuestId } from "@/lib/guest";
+import { setJoinTransitionState } from "@/lib/queue/joinTransition";
 import type { SchedulePickerOption } from "@/lib/shows/schedulePicker";
 
 interface ReserveNowButtonProps {
@@ -79,6 +80,7 @@ export function ReserveNowButton({
         });
 
         setJoinPhase('redirecting');
+        setJoinTransitionState(showScopeId);
         setIsOpen(false);
         router.push(`/reserve/${showId}/${selectedSchedId}`);
         return;

@@ -34,6 +34,7 @@ import { toast } from "@/components/ui/sonner";
 import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
 import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
 import { getOrCreateGuestId } from "@/lib/guest";
+import { clearJoinTransitionState } from "@/lib/queue/joinTransition";
 import { cn } from "@/lib/utils";
 import {
   getReservationRoomModeConfig,
@@ -261,6 +262,10 @@ export function ReserveSeatClient({
       window.sessionStorage.setItem(storageKey, JSON.stringify(initialActiveSession));
     }
   }, [initialActiveSession, showScopeId]);
+
+  React.useEffect(() => {
+    clearJoinTransitionState(showScopeId);
+  }, [showScopeId]);
 
   React.useEffect(() => {
     hasHandledExpiryRef.current = false;
@@ -651,7 +656,7 @@ export function ReserveSeatClient({
     }
   };
 
-  // Step transition: seats → payment
+  // Step transition: seats -> contact
   const handleProceedToContact = () => {
     if (selectedSeatIds.length === 0) {
       setSelectionMessage("Please select at least one seat.");
@@ -661,7 +666,7 @@ export function ReserveSeatClient({
     setStep("contact");
   };
 
-  // Step transition: contact -> payment
+  // Step transition: contact -> ticket design
   const handleProceedToPayment = () => {
     const firstName = contactDetails.firstName.trim();
     const lastName = contactDetails.lastName.trim();
@@ -731,7 +736,7 @@ export function ReserveSeatClient({
   };
 
   const handleBackToTicketDesign = () => {
-    setStep("ticket_design");
+    setStep("contact");
     setWalkInConfirmationComplete(false);
   };
 

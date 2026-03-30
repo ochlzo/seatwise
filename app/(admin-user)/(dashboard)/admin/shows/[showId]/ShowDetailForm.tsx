@@ -104,13 +104,13 @@ const COLOR_OPTIONS: Array<{
   label: string;
   swatch: string | null;
 }> = [
-    { value: "NO_COLOR", label: "No Color", swatch: null },
-    { value: "GOLD", label: "Gold", swatch: "#ffd700" },
-    { value: "PINK", label: "Pink", swatch: "#e005b9" },
-    { value: "BLUE", label: "Blue", swatch: "#111184" },
-    { value: "BURGUNDY", label: "Burgundy", swatch: "#800020" },
-    { value: "GREEN", label: "Green", swatch: "#046307" },
-  ];
+  { value: "NO_COLOR", label: "No Color", swatch: null },
+  { value: "GOLD", label: "Gold", swatch: "#ffd700" },
+  { value: "PINK", label: "Pink", swatch: "#e005b9" },
+  { value: "BLUE", label: "Blue", swatch: "#111184" },
+  { value: "BURGUNDY", label: "Burgundy", swatch: "#800020" },
+  { value: "GREEN", label: "Green", swatch: "#046307" },
+];
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -248,12 +248,12 @@ type ShowDetail = {
           category_name: string;
           price: string; // Serialized from Decimal
           color_code:
-          | "NO_COLOR"
-          | "GOLD"
-          | "PINK"
-          | "BLUE"
-          | "BURGUNDY"
-          | "GREEN";
+            | "NO_COLOR"
+            | "GOLD"
+            | "PINK"
+            | "BLUE"
+            | "BURGUNDY"
+            | "GREEN";
         };
       };
     }>;
@@ -267,12 +267,12 @@ type ShowDetail = {
         category_name: string;
         price: string; // Serialized from Decimal
         color_code:
-        | "NO_COLOR"
-        | "GOLD"
-        | "PINK"
-        | "BLUE"
-        | "BURGUNDY"
-        | "GREEN";
+          | "NO_COLOR"
+          | "GOLD"
+          | "PINK"
+          | "BLUE"
+          | "BURGUNDY"
+          | "GREEN";
       };
     }>;
   }>;
@@ -311,22 +311,34 @@ type SchedDraft = Omit<
   sched_end_time: string;
 };
 
-export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDetailFormProps) {
+export function ShowDetailForm({
+  show,
+  allowEdit = true,
+  reserveButton,
+}: ShowDetailFormProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
-  const [isScannerScheduleDialogOpen, setIsScannerScheduleDialogOpen] = React.useState(false);
-  const [selectedScannerSchedId, setSelectedScannerSchedId] = React.useState("");
+  const [isScannerScheduleDialogOpen, setIsScannerScheduleDialogOpen] =
+    React.useState(false);
+  const [selectedScannerSchedId, setSelectedScannerSchedId] =
+    React.useState("");
   const [isStatusConfirmOpen, setIsStatusConfirmOpen] = React.useState(false);
-  const [pendingStatus, setPendingStatus] = React.useState<ShowStatus | null>(null);
+  const [pendingStatus, setPendingStatus] = React.useState<ShowStatus | null>(
+    null,
+  );
   const [isStatusBlockedOpen, setIsStatusBlockedOpen] = React.useState(false);
-  const [blockedStatus, setBlockedStatus] = React.useState<ShowStatus | null>(null);
+  const [blockedStatus, setBlockedStatus] = React.useState<ShowStatus | null>(
+    null,
+  );
 
   // Schedule Editor State
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
   const [seatmaps, setSeatmaps] = React.useState<SeatmapOption[]>([]);
   const [seatmapQuery, setSeatmapQuery] = React.useState("");
-  const [ticketTemplates, setTicketTemplates] = React.useState<TicketTemplateOption[]>([]);
+  const [ticketTemplates, setTicketTemplates] = React.useState<
+    TicketTemplateOption[]
+  >([]);
   const [selectedDates, setSelectedDates] = React.useState<Date[]>([]);
   const [timeRanges, setTimeRanges] = React.useState([
     { id: `time-${uuidv4()}`, start: "19:00", end: "21:00" },
@@ -343,13 +355,17 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   const [gcashQrPreview, setGcashQrPreview] = React.useState<string | null>(
     show.gcash_qr_image_key || null,
   );
-  const [gcashQrUploadError, setGcashQrUploadError] = React.useState<string | null>(null);
+  const [gcashQrUploadError, setGcashQrUploadError] = React.useState<
+    string | null
+  >(null);
   const [isGcashQrProcessing, setIsGcashQrProcessing] = React.useState(false);
 
   const scannerScheduleOptions = React.useMemo(
     () =>
       (show.scheds ?? [])
-        .filter((sched): sched is typeof sched & { sched_id: string } => Boolean(sched.sched_id))
+        .filter((sched): sched is typeof sched & { sched_id: string } =>
+          Boolean(sched.sched_id),
+        )
         .sort((left, right) => {
           const leftDate = toDateValue(left.sched_date).getTime();
           const rightDate = toDateValue(right.sched_date).getTime();
@@ -448,7 +464,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
       sched_date: toManilaDateKey(new Date(s.sched_date)),
       sched_start_time:
         typeof s.sched_start_time === "string" &&
-          s.sched_start_time.includes("T")
+        s.sched_start_time.includes("T")
           ? formatManilaTimeKey(new Date(s.sched_start_time))
           : typeof s.sched_start_time === "string"
             ? s.sched_start_time
@@ -483,7 +499,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
         sched_date: toManilaDateKey(new Date(s.sched_date)),
         sched_start_time:
           typeof s.sched_start_time === "string" &&
-            s.sched_start_time.includes("T")
+          s.sched_start_time.includes("T")
             ? formatManilaTimeKey(new Date(s.sched_start_time))
             : typeof s.sched_start_time === "string"
               ? s.sched_start_time
@@ -547,8 +563,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
   );
   const numberOfMonths =
     showStartDate &&
-      showEndDate &&
-      differenceInCalendarMonths(showEndDate, showStartDate) >= 1
+    showEndDate &&
+    differenceInCalendarMonths(showEndDate, showStartDate) >= 1
       ? 2
       : 1;
 
@@ -1018,7 +1034,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
 
     const cardErrors = {
       schedule:
-        formData.scheds.length === 0 || scheduleCoverage.missingDates.length > 0,
+        formData.scheds.length === 0 ||
+        scheduleCoverage.missingDates.length > 0,
       seatmap:
         !formData.seatmap_id ||
         categorySets.length === 0 ||
@@ -1078,38 +1095,41 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     }
   }, [blockedStatus, blockingReservationCount]);
 
-  const handleStatusSelection = React.useCallback((nextStatus: ShowStatus) => {
-    if (nextStatus === formData.show_status) return;
+  const handleStatusSelection = React.useCallback(
+    (nextStatus: ShowStatus) => {
+      if (nextStatus === formData.show_status) return;
 
-    if (formData.show_status === "OPEN" && nextStatus === "CLOSED") {
-      setBlockedStatus(nextStatus);
-      setIsStatusBlockedOpen(true);
-      return;
-    }
+      if (formData.show_status === "OPEN" && nextStatus === "CLOSED") {
+        setBlockedStatus(nextStatus);
+        setIsStatusBlockedOpen(true);
+        return;
+      }
 
-    if (
-      formData.show_status === "OPEN" &&
-      (nextStatus === "DRAFT" ||
-        nextStatus === "UPCOMING" ||
-        nextStatus === "CANCELLED") &&
-      hasBlockingReservations
-    ) {
-      setBlockedStatus(nextStatus);
-      setIsStatusBlockedOpen(true);
-      return;
-    }
+      if (
+        formData.show_status === "OPEN" &&
+        (nextStatus === "DRAFT" ||
+          nextStatus === "UPCOMING" ||
+          nextStatus === "CANCELLED") &&
+        hasBlockingReservations
+      ) {
+        setBlockedStatus(nextStatus);
+        setIsStatusBlockedOpen(true);
+        return;
+      }
 
-    if (nextStatus === "UPCOMING" || nextStatus === "OPEN") {
-      setPendingStatus(nextStatus);
-      setIsStatusConfirmOpen(true);
-      return;
-    }
+      if (nextStatus === "UPCOMING" || nextStatus === "OPEN") {
+        setPendingStatus(nextStatus);
+        setIsStatusConfirmOpen(true);
+        return;
+      }
 
-    setFormData((prev) => ({
-      ...prev,
-      show_status: nextStatus,
-    }));
-  }, [formData.show_status, hasBlockingReservations]);
+      setFormData((prev) => ({
+        ...prev,
+        show_status: nextStatus,
+      }));
+    },
+    [formData.show_status, hasBlockingReservations],
+  );
 
   const handleConfirmStatusChange = React.useCallback(() => {
     if (!pendingStatus) return;
@@ -1125,7 +1145,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
 
   const handleAddSchedules = () => {
     if (isStructuralEditingLocked) {
-      toast.error("Schedules are locked because this show already has reservation history.");
+      toast.error(
+        "Schedules are locked because this show already has reservation history.",
+      );
       return;
     }
 
@@ -1300,9 +1322,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
 
       {/* Reserve Now Button (Mobile Only - shown before Show Information) */}
       {!isEditing && reserveButton && (
-        <div className="lg:hidden w-full px-4 -mt-2 mb-6">
-          {reserveButton}
-        </div>
+        <div className="lg:hidden w-full px-4 -mt-2 mb-6">{reserveButton}</div>
       )}
 
       <div className="grid gap-8 grid-cols-1 lg:grid-cols-3">
@@ -1320,7 +1340,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
             <CardContent className="space-y-6">
               {isStructuralEditingLocked && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  GCash details, schedules, seatmap, category sets, and seat assignments are locked because this show already has reservation history.
+                  GCash details, schedules, seatmap, category sets, and seat
+                  assignments are locked because this show already has
+                  reservation history.
                 </div>
               )}
               <div className="grid gap-4 md:grid-cols-2">
@@ -1356,7 +1378,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                   {isEditing ? (
                     <Select
                       value={formData.show_status}
-                      onValueChange={(value) => handleStatusSelection(value as ShowStatus)}
+                      onValueChange={(value) =>
+                        handleStatusSelection(value as ShowStatus)
+                      }
                     >
                       <SelectTrigger
                         id="status"
@@ -1490,12 +1514,18 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     isProcessing={isGcashQrProcessing}
                     processingText="Preparing GCash QR image..."
                     uploadError={gcashQrUploadError}
-                    onFileRejected={(message) => setGcashQrUploadError(message || null)}
+                    onFileRejected={(message) =>
+                      setGcashQrUploadError(message || null)
+                    }
                     showRemoveButton={isEditing}
                     idleTitle="Drop GCash QR image here"
                     activeTitle="Release to set this QR image"
                     helperText="JPEG, PNG, or WebP up to 5MB"
-                    successMessage={gcashQrImageBase64 ? "GCash QR update ready to save" : null}
+                    successMessage={
+                      gcashQrImageBase64
+                        ? "GCash QR update ready to save"
+                        : null
+                    }
                     emptyHint="This QR image is shown to users during reservation payment."
                   />
                 </div>
@@ -1512,7 +1542,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       id="gcash-number"
                       value={formData.gcash_number}
                       onChange={(e) =>
-                        setFormData({ ...formData, gcash_number: e.target.value })
+                        setFormData({
+                          ...formData,
+                          gcash_number: e.target.value,
+                        })
                       }
                       className={cn(
                         "font-medium bg-muted/30",
@@ -1534,7 +1567,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       id="gcash-account-name"
                       value={formData.gcash_account_name}
                       onChange={(e) =>
-                        setFormData({ ...formData, gcash_account_name: e.target.value })
+                        setFormData({
+                          ...formData,
+                          gcash_account_name: e.target.value,
+                        })
                       }
                       className={cn(
                         "font-medium bg-muted/30",
@@ -1731,7 +1767,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                 // When editing, show simple list grouped by date
                 if (isEditing) {
                   // Group schedules by date
-                  const schedulesByDate = new Map<string, typeof schedulesWithSets>();
+                  const schedulesByDate = new Map<
+                    string,
+                    typeof schedulesWithSets
+                  >();
 
                   schedulesWithSets.forEach((sched) => {
                     const dateKey = toDateKey(sched.sched_date);
@@ -1749,9 +1788,11 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                       {sortedDates.map((dateKey) => {
                         const schedules = schedulesByDate.get(dateKey) || [];
                         const sortedSchedules = schedules.sort((a, b) =>
-                          toManilaTimeKey(toTimeValue(a.sched_start_time)).localeCompare(
-                            toManilaTimeKey(toTimeValue(b.sched_start_time))
-                          )
+                          toManilaTimeKey(
+                            toTimeValue(a.sched_start_time),
+                          ).localeCompare(
+                            toManilaTimeKey(toTimeValue(b.sched_start_time)),
+                          ),
                         );
 
                         const schedDate = toDateValue(dateKey);
@@ -1781,9 +1822,15 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                   >
                                     <div className="space-y-1.5 flex-1">
                                       <div className="text-sm font-medium flex items-center gap-2">
-                                        {formatManilaTime(toTimeValue(sched.sched_start_time))}
-                                        <span className="text-muted-foreground">-</span>
-                                        {formatManilaTime(toTimeValue(sched.sched_end_time))}
+                                        {formatManilaTime(
+                                          toTimeValue(sched.sched_start_time),
+                                        )}
+                                        <span className="text-muted-foreground">
+                                          -
+                                        </span>
+                                        {formatManilaTime(
+                                          toTimeValue(sched.sched_end_time),
+                                        )}
                                       </div>
                                       {categorySet && (
                                         <div className="space-y-1.5 pt-1">
@@ -1793,7 +1840,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           <div className="flex flex-wrap gap-1.5">
                                             {categorySet.categories
                                               .filter((category) =>
-                                                Object.values(categorySet.seatAssignments || {}).includes(category.id),
+                                                Object.values(
+                                                  categorySet.seatAssignments ||
+                                                    {},
+                                                ).includes(category.id),
                                               )
                                               .map((category) => (
                                                 <div
@@ -1804,21 +1854,30 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                                     className="h-2 w-2 rounded-full border border-zinc-300"
                                                     style={{
                                                       backgroundColor:
-                                                        category.color_code === "NO_COLOR"
+                                                        category.color_code ===
+                                                        "NO_COLOR"
                                                           ? "transparent"
-                                                          : category.color_code === "GOLD"
+                                                          : category.color_code ===
+                                                              "GOLD"
                                                             ? "#ffd700"
-                                                            : category.color_code === "PINK"
+                                                            : category.color_code ===
+                                                                "PINK"
                                                               ? "#e005b9"
-                                                              : category.color_code === "BLUE"
+                                                              : category.color_code ===
+                                                                  "BLUE"
                                                                 ? "#111184"
-                                                                : category.color_code === "BURGUNDY"
+                                                                : category.color_code ===
+                                                                    "BURGUNDY"
                                                                   ? "#800020"
                                                                   : "#046307",
                                                     }}
                                                   />
-                                                  <span className="font-medium">{category.category_name}</span>
-                                                  <span className="text-muted-foreground">₱{category.price}</span>
+                                                  <span className="font-medium">
+                                                    {category.category_name}
+                                                  </span>
+                                                  <span className="text-muted-foreground">
+                                                    ₱{category.price}
+                                                  </span>
                                                 </div>
                                               ))}
                                           </div>
@@ -1832,7 +1891,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                       onClick={() => {
                                         setFormData((prev) => ({
                                           ...prev,
-                                          scheds: prev.scheds.filter((s) => s !== sched),
+                                          scheds: prev.scheds.filter(
+                                            (s) => s !== sched,
+                                          ),
                                         }));
                                       }}
                                       disabled={isStructuralEditingLocked}
@@ -1852,7 +1913,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
 
                 // When not editing, use grouped view with tabs
                 // Group schedules using the helper function
-                const groupedSchedules = groupSchedulesByCommonalities(schedulesWithSets);
+                const groupedSchedules =
+                  groupSchedulesByCommonalities(schedulesWithSets);
 
                 if (groupedSchedules.length === 0) {
                   return (
@@ -1879,10 +1941,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
 
                           // Convert 24-hour time string (e.g., "19:00") to 12-hour format
                           const format12Hour = (time24: string) => {
-                            const [hours, minutes] = time24.split(':').map(Number);
-                            const period = hours >= 12 ? 'PM' : 'AM';
+                            const [hours, minutes] = time24
+                              .split(":")
+                              .map(Number);
+                            const period = hours >= 12 ? "PM" : "AM";
                             const hours12 = hours % 12 || 12;
-                            return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+                            return `${hours12}:${minutes.toString().padStart(2, "0")} ${period}`;
                           };
 
                           return (
@@ -1893,7 +1957,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                               <div className="space-y-1.5 flex-1">
                                 <div className="text-sm font-medium flex items-center gap-2">
                                   {format12Hour(item.sched_start_time)}
-                                  <span className="text-muted-foreground">-</span>
+                                  <span className="text-muted-foreground">
+                                    -
+                                  </span>
                                   {format12Hour(item.sched_end_time)}
                                 </div>
                                 {categorySet && (
@@ -1904,7 +1970,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                     <div className="flex flex-wrap gap-1.5">
                                       {categorySet.categories
                                         .filter((category) =>
-                                          Object.values(categorySet.seatAssignments || {}).includes(category.id),
+                                          Object.values(
+                                            categorySet.seatAssignments || {},
+                                          ).includes(category.id),
                                         )
                                         .map((category) => (
                                           <div
@@ -1915,21 +1983,30 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                               className="h-2 w-2 rounded-full border border-zinc-300"
                                               style={{
                                                 backgroundColor:
-                                                  category.color_code === "NO_COLOR"
+                                                  category.color_code ===
+                                                  "NO_COLOR"
                                                     ? "transparent"
-                                                    : category.color_code === "GOLD"
+                                                    : category.color_code ===
+                                                        "GOLD"
                                                       ? "#ffd700"
-                                                      : category.color_code === "PINK"
+                                                      : category.color_code ===
+                                                          "PINK"
                                                         ? "#e005b9"
-                                                        : category.color_code === "BLUE"
+                                                        : category.color_code ===
+                                                            "BLUE"
                                                           ? "#111184"
-                                                          : category.color_code === "BURGUNDY"
+                                                          : category.color_code ===
+                                                              "BURGUNDY"
                                                             ? "#800020"
                                                             : "#046307",
                                               }}
                                             />
-                                            <span className="font-medium">{category.category_name}</span>
-                                            <span className="text-muted-foreground">₱{category.price}</span>
+                                            <span className="font-medium">
+                                              {category.category_name}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                              ₱{category.price}
+                                            </span>
                                           </div>
                                         ))}
                                     </div>
@@ -1947,39 +2024,60 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                 // Multiple groups - use tabs
                 return (
                   <Tabs
-                    key={groupedSchedules.map((group) => group.label).join("||")}
+                    key={groupedSchedules
+                      .map((group) => group.label)
+                      .join("||")}
                     defaultValue={groupedSchedules[0].label}
                     className="w-full"
                     onValueChange={(tabLabel) => {
                       // Sync seatmap tab when schedule tab changes
-                      const selectedGroup = groupedSchedules.find(g => g.label === tabLabel);
+                      const selectedGroup = groupedSchedules.find(
+                        (g) => g.label === tabLabel,
+                      );
                       if (selectedGroup && selectedGroup.items[0]) {
                         // Each group has exactly 1 category set (guaranteed by use case)
-                        const categorySetId = selectedGroup.items[0].category_set_id;
+                        const categorySetId =
+                          selectedGroup.items[0].category_set_id;
                         if (categorySetId) {
                           setActiveSetId(categorySetId);
                         }
                       }
                     }}
                   >
-                    <TabsList variant="line" className="w-full justify-start overflow-x-auto flex-wrap h-auto">
+                    <TabsList
+                      variant="line"
+                      className="w-full justify-start overflow-x-auto flex-wrap h-auto"
+                    >
                       {groupedSchedules.map((group) => (
-                        <TabsTrigger key={group.label} value={group.label} className="flex items-center gap-2">
+                        <TabsTrigger
+                          key={group.label}
+                          value={group.label}
+                          className="flex items-center gap-2"
+                        >
                           <CalendarDays className="w-3.5 h-3.5" />
                           {group.label}
                         </TabsTrigger>
                       ))}
                     </TabsList>
                     {groupedSchedules.map((group) => (
-                      <TabsContent key={group.label} value={group.label} className="mt-4">
+                      <TabsContent
+                        key={group.label}
+                        value={group.label}
+                        className="mt-4"
+                      >
                         <div className="grid gap-3 sm:grid-cols-2">
                           {group.items.map((item, idx) => {
                             // Find one matching schedule for delete functionality
                             const firstMatchingSched = schedulesWithSets.find(
                               (s) =>
-                                toManilaTimeKey(toTimeValue(s.sched_start_time)) === item.sched_start_time &&
-                                toManilaTimeKey(toTimeValue(s.sched_end_time)) === item.sched_end_time &&
-                                (s.category_set_id || null) === item.category_set_id,
+                                toManilaTimeKey(
+                                  toTimeValue(s.sched_start_time),
+                                ) === item.sched_start_time &&
+                                toManilaTimeKey(
+                                  toTimeValue(s.sched_end_time),
+                                ) === item.sched_end_time &&
+                                (s.category_set_id || null) ===
+                                  item.category_set_id,
                             );
 
                             const categorySet = categorySets.find(
@@ -1988,10 +2086,12 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
 
                             // Convert 24-hour time string (e.g., "19:00") to 12-hour format
                             const format12Hour = (time24: string) => {
-                              const [hours, minutes] = time24.split(':').map(Number);
-                              const period = hours >= 12 ? 'PM' : 'AM';
+                              const [hours, minutes] = time24
+                                .split(":")
+                                .map(Number);
+                              const period = hours >= 12 ? "PM" : "AM";
                               const hours12 = hours % 12 || 12;
-                              return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+                              return `${hours12}:${minutes.toString().padStart(2, "0")} ${period}`;
                             };
 
                             return (
@@ -2002,7 +2102,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                 <div className="space-y-1.5 flex-1">
                                   <div className="text-sm font-medium flex items-center gap-2">
                                     {format12Hour(item.sched_start_time)}
-                                    <span className="text-muted-foreground">-</span>
+                                    <span className="text-muted-foreground">
+                                      -
+                                    </span>
                                     {format12Hour(item.sched_end_time)}
                                   </div>
                                   {categorySet && (
@@ -2013,7 +2115,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                       <div className="flex flex-wrap gap-1.5">
                                         {categorySet.categories
                                           .filter((category) =>
-                                            Object.values(categorySet.seatAssignments || {}).includes(category.id),
+                                            Object.values(
+                                              categorySet.seatAssignments || {},
+                                            ).includes(category.id),
                                           )
                                           .map((category) => (
                                             <div
@@ -2024,21 +2128,30 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                                 className="h-2 w-2 rounded-full border border-zinc-300"
                                                 style={{
                                                   backgroundColor:
-                                                    category.color_code === "NO_COLOR"
+                                                    category.color_code ===
+                                                    "NO_COLOR"
                                                       ? "transparent"
-                                                      : category.color_code === "GOLD"
+                                                      : category.color_code ===
+                                                          "GOLD"
                                                         ? "#ffd700"
-                                                        : category.color_code === "PINK"
+                                                        : category.color_code ===
+                                                            "PINK"
                                                           ? "#e005b9"
-                                                          : category.color_code === "BLUE"
+                                                          : category.color_code ===
+                                                              "BLUE"
                                                             ? "#111184"
-                                                            : category.color_code === "BURGUNDY"
+                                                            : category.color_code ===
+                                                                "BURGUNDY"
                                                               ? "#800020"
                                                               : "#046307",
                                                 }}
                                               />
-                                              <span className="font-medium">{category.category_name}</span>
-                                              <span className="text-muted-foreground">₱{category.price}</span>
+                                              <span className="font-medium">
+                                                {category.category_name}
+                                              </span>
+                                              <span className="text-muted-foreground">
+                                                ₱{category.price}
+                                              </span>
                                             </div>
                                           ))}
                                       </div>
@@ -2051,28 +2164,39 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                     size="icon"
                                     className="h-8 w-8 text-destructive hover:bg-destructive/10"
                                     onClick={() => {
-                                      const isSingleDay = group.start_date === group.end_date;
+                                      const isSingleDay =
+                                        group.start_date === group.end_date;
 
                                       setFormData((prev) => ({
                                         ...prev,
-                                        scheds: prev.scheds.filter(
-                                          (s) => {
-                                            const schedDate = toDateKey(s.sched_date);
-                                            const matchesTime =
-                                              toManilaTimeKey(toTimeValue(s.sched_start_time)) === item.sched_start_time &&
-                                              toManilaTimeKey(toTimeValue(s.sched_end_time)) === item.sched_end_time &&
-                                              (s.category_set_id || null) === item.category_set_id;
+                                        scheds: prev.scheds.filter((s) => {
+                                          const schedDate = toDateKey(
+                                            s.sched_date,
+                                          );
+                                          const matchesTime =
+                                            toManilaTimeKey(
+                                              toTimeValue(s.sched_start_time),
+                                            ) === item.sched_start_time &&
+                                            toManilaTimeKey(
+                                              toTimeValue(s.sched_end_time),
+                                            ) === item.sched_end_time &&
+                                            (s.category_set_id || null) ===
+                                              item.category_set_id;
 
-                                            if (isSingleDay) {
-                                              // For single-day groups, only delete schedules on that specific date
-                                              return !(matchesTime && schedDate === group.start_date);
-                                            } else {
-                                              // For multi-day ranges, delete all matching schedules in the range
-                                              const inRange = schedDate >= group.start_date && schedDate <= group.end_date;
-                                              return !(matchesTime && inRange);
-                                            }
+                                          if (isSingleDay) {
+                                            // For single-day groups, only delete schedules on that specific date
+                                            return !(
+                                              matchesTime &&
+                                              schedDate === group.start_date
+                                            );
+                                          } else {
+                                            // For multi-day ranges, delete all matching schedules in the range
+                                            const inRange =
+                                              schedDate >= group.start_date &&
+                                              schedDate <= group.end_date;
+                                            return !(matchesTime && inRange);
                                           }
-                                        ),
+                                        }),
                                       }));
                                     }}
                                     disabled={isStructuralEditingLocked}
@@ -2211,19 +2335,19 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     </ComboboxContent>
                   </Combobox>
                 ) : (
-                    <Input
+                  <Input
                     id="seatmap"
                     value={
                       seatmaps.find((s) => s.seatmap_id === formData.seatmap_id)
                         ?.seatmap_name || "Unassigned"
                     }
                     readOnly
-                      className={cn(
-                        "font-medium bg-muted/30",
-                        isEditing &&
-                          validationState.fieldErrors.seatmap &&
-                          "border-red-500 focus-visible:ring-red-500/30",
-                      )}
+                    className={cn(
+                      "font-medium bg-muted/30",
+                      isEditing &&
+                        validationState.fieldErrors.seatmap &&
+                        "border-red-500 focus-visible:ring-red-500/30",
+                    )}
                   />
                 )}
               </div>
@@ -2310,7 +2434,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           <div className="relative mt-1">
                             <SeatmapPreview
                               seatmapId={formData.seatmap_id || undefined}
-                              allowMarqueeSelection={isEditing && !isStructuralEditingLocked}
+                              allowMarqueeSelection={
+                                isEditing && !isStructuralEditingLocked
+                              }
                               selectedSeatIds={selectedSeatIds}
                               onSelectionChange={setSelectedSeatIds}
                               categories={setCategories}
@@ -2318,10 +2444,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                               onSeatCategoriesChange={
                                 isEditing && !isStructuralEditingLocked
                                   ? (newAssignments) =>
-                                    updateSetSeatAssignments(
-                                      activeSet.id,
-                                      newAssignments,
-                                    )
+                                      updateSetSeatAssignments(
+                                        activeSet.id,
+                                        newAssignments,
+                                      )
                                   : undefined
                               }
                             />
@@ -2333,33 +2459,33 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                               onAssign={
                                 isEditing && !isStructuralEditingLocked
                                   ? (seatIds, categoryId) => {
-                                    updateSetSeatAssignments(
-                                      activeSet.id,
-                                      (prev) => {
-                                        const next = { ...prev };
-                                        seatIds.forEach((id) => {
-                                          next[id] = categoryId;
-                                        });
-                                        return next;
-                                      },
-                                    );
-                                  }
+                                      updateSetSeatAssignments(
+                                        activeSet.id,
+                                        (prev) => {
+                                          const next = { ...prev };
+                                          seatIds.forEach((id) => {
+                                            next[id] = categoryId;
+                                          });
+                                          return next;
+                                        },
+                                      );
+                                    }
                                   : undefined
                               }
                               onClear={
                                 isEditing && !isStructuralEditingLocked
                                   ? (seatIds) => {
-                                    updateSetSeatAssignments(
-                                      activeSet.id,
-                                      (prev) => {
-                                        const next = { ...prev };
-                                        seatIds.forEach((id) => {
-                                          delete next[id];
-                                        });
-                                        return next;
-                                      },
-                                    );
-                                  }
+                                      updateSetSeatAssignments(
+                                        activeSet.id,
+                                        (prev) => {
+                                          const next = { ...prev };
+                                          seatIds.forEach((id) => {
+                                            delete next[id];
+                                          });
+                                          return next;
+                                        },
+                                      );
+                                    }
                                   : undefined
                               }
                             />
@@ -2367,12 +2493,24 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                               <div className="mt-2 hidden md:flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                                 <span>Use</span>
                                 <span className="inline-flex items-center gap-1">
-                                  <Image src="/shift.svg" alt="Shift key" width={18} height={18} className="h-4.5 w-4.5 object-contain" />
+                                  <Image
+                                    src="/shift.svg"
+                                    alt="Shift key"
+                                    width={18}
+                                    height={18}
+                                    className="h-4.5 w-4.5 object-contain"
+                                  />
                                   <span>Shift</span>
                                 </span>
                                 <span>or</span>
                                 <span className="inline-flex items-center gap-1">
-                                  <Image src="/control.svg" alt="Control key" width={18} height={18} className="h-4.5 w-4.5 object-contain" />
+                                  <Image
+                                    src="/control.svg"
+                                    alt="Control key"
+                                    width={18}
+                                    height={18}
+                                    className="h-4.5 w-4.5 object-contain"
+                                  />
                                   <span>Ctrl</span>
                                 </span>
                                 <span>to multi-select.</span>
@@ -2400,7 +2538,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                           size="sm"
                           onClick={addCategorySet}
                           className="gap-1.5"
-                          disabled={allSchedsCovered || isStructuralEditingLocked}
+                          disabled={
+                            allSchedsCovered || isStructuralEditingLocked
+                          }
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Add Category Set
@@ -2537,7 +2677,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                   }}
                                   disabled={
                                     formData.scheds.length === 0 ||
-                                    getAvailableScheds(setItem.id).length === 0 ||
+                                    getAvailableScheds(setItem.id).length ===
+                                      0 ||
                                     isStructuralEditingLocked
                                   }
                                 />
@@ -2564,7 +2705,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           sched.client_id,
                                         )
                                       }
-                                      disabled={setItem.apply_to_all || isStructuralEditingLocked}
+                                      disabled={
+                                        setItem.apply_to_all ||
+                                        isStructuralEditingLocked
+                                      }
                                     />
                                     {formatManilaDate(
                                       toDateValue(sched.sched_date),
@@ -2587,7 +2731,7 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                 )}
                                 {formData.scheds.length > 0 &&
                                   getAvailableScheds(setItem.id).length ===
-                                  0 && (
+                                    0 && (
                                     <p className="text-xs text-destructive">
                                       All schedules already assigned.
                                     </p>
@@ -2615,8 +2759,8 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                   className="gap-1.5"
                                   onClick={() => addCategoryToSet(setItem.id)}
                                   disabled={
-                                    getAvailableScheds(setItem.id).length === 0 ||
-                                    isStructuralEditingLocked
+                                    getAvailableScheds(setItem.id).length ===
+                                      0 || isStructuralEditingLocked
                                   }
                                 >
                                   <Plus className="h-3.5 w-3.5" />
@@ -2645,12 +2789,13 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                         onChange={(e) =>
                                           isStructuralEditingLocked
                                             ? undefined
-                                            :
-                                          updateCategoryInSet(
-                                            setItem.id,
-                                            category.id,
-                                            { category_name: e.target.value },
-                                          )
+                                            : updateCategoryInSet(
+                                                setItem.id,
+                                                category.id,
+                                                {
+                                                  category_name: e.target.value,
+                                                },
+                                              )
                                         }
                                         placeholder="e.g. VIP"
                                         readOnly={isStructuralEditingLocked}
@@ -2722,7 +2867,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                                           )
                                         }
                                       >
-                                        <SelectTrigger className="h-9 w-full" disabled={isStructuralEditingLocked}>
+                                        <SelectTrigger
+                                          className="h-9 w-full"
+                                          disabled={isStructuralEditingLocked}
+                                        >
                                           <SelectValue placeholder="Select color" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -2846,16 +2994,16 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
 
           {/* Reserve Now Button (Desktop Only - shown in sidebar) */}
           {!isEditing && reserveButton && (
-            <div className="hidden lg:block w-full">
-              {reserveButton}
-            </div>
+            <div className="hidden lg:block w-full">{reserveButton}</div>
           )}
 
           {!isEditing && allowEdit ? (
             <div className="grid gap-3">
               <Button
                 variant="outline"
-                onClick={() => router.push(`/admin/shows/${show.show_id}/tickets`)}
+                onClick={() =>
+                  router.push(`/admin/shows/${show.show_id}/tickets`)
+                }
                 className="w-full h-12 font-semibold uppercase tracking-widest text-base"
               >
                 <Ticket className="w-5 h-5 mr-2" />
@@ -2906,21 +3054,25 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     ),
                     seatmap_id: show.seatmap_id || "",
                     ticket_template_ids:
-                      show.ticket_templates?.map((template) => template.ticket_template_id) ??
-                      (show.ticket_template_id ? [show.ticket_template_id] : []),
+                      show.ticket_templates?.map(
+                        (template) => template.ticket_template_id,
+                      ) ??
+                      (show.ticket_template_id
+                        ? [show.ticket_template_id]
+                        : []),
                     scheds: (show.scheds || []).map((s) => ({
                       ...s,
                       sched_date: toManilaDateKey(new Date(s.sched_date)),
                       sched_start_time:
                         typeof s.sched_start_time === "string" &&
-                          s.sched_start_time.includes("T")
+                        s.sched_start_time.includes("T")
                           ? formatManilaTimeKey(new Date(s.sched_start_time))
                           : typeof s.sched_start_time === "string"
                             ? s.sched_start_time
                             : formatManilaTimeKey(new Date(s.sched_start_time)),
                       sched_end_time:
                         typeof s.sched_end_time === "string" &&
-                          s.sched_end_time.includes("T")
+                        s.sched_end_time.includes("T")
                           ? formatManilaTimeKey(new Date(s.sched_end_time))
                           : typeof s.sched_end_time === "string"
                             ? s.sched_end_time
@@ -2952,13 +3104,6 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                 className="w-full h-12 font-black uppercase tracking-widest text-base shadow-xl shadow-primary/20"
               >
                 Edit Production
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push("/admin/shows")}
-                className="w-full h-12 font-semibold uppercase tracking-widest text-base"
-              >
-                Back to Shows
               </Button>
             </div>
           ) : null}
@@ -2994,7 +3139,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                     className="mt-0.5"
                   />
                   <div className="space-y-1">
-                    <p className="text-sm font-medium leading-5">{schedule.label}</p>
+                    <p className="text-sm font-medium leading-5">
+                      {schedule.label}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       Open scanner
                     </p>
@@ -3078,7 +3225,9 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
                             type="time"
                             value={range.start}
                             onChange={(e) =>
-                              updateTimeRange(range.id, { start: e.target.value })
+                              updateTimeRange(range.id, {
+                                start: e.target.value,
+                              })
                             }
                             className="h-8 text-xs"
                           />
@@ -3118,7 +3267,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsScheduleOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsScheduleOpen(false)}
+              >
                 Cancel
               </Button>
               <Button onClick={handleAddSchedules}>Add Schedules</Button>
@@ -3143,7 +3295,10 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
             <DialogDescription>{statusConfirmMessage}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsStatusConfirmOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsStatusConfirmOpen(false)}
+            >
               Cancel
             </Button>
             <Button onClick={handleConfirmStatusChange}>Confirm</Button>
@@ -3175,4 +3330,3 @@ export function ShowDetailForm({ show, allowEdit = true, reserveButton }: ShowDe
     </div>
   );
 }
-

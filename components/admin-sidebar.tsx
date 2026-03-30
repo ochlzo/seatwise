@@ -1,144 +1,146 @@
-"use client"
+"use client";
 
-import * as React from "react"
+import * as React from "react";
 import {
-    Settings2,
-    Theater,
-    Armchair,
-    Ticket,
-    UserRound,
-    ShieldUser
-} from "lucide-react"
+  Settings2,
+  Theater,
+  Armchair,
+  Ticket,
+  UserRound,
+  ShieldUser,
+} from "lucide-react";
 
-import { NavMain } from "@/components/nav-main"
+import { NavMain } from "@/components/nav-main";
 
-import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
+import { NavUser } from "@/components/nav-user";
+import { TeamSwitcher } from "@/components/team-switcher";
 import {
-    Sidebar,
-    SidebarContent,
-    SidebarFooter,
-    SidebarHeader,
-    SidebarRail,
-    useSidebar,
-} from "@/components/ui/sidebar"
-import { useAppSelector } from "@/lib/hooks"
-import { RootState } from "@/lib/store"
-import { usePathname } from "next/navigation"
-import { useEffect } from "react"
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarRail,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { useAppSelector } from "@/lib/hooks";
+import { RootState } from "@/lib/store";
+import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 
 // This is sample data.
 const data = {
-    teams: [
+  teams: [
+    {
+      name: "user",
+      logo: UserRound,
+      plan: "",
+    },
+    {
+      name: "admin",
+      logo: ShieldUser,
+      plan: "",
+    },
+  ],
+  navMain: [
+    {
+      title: "System",
+      url: "#",
+      icon: Settings2,
+      isActive: true,
+      items: [
         {
-            name: "user",
-            logo: UserRound,
-            plan: "",
+          title: "Dashboard",
+          url: "/admin",
         },
         {
-            name: "admin",
-            logo: ShieldUser,
-            plan: "",
-        },
-    ],
-    navMain: [
-        {
-            title: "System",
-            url: "#",
-            icon: Settings2,
-            isActive: true,
-            items: [
-                {
-                    title: "Dashboard",
-                    url: "/admin",
-                },
-                {
-                    title: "Reservations",
-                    url: "/admin/reservations",
-                },
-                {
-                    title: "Admin Access",
-                    url: "/admin/access",
-                },
-            ],
+          title: "Reservations",
+          url: "/admin/reservations",
         },
         {
-            title: "Shows",
-            url: "#",
-            icon: Theater,
-            items: [
-                {
-                    title: "Shows List",
-                    url: "/admin/shows",
-                },
-                {
-                    title: "Calendar",
-                    url: "/admin/calendar",
-                },
-            ],
+          title: "Admin Access",
+          url: "/admin/access",
+        },
+      ],
+    },
+    {
+      title: "Shows",
+      url: "#",
+      icon: Theater,
+      items: [
+        {
+          title: "Shows List",
+          url: "/admin/shows",
         },
         {
-            title: "Seat Map",
-            url: "#",
-            icon: Armchair,
-            items: [
-                {
-                    title: "Templates",
-                    url: "/admin/templates",
-                },
-                {
-                    title: "Seatmap Designer",
-                    url: "/seat-builder",
-                },
-            ],
+          title: "Calendar",
+          url: "/admin/calendar",
+        },
+      ],
+    },
+    {
+      title: "Seat Map",
+      url: "#",
+      icon: Armchair,
+      items: [
+        {
+          title: "Seatmap Templates",
+          url: "/admin/templates",
         },
         {
-            title: "Tickets",
-            url: "#",
-            icon: Ticket,
-            items: [
-                {
-                    title: "Ticket Templates",
-                    url: "/admin/ticket-templates",
-                },
-                {
-                    title: "Ticket Designer",
-                    url: "/ticket-builder",
-                },
-            ],
+          title: "Seatmap Designer",
+          url: "/seat-builder",
         },
-    ]
-}
+      ],
+    },
+    {
+      title: "Tickets",
+      url: "#",
+      icon: Ticket,
+      items: [
+        {
+          title: "Ticket Templates",
+          url: "/admin/ticket-templates",
+        },
+        {
+          title: "Ticket Designer",
+          url: "/ticket-builder",
+        },
+      ],
+    },
+  ],
+};
 
-export function AdminSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-    const user = useAppSelector((state: RootState) => state.auth.user);
-    const { isMobile, setOpenMobile } = useSidebar();
-    const pathname = usePathname();
+export function AdminSidebar({
+  ...props
+}: React.ComponentProps<typeof Sidebar>) {
+  const user = useAppSelector((state: RootState) => state.auth.user);
+  const { isMobile, setOpenMobile } = useSidebar();
+  const pathname = usePathname();
 
-    useEffect(() => {
-        if (isMobile) {
-            setOpenMobile(false);
-        }
-    }, [pathname, isMobile, setOpenMobile]);
+  useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [pathname, isMobile, setOpenMobile]);
 
-    return (
-        <Sidebar collapsible="icon" {...props}>
-            <SidebarHeader>
-                <TeamSwitcher
-                    teams={data.teams}
-                    logoLight="/logo_light.png"
-                    logoDark="/logo_dark.png"
-                    logoMini="/logo-mini.png"
-                    currentTeam="admin"
-                />
-            </SidebarHeader>
-            <SidebarContent>
-                <NavMain items={data.navMain} openAll />
-            </SidebarContent>
-            <SidebarFooter>
-                <NavUser user={user} />
-            </SidebarFooter>
-            <SidebarRail />
-        </Sidebar >
-    )
+  return (
+    <Sidebar collapsible="icon" {...props}>
+      <SidebarHeader>
+        <TeamSwitcher
+          teams={data.teams}
+          logoLight="/logo_light.png"
+          logoDark="/logo_dark.png"
+          logoMini="/logo-mini.png"
+          currentTeam="admin"
+        />
+      </SidebarHeader>
+      <SidebarContent>
+        <NavMain items={data.navMain} openAll />
+      </SidebarContent>
+      <SidebarFooter>
+        <NavUser user={user} />
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
+  );
 }
