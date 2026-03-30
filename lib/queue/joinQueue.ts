@@ -1,7 +1,7 @@
 import { redis } from '@/lib/clients/redis';
 import { v4 as uuidv4 } from 'uuid';
 import type { TicketData } from '@/lib/types/queue';
-import { toOneBasedQueueRank } from './rank';
+import { resolveVisibleQueueRank } from './visibleRank';
 
 interface JoinQueueParams {
     showScopeId: string; // format: "showId:schedId"
@@ -100,8 +100,10 @@ export async function joinQueue({
         await redis.hset(userTicketKey, { [userId]: ticketId });
 
         // 7. Calculate rank (position in queue)
-        const rank = await redis.zrank(queueKey, ticketId);
-        const actualRank = rank !== null ? toOneBasedQueueRank(rank) : 1;
+        const actualRank = (await resolveVisibleQueueRank({
+            showScopeId,
+            ticketId,
+        })) ?? 1;
 
         // 8. Calculate estimated wait time
         const avgServiceMsKey = `seatwise:metrics:avg_service_ms:${showScopeId}`;

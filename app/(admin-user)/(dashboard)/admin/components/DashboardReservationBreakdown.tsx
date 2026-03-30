@@ -31,7 +31,7 @@ export function DashboardReservationBreakdown({
       <CardHeader>
         <CardTitle>Reservation breakdown</CardTitle>
         <CardDescription>
-          Booking activity is filtered by <code>Reservation.createdAt</code>.
+          How reservations are currently distributed in the selected date range.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

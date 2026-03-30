@@ -32,6 +32,16 @@ const trimToNull = (value?: string | null) => {
   return trimmed ? trimmed : null;
 };
 
+const normalizePositiveInteger = (value?: string | null) => {
+  const trimmed = trimToNull(value);
+  if (!trimmed || !/^\d+$/.test(trimmed)) {
+    return 1;
+  }
+
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
+
 const parseDateOnly = (value?: string | null) => {
   const trimmed = trimToNull(value);
   if (!trimmed || !DATE_ONLY_PATTERN.test(trimmed)) {
@@ -98,6 +108,7 @@ export function normalizeDashboardFilters(
     teamId: effectiveTeamId,
     effectiveTeamId,
     showId: trimToNull(searchParams.showId),
+    recentPage: normalizePositiveInteger(searchParams.recentPage),
   };
 }
 

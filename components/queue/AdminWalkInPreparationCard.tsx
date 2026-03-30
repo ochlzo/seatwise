@@ -53,18 +53,22 @@ const formatDuration = (ms: number) => {
 export function AdminWalkInPreparationCard({
   showId,
   schedId,
+  adminUserId,
 }: {
   showId: string;
   schedId: string;
+  adminUserId: string;
 }) {
   const router = useRouter();
   const [data, setData] = React.useState<PrepareResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [isExiting, setIsExiting] = React.useState(false);
   const [now, setNow] = React.useState(() => Date.now());
   const previousStateRef = React.useRef<WalkInEntryState | null>(null);
   const roomHref = React.useMemo(() => buildAdminWalkInRoomHref(showId, schedId), [schedId, showId]);
+  const returnHref = React.useMemo(() => `/admin/shows/${showId}`, [showId]);
 
   const prepareWalkIn = React.useCallback(
     async (background = false) => {
@@ -170,6 +174,47 @@ export function AdminWalkInPreparationCard({
     router.push(roomHref);
   };
 
+  const handleExitQueue = React.useCallback(async () => {
+    if (!data?.ticketId || isExiting) return;
+
+    const confirmed = window.confirm(
+      data.state === "active_and_paused"
+        ? "Exiting now will release the reservation room and update the queue. Continue?"
+        : "Exiting now will remove this walk-in from the queue. Continue?",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsExiting(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/queue/terminate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          schedId,
+          guestId: adminUserId,
+          ticketId: data.ticketId,
+          activeToken: data.state === "active_and_paused" ? data.activeToken : undefined,
+        }),
+      });
+
+      const payload = (await response.json()) as { success?: boolean; error?: string };
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || "Failed to exit queue.");
+      }
+
+      router.push(returnHref);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to exit queue.");
+      setIsExiting(false);
+    }
+  }, [adminUserId, data, isExiting, returnHref, router, schedId, showId]);
+
   return (
     <div className="space-y-6">
       <Card className="border-sidebar-border shadow-sm">
@@ -247,6 +292,12 @@ export function AdminWalkInPreparationCard({
                   </div>
                 </div>
               </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => void handleExitQueue()} disabled={isExiting}>
+                  {isExiting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Exit queue
+                </Button>
+              </div>
             </div>
           )}
 
@@ -273,8 +324,12 @@ export function AdminWalkInPreparationCard({
                   <div className="text-lg font-semibold">Ready for seat selection</div>
                 </div>
               </div>
-              <div className="flex justify-end">
-                <Button onClick={handleEnterReservationRoom} className="gap-2">
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => void handleExitQueue()} disabled={isExiting}>
+                  {isExiting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Exit queue
+                </Button>
+                <Button onClick={handleEnterReservationRoom} className="gap-2" disabled={isExiting}>
                   Enter reservation room
                 </Button>
               </div>

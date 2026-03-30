@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Ticket } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useState } from "react";
+import { Ticket } from "lucide-react";
+import { useRouter } from "next/navigation";
 
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/sonner";
-import { ScheduleSelectionDialog } from '@/components/queue/ScheduleSelectionDialog';
+import { ScheduleSelectionDialog } from "@/components/queue/ScheduleSelectionDialog";
 import { getOrCreateGuestId } from "@/lib/guest";
 import { setJoinTransitionState } from "@/lib/queue/joinTransition";
 import type { SchedulePickerOption } from "@/lib/shows/schedulePicker";
@@ -18,11 +18,11 @@ interface ReserveNowButtonProps {
 }
 
 type JoinPhase =
-  | 'idle'
-  | 'joining_queue'
-  | 'processing_response'
-  | 'saving_session'
-  | 'redirecting';
+  | "idle"
+  | "joining_queue"
+  | "processing_response"
+  | "saving_session"
+  | "redirecting";
 
 export function ReserveNowButton({
   showId,
@@ -31,38 +31,43 @@ export function ReserveNowButton({
 }: ReserveNowButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [joinPhase, setJoinPhase] = useState<JoinPhase>('idle');
-  const isJoining = joinPhase !== 'idle';
+  const [joinPhase, setJoinPhase] = useState<JoinPhase>("idle");
+  const isJoining = joinPhase !== "idle";
 
   const handleJoinQueue = async (selectedSchedId: string) => {
-    setJoinPhase('joining_queue');
+    setJoinPhase("joining_queue");
     try {
       const guestId = getOrCreateGuestId();
-      const response = await fetch('/api/queue/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/queue/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ showId, schedId: selectedSchedId, guestId }),
       });
 
-      setJoinPhase('processing_response');
+      setJoinPhase("processing_response");
       const data = await response.json();
 
       if (!response.ok || !data.success) {
-        const message = data.error || 'Failed to join queue';
+        const message = data.error || "Failed to join queue";
 
-        if (data.pauseReason === 'walk_in') {
-          toast.warning('Queue temporarily paused', {
+        if (data.pauseReason === "walk_in") {
+          toast.warning("Queue temporarily paused", {
             description: message,
           });
-          setJoinPhase('idle');
+          setJoinPhase("idle");
           return;
         }
 
         throw new Error(message);
       }
 
-      if (data.status === 'active' && data.ticket?.ticketId && data.activeToken && data.expiresAt) {
-        setJoinPhase('saving_session');
+      if (
+        data.status === "active" &&
+        data.ticket?.ticketId &&
+        data.activeToken &&
+        data.expiresAt
+      ) {
+        setJoinPhase("saving_session");
         const showScopeId = `${showId}:${selectedSchedId}`;
         const storageKey = `seatwise:active:${showScopeId}:${data.ticket.ticketId}`;
         sessionStorage.setItem(
@@ -75,29 +80,30 @@ export function ReserveNowButton({
           }),
         );
 
-        toast.success('Your reservation window is active!', {
-          description: 'Proceeding to reservation room...',
+        toast.success("Your reservation window is active!", {
+          description: "Proceeding to reservation room...",
         });
 
-        setJoinPhase('redirecting');
+        setJoinPhase("redirecting");
         setJoinTransitionState(showScopeId);
         setIsOpen(false);
         router.push(`/reserve/${showId}/${selectedSchedId}`);
         return;
       }
 
-      toast.success('Successfully joined the queue!', {
+      toast.success("Successfully joined the queue!", {
         description: `You're #${data.rank} in line. Estimated wait: ~${data.estimatedWaitMinutes} min`,
       });
 
-      setJoinPhase('redirecting');
+      setJoinPhase("redirecting");
       setIsOpen(false);
       router.push(`/queue/${showId}/${selectedSchedId}`);
     } catch (error) {
-      toast.error('Failed to join queue', {
-        description: error instanceof Error ? error.message : 'Please try again',
+      toast.error("Failed to join queue", {
+        description:
+          error instanceof Error ? error.message : "Please try again",
       });
-      setJoinPhase('idle');
+      setJoinPhase("idle");
       throw error;
     }
   };
@@ -119,20 +125,20 @@ export function ReserveNowButton({
           if (isJoining) return;
           setIsOpen(open);
           if (!open) {
-            setJoinPhase('idle');
+            setJoinPhase("idle");
           }
         }}
         showName={showName}
         schedules={schedules}
         confirmButtonLabel="Confirm & Join Queue"
         confirmLoadingLabel={
-          joinPhase === 'joining_queue'
-            ? 'Joining queue...'
-            : joinPhase === 'processing_response'
-              ? 'Processing response...'
-              : joinPhase === 'saving_session'
-                ? 'Preparing reservation room...'
-                : 'Redirecting...'
+          joinPhase === "joining_queue"
+            ? "Joining queue..."
+            : joinPhase === "processing_response"
+              ? "Processing response..."
+              : joinPhase === "saving_session"
+                ? "Preparing reservation room..."
+                : "Redirecting..."
         }
         onConfirm={handleJoinQueue}
       />

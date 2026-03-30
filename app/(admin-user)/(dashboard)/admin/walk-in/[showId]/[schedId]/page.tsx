@@ -75,6 +75,7 @@ export default async function AdminWalkInSchedulePage({
           <AdminWalkInPreparationCard
             showId={showId}
             schedId={schedId}
+            adminUserId={adminContext.userId}
           />
         </div>
       </div>

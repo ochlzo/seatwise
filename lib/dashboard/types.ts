@@ -12,6 +12,7 @@ export type DashboardSearchParams = {
   to?: string;
   teamId?: string;
   showId?: string;
+  recentPage?: string;
 };
 
 export type DashboardAdminScope = {
@@ -26,6 +27,7 @@ export type NormalizedDashboardFilters = {
   teamId: string | null;
   effectiveTeamId: string | null;
   showId: string | null;
+  recentPage: number;
 };
 
 export type DashboardFilterOption = {
@@ -108,6 +110,15 @@ export type DashboardRecentReservation = {
   paymentAmount: number | null;
 };
 
+export type DashboardRecentReservationsPagination = {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+};
+
 export type AdminDashboardData = {
   filters: NormalizedDashboardFilters;
   filterOptions: AdminDashboardFilterOptions;
@@ -120,4 +131,5 @@ export type AdminDashboardData = {
   topShowsByReservations: DashboardTopShow[];
   topShowsByRevenue: DashboardTopShow[];
   recentReservations: DashboardRecentReservation[];
+  recentReservationsPagination: DashboardRecentReservationsPagination;
 };

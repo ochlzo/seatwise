@@ -1,7 +1,7 @@
 import { redis } from "@/lib/clients/redis";
 import type { ActiveSession, QueuePauseReason, TicketData } from "@/lib/types/queue";
 import { getQueuePauseState } from "./closeQueue";
-import { toOneBasedQueueRank } from "./rank";
+import { resolveVisibleQueueRank } from "./visibleRank";
 
 export type QueueHeartbeatStatus =
   | "waiting"
@@ -90,7 +90,7 @@ export async function getQueueStatus({
   }
 
   const queueKey = `seatwise:queue:${showScopeId}`;
-  const rank = await redis.zrank(queueKey, ticketId);
+  const rank = await resolveVisibleQueueRank({ showScopeId, ticketId });
 
   if (rank === null) {
     await redis.hdel(userTicketKey, userId);
@@ -123,8 +123,7 @@ export async function getQueueStatus({
     Number.isFinite(avgServiceMs) && avgServiceMs > 0
       ? avgServiceMs
       : DEFAULT_AVG_SERVICE_MS;
-  const oneBasedRank = toOneBasedQueueRank(rank);
-  const etaMs = oneBasedRank * safeAvgServiceMs;
+  const etaMs = rank * safeAvgServiceMs;
   const pauseState = await getQueuePauseState(showScopeId);
 
   if (pauseState) {
@@ -134,7 +133,7 @@ export async function getQueueStatus({
       showScopeId,
       ticketId,
       name: ticket?.name,
-      rank: oneBasedRank,
+      rank,
       etaMs,
       estimatedWaitMinutes: Math.ceil(etaMs / 60000),
       pauseReason: pauseState.reason,
@@ -148,7 +147,7 @@ export async function getQueueStatus({
     showScopeId,
     ticketId,
     name: ticket?.name,
-    rank: oneBasedRank,
+    rank,
     etaMs,
     estimatedWaitMinutes: Math.ceil(etaMs / 60000),
     message: "Waiting in line.",

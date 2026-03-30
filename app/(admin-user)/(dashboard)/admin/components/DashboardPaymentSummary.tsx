@@ -7,10 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import type {
-  DashboardMetricDateField,
-  DashboardPaymentSummary as DashboardPaymentSummaryData,
-} from "@/lib/dashboard/types";
+import type { DashboardPaymentSummary as DashboardPaymentSummaryData } from "@/lib/dashboard/types";
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
@@ -18,22 +15,26 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   maximumFractionDigits: 0,
 });
 
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pending",
+  PAID: "Paid",
+  FAILED: "Failed",
+  REFUNDED: "Refunded",
+};
+
 type DashboardPaymentSummaryProps = {
   paymentSummary: DashboardPaymentSummaryData;
-  metricDateFields: Record<string, DashboardMetricDateField>;
 };
 
 export function DashboardPaymentSummary({
   paymentSummary,
-  metricDateFields,
 }: DashboardPaymentSummaryProps) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Payment summary</CardTitle>
         <CardDescription>
-          Revenue uses <code>{metricDateFields.paidRevenue}</code>. Status counts use{" "}
-          <code>{metricDateFields.paymentStatusCounts}</code>.
+          Revenue collected and payment outcomes for the selected date range.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -42,7 +43,7 @@ export function DashboardPaymentSummary({
             <p className="text-sm text-muted-foreground">Paid revenue</p>
             <p className="text-2xl font-semibold">{currencyFormatter.format(paymentSummary.paidRevenue)}</p>
           </div>
-          <Badge variant="secondary">{paymentSummary.paidCount} paid payments</Badge>
+          <Badge variant="secondary">{paymentSummary.paidCount} completed payments</Badge>
         </div>
 
         <Separator />
@@ -51,7 +52,7 @@ export function DashboardPaymentSummary({
           {Object.entries(paymentSummary.statuses).map(([status, count]) => (
             <div key={status} className="rounded-lg border bg-muted/30 p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {status.replaceAll("_", " ")}
+                {PAYMENT_STATUS_LABELS[status] ?? status.replaceAll("_", " ")}
               </p>
               <p className="mt-2 text-xl font-semibold">{count.toLocaleString()}</p>
             </div>

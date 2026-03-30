@@ -664,9 +664,9 @@ export function ReserveSeatClient({
         typeof navigator.sendBeacon === "function"
       ) {
         const blob = new Blob([payload], { type: "application/json" });
-        navigator.sendBeacon("/api/queue/leave", blob);
+        navigator.sendBeacon("/api/queue/terminate", blob);
       } else {
-        void fetch("/api/queue/leave", {
+        void fetch("/api/queue/terminate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: payload,

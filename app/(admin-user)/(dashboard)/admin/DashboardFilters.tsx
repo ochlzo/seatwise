@@ -66,6 +66,8 @@ export function DashboardFilters({
         params.set(key, value);
       }
 
+      params.delete("recentPage");
+
       if (key === "range" && value !== "custom") {
         params.delete("from");
         params.delete("to");
@@ -80,6 +82,7 @@ export function DashboardFilters({
   const applyCustomRange = () => {
     pushQuery((params) => {
       params.set("range", "custom");
+      params.delete("recentPage");
       if (customFrom) {
         params.set("from", customFrom);
       } else {
@@ -97,17 +100,20 @@ export function DashboardFilters({
     router.push(pathname);
   };
 
+  const filterHeading = filterOptions.canFilterTeams ? "Dashboard filters" : "Team filters";
+  const filterSummary = filterOptions.canFilterTeams
+    ? "Choose a date range, team, and show to focus this dashboard."
+    : `Showing activity for ${adminTeamName ?? "your assigned team"}. Use the date range and show filters to narrow the view.`;
+
   return (
     <Card>
       <CardContent className="flex flex-col gap-4 pt-6">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-sm font-medium">
             <CalendarRange className="h-4 w-4 text-muted-foreground" />
-            Dashboard filters
+            {filterHeading}
           </div>
-          <p className="text-sm text-muted-foreground">
-            Superadmins can switch team scope. Team-scoped admins stay locked to {adminTeamName ?? "their assigned team"}.
-          </p>
+          <p className="text-sm text-muted-foreground">{filterSummary}</p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">

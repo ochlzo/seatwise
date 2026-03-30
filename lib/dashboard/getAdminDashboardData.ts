@@ -21,8 +21,8 @@ import {
   type AdminDashboardFilterOptions,
   type DashboardAdminScope,
   type DashboardRecentReservation,
+  type DashboardRecentReservationsPagination,
   type DashboardScheduleStatusTotals,
-  type DashboardSearchParams,
   type DashboardShowStatusTotals,
   type NormalizedDashboardFilters,
 } from "./types.ts";
@@ -116,6 +116,9 @@ export type DashboardAggregationInput = {
     _count: { _all: number };
   }>;
   paidRevenueRows: RevenueRow[];
+  recentReservationsPage: number;
+  recentReservationsPageSize: number;
+  recentReservationsTotal: number;
   recentReservations: RecentReservationRecord[];
 };
 
@@ -154,6 +157,8 @@ const DEFAULT_SCHEDULE_STATUS_TOTALS: DashboardScheduleStatusTotals = {
   FULLY_BOOKED: 0,
   CLOSED: 0,
 };
+
+const RECENT_RESERVATIONS_PAGE_SIZE = 5;
 
 const toNumber = (value: unknown) => {
   if (typeof value === "number") {
@@ -229,6 +234,9 @@ export function buildAdminDashboardData({
   shows,
   reservationTopShowRows,
   paidRevenueRows,
+  recentReservationsPage,
+  recentReservationsPageSize,
+  recentReservationsTotal,
   recentReservations,
 }: DashboardAggregationInput): AdminDashboardData {
   const reservationCounts = { ...DEFAULT_RESERVATION_COUNTS };
@@ -303,9 +311,7 @@ export function buildAdminDashboardData({
     return right.createdAt.getTime() - left.createdAt.getTime();
   });
 
-  const normalizedRecentReservations: DashboardRecentReservation[] = prioritizedReservations
-    .slice(0, 8)
-    .map((reservation) => ({
+  const normalizedRecentReservations: DashboardRecentReservation[] = prioritizedReservations.map((reservation) => ({
       id: reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
       guestName: `${reservation.first_name} ${reservation.last_name}`.trim(),
@@ -320,6 +326,17 @@ export function buildAdminDashboardData({
       paymentStatus: reservation.payment?.status ?? null,
       paymentAmount: reservation.payment ? toNumber(reservation.payment.amount) : null,
     }));
+
+  const totalPages = Math.max(1, Math.ceil(recentReservationsTotal / recentReservationsPageSize));
+  const currentPage = Math.min(Math.max(1, recentReservationsPage), totalPages);
+  const recentReservationsPagination: DashboardRecentReservationsPagination = {
+    page: currentPage,
+    pageSize: recentReservationsPageSize,
+    totalItems: recentReservationsTotal,
+    totalPages,
+    hasPreviousPage: currentPage > 1,
+    hasNextPage: currentPage < totalPages,
+  };
 
   return {
     filters,
@@ -346,6 +363,7 @@ export function buildAdminDashboardData({
     topShowsByReservations: sortTopShows(rankedShows, "reservationCount"),
     topShowsByRevenue: sortTopShows(rankedShows, "paidRevenue"),
     recentReservations: normalizedRecentReservations,
+    recentReservationsPagination,
   };
 }
 
@@ -371,6 +389,10 @@ export async function getAdminDashboardData({
   const windows = buildDashboardWindows(effectiveFilters);
   const scopedShowWhere = buildScopedShowWhere(effectiveFilters);
   const showWindowWhere = buildShowWindowWhere(effectiveFilters, windows.scheduleDates);
+  const recentReservationsWhere: Prisma.ReservationWhereInput = {
+    createdAt: windows.timestamps,
+    ...(scopedShowWhere ? { show: scopedShowWhere } : {}),
+  };
 
   const [
     reservationStatusRows,
@@ -380,7 +402,8 @@ export async function getAdminDashboardData({
     shows,
     reservationTopShowRows,
     paidRevenueRows,
-    recentReservations,
+    pendingRecentReservationsCount,
+    nonPendingRecentReservationsCount,
   ] = await Promise.all([
     db.reservation.groupBy({
       by: ["status"],
@@ -497,52 +520,127 @@ export async function getAdminDashboardData({
         },
       },
     }),
-    db.reservation.findMany({
+    db.reservation.count({
       where: {
-        createdAt: windows.timestamps,
-        ...(scopedShowWhere ? { show: scopedShowWhere } : {}),
+        ...recentReservationsWhere,
+        status: "PENDING",
       },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 12,
-      select: {
-        reservation_id: true,
-        reservation_number: true,
-        first_name: true,
-        last_name: true,
-        createdAt: true,
-        status: true,
-        payment: {
-          select: {
-            status: true,
-            amount: true,
-          },
-        },
-        show: {
-          select: {
-            show_id: true,
-            show_name: true,
-            team: {
-              select: {
-                name: true,
-              },
-            },
-          },
-        },
-        sched: {
-          select: {
-            sched_id: true,
-            sched_date: true,
-            sched_start_time: true,
-          },
+    }),
+    db.reservation.count({
+      where: {
+        ...recentReservationsWhere,
+        status: {
+          not: "PENDING",
         },
       },
     }),
   ]);
 
+  const recentReservationsTotal =
+    pendingRecentReservationsCount + nonPendingRecentReservationsCount;
+  const recentReservationsTotalPages = Math.max(
+    1,
+    Math.ceil(recentReservationsTotal / RECENT_RESERVATIONS_PAGE_SIZE),
+  );
+  const recentReservationsPage = Math.min(
+    Math.max(1, effectiveFilters.recentPage),
+    recentReservationsTotalPages,
+  );
+  const recentReservationsOffset =
+    (recentReservationsPage - 1) * RECENT_RESERVATIONS_PAGE_SIZE;
+  const pendingSkip = Math.min(recentReservationsOffset, pendingRecentReservationsCount);
+  const pendingTake = Math.max(
+    0,
+    Math.min(
+      RECENT_RESERVATIONS_PAGE_SIZE,
+      pendingRecentReservationsCount - pendingSkip,
+    ),
+  );
+  const nonPendingSkip = Math.max(
+    0,
+    recentReservationsOffset - pendingRecentReservationsCount,
+  );
+  const nonPendingTake = Math.max(
+    0,
+    RECENT_RESERVATIONS_PAGE_SIZE - pendingTake,
+  );
+
+  const recentReservationSelect = {
+    reservation_id: true,
+    reservation_number: true,
+    first_name: true,
+    last_name: true,
+    createdAt: true,
+    status: true,
+    payment: {
+      select: {
+        status: true,
+        amount: true,
+      },
+    },
+    show: {
+      select: {
+        show_id: true,
+        show_name: true,
+        team: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    },
+    sched: {
+      select: {
+        sched_id: true,
+        sched_date: true,
+        sched_start_time: true,
+      },
+    },
+  } satisfies Prisma.ReservationSelect;
+
+  const [pendingRecentReservations, nonPendingRecentReservations] = await Promise.all([
+    pendingTake > 0
+      ? db.reservation.findMany({
+          where: {
+            ...recentReservationsWhere,
+            status: "PENDING",
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          skip: pendingSkip,
+          take: pendingTake,
+          select: recentReservationSelect,
+        })
+      : Promise.resolve([]),
+    nonPendingTake > 0
+      ? db.reservation.findMany({
+          where: {
+            ...recentReservationsWhere,
+            status: {
+              not: "PENDING",
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          skip: nonPendingSkip,
+          take: nonPendingTake,
+          select: recentReservationSelect,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const recentReservations = [
+    ...pendingRecentReservations,
+    ...nonPendingRecentReservations,
+  ];
+
   return buildAdminDashboardData({
-    filters: effectiveFilters,
+    filters: {
+      ...effectiveFilters,
+      recentPage: recentReservationsPage,
+    },
     filterOptions,
     reservationStatusRows,
     paymentStatusRows,
@@ -557,6 +655,9 @@ export async function getAdminDashboardData({
       amount: toNumber(row.amount),
       reservation: row.reservation,
     })),
+    recentReservationsPage,
+    recentReservationsPageSize: RECENT_RESERVATIONS_PAGE_SIZE,
+    recentReservationsTotal,
     recentReservations,
   });
 }

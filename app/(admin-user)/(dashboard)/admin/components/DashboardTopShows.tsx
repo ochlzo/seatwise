@@ -30,7 +30,7 @@ export function DashboardTopShows({
       <CardHeader>
         <CardTitle>Top shows</CardTitle>
         <CardDescription>
-          Ranked from grouped dashboard data instead of client-side sorting of a full admin list.
+          The most booked and highest earning shows in the selected date range.
         </CardDescription>
       </CardHeader>
       <CardContent>
