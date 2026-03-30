@@ -91,21 +91,19 @@ export default async function AdminDashboardPage({
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-            <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
               <DashboardReservationBreakdown breakdown={dashboard.reservationBreakdown} />
-              <DashboardTopShows
-                topShowsByReservations={dashboard.topShowsByReservations}
-                topShowsByRevenue={dashboard.topShowsByRevenue}
-              />
-            </div>
-            <div className="flex flex-col gap-6">
               <DashboardPaymentSummary
                 paymentSummary={dashboard.paymentSummary}
                 metricDateFields={dashboard.metricDateFields}
               />
-              <DashboardRecentReservations reservations={dashboard.recentReservations} />
             </div>
+            <DashboardTopShows
+              topShowsByReservations={dashboard.topShowsByReservations}
+              topShowsByRevenue={dashboard.topShowsByRevenue}
+            />
+            <DashboardRecentReservations reservations={dashboard.recentReservations} />
           </div>
         )}
       </div>
