@@ -640,18 +640,27 @@ export function ReserveSeatClient({
       event.returnValue = "";
     };
 
-    const handlePageHide = (event: PageTransitionEvent) => {
+    const handlePageHide = () => {
+      // Fire on ALL pagehide events — including persisted:true (iOS Safari bfcache).
+      // On iOS, "kill app in App Switcher" fires pagehide with persisted:true before
+      // the OS kills the process. We must beacon here — there is no later opportunity.
+      // If the user quickly returns via bfcache, handlePageShow will re-validate.
       if (!shouldGuard()) return;
-      // `persisted` is true when the page enters the bfcache (e.g. desktop tab switch).
-      // When false, the page is truly being discarded: tab close, browser close,
-      // or removing the browser from the recent-apps list on mobile.
-      if (event.persisted) return;
-      // Cancel any grace-period timer — pagehide supersedes visibilitychange.
       if (hiddenTimerRef.current !== null) {
         clearTimeout(hiddenTimerRef.current);
         hiddenTimerRef.current = null;
       }
       void terminateQueueSession(true);
+    };
+
+    // Fires when the page is restored from bfcache (persisted:true app-switch return).
+    // By this point we already sent a terminate beacon in pagehide.
+    // router.refresh() re-runs server components — the client remounts, calls /api/queue/active,
+    // and either shows "session expired" or (if beacon not yet processed) lets them continue.
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      hasTerminatedRef.current = false; // allow re-validation
+      router.refresh();
     };
 
     const handleOffline = () => {
@@ -723,6 +732,7 @@ export function ReserveSeatClient({
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
     window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
       window.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -730,6 +740,7 @@ export function ReserveSeatClient({
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("click", handleDocumentClick, true);
       if (hiddenTimerRef.current !== null) {
         clearTimeout(hiddenTimerRef.current);

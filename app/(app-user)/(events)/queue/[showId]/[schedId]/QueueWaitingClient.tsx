@@ -57,10 +57,38 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   const hasTerminatedRef = React.useRef(false);
   const allowNavigationRef = React.useRef(false);
   const hiddenTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors the latest terminable ticket payload into a ref so pagehide/visibilitychange
+  // handlers always read current values — event listeners close over stale state otherwise.
+  const terminationPayloadRef = React.useRef<{
+    ticketId: string;
+    activeToken: string | undefined;
+  } | null>(null);
 
   const hasTerminableTicket =
     !!status?.ticketId &&
     (status.status === "waiting" || status.status === "active" || status.status === "paused");
+
+  // Keep the ref in sync with the latest ticket state on every render.
+  terminationPayloadRef.current = hasTerminableTicket
+    ? { ticketId: status!.ticketId!, activeToken: status?.activeToken }
+    : null;
+
+  // Sends the terminate beacon using the ref so it is safe to call from pagehide
+  // (which captures a stale closure over React state).
+  const sendTerminationBeacon = React.useCallback(() => {
+    const p = terminationPayloadRef.current;
+    if (!p || hasTerminatedRef.current) return;
+    hasTerminatedRef.current = true;
+    const payload = JSON.stringify({
+      showId,
+      schedId,
+      guestId,
+      ticketId: p.ticketId,
+      activeToken: p.activeToken,
+    });
+    const blob = new Blob([payload], { type: "application/json" });
+    navigator.sendBeacon("/api/queue/terminate", blob);
+  }, [guestId, schedId, showId]);
 
   const terminateTicket = React.useCallback(
     async (preferBeacon: boolean) => {
@@ -205,18 +233,32 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       event.returnValue = "";
     };
 
-    const handlePageHide = (event: PageTransitionEvent) => {
+    const handlePageHide = () => {
+      // Fire on ALL pagehide events — including persisted:true (iOS Safari bfcache).
+      // On iOS, swiping Safari out of the App Switcher produces persisted:true, not false.
+      // We cannot distinguish that from a quick app-switch here, so we always beacon.
+      // If the user returns quickly (bfcache restore), pageshow will re-fetch server state.
       if (allowNavigationRef.current) return;
-      // `persisted` is true when the page enters the bfcache (tab switch on desktop).
-      // When false, the page is truly being discarded: tab close, browser close,
-      // or removing the browser from the recent-apps list on mobile.
-      if (event.persisted) return;
       // Cancel the visibility timer — pagehide supersedes it.
       if (hiddenTimerRef.current !== null) {
         clearTimeout(hiddenTimerRef.current);
         hiddenTimerRef.current = null;
       }
-      void terminateTicket(true);
+      sendTerminationBeacon();
+    };
+
+    // Called when the page is restored from bfcache (user quickly returned after pagehide).
+    // Re-fetching from the server ensures we show the correct post-termination state.
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return; // normal forward navigation, not a bfcache restore
+      // Cancel the visibility timer just in case it's still running.
+      if (hiddenTimerRef.current !== null) {
+        clearTimeout(hiddenTimerRef.current);
+        hiddenTimerRef.current = null;
+      }
+      // Allow hasTerminatedRef to reset so fetchStatus can re-populate state.
+      hasTerminatedRef.current = false;
+      void fetchStatus();
     };
 
     const handleDocumentClick = (event: MouseEvent) => {
@@ -272,11 +314,13 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     window.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
       window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("click", handleDocumentClick, true);
       if (hiddenTimerRef.current !== null) {
         clearTimeout(hiddenTimerRef.current);
