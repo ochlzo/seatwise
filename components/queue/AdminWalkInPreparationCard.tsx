@@ -276,10 +276,19 @@ export function AdminWalkInPreparationCard({
       router.push(nextPath);
     };
 
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        if (allowNavigationRef.current) return;
+        void terminateQueueSession(true);
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("click", handleDocumentClick, true);

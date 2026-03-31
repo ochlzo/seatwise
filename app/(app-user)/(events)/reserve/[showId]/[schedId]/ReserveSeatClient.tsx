@@ -684,12 +684,24 @@ export function ReserveSeatClient({
       router.push(nextPath);
     };
 
+    const handleVisibilityChange = () => {
+      // Protect users who are switching to banking apps or photo picker
+      if (step === "payment") return;
+      
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        if (!shouldGuard()) return;
+        void terminateQueueSession(true);
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
     window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);

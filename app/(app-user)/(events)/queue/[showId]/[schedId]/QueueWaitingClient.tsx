@@ -236,10 +236,19 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       router.push(nextPath);
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (allowNavigationRef.current) return;
+        void terminateTicket(true);
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("click", handleDocumentClick, true);
