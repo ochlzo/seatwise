@@ -114,11 +114,14 @@ export default function ShowsPage({
   const router = useRouter();
   const dispatch = useAppDispatch();
   const user = useAppSelector((state: RootState) => state.auth.user);
-  const teamDialogPortalContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const teamDialogPortalContainerRef = React.useRef<HTMLDivElement | null>(
+    null,
+  );
   const [shows, setShows] = React.useState<Show[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
-  const [isAssignTeamDialogOpen, setIsAssignTeamDialogOpen] = React.useState(false);
+  const [isAssignTeamDialogOpen, setIsAssignTeamDialogOpen] =
+    React.useState(false);
   const [isLoadingTeams, setIsLoadingTeams] = React.useState(false);
   const [isTeamComboboxOpen, setIsTeamComboboxOpen] = React.useState(false);
   const [teamSearchQuery, setTeamSearchQuery] = React.useState("");
@@ -207,13 +210,17 @@ export default function ShowsPage({
         throw new Error(data.error || "Failed to load teams.");
       }
 
-      setTeams((data.teams ?? []).map((team) => ({
-        team_id: team.team_id,
-        name: team.name,
-      })));
+      setTeams(
+        (data.teams ?? []).map((team) => ({
+          team_id: team.team_id,
+          name: team.name,
+        })),
+      );
       setHasLoadedTeams(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load teams.");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to load teams.",
+      );
     } finally {
       setIsLoadingTeams(false);
     }
@@ -236,12 +243,23 @@ export default function ShowsPage({
   }, [createPath, isSuperadmin, loadTeams, router, teams.length]);
 
   React.useEffect(() => {
-    if (!isSuperadmin || !isAssignTeamDialogOpen || hasLoadedTeams || isLoadingTeams) {
+    if (
+      !isSuperadmin ||
+      !isAssignTeamDialogOpen ||
+      hasLoadedTeams ||
+      isLoadingTeams
+    ) {
       return;
     }
 
     void loadTeams();
-  }, [hasLoadedTeams, isAssignTeamDialogOpen, isLoadingTeams, isSuperadmin, loadTeams]);
+  }, [
+    hasLoadedTeams,
+    isAssignTeamDialogOpen,
+    isLoadingTeams,
+    isSuperadmin,
+    loadTeams,
+  ]);
 
   const handleConfirmTeamAssignment = React.useCallback(() => {
     if (!selectedTeamId) return;
@@ -349,7 +367,7 @@ export default function ShowsPage({
             <CardDescription className="max-w-xs mx-auto mb-6">
               {hasFilters
                 ? "No shows match your current filter criteria. Try adjusting your filters or clearing them to see all shows."
-                : "Your stage is currently empty. Create your first show to start managing seats and ticket sales."}
+                : "Stage is currently empty. Once shows are available, they will appear here."}
             </CardDescription>
             {hasFilters && (
               <Button variant="outline" asChild size="sm">
@@ -539,7 +557,10 @@ export default function ShowsPage({
         )}
       </div>
 
-      <Dialog open={isAssignTeamDialogOpen} onOpenChange={setIsAssignTeamDialogOpen}>
+      <Dialog
+        open={isAssignTeamDialogOpen}
+        onOpenChange={setIsAssignTeamDialogOpen}
+      >
         <DialogContent className="overflow-visible sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Assign show to a team</DialogTitle>
@@ -608,10 +629,16 @@ export default function ShowsPage({
             </Combobox>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAssignTeamDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsAssignTeamDialogOpen(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleConfirmTeamAssignment} disabled={!selectedTeamId}>
+            <Button
+              onClick={handleConfirmTeamAssignment}
+              disabled={!selectedTeamId}
+            >
               Continue
             </Button>
           </DialogFooter>
@@ -620,4 +647,3 @@ export default function ShowsPage({
     </>
   );
 }
-

@@ -127,7 +127,13 @@ const EMPTY_CONTACT_ERRORS: ContactFieldErrors = {
   phoneNumber: null,
 };
 
-type ReservationStep = "seats" | "contact" | "ticket_design" | "payment" | "post_finalize" | "success";
+type ReservationStep =
+  | "seats"
+  | "contact"
+  | "ticket_design"
+  | "payment"
+  | "post_finalize"
+  | "success";
 
 type TicketDesignOption = {
   ticketTemplateId: string;
@@ -213,7 +219,9 @@ const getPendingTermination = (
 ): PendingTerminationPayload | null => {
   if (typeof window === "undefined") return null;
 
-  const raw = window.localStorage.getItem(getPendingTerminationKey(showScopeId));
+  const raw = window.localStorage.getItem(
+    getPendingTerminationKey(showScopeId),
+  );
   if (!raw) return null;
 
   try {
@@ -264,7 +272,10 @@ export function ReserveSeatClient({
     [queueParticipantId],
   );
   const showScopeId = `${showId}:${schedId}`;
-  const modeConfig = React.useMemo(() => getReservationRoomModeConfig(mode), [mode]);
+  const modeConfig = React.useMemo(
+    () => getReservationRoomModeConfig(mode),
+    [mode],
+  );
   const isWalkInMode = mode === "walk_in";
   const hasHandledExpiryRef = React.useRef(false);
   const hasShownOneMinuteToastRef = React.useRef(false);
@@ -306,11 +317,13 @@ export function ReserveSeatClient({
   });
   const [contactFieldErrors, setContactFieldErrors] =
     React.useState<ContactFieldErrors>(EMPTY_CONTACT_ERRORS);
-  const [ticketDesigns, setTicketDesigns] = React.useState<TicketDesignOption[]>(
-    initialTicketDesigns,
-  );
-  const [isLoadingTicketDesigns, setIsLoadingTicketDesigns] = React.useState(false);
-  const [ticketDesignsError, setTicketDesignsError] = React.useState<string | null>(null);
+  const [ticketDesigns, setTicketDesigns] =
+    React.useState<TicketDesignOption[]>(initialTicketDesigns);
+  const [isLoadingTicketDesigns, setIsLoadingTicketDesigns] =
+    React.useState(false);
+  const [ticketDesignsError, setTicketDesignsError] = React.useState<
+    string | null
+  >(null);
   const [selectedTicketTemplateVersionId, setSelectedTicketTemplateVersionId] =
     React.useState<string | null>(null);
 
@@ -349,7 +362,10 @@ export function ReserveSeatClient({
     const storageKey = `seatwise:active:${showScopeId}:${initialActiveSession.ticketId}`;
     const existing = window.sessionStorage.getItem(storageKey);
     if (!existing) {
-      window.sessionStorage.setItem(storageKey, JSON.stringify(initialActiveSession));
+      window.sessionStorage.setItem(
+        storageKey,
+        JSON.stringify(initialActiveSession),
+      );
     }
   }, [initialActiveSession, showScopeId]);
 
@@ -454,7 +470,14 @@ export function ReserveSeatClient({
   }, [expiresAt, isWalkInMode, now, notifyExpiry, showScopeId, step]);
 
   React.useEffect(() => {
-    if (isWalkInMode || step === "success" || !expiresAt || isLoading || !!error) return;
+    if (
+      isWalkInMode ||
+      step === "success" ||
+      !expiresAt ||
+      isLoading ||
+      !!error
+    )
+      return;
 
     const remainingMs = expiresAt - now;
     if (remainingMs <= 0) return;
@@ -502,10 +525,7 @@ export function ReserveSeatClient({
         const designs = data.designs ?? [];
         setTicketDesigns(designs);
       } catch (err) {
-        if (
-          err instanceof DOMException &&
-          err.name === "AbortError"
-        ) {
+        if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
         setTicketDesignsError(
@@ -523,11 +543,7 @@ export function ReserveSeatClient({
     return () => {
       abortController.abort();
     };
-  }, [
-    showId,
-    step,
-    ticketDesigns.length,
-  ]);
+  }, [showId, step, ticketDesigns.length]);
 
   const terminateQueueSession = React.useCallback(
     async (preferBeacon: boolean) => {
@@ -559,7 +575,9 @@ export function ReserveSeatClient({
         typeof navigator !== "undefined" &&
         typeof navigator.sendBeacon === "function"
       ) {
-        const blob = new Blob([serializedPayload], { type: "application/json" });
+        const blob = new Blob([serializedPayload], {
+          type: "application/json",
+        });
         if (navigator.sendBeacon("/api/queue/terminate", blob)) {
           clearPendingTermination(showScopeId);
         }
@@ -608,7 +626,9 @@ export function ReserveSeatClient({
 
     const shouldGuard = () => {
       if (allowNavigationRef.current) return false;
-      return !!getStoredSession(showScopeId) || !!getPendingTermination(showScopeId);
+      return (
+        !!getStoredSession(showScopeId) || !!getPendingTermination(showScopeId)
+      );
     };
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -746,7 +766,9 @@ export function ReserveSeatClient({
     setIsLeaving(true);
     allowNavigationRef.current = true;
     await terminateQueueSession(true);
-    router.push(isWalkInMode ? (returnHref ?? `/admin/shows/${showId}`) : `/${showId}`);
+    router.push(
+      isWalkInMode ? (returnHref ?? `/admin/shows/${showId}`) : `/${showId}`,
+    );
   };
 
   // Step transition: seats -> contact
@@ -1175,34 +1197,50 @@ export function ReserveSeatClient({
                   <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">Walk-in sale finalized</h3>
+                  <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                    Walk-in sale finalized
+                  </h3>
                   {reservationNumber && (
                     <p className="text-sm font-semibold text-foreground sm:text-base">
                       Reservation Number: {reservationNumber}
                     </p>
                   )}
                   <p className="text-sm text-muted-foreground sm:text-base">
-                    The sale has been saved. The room is still reserved for walk-in admissions until you admit again or exit the queue.
+                    The sale has been saved. The room is still reserved for
+                    walk-in admissions until you admit again or exit the queue.
                   </p>
                 </div>
                 <div className="rounded-xl border border-sidebar-border bg-sidebar p-5 text-left shadow-sm">
-                  <p className="mb-3 text-sm font-semibold text-sidebar-foreground">Completed Seats</p>
+                  <p className="mb-3 text-sm font-semibold text-sidebar-foreground">
+                    Completed Seats
+                  </p>
                   <div className="flex flex-wrap justify-center gap-2">
                     {selectedSeatIds.map((seatId) => (
                       <div
                         key={seatId}
                         className="inline-flex items-center justify-center rounded-md border border-sidebar-border/70 bg-background px-3 py-1.5 text-xs font-semibold shadow-sm"
                       >
-                        <span className="truncate">{seatNumbersById[seatId] ?? seatId}</span>
+                        <span className="truncate">
+                          {seatNumbersById[seatId] ?? seatId}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-                  <Button onClick={resetWalkInSaleDraft} className="sm:min-w-[200px]" size="lg">
+                  <Button
+                    onClick={resetWalkInSaleDraft}
+                    className="sm:min-w-[200px]"
+                    size="lg"
+                  >
                     Admit again
                   </Button>
-                  <Button onClick={handleLeaveReservationRoom} variant="outline" className="sm:min-w-[200px]" size="lg">
+                  <Button
+                    onClick={handleLeaveReservationRoom}
+                    variant="outline"
+                    className="sm:min-w-[200px]"
+                    size="lg"
+                  >
                     Exit queue
                   </Button>
                 </div>
@@ -1287,11 +1325,11 @@ export function ReserveSeatClient({
           )}
 
           {!isSuccess &&
-              !isWalkInPostFinalize &&
-              !isLoading &&
-              !error &&
-              hasActiveRoomAccess &&
-              step === "seats" && (
+            !isWalkInPostFinalize &&
+            !isLoading &&
+            !error &&
+            hasActiveRoomAccess &&
+            step === "seats" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="space-y-3 px-2 sm:px-3 md:px-4">
                   <SeatmapPreview
@@ -1524,7 +1562,8 @@ export function ReserveSeatClient({
                 <DialogTitle>Confirm contact details</DialogTitle>
                 <DialogDescription className="text-xs sm:text-sm">
                   Please make sure these details are correct before continuing
-                  to ticket design selection. Your confirmation and updates will be sent to{" "}
+                  to ticket design selection. Your confirmation and updates will
+                  be sent to{" "}
                   <span className="font-semibold text-foreground">
                     {contactDetails.email.trim()}
                   </span>{" "}
@@ -1584,7 +1623,9 @@ export function ReserveSeatClient({
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          {isWalkInMode && modeConfig.finalConfirmationTitle && modeConfig.finalConfirmationDescription ? (
+          {isWalkInMode &&
+          modeConfig.finalConfirmationTitle &&
+          modeConfig.finalConfirmationDescription ? (
             <Dialog
               open={isFinalizeWalkInDialogOpen}
               onOpenChange={handleFinalizeWalkInDialogChange}
@@ -1617,12 +1658,12 @@ export function ReserveSeatClient({
             </Dialog>
           ) : null}
 
-              {!isSuccess &&
-                  !isWalkInPostFinalize &&
-                  !isLoading &&
-                  !error &&
-                  hasActiveRoomAccess &&
-              step === "contact" && (
+          {!isSuccess &&
+            !isWalkInPostFinalize &&
+            !isLoading &&
+            !error &&
+            hasActiveRoomAccess &&
+            step === "contact" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="border-sidebar-border/70">
                   <CardHeader className="pb-3">
@@ -1749,12 +1790,12 @@ export function ReserveSeatClient({
               </div>
             )}
 
-              {!isSuccess &&
-                  !isWalkInPostFinalize &&
-                  !isLoading &&
-                  !error &&
-                  hasActiveRoomAccess &&
-              step === "ticket_design" && (
+          {!isSuccess &&
+            !isWalkInPostFinalize &&
+            !isLoading &&
+            !error &&
+            hasActiveRoomAccess &&
+            step === "ticket_design" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="border-sidebar-border/70">
                   <CardHeader className="pb-3">
@@ -1767,7 +1808,9 @@ export function ReserveSeatClient({
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <CardTitle className="text-base">Select Ticket Design</CardTitle>
+                      <CardTitle className="text-base">
+                        Select Ticket Design
+                      </CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -1778,7 +1821,9 @@ export function ReserveSeatClient({
                       </div>
                     ) : ticketDesignsError ? (
                       <div className="space-y-3">
-                        <p className="text-sm text-destructive">{ticketDesignsError}</p>
+                        <p className="text-sm text-destructive">
+                          {ticketDesignsError}
+                        </p>
                         <Button
                           type="button"
                           variant="outline"
@@ -1792,13 +1837,15 @@ export function ReserveSeatClient({
                       </div>
                     ) : ticketDesigns.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
-                        No ticket designs are available for this show. Please contact the organizer.
+                        No ticket designs are available for this show. Please
+                        contact the organizer.
                       </p>
                     ) : (
                       <div className="grid gap-3 sm:grid-cols-2">
                         {ticketDesigns.map((design) => {
                           const isSelected =
-                            selectedTicketTemplateVersionId === design.ticketTemplateVersionId;
+                            selectedTicketTemplateVersionId ===
+                            design.ticketTemplateVersionId;
                           return (
                             <button
                               key={design.ticketTemplateVersionId}
@@ -1832,9 +1879,8 @@ export function ReserveSeatClient({
                                 )}
                               </div>
                               <div className="space-y-1 px-3 py-2">
-                                <p className="text-sm font-medium">{design.templateName}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  Version {design.versionNumber}
+                                <p className="text-sm font-medium">
+                                  {design.templateName}
                                 </p>
                               </div>
                             </button>
@@ -1883,12 +1929,12 @@ export function ReserveSeatClient({
               </div>
             )}
 
-              {!isSuccess &&
-                  !isWalkInPostFinalize &&
-                  !isLoading &&
-                  !error &&
-                  hasActiveRoomAccess &&
-              step === "payment" && (
+          {!isSuccess &&
+            !isWalkInPostFinalize &&
+            !isLoading &&
+            !error &&
+            hasActiveRoomAccess &&
+            step === "payment" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="gap-0 border-sidebar-border/70">
                   <CardHeader className="pb-1 sm:pb-3">
@@ -1901,15 +1947,17 @@ export function ReserveSeatClient({
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <CardTitle className="text-base">{modeConfig.paymentTitle}</CardTitle>
+                      <CardTitle className="text-base">
+                        {modeConfig.paymentTitle}
+                      </CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent className="px-3 pt-0 sm:px-6">
                     {isWalkInMode ? (
                       <div className="space-y-4 pb-3 text-sm">
                         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
-                          Collect the in-person payment first, then confirm the amount and seats
-                          before finalizing the walk-in sale.
+                          Collect the in-person payment first, then confirm the
+                          amount and seats before finalizing the walk-in sale.
                         </div>
                         <div className="rounded-xl border border-sidebar-border/70 bg-muted/20 p-4">
                           <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -1917,26 +1965,36 @@ export function ReserveSeatClient({
                           </p>
                           <div className="mt-2 space-y-1">
                             <p className="font-medium">
-                              {contactDetails.firstName.trim()} {contactDetails.lastName.trim()}
+                              {contactDetails.firstName.trim()}{" "}
+                              {contactDetails.lastName.trim()}
                             </p>
-                            <p className="text-muted-foreground">{contactDetails.email.trim()}</p>
-                            <p className="text-muted-foreground">{contactDetails.phoneNumber.trim()}</p>
-                            <p className="text-muted-foreground">{contactDetails.address.trim()}</p>
+                            <p className="text-muted-foreground">
+                              {contactDetails.email.trim()}
+                            </p>
+                            <p className="text-muted-foreground">
+                              {contactDetails.phoneNumber.trim()}
+                            </p>
+                            <p className="text-muted-foreground">
+                              {contactDetails.address.trim()}
+                            </p>
                           </div>
                         </div>
                         <div className="rounded-xl border border-sidebar-border/70 bg-background p-4">
                           <p className="text-xs uppercase tracking-wide text-muted-foreground">
                             Point-of-sale total
                           </p>
-                          <p className="mt-2 text-3xl font-semibold">{formatCurrency(subtotal)}</p>
+                          <p className="mt-2 text-3xl font-semibold">
+                            {formatCurrency(subtotal)}
+                          </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {selectedSeatIds.length} seat{selectedSeatIds.length === 1 ? "" : "s"} selected
+                            {selectedSeatIds.length} seat
+                            {selectedSeatIds.length === 1 ? "" : "s"} selected
                           </p>
                         </div>
                         {walkInConfirmationComplete ? (
                           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200">
-                            Walk-in confirmation has been captured. Finalizing will save the sale
-                            and send the PDF ticket.
+                            Walk-in confirmation has been captured. Finalizing
+                            will save the sale and send the PDF ticket.
                           </div>
                         ) : null}
                       </div>
