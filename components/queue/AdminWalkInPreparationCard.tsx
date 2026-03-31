@@ -59,8 +59,49 @@ export function AdminWalkInPreparationCard({
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [isExiting, setIsExiting] = React.useState(false);
   const previousStateRef = React.useRef<WalkInEntryState | null>(null);
+  const allowNavigationRef = React.useRef(false);
+  const hasTerminatedRef = React.useRef(false);
   const roomHref = React.useMemo(() => buildAdminWalkInRoomHref(showId, schedId), [schedId, showId]);
   const returnHref = React.useMemo(() => `/admin/shows/${showId}`, [showId]);
+
+  const terminateQueueSession = React.useCallback(
+    async (preferBeacon: boolean) => {
+      if (!data?.ticketId || hasTerminatedRef.current) {
+        return;
+      }
+
+      hasTerminatedRef.current = true;
+      const payload = JSON.stringify({
+        showId,
+        schedId,
+        guestId: adminUserId,
+        ticketId: data.ticketId,
+        activeToken: data.state === "active_and_paused" ? data.activeToken : undefined,
+      });
+
+      if (
+        preferBeacon &&
+        typeof navigator !== "undefined" &&
+        typeof navigator.sendBeacon === "function"
+      ) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon("/api/queue/terminate", blob);
+        return;
+      }
+
+      try {
+        await fetch("/api/queue/terminate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+          keepalive: true,
+        });
+      } catch {
+        // Best effort
+      }
+    },
+    [adminUserId, data, schedId, showId],
+  );
 
   const prepareWalkIn = React.useCallback(
     async (background = false) => {
@@ -143,6 +184,7 @@ export function AdminWalkInPreparationCard({
 
     if (shouldAutoEnterWalkInRoom(previousState, data.state)) {
       persistActiveSession(activeSession);
+      allowNavigationRef.current = true;
       router.replace(roomHref);
     }
   }, [activeSession, data, persistActiveSession, roomHref, router]);
@@ -150,6 +192,7 @@ export function AdminWalkInPreparationCard({
   const handleEnterReservationRoom = () => {
     if (!activeSession) return;
     persistActiveSession(activeSession);
+    allowNavigationRef.current = true;
     router.push(roomHref);
   };
 
@@ -167,32 +210,105 @@ export function AdminWalkInPreparationCard({
 
     setIsExiting(true);
     setError(null);
+    allowNavigationRef.current = true;
 
     try {
-      const response = await fetch("/api/queue/terminate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          showId,
-          schedId,
-          guestId: adminUserId,
-          ticketId: data.ticketId,
-          activeToken: data.state === "active_and_paused" ? data.activeToken : undefined,
-        }),
-      });
-
-      const payload = (await response.json()) as { success?: boolean; error?: string };
-      if (!response.ok || !payload.success) {
-        throw new Error(payload.error || "Failed to exit queue.");
-      }
-
+      await terminateQueueSession(false);
       router.push(returnHref);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to exit queue.");
       setIsExiting(false);
     }
-  }, [adminUserId, data, isExiting, returnHref, router, schedId, showId]);
+  }, [data, isExiting, returnHref, router, terminateQueueSession]);
+
+  React.useEffect(() => {
+    hasTerminatedRef.current = false;
+    allowNavigationRef.current = false;
+  }, [showId, schedId, data?.ticketId]);
+
+  React.useEffect(() => {
+    const hasTerminableTicket = data?.state === "queued" || data?.state === "active_and_paused";
+    if (!hasTerminableTicket || !data?.ticketId) return;
+
+    const confirmLeaveMessage =
+      data.state === "active_and_paused"
+        ? "Leaving this page will release the reservation room and update the queue. Continue?"
+        : "Leaving this page will remove this walk-in from the queue. Continue?";
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowNavigationRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    const handlePageHide = () => {
+      if (allowNavigationRef.current) return;
+      void terminateQueueSession(true);
+    };
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (allowNavigationRef.current) return;
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      if (anchor.target && anchor.target !== "_self") return;
+      if (anchor.hasAttribute("download")) return;
+
+      const nextUrl = new URL(anchor.href, window.location.href);
+      const currentUrl = new URL(window.location.href);
+      if (nextUrl.origin !== currentUrl.origin) return;
+
+      const currentPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      if (currentPath === nextPath) return;
+      if (nextUrl.pathname === roomHref && data.state === "active_and_paused") return;
+
+      event.preventDefault();
+      const confirmed = window.confirm(confirmLeaveMessage);
+      if (!confirmed) return;
+
+      allowNavigationRef.current = true;
+      void terminateQueueSession(true);
+      router.push(nextPath);
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("click", handleDocumentClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [data?.state, data?.ticketId, roomHref, router, terminateQueueSession]);
+
+  React.useEffect(() => {
+    const hasTerminableTicket = data?.state === "queued" || data?.state === "active_and_paused";
+    if (!hasTerminableTicket || !data?.ticketId) return;
+
+    const backGuardMessage =
+      data.state === "active_and_paused"
+        ? "Leaving this page will release the reservation room and update the queue."
+        : "Leaving this page will remove this walk-in from the queue.";
+    const guardState = { __seatwiseQueueGuard: true, showId, schedId };
+
+    window.history.pushState(guardState, "", window.location.href);
+
+    const handlePopState = () => {
+      if (allowNavigationRef.current) return;
+      window.alert(backGuardMessage);
+      window.history.pushState(guardState, "", window.location.href);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [data?.state, data?.ticketId, schedId, showId]);
 
   return (
     <div className="space-y-6">

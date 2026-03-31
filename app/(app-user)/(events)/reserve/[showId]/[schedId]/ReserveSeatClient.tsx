@@ -621,7 +621,7 @@ export function ReserveSeatClient({
 
     const confirmLeaveMessage =
       "Leaving this page will remove you from the queue. Continue?";
-    const reservePath = `/reserve/${showId}/${schedId}`;
+    const reservePath = isWalkInMode ? `/admin/walk-in/${showId}/${schedId}/room` : `/reserve/${showId}/${schedId}`;
     const queuePath = `/queue/${showId}/${schedId}`;
 
     const shouldGuard = () => {
@@ -696,7 +696,36 @@ export function ReserveSeatClient({
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [router, schedId, showId, showScopeId, step, terminateQueueSession]);
+  }, [isWalkInMode, router, schedId, showId, showScopeId, step, terminateQueueSession]);
+
+  React.useEffect(() => {
+    if (step === "success") return;
+
+    const shouldGuard = () => {
+      if (allowNavigationRef.current) return false;
+      return (
+        !!getStoredSession(showScopeId) || !!getPendingTermination(showScopeId)
+      );
+    };
+
+    const backGuardMessage = "Leaving this page will remove you from the queue.";
+    const guardState = { __seatwiseQueueGuard: true, showId, schedId };
+
+    if (shouldGuard()) {
+      window.history.pushState(guardState, "", window.location.href);
+    }
+
+    const handlePopState = () => {
+      if (!shouldGuard()) return;
+      window.alert(backGuardMessage);
+      window.history.pushState(guardState, "", window.location.href);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [schedId, showId, showScopeId, step]);
 
   React.useEffect(() => {
     if (!getPendingTermination(showScopeId)) return;
