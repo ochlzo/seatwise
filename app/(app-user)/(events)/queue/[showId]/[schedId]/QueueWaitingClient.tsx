@@ -19,7 +19,7 @@ type QueueStatusResponse = {
   etaMs?: number;
   estimatedWaitMinutes?: number;
   activeToken?: string;
-  expiresAt?: number;
+  expiresAt?: number | null;
   message?: string;
   error?: string;
 };

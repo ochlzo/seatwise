@@ -22,7 +22,7 @@ export interface QueueHeartbeatResult {
   etaMs?: number;
   estimatedWaitMinutes?: number;
   activeToken?: string;
-  expiresAt?: number;
+  expiresAt?: number | null;
   pauseReason?: QueuePauseReason;
   message?: string;
 }
