@@ -8,7 +8,8 @@ interface JoinQueueParams {
     showScopeId: string; // format: "showId:schedId"
     userId: string;
     userName: string;
-    queueScore?: number;
+    // queueScore intentionally removed — every join/rejoin always lands at
+    // the tail of the queue (Date.now() score) to enforce last-rank behavior.
 }
 
 interface JoinQueueResult {
@@ -41,7 +42,6 @@ export async function joinQueue({
     showScopeId,
     userId,
     userName,
-    queueScore,
 }: JoinQueueParams): Promise<JoinQueueResult> {
     try {
         // 1. Check if user is already in queue
@@ -82,7 +82,7 @@ export async function joinQueue({
 
         // 2. Generate unique ticket ID
         const ticketId = uuidv4();
-        const timestamp = typeof queueScore === 'number' ? queueScore : Date.now();
+        const timestamp = Date.now(); // always last rank — queueScore override removed
 
         // 3. Create ticket data
         const ticket: TicketData = {

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import * as React from "react";
 import Image from "next/image";
@@ -247,7 +247,41 @@ const clearPendingTermination = (showScopeId: string) => {
   window.localStorage.removeItem(getPendingTerminationKey(showScopeId));
 };
 
-const HIDDEN_TERMINATE_DELAY_MS = 30_000;
+// ---------------------------------------------------------------------------
+// Background-checkpoint helpers
+// Used to measure how long the page was backgrounded in bfcache
+// (pagehide:persisted:true). JS timers cannot run while the page is frozen,
+// so we store a timestamp+graceMs in localStorage and evaluate it on pageshow.
+// ---------------------------------------------------------------------------
+const getBgCheckpointKey = (scopeId: string) =>
+  `seatwise:bg_checkpoint:${scopeId}`;
+
+const saveBgCheckpoint = (scopeId: string, graceMs: number) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    getBgCheckpointKey(scopeId),
+    JSON.stringify({ backgroundedAt: Date.now(), graceMs }),
+  );
+};
+
+const getBgCheckpoint = (
+  scopeId: string,
+): { backgroundedAt: number; graceMs: number } | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(getBgCheckpointKey(scopeId));
+    return raw
+      ? (JSON.parse(raw) as { backgroundedAt: number; graceMs: number })
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearBgCheckpoint = (scopeId: string) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(getBgCheckpointKey(scopeId));
+};
 
 export function ReserveSeatClient({
   showId,
@@ -284,7 +318,8 @@ export function ReserveSeatClient({
   const hasShownTwentySecondToastRef = React.useRef(false);
   const hasTerminatedRef = React.useRef(false);
   const allowNavigationRef = React.useRef(false);
-  const hiddenTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors expiresAt into a ref so pagehide handlers can read it without stale-closure issues.
+  const expiresAtRef = React.useRef<number | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isCompleting, setIsCompleting] = React.useState(false);
   const [isLeaving, setIsLeaving] = React.useState(false);
@@ -602,6 +637,9 @@ export function ReserveSeatClient({
     [participantId, schedId, showId, showScopeId],
   );
 
+  // Keep expiresAtRef in sync so frozen-closure pagehide handlers can read it.
+  expiresAtRef.current = expiresAt;
+
   React.useEffect(() => {
     hasTerminatedRef.current = false;
     allowNavigationRef.current = false;
@@ -640,26 +678,40 @@ export function ReserveSeatClient({
       event.returnValue = "";
     };
 
-    const handlePageHide = () => {
-      // Fire on ALL pagehide events — including persisted:true (iOS Safari bfcache).
-      // On iOS, "kill app in App Switcher" fires pagehide with persisted:true before
-      // the OS kills the process. We must beacon here — there is no later opportunity.
-      // If the user quickly returns via bfcache, handlePageShow will re-validate.
+    const handlePageHide = (event: PageTransitionEvent) => {
       if (!shouldGuard()) return;
-      if (hiddenTimerRef.current !== null) {
-        clearTimeout(hiddenTimerRef.current);
-        hiddenTimerRef.current = null;
+      if (event.persisted) {
+        // pagehide:persisted:true -- mobile app switch entering bfcache.
+        // JS is frozen; record a grace checkpoint so pageshow can measure
+        // how long the page was actually backgrounded.
+        const ea = expiresAtRef.current;
+        // Grace = 60 s, capped at remaining reservation window when active.
+        const graceMs = ea ? Math.min(60_000, ea - Date.now()) : 60_000;
+        saveBgCheckpoint(showScopeId, Math.max(0, graceMs));
+      } else {
+        // pagehide:persisted:false -- real close or navigation away.
+        // Terminate immediately via beacon.
+        void terminateQueueSession(true);
       }
-      void terminateQueueSession(true);
     };
 
-    // Fires when the page is restored from bfcache (persisted:true app-switch return).
-    // By this point we already sent a terminate beacon in pagehide.
-    // router.refresh() re-runs server components — the client remounts, calls /api/queue/active,
-    // and either shows "session expired" or (if beacon not yet processed) lets them continue.
+    // Called when the page is restored from bfcache (user returned from app switch).
+    // Check whether the grace period has elapsed; if so, terminate the session.
     const handlePageShow = (event: PageTransitionEvent) => {
-      if (!event.persisted) return;
-      hasTerminatedRef.current = false; // allow re-validation
+      if (!event.persisted) return; // normal forward navigation, not bfcache restore
+      const checkpoint = getBgCheckpoint(showScopeId);
+      if (checkpoint) {
+        clearBgCheckpoint(showScopeId);
+        if (Date.now() - checkpoint.backgroundedAt >= checkpoint.graceMs) {
+          // Grace period elapsed -- terminate now, then refresh to show expired UI.
+          hasTerminatedRef.current = false;
+          void terminateQueueSession(true);
+          router.refresh();
+          return;
+        }
+      }
+      // Came back within the grace window -- re-validate.
+      hasTerminatedRef.current = false;
       router.refresh();
     };
 
@@ -705,29 +757,10 @@ export function ReserveSeatClient({
       router.push(nextPath);
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        // On mobile, switching apps also fires visibilitychange:hidden.
-        // Use a grace-period timer so we only terminate after the user
-        // has been away for a meaningful duration (not just a quick app switch).
-        // Exception: walk-in mode does not have a user-facing session to protect.
-        if (!shouldGuard()) return;
-        if (hiddenTimerRef.current === null) {
-          hiddenTimerRef.current = setTimeout(() => {
-            hiddenTimerRef.current = null;
-            void terminateQueueSession(true);
-          }, HIDDEN_TERMINATE_DELAY_MS);
-        }
-      } else {
-        // User came back — cancel any pending termination.
-        if (hiddenTimerRef.current !== null) {
-          clearTimeout(hiddenTimerRef.current);
-          hiddenTimerRef.current = null;
-        }
-      }
-    };
+    // NOTE: visibilitychange is intentionally NOT used for termination.
+    // Tab switching and browser minimizing should NOT trigger termination per spec.
+    // Only pagehide (real close / mobile app switch) is actionable.
 
-    window.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
@@ -735,17 +768,12 @@ export function ReserveSeatClient({
     window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
-      window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("click", handleDocumentClick, true);
-      if (hiddenTimerRef.current !== null) {
-        clearTimeout(hiddenTimerRef.current);
-        hiddenTimerRef.current = null;
-      }
     };
   }, [isWalkInMode, router, schedId, showId, showScopeId, step, terminateQueueSession]);
 

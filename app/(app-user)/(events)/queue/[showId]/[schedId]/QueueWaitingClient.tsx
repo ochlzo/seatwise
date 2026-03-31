@@ -44,7 +44,41 @@ const toDisplayRank = (rank?: number) => {
   return rank;
 };
 
-const HIDDEN_TERMINATE_DELAY_MS = 30_000;
+// ---------------------------------------------------------------------------
+// Background-checkpoint helpers
+// Used to measure how long the page was backgrounded in bfcache
+// (pagehide:persisted:true). JS timers cannot run while the page is frozen,
+// so we store a timestamp+graceMs in localStorage and evaluate it on pageshow.
+// ---------------------------------------------------------------------------
+const getBgCheckpointKey = (scopeId: string) =>
+  `seatwise:bg_checkpoint:${scopeId}`;
+
+const saveBgCheckpoint = (scopeId: string, graceMs: number) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    getBgCheckpointKey(scopeId),
+    JSON.stringify({ backgroundedAt: Date.now(), graceMs }),
+  );
+};
+
+const getBgCheckpoint = (
+  scopeId: string,
+): { backgroundedAt: number; graceMs: number } | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(getBgCheckpointKey(scopeId));
+    return raw
+      ? (JSON.parse(raw) as { backgroundedAt: number; graceMs: number })
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const clearBgCheckpoint = (scopeId: string) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(getBgCheckpointKey(scopeId));
+};
 
 export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
   const router = useRouter();
@@ -56,8 +90,10 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   const [now, setNow] = React.useState<number>(0);
   const hasTerminatedRef = React.useRef(false);
   const allowNavigationRef = React.useRef(false);
-  const hiddenTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Mirrors the latest terminable ticket payload into a ref so pagehide/visibilitychange
+  // Mirrors the latest status into a ref so pagehide handlers can read
+  // expiresAt without capturing stale React state in the frozen closure.
+  const statusRef = React.useRef<QueueStatusResponse | null>(null);
+  // Mirrors the latest terminable ticket payload into a ref so pagehide
   // handlers always read current values — event listeners close over stale state otherwise.
   const terminationPayloadRef = React.useRef<{
     ticketId: string;
@@ -68,7 +104,8 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     !!status?.ticketId &&
     (status.status === "waiting" || status.status === "active" || status.status === "paused");
 
-  // Keep the ref in sync with the latest ticket state on every render.
+  // Keep both refs in sync with the latest state on every render.
+  statusRef.current = status;
   terminationPayloadRef.current = hasTerminableTicket
     ? { ticketId: status!.ticketId!, activeToken: status?.activeToken }
     : null;
@@ -233,30 +270,43 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       event.returnValue = "";
     };
 
-    const handlePageHide = () => {
-      // Fire on ALL pagehide events — including persisted:true (iOS Safari bfcache).
-      // On iOS, swiping Safari out of the App Switcher produces persisted:true, not false.
-      // We cannot distinguish that from a quick app-switch here, so we always beacon.
-      // If the user returns quickly (bfcache restore), pageshow will re-fetch server state.
+    const handlePageHide = (event: PageTransitionEvent) => {
       if (allowNavigationRef.current) return;
-      // Cancel the visibility timer — pagehide supersedes it.
-      if (hiddenTimerRef.current !== null) {
-        clearTimeout(hiddenTimerRef.current);
-        hiddenTimerRef.current = null;
+      if (event.persisted) {
+        // pagehide:persisted:true — mobile app switch entering bfcache.
+        // JS is frozen from this point; we cannot run a timer.
+        // Record a grace checkpoint in localStorage so pageshow can measure
+        // how long the page was actually backgrounded.
+        const p = terminationPayloadRef.current;
+        if (!p || hasTerminatedRef.current) return;
+        const ea = statusRef.current?.expiresAt;
+        // Grace = 60 s, capped at remaining reservation window when ticket is active.
+        const graceMs = ea ? Math.min(60_000, ea - Date.now()) : 60_000;
+        saveBgCheckpoint(`${showId}:${schedId}`, Math.max(0, graceMs));
+      } else {
+        // pagehide:persisted:false — real close or navigation away.
+        // Terminate immediately via beacon.
+        sendTerminationBeacon();
       }
-      sendTerminationBeacon();
     };
 
-    // Called when the page is restored from bfcache (user quickly returned after pagehide).
-    // Re-fetching from the server ensures we show the correct post-termination state.
+    // Called when the page is restored from bfcache (user returned from app switch).
+    // Check whether the grace period has elapsed; if so, terminate the session.
     const handlePageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return; // normal forward navigation, not a bfcache restore
-      // Cancel the visibility timer just in case it's still running.
-      if (hiddenTimerRef.current !== null) {
-        clearTimeout(hiddenTimerRef.current);
-        hiddenTimerRef.current = null;
+      const showScopeId = `${showId}:${schedId}`;
+      const checkpoint = getBgCheckpoint(showScopeId);
+      if (checkpoint) {
+        clearBgCheckpoint(showScopeId);
+        if (Date.now() - checkpoint.backgroundedAt >= checkpoint.graceMs) {
+          // Grace period elapsed — terminate now.
+          sendTerminationBeacon();
+          hasTerminatedRef.current = true;
+          void fetchStatus(); // will reflect not_joined / expired state
+          return;
+        }
       }
-      // Allow hasTerminatedRef to reset so fetchStatus can re-populate state.
+      // Came back within the grace window — re-validate server state.
       hasTerminatedRef.current = false;
       void fetchStatus();
     };
@@ -290,44 +340,22 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       router.push(nextPath);
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
-        if (allowNavigationRef.current) return;
-        // On mobile, switching apps also fires visibilitychange:hidden.
-        // Use a grace-period timer so we only terminate after the user
-        // has been away for a meaningful duration (not just a quick app switch).
-        if (hiddenTimerRef.current === null) {
-          hiddenTimerRef.current = setTimeout(() => {
-            hiddenTimerRef.current = null;
-            void terminateTicket(true);
-          }, HIDDEN_TERMINATE_DELAY_MS);
-        }
-      } else {
-        // User came back — cancel any pending termination.
-        if (hiddenTimerRef.current !== null) {
-          clearTimeout(hiddenTimerRef.current);
-          hiddenTimerRef.current = null;
-        }
-      }
-    };
+    // NOTE: visibilitychange is intentionally NOT used for termination.
+    // Tab switching and browser minimizing both fire visibilitychange:hidden
+    // but should NOT trigger termination or a grace timer per product spec.
+    // Only pagehide (real close / mobile app switch) is actionable.
 
-    window.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
-      window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("click", handleDocumentClick, true);
-      if (hiddenTimerRef.current !== null) {
-        clearTimeout(hiddenTimerRef.current);
-        hiddenTimerRef.current = null;
-      }
     };
-  }, [hasTerminableTicket, router, schedId, showId, status?.status, terminateTicket]);
+  }, [hasTerminableTicket, router, schedId, showId, status?.status, terminateTicket, fetchStatus, sendTerminationBeacon]);
 
   React.useEffect(() => {
     if (!hasTerminableTicket) return;
