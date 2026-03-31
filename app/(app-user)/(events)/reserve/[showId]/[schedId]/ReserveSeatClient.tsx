@@ -247,6 +247,8 @@ const clearPendingTermination = (showScopeId: string) => {
   window.localStorage.removeItem(getPendingTerminationKey(showScopeId));
 };
 
+const HIDDEN_TERMINATE_DELAY_MS = 30_000;
+
 export function ReserveSeatClient({
   showId,
   schedId,
@@ -282,6 +284,7 @@ export function ReserveSeatClient({
   const hasShownTwentySecondToastRef = React.useRef(false);
   const hasTerminatedRef = React.useRef(false);
   const allowNavigationRef = React.useRef(false);
+  const hiddenTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isCompleting, setIsCompleting] = React.useState(false);
   const [isLeaving, setIsLeaving] = React.useState(false);
@@ -637,8 +640,17 @@ export function ReserveSeatClient({
       event.returnValue = "";
     };
 
-    const handlePageHide = () => {
+    const handlePageHide = (event: PageTransitionEvent) => {
       if (!shouldGuard()) return;
+      // `persisted` is true when the page enters the bfcache (e.g. desktop tab switch).
+      // When false, the page is truly being discarded: tab close, browser close,
+      // or removing the browser from the recent-apps list on mobile.
+      if (event.persisted) return;
+      // Cancel any grace-period timer — pagehide supersedes visibilitychange.
+      if (hiddenTimerRef.current !== null) {
+        clearTimeout(hiddenTimerRef.current);
+        hiddenTimerRef.current = null;
+      }
       void terminateQueueSession(true);
     };
 
@@ -685,12 +697,24 @@ export function ReserveSeatClient({
     };
 
     const handleVisibilityChange = () => {
-      // Protect users who are switching to banking apps or photo picker
-      if (step === "payment") return;
-      
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      if (document.visibilityState === "hidden") {
+        // On mobile, switching apps also fires visibilitychange:hidden.
+        // Use a grace-period timer so we only terminate after the user
+        // has been away for a meaningful duration (not just a quick app switch).
+        // Exception: walk-in mode does not have a user-facing session to protect.
         if (!shouldGuard()) return;
-        void terminateQueueSession(true);
+        if (hiddenTimerRef.current === null) {
+          hiddenTimerRef.current = setTimeout(() => {
+            hiddenTimerRef.current = null;
+            void terminateQueueSession(true);
+          }, HIDDEN_TERMINATE_DELAY_MS);
+        }
+      } else {
+        // User came back — cancel any pending termination.
+        if (hiddenTimerRef.current !== null) {
+          clearTimeout(hiddenTimerRef.current);
+          hiddenTimerRef.current = null;
+        }
       }
     };
 
@@ -707,6 +731,10 @@ export function ReserveSeatClient({
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("click", handleDocumentClick, true);
+      if (hiddenTimerRef.current !== null) {
+        clearTimeout(hiddenTimerRef.current);
+        hiddenTimerRef.current = null;
+      }
     };
   }, [isWalkInMode, router, schedId, showId, showScopeId, step, terminateQueueSession]);
 

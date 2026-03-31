@@ -44,6 +44,8 @@ const toDisplayRank = (rank?: number) => {
   return rank;
 };
 
+const HIDDEN_TERMINATE_DELAY_MS = 30_000;
+
 export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
   const router = useRouter();
   const guestId = React.useMemo(() => getOrCreateGuestId(), []);
@@ -54,6 +56,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   const [now, setNow] = React.useState<number>(0);
   const hasTerminatedRef = React.useRef(false);
   const allowNavigationRef = React.useRef(false);
+  const hiddenTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hasTerminableTicket =
     !!status?.ticketId &&
@@ -202,8 +205,17 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       event.returnValue = "";
     };
 
-    const handlePageHide = () => {
+    const handlePageHide = (event: PageTransitionEvent) => {
       if (allowNavigationRef.current) return;
+      // `persisted` is true when the page enters the bfcache (tab switch on desktop).
+      // When false, the page is truly being discarded: tab close, browser close,
+      // or removing the browser from the recent-apps list on mobile.
+      if (event.persisted) return;
+      // Cancel the visibility timer — pagehide supersedes it.
+      if (hiddenTimerRef.current !== null) {
+        clearTimeout(hiddenTimerRef.current);
+        hiddenTimerRef.current = null;
+      }
       void terminateTicket(true);
     };
 
@@ -239,7 +251,21 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         if (allowNavigationRef.current) return;
-        void terminateTicket(true);
+        // On mobile, switching apps also fires visibilitychange:hidden.
+        // Use a grace-period timer so we only terminate after the user
+        // has been away for a meaningful duration (not just a quick app switch).
+        if (hiddenTimerRef.current === null) {
+          hiddenTimerRef.current = setTimeout(() => {
+            hiddenTimerRef.current = null;
+            void terminateTicket(true);
+          }, HIDDEN_TERMINATE_DELAY_MS);
+        }
+      } else {
+        // User came back — cancel any pending termination.
+        if (hiddenTimerRef.current !== null) {
+          clearTimeout(hiddenTimerRef.current);
+          hiddenTimerRef.current = null;
+        }
       }
     };
 
@@ -252,6 +278,10 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("click", handleDocumentClick, true);
+      if (hiddenTimerRef.current !== null) {
+        clearTimeout(hiddenTimerRef.current);
+        hiddenTimerRef.current = null;
+      }
     };
   }, [hasTerminableTicket, router, schedId, showId, status?.status, terminateTicket]);
 
