@@ -5,7 +5,11 @@ import { redis } from "@/lib/clients/redis";
 import { getQueuePauseState, pauseQueueChannel } from "@/lib/queue/closeQueue";
 import { getQueueStatus } from "@/lib/queue/getQueueStatus";
 import { joinQueue } from "@/lib/queue/joinQueue";
-import { getCurrentActiveSession, promoteNextInQueue } from "@/lib/queue/queueLifecycle";
+import {
+  getCurrentActiveSession,
+  persistWalkInActiveSession,
+  promoteNextInQueue,
+} from "@/lib/queue/queueLifecycle";
 import { prisma } from "@/lib/prisma";
 import {
   getEffectiveSchedStatus,
@@ -110,6 +114,10 @@ export async function POST(request: NextRequest) {
     const currentActiveSession = await getCurrentActiveSession(showScopeId);
 
     if (currentActiveSession?.userId === adminContext.userId) {
+      const activeWalkInSession = await persistWalkInActiveSession({
+        showScopeId,
+        session: currentActiveSession,
+      });
       const pauseState = await getQueuePauseState(showScopeId);
       if (pauseState?.reason !== "walk_in") {
         await pauseQueueChannel(showScopeId, "walk_in");
@@ -120,10 +128,10 @@ export async function POST(request: NextRequest) {
         state: "active_and_paused",
         showScopeId,
         showName: schedule.show.show_name,
-        ticketId: currentActiveSession.ticketId,
-        activeToken: currentActiveSession.activeToken,
-        expiresAt: currentActiveSession.expiresAt,
-        message: "Walk-in reservation window is active. Queue has been paused for waiting customers.",
+        ticketId: activeWalkInSession.ticketId,
+        activeToken: activeWalkInSession.activeToken,
+        expiresAt: activeWalkInSession.expiresAt,
+        message: "Walk-in reservation room is active. Queue will stay paused until you finalize or exit.",
       });
     }
 
@@ -197,6 +205,10 @@ export async function POST(request: NextRequest) {
     const activeAfterPromotion = promotion.activeSession ?? (await getCurrentActiveSession(showScopeId));
 
     if (activeAfterPromotion?.userId === adminContext.userId) {
+      const activeWalkInSession = await persistWalkInActiveSession({
+        showScopeId,
+        session: activeAfterPromotion,
+      });
       await pauseQueueChannel(showScopeId, "walk_in");
 
       return NextResponse.json({
@@ -204,10 +216,10 @@ export async function POST(request: NextRequest) {
         state: "active_and_paused",
         showScopeId,
         showName: schedule.show.show_name,
-        ticketId: activeAfterPromotion.ticketId,
-        activeToken: activeAfterPromotion.activeToken,
-        expiresAt: activeAfterPromotion.expiresAt,
-        message: "Walk-in reservation window is active. Queue has been paused for waiting customers.",
+        ticketId: activeWalkInSession.ticketId,
+        activeToken: activeWalkInSession.activeToken,
+        expiresAt: activeWalkInSession.expiresAt,
+        message: "Walk-in reservation room is active. Queue will stay paused until you finalize or exit.",
       });
     }
 

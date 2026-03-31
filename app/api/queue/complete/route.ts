@@ -432,12 +432,14 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to generate a unique reservation number. Please try again.");
     }
 
-    const promotion = await timer.time("redis.complete_and_promote_next", () =>
-      completeActiveSessionAndPromoteNext({
-        showScopeId,
-        session: validation.session!,
-      }),
-    );
+    const promotion = isWalkInMode
+      ? { promoted: false, activeSession: validation.session, ticket: undefined }
+      : await timer.time("redis.complete_and_promote_next", () =>
+          completeActiveSessionAndPromoteNext({
+            showScopeId,
+            session: validation.session!,
+          }),
+        );
 
     const baseUrl =
       process.env.NEXT_PUBLIC_BASE_URL?.trim() ||

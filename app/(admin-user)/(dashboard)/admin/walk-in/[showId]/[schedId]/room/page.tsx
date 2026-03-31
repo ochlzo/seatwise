@@ -75,13 +75,6 @@ export default async function AdminWalkInRoomPage({
     notFound();
   }
 
-  const scheduleLabel = new Intl.DateTimeFormat("en-PH", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(schedule.sched_start_time);
-
   const categoriesById = new Map<string, SeatmapCategoryPayload>();
   const seatCategoryAssignments: Record<string, string> = {};
   const seatNumbersById: Record<string, string> = {};
@@ -109,12 +102,15 @@ export default async function AdminWalkInRoomPage({
     <>
       <PageHeader
         title="Walk-In Reservation"
-        parentLabel={schedule.show.show_name}
-        parentHref={`/admin/shows/${schedule.show.show_id}`}
-        breadcrumbLabelOverrides={{
-          [schedule.show.show_id]: schedule.show.show_name,
-          [schedule.sched_id]: scheduleLabel,
-        }}
+        breadcrumbs={[
+          { label: "Home", href: "/" },
+          { label: "Admin Dashboard", href: "/admin" },
+          {
+            label: schedule.show.show_name,
+            href: `/admin/shows/${schedule.show.show_id}`,
+          },
+          { label: "Walk-In" },
+        ]}
         rightSlot={
           <>
             <ThemeSwithcer />

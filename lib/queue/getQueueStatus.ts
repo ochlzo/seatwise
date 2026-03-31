@@ -1,5 +1,6 @@
 import { redis } from "@/lib/clients/redis";
 import type { ActiveSession, QueuePauseReason, TicketData } from "@/lib/types/queue";
+import { isActiveSessionLive } from "./activeSessionPolicy";
 import { getQueuePauseState } from "./closeQueue";
 import { resolveVisibleQueueRank } from "./visibleRank";
 
@@ -75,7 +76,7 @@ export async function getQueueStatus({
   if (
     activeSession &&
     activeSession.userId === userId &&
-    activeSession.expiresAt > Date.now()
+    isActiveSessionLive(activeSession)
   ) {
     return {
       success: true,

@@ -44,8 +44,16 @@ import {
 type StoredActiveSession = {
   ticketId: string;
   activeToken: string;
-  expiresAt: number;
+  expiresAt: number | null;
   showScopeId: string;
+};
+
+type PendingTerminationPayload = {
+  showId: string;
+  schedId: string;
+  guestId: string;
+  ticketId: string;
+  activeToken: string;
 };
 
 type ActiveValidationResponse = {
@@ -56,9 +64,10 @@ type ActiveValidationResponse = {
   session?: {
     ticketId: string;
     activeToken: string;
-    expiresAt: number;
+    expiresAt: number | null;
     startedAt: number;
     userId: string;
+    mode: "online" | "walk_in";
   };
 };
 
@@ -118,7 +127,7 @@ const EMPTY_CONTACT_ERRORS: ContactFieldErrors = {
   phoneNumber: null,
 };
 
-type ReservationStep = "seats" | "contact" | "ticket_design" | "payment" | "success";
+type ReservationStep = "seats" | "contact" | "ticket_design" | "payment" | "post_finalize" | "success";
 
 type TicketDesignOption = {
   ticketTemplateId: string;
@@ -196,6 +205,40 @@ const clearStoredSession = (showScopeId: string) => {
   keysToRemove.forEach((key) => window.sessionStorage.removeItem(key));
 };
 
+const getPendingTerminationKey = (showScopeId: string) =>
+  `seatwise:pending-termination:${showScopeId}`;
+
+const getPendingTermination = (
+  showScopeId: string,
+): PendingTerminationPayload | null => {
+  if (typeof window === "undefined") return null;
+
+  const raw = window.localStorage.getItem(getPendingTerminationKey(showScopeId));
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw) as PendingTerminationPayload;
+  } catch {
+    return null;
+  }
+};
+
+const setPendingTermination = (
+  showScopeId: string,
+  payload: PendingTerminationPayload,
+) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    getPendingTerminationKey(showScopeId),
+    JSON.stringify(payload),
+  );
+};
+
+const clearPendingTermination = (showScopeId: string) => {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(getPendingTerminationKey(showScopeId));
+};
+
 export function ReserveSeatClient({
   showId,
   schedId,
@@ -270,6 +313,29 @@ export function ReserveSeatClient({
   const [ticketDesignsError, setTicketDesignsError] = React.useState<string | null>(null);
   const [selectedTicketTemplateVersionId, setSelectedTicketTemplateVersionId] =
     React.useState<string | null>(null);
+
+  const resetWalkInSaleDraft = React.useCallback(() => {
+    setSelectedSeatIds([]);
+    setPendingSeatId(null);
+    setSelectionMessage(null);
+    setStep("seats");
+    setScreenshotUrl("");
+    setReservationNumber(null);
+    setWalkInConfirmationComplete(false);
+    setContactDetails({
+      firstName: "",
+      lastName: "",
+      address: "",
+      email: "",
+      phoneNumber: "",
+    });
+    setContactFieldErrors(EMPTY_CONTACT_ERRORS);
+    setTicketDesigns(initialTicketDesigns);
+    setTicketDesignsError(null);
+    setSelectedTicketTemplateVersionId(null);
+    setError(null);
+    router.refresh();
+  }, [initialTicketDesigns, router]);
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -358,7 +424,7 @@ export function ReserveSeatClient({
         }
 
         setShowName(data.showName || "");
-        setExpiresAt(data.session.expiresAt);
+        setExpiresAt(data.session.expiresAt ?? null);
         setIsLoading(false);
       } catch (err) {
         setError(
@@ -374,21 +440,21 @@ export function ReserveSeatClient({
   }, [initialScheduleSnapshot, participantId, schedId, showId, showScopeId]);
 
   React.useEffect(() => {
-    if (step === "success" || !expiresAt) return;
+    if (isWalkInMode || step === "success" || !expiresAt) return;
     if (expiresAt > now) return;
     if (hasHandledExpiryRef.current) return;
 
     hasHandledExpiryRef.current = true;
     const stored = getStoredSession(showScopeId);
-    if (stored) {
+    if (!isWalkInMode && stored) {
       void notifyExpiry(stored);
     }
     clearStoredSession(showScopeId);
     setError(EXPIRED_WINDOW_MESSAGE);
-  }, [expiresAt, now, notifyExpiry, showScopeId, step]);
+  }, [expiresAt, isWalkInMode, now, notifyExpiry, showScopeId, step]);
 
   React.useEffect(() => {
-    if (step === "success" || !expiresAt || isLoading || !!error) return;
+    if (isWalkInMode || step === "success" || !expiresAt || isLoading || !!error) return;
 
     const remainingMs = expiresAt - now;
     if (remainingMs <= 0) return;
@@ -404,7 +470,7 @@ export function ReserveSeatClient({
       hasShownOneMinuteToastRef.current = true;
       toast.warning("1 minute left");
     }
-  }, [error, expiresAt, isLoading, now, step]);
+  }, [error, expiresAt, isLoading, isWalkInMode, now, step]);
 
   React.useEffect(() => {
     setSelectedSeatIds([]);
@@ -465,27 +531,38 @@ export function ReserveSeatClient({
 
   const terminateQueueSession = React.useCallback(
     async (preferBeacon: boolean) => {
+      const pending = getPendingTermination(showScopeId);
       const stored = getStoredSession(showScopeId);
-      if (!stored || hasTerminatedRef.current) {
+      const payload =
+        pending ??
+        (stored
+          ? {
+              showId,
+              schedId,
+              guestId: participantId,
+              ticketId: stored.ticketId,
+              activeToken: stored.activeToken,
+            }
+          : null);
+
+      if (!payload || (hasTerminatedRef.current && !pending)) {
         return;
       }
 
+      clearStoredSession(showScopeId);
+      setPendingTermination(showScopeId, payload);
       hasTerminatedRef.current = true;
-      const payload = JSON.stringify({
-        showId,
-        schedId,
-        guestId: participantId,
-        ticketId: stored.ticketId,
-        activeToken: stored.activeToken,
-      });
+      const serializedPayload = JSON.stringify(payload);
 
       if (
         preferBeacon &&
         typeof navigator !== "undefined" &&
         typeof navigator.sendBeacon === "function"
       ) {
-        const blob = new Blob([payload], { type: "application/json" });
-        navigator.sendBeacon("/api/queue/terminate", blob);
+        const blob = new Blob([serializedPayload], { type: "application/json" });
+        if (navigator.sendBeacon("/api/queue/terminate", blob)) {
+          clearPendingTermination(showScopeId);
+        }
         return;
       }
 
@@ -493,9 +570,10 @@ export function ReserveSeatClient({
         await fetch("/api/queue/terminate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: payload,
+          body: serializedPayload,
           keepalive: true,
         });
+        clearPendingTermination(showScopeId);
       } catch {
         // Best effort termination during navigation.
       }
@@ -530,7 +608,7 @@ export function ReserveSeatClient({
 
     const shouldGuard = () => {
       if (allowNavigationRef.current) return false;
-      return !!getStoredSession(showScopeId);
+      return !!getStoredSession(showScopeId) || !!getPendingTermination(showScopeId);
     };
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -542,6 +620,17 @@ export function ReserveSeatClient({
     const handlePageHide = () => {
       if (!shouldGuard()) return;
       void terminateQueueSession(true);
+    };
+
+    const handleOffline = () => {
+      if (!shouldGuard()) return;
+      void terminateQueueSession(false);
+      setError("Connection lost. Your queue session has been closed.");
+    };
+
+    const handleOnline = () => {
+      if (!getPendingTermination(showScopeId)) return;
+      void terminateQueueSession(false);
     };
 
     const handleDocumentClick = (event: MouseEvent) => {
@@ -576,14 +665,24 @@ export function ReserveSeatClient({
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
     window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("click", handleDocumentClick, true);
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("click", handleDocumentClick, true);
     };
   }, [router, schedId, showId, showScopeId, step, terminateQueueSession]);
+
+  React.useEffect(() => {
+    if (!getPendingTermination(showScopeId)) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    void terminateQueueSession(false);
+  }, [showScopeId, terminateQueueSession]);
 
   const goToQueue = () => {
     if (isWalkInMode) {
@@ -644,38 +743,10 @@ export function ReserveSeatClient({
   };
 
   const handleLeaveReservationRoom = async () => {
-    const stored = getStoredSession(showScopeId);
     setIsLeaving(true);
     allowNavigationRef.current = true;
-    clearStoredSession(showScopeId);
+    await terminateQueueSession(true);
     router.push(isWalkInMode ? (returnHref ?? `/admin/shows/${showId}`) : `/${showId}`);
-
-    if (stored) {
-      const payload = JSON.stringify({
-        showId,
-        schedId,
-        guestId: participantId,
-        ticketId: stored.ticketId,
-        activeToken: stored.activeToken,
-      });
-
-      if (
-        typeof navigator !== "undefined" &&
-        typeof navigator.sendBeacon === "function"
-      ) {
-        const blob = new Blob([payload], { type: "application/json" });
-        navigator.sendBeacon("/api/queue/terminate", blob);
-      } else {
-        void fetch("/api/queue/terminate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: payload,
-          keepalive: true,
-        }).catch(() => {
-          // Best effort leave on navigation.
-        });
-      }
-    }
   };
 
   // Step transition: seats -> contact
@@ -878,12 +949,16 @@ export function ReserveSeatClient({
         throw new Error(data.error || "Failed to complete reservation session");
       }
 
-      clearStoredSession(showScopeId);
       setReservationNumber(data.reservationNumber ?? null);
       if (data.warning) {
         toast.warning(data.warning);
       }
-      setStep("success");
+      if (isWalkInMode) {
+        setStep("post_finalize");
+      } else {
+        clearStoredSession(showScopeId);
+        setStep("success");
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -895,9 +970,11 @@ export function ReserveSeatClient({
     }
   };
 
-  const remaining = expiresAt ? expiresAt - now : 0;
+  const remaining = !isWalkInMode && expiresAt ? expiresAt - now : 0;
   const isExpiredWindowError = error === EXPIRED_WINDOW_MESSAGE;
   const isSuccess = step === "success";
+  const isWalkInPostFinalize = isWalkInMode && step === "post_finalize";
+  const hasActiveRoomAccess = isWalkInMode || !!expiresAt;
 
   const categoriesById = React.useMemo(
     () =>
@@ -1026,7 +1103,7 @@ export function ReserveSeatClient({
                     {showName || "Validating your queue access token..."}
                   </CardTitle>
                 </div>
-                {!isLoading && !error && expiresAt && (
+                {!isLoading && !error && !isWalkInMode && expiresAt && (
                   <div className="flex items-center gap-2">
                     {step === "seats" && (
                       <Badge
@@ -1091,14 +1168,56 @@ export function ReserveSeatClient({
             />
           )}
 
-          {!isSuccess && isLoading && (
+          {isWalkInPostFinalize && (
+            <div className="flex min-h-[50vh] items-center justify-center px-4 py-8">
+              <div className="mx-auto flex w-full max-w-xl flex-col gap-6 text-center">
+                <div className="rounded-full bg-green-100 p-4 text-green-600 dark:bg-green-900/40 dark:text-green-400 mx-auto">
+                  <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-2xl font-bold tracking-tight sm:text-3xl">Walk-in sale finalized</h3>
+                  {reservationNumber && (
+                    <p className="text-sm font-semibold text-foreground sm:text-base">
+                      Reservation Number: {reservationNumber}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground sm:text-base">
+                    The sale has been saved. The room is still reserved for walk-in admissions until you admit again or exit the queue.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-sidebar-border bg-sidebar p-5 text-left shadow-sm">
+                  <p className="mb-3 text-sm font-semibold text-sidebar-foreground">Completed Seats</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {selectedSeatIds.map((seatId) => (
+                      <div
+                        key={seatId}
+                        className="inline-flex items-center justify-center rounded-md border border-sidebar-border/70 bg-background px-3 py-1.5 text-xs font-semibold shadow-sm"
+                      >
+                        <span className="truncate">{seatNumbersById[seatId] ?? seatId}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+                  <Button onClick={resetWalkInSaleDraft} className="sm:min-w-[200px]" size="lg">
+                    Admit again
+                  </Button>
+                  <Button onClick={handleLeaveReservationRoom} variant="outline" className="sm:min-w-[200px]" size="lg">
+                    Exit queue
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isSuccess && !isWalkInPostFinalize && isLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Verifying active session...
             </div>
           )}
 
-          {!isSuccess && !isLoading && error && (
+          {!isSuccess && !isWalkInPostFinalize && !isLoading && error && (
             <div
               className={
                 isExpiredWindowError
@@ -1168,10 +1287,11 @@ export function ReserveSeatClient({
           )}
 
           {!isSuccess &&
-            !isLoading &&
-            !error &&
-            expiresAt &&
-            step === "seats" && (
+              !isWalkInPostFinalize &&
+              !isLoading &&
+              !error &&
+              hasActiveRoomAccess &&
+              step === "seats" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="space-y-3 px-2 sm:px-3 md:px-4">
                   <SeatmapPreview
@@ -1497,11 +1617,12 @@ export function ReserveSeatClient({
             </Dialog>
           ) : null}
 
-          {!isSuccess &&
-            !isLoading &&
-            !error &&
-            expiresAt &&
-            step === "contact" && (
+              {!isSuccess &&
+                  !isWalkInPostFinalize &&
+                  !isLoading &&
+                  !error &&
+                  hasActiveRoomAccess &&
+              step === "contact" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="border-sidebar-border/70">
                   <CardHeader className="pb-3">
@@ -1628,11 +1749,12 @@ export function ReserveSeatClient({
               </div>
             )}
 
-          {!isSuccess &&
-            !isLoading &&
-            !error &&
-            expiresAt &&
-            step === "ticket_design" && (
+              {!isSuccess &&
+                  !isWalkInPostFinalize &&
+                  !isLoading &&
+                  !error &&
+                  hasActiveRoomAccess &&
+              step === "ticket_design" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="border-sidebar-border/70">
                   <CardHeader className="pb-3">
@@ -1761,11 +1883,12 @@ export function ReserveSeatClient({
               </div>
             )}
 
-          {!isSuccess &&
-            !isLoading &&
-            !error &&
-            expiresAt &&
-            step === "payment" && (
+              {!isSuccess &&
+                  !isWalkInPostFinalize &&
+                  !isLoading &&
+                  !error &&
+                  hasActiveRoomAccess &&
+              step === "payment" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="gap-0 border-sidebar-border/70">
                   <CardHeader className="pb-1 sm:pb-3">

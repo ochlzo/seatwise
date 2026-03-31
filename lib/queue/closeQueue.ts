@@ -2,6 +2,7 @@ import { redis } from '@/lib/clients/redis';
 import { ably } from '@/lib/clients/ably';
 import type { ActiveSession } from '@/lib/types/queue';
 import type { QueueClosedEvent, QueuePauseReason } from '@/lib/types/queue';
+import { isActiveSessionLive } from '@/lib/queue/activeSessionPolicy';
 import {
     createQueuePauseState,
     parseQueuePauseState,
@@ -204,7 +205,7 @@ const queueHasLiveActiveSession = async (showScopeId: string) => {
 
     for (const activeKey of activeKeys) {
         const session = parseActiveSession(await redis.get(activeKey));
-        if (!session || session.expiresAt <= now) {
+        if (!session || !isActiveSessionLive(session, now)) {
             await redis.del(activeKey);
             continue;
         }

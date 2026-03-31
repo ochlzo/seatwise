@@ -12,8 +12,9 @@ export interface ActiveSession {
     userId: string;
     ticketId: string;
     activeToken: string;
-    expiresAt: number;
+    expiresAt: number | null;
     startedAt: number;
+    mode: 'online' | 'walk_in';
 }
 
 export type QueuePauseReason = 'postponed' | 'walk_in';
@@ -42,7 +43,7 @@ export interface QueueMoveEvent {
 export interface QueueActiveEvent {
     type: 'ACTIVE';
     activeToken: string;
-    expiresAt: number;
+    expiresAt: number | null;
 }
 
 export interface QueueClosedEvent {

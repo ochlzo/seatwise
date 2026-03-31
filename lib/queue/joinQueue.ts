@@ -1,6 +1,7 @@
 import { redis } from '@/lib/clients/redis';
 import { v4 as uuidv4 } from 'uuid';
 import type { TicketData } from '@/lib/types/queue';
+import { isActiveSessionLive } from './activeSessionPolicy';
 import { resolveVisibleQueueRank } from './visibleRank';
 
 interface JoinQueueParams {
@@ -57,9 +58,13 @@ export async function joinQueue({
                 redis.get(existingActiveKey),
             ]);
 
-            const existingActive = parseJson<{ expiresAt?: number }>(existingActiveRaw);
+            const existingActive = parseJson<{ expiresAt?: number | null; mode?: 'online' | 'walk_in' }>(existingActiveRaw);
             const hasValidActive =
-                !!existingActive?.expiresAt && existingActive.expiresAt > Date.now();
+                !!existingActive &&
+                isActiveSessionLive({
+                    expiresAt: existingActive.expiresAt ?? null,
+                    mode: existingActive.mode === 'walk_in' ? 'walk_in' : 'online',
+                });
             const hasQueueEntry = existingRank !== null;
             const hasTicketData = !!parseJson<TicketData>(existingTicketRaw);
 

@@ -1,5 +1,6 @@
 import { redis } from "@/lib/clients/redis";
 import type { ActiveSession } from "@/lib/types/queue";
+import { isActiveSessionLive } from "@/lib/queue/activeSessionPolicy";
 import { expireQueueSession } from "@/lib/queue/queueLifecycle";
 
 export interface ValidateActiveSessionParams {
@@ -63,7 +64,7 @@ export async function validateActiveSession({
     return { valid: false, reason: "ticket_mismatch", session };
   }
 
-  if (session.expiresAt <= Date.now()) {
+  if (!isActiveSessionLive(session)) {
     await expireQueueSession({
       showScopeId,
       ticketId: session.ticketId || ticketId,

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { redis } from "@/lib/clients/redis";
 import { ably } from "@/lib/clients/ably";
+import { isActiveSessionLive, isPersistentActiveSession } from "@/lib/queue/activeSessionPolicy";
 import { clearWalkInPauseState } from "@/lib/queue/closeQueue";
 import {
   getActiveSessionKey,
@@ -92,6 +93,13 @@ const setCurrentActiveSession = async ({
   const pointerKey = getActiveSessionPointerKey(showScopeId);
 
   await redis.set(activeKey, JSON.stringify(session));
+
+  if (isPersistentActiveSession(session)) {
+    await redis.persist(activeKey);
+    await redis.set(pointerKey, session.ticketId);
+    return;
+  }
+
   await redis.expire(activeKey, ACTIVE_SESSION_TTL_SECONDS);
   await redis.set(pointerKey, session.ticketId, {
     ex: ACTIVE_SESSION_TTL_SECONDS,
@@ -185,6 +193,27 @@ export async function expireQueueSession({
   return promoteNextInQueue({ showScopeId });
 }
 
+export async function persistWalkInActiveSession({
+  showScopeId,
+  session,
+}: {
+  showScopeId: string;
+  session: ActiveSession;
+}) {
+  const persistentSession: ActiveSession = {
+    ...session,
+    mode: "walk_in",
+    expiresAt: null,
+  };
+
+  await setCurrentActiveSession({
+    showScopeId,
+    session: persistentSession,
+  });
+
+  return persistentSession;
+}
+
 export const getCurrentActiveSession = async (
   showScopeId: string,
 ): Promise<ActiveSession | null> => {
@@ -208,7 +237,7 @@ export const getCurrentActiveSession = async (
     return null;
   }
 
-  if (active.expiresAt <= now) {
+  if (!isActiveSessionLive(active, now)) {
     const expiredTicketId = active.ticketId || pointedTicketId;
 
     await expireQueueSession({
@@ -309,6 +338,7 @@ export async function promoteNextInQueue({
         activeToken: randomUUID(),
         startedAt: now,
         expiresAt: now + ACTIVE_WINDOW_MS,
+        mode: "online",
       };
 
       await setCurrentActiveSession({

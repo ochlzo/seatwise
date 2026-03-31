@@ -38,6 +38,7 @@ type PageHeaderProps = {
   title: string;
   parentLabel?: string;
   parentHref?: string;
+  breadcrumbs?: Array<{ label: string; href?: string }>;
   breadcrumbLabelOverrides?: Record<string, string>;
   rightSlot?: React.ReactNode;
   className?: string;
@@ -47,6 +48,7 @@ export function PageHeader({
   title,
   parentLabel,
   parentHref,
+  breadcrumbs: explicitBreadcrumbs,
   breadcrumbLabelOverrides,
   rightSlot,
   className,
@@ -61,6 +63,13 @@ export function PageHeader({
     !["dashboard", "account", "profile", "all-events"].includes(segments[0]);
 
   const breadcrumbs = React.useMemo(() => {
+    if (explicitBreadcrumbs?.length) {
+      return explicitBreadcrumbs.map((crumb, index) => ({
+        label: crumb.label,
+        href: crumb.href ?? `#breadcrumb-${index}`,
+      }));
+    }
+
     const segments = pathname.split("/").filter(Boolean);
     const crumbs: { label: string; href: string }[] = [];
 
@@ -109,7 +118,7 @@ export function PageHeader({
     });
 
     return crumbs;
-  }, [breadcrumbLabelOverrides, pathname, parentHref, parentLabel]);
+  }, [breadcrumbLabelOverrides, explicitBreadcrumbs, pathname, parentHref, parentLabel]);
 
   return (
     <StickyHeader
@@ -147,7 +156,9 @@ export function PageHeader({
                 <React.Fragment key={crumb.href}>
                   <BreadcrumbItem>
                     {isLast ? (
-                      <BreadcrumbPage className="text-xs sm:text-sm font-medium">{title || crumb.label}</BreadcrumbPage>
+                      <BreadcrumbPage className="text-xs sm:text-sm font-medium">
+                        {explicitBreadcrumbs?.length ? crumb.label : title || crumb.label}
+                      </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink href={crumb.href} className="text-xs sm:text-sm">
                         {crumb.label}

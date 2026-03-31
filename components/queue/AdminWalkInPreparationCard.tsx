@@ -31,7 +31,7 @@ type PrepareResponse =
       showName?: string;
       ticketId?: string;
       activeToken?: string;
-      expiresAt?: number;
+      expiresAt?: number | null;
       message?: string;
     };
 
@@ -42,13 +42,6 @@ type ErrorResponse = {
 };
 
 const POLL_MS = 4000;
-
-const formatDuration = (ms: number) => {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-};
 
 export function AdminWalkInPreparationCard({
   showId,
@@ -65,7 +58,6 @@ export function AdminWalkInPreparationCard({
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [isExiting, setIsExiting] = React.useState(false);
-  const [now, setNow] = React.useState(() => Date.now());
   const previousStateRef = React.useRef<WalkInEntryState | null>(null);
   const roomHref = React.useMemo(() => buildAdminWalkInRoomHref(showId, schedId), [schedId, showId]);
   const returnHref = React.useMemo(() => `/admin/shows/${showId}`, [showId]);
@@ -114,28 +106,15 @@ export function AdminWalkInPreparationCard({
     return () => window.clearInterval(timer);
   }, [data?.state, prepareWalkIn]);
 
-  React.useEffect(() => {
-    if (data?.state !== "active_and_paused" || !data.expiresAt) return;
-    setNow(Date.now());
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [data]);
-
-  const expiresInMs =
-    data?.state === "active_and_paused" && data.expiresAt
-      ? data.expiresAt - now
-      : null;
-
   const activeSession = React.useMemo(
     () =>
       data?.state === "active_and_paused" &&
       data.ticketId &&
-      data.activeToken &&
-      data.expiresAt
+      data.activeToken
         ? {
             ticketId: data.ticketId,
             activeToken: data.activeToken,
-            expiresAt: data.expiresAt,
+            expiresAt: data.expiresAt ?? null,
             showScopeId: data.showScopeId,
           }
         : null,
@@ -314,14 +293,12 @@ export function AdminWalkInPreparationCard({
                   <div className="text-lg font-semibold">{data.ticketId ?? "-"}</div>
                 </div>
                 <div className="rounded-md border border-emerald-200/70 bg-background/70 p-3 dark:border-emerald-900/60">
-                  <div className="text-xs text-muted-foreground">Reservation window</div>
-                  <div className="text-lg font-semibold">
-                    {typeof expiresInMs === "number" ? formatDuration(expiresInMs) : "--:--"}
-                  </div>
+                  <div className="text-xs text-muted-foreground">Queue state</div>
+                  <div className="text-lg font-semibold">Paused for this walk-in</div>
                 </div>
                 <div className="rounded-md border border-emerald-200/70 bg-background/70 p-3 dark:border-emerald-900/60">
                   <div className="text-xs text-muted-foreground">Room status</div>
-                  <div className="text-lg font-semibold">Ready for seat selection</div>
+                  <div className="text-lg font-semibold">Open until finalized or exited</div>
                 </div>
               </div>
               <div className="flex justify-end gap-2">

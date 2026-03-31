@@ -307,23 +307,30 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
               )}
 
               {status.status === "waiting" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">You&apos;re in</div>
-                    <div className="text-2xl font-semibold">
-                      {toDisplayRank(status.rank) ? `#${toDisplayRank(status.rank)}` : "-"}
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-md border p-3">
+                      <div className="text-xs text-muted-foreground">You&apos;re in</div>
+                      <div className="text-2xl font-semibold">
+                        {toDisplayRank(status.rank) ? `#${toDisplayRank(status.rank)}` : "-"}
+                      </div>
+                      {status.rank === 1 && (
+                        <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                          Almost there - someone is still finalizing their seat, and you&apos;re next in line.
+                        </p>
+                      )}
                     </div>
-                    {status.rank === 1 && (
-                      <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                        Almost there - someone is still finalizing their seat, and you&apos;re next in line.
-                      </p>
-                    )}
+                    <div className="rounded-md border p-3">
+                      <div className="text-xs text-muted-foreground">Estimated wait</div>
+                      <div className="text-2xl font-semibold">
+                        ~{status.estimatedWaitMinutes ?? Math.ceil((status.etaMs ?? 0) / 60000)} min
+                      </div>
+                    </div>
                   </div>
-                  <div className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">Estimated wait</div>
-                    <div className="text-2xl font-semibold">
-                      ~{status.estimatedWaitMinutes ?? Math.ceil((status.etaMs ?? 0) / 60000)} min
-                    </div>
+                  <div className="flex items-center justify-start gap-2">
+                    <Button variant="outline" onClick={goBackToShow}>
+                      Exit queue
+                    </Button>
                   </div>
                 </div>
               )}
