@@ -230,9 +230,18 @@ export const getCurrentActiveSession = async (
   const active = parseJson<ActiveSession>(raw);
 
   if (!active) {
+    // The active key was evicted (by Redis TTL or memory pressure) but the
+    // pointer key survived. Clean up artifacts and promote the next user so
+    // the queue does not stall. The promotion lock keeps this idempotent even
+    // if multiple concurrent heartbeats hit this branch simultaneously.
     await cleanupQueueTicketArtifacts({
       showScopeId,
       ticketId: pointedTicketId,
+    });
+    await expireQueueSession({
+      showScopeId,
+      ticketId: pointedTicketId,
+      promoteNext: true,
     });
     return null;
   }
@@ -240,11 +249,16 @@ export const getCurrentActiveSession = async (
   if (!isActiveSessionLive(active, now)) {
     const expiredTicketId = active.ticketId || pointedTicketId;
 
+    // promoteNext: true — when a mobile user closes their browser and the
+    // ACTIVE_WINDOW_MS elapses, no client-side terminate ever fires. Any
+    // subsequent heartbeat from a waiting user (via getQueueStatus) will hit
+    // this path and trigger promotion. The distribute promotion lock in
+    // promoteNextInQueue ensures only one concurrent caller wins.
     await expireQueueSession({
       showScopeId,
       ticketId: expiredTicketId,
       userId: active.userId,
-      promoteNext: false,
+      promoteNext: true,
     });
     return null;
   }
@@ -312,7 +326,7 @@ export async function promoteNextInQueue({
       return { promoted: false };
     }
 
-      const queueKey = getQueueKey(showScopeId);
+    const queueKey = getQueueKey(showScopeId);
 
     for (let attempts = 0; attempts < 10; attempts += 1) {
       const head = (await redis.zrange(queueKey, 0, 0)) as string[];
@@ -361,6 +375,46 @@ export async function promoteNextInQueue({
   } finally {
     await redis.del(lockKey);
   }
+}
+
+/**
+ * Ensures the queue makes forward progress on every waiting-user heartbeat.
+ *
+ * Covers all three stall scenarios that `getCurrentActiveSession` alone cannot
+ * fully address:
+ *
+ *  A. Both `active_pointer` and `active` key expired together after Redis TTL
+ *     (the most common mobile-browser-close scenario). `getCurrentActiveSession`
+ *     returns null from branch A and no promotion fires — this function catches
+ *     that case by calling `promoteNextInQueue` whenever `getCurrentActiveSession`
+ *     returns null and the queue is non-empty.
+ *
+ *  B. Active key evicted before pointer (partial eviction). Now handled inside
+ *     `getCurrentActiveSession` itself (see patch above), but `ensureQueueProgress`
+ *     adds a second safety net.
+ *
+ *  C. Session expired with key still present (expiresAt in the past). Already
+ *     handled inside `getCurrentActiveSession` (promoteNext: true).
+ *
+ * Race-safety: `promoteNextInQueue` acquires a distributed lock (`nx: true`).
+ * Only one concurrent caller promotes; the rest return `{ promoted: false }`.
+ * Walk-in persistent sessions and paused queues are guarded inside
+ * `promoteNextInQueue` — this function does not bypass either guard.
+ */
+export async function ensureQueueProgress(showScopeId: string): Promise<void> {
+  const activeSession = await getCurrentActiveSession(showScopeId);
+
+  // If there is a live active session (online or walk-in), nothing to do.
+  if (activeSession) {
+    return;
+  }
+
+  // No active session — attempt to promote the next waiting user.
+  // promoteNextInQueue internally re-checks for:
+  //   • an active pause (postponed or walk_in)
+  //   • a live active session (double-check inside the lock)
+  // so this call is fully idempotent and safe to call from concurrent requests.
+  await promoteNextInQueue({ showScopeId });
 }
 
 export async function completeActiveSessionAndPromoteNext({

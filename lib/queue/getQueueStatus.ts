@@ -2,6 +2,7 @@ import { redis } from "@/lib/clients/redis";
 import type { ActiveSession, QueuePauseReason, TicketData } from "@/lib/types/queue";
 import { isActiveSessionLive } from "./activeSessionPolicy";
 import { getQueuePauseState } from "./closeQueue";
+import { ensureQueueProgress } from "./queueLifecycle";
 import { resolveVisibleQueueRank } from "./visibleRank";
 
 export type QueueHeartbeatStatus =
@@ -90,7 +91,23 @@ export async function getQueueStatus({
     };
   }
 
-  const queueKey = `seatwise:queue:${showScopeId}`;
+  // Self-heal the queue on every waiting-user heartbeat.
+  //
+  // ensureQueueProgress covers all three stall scenarios:
+  //   A. Both pointer + active key expired simultaneously (mobile browser killed
+  //      after ACTIVE_WINDOW_MS) — getCurrentActiveSession returns null from the
+  //      no-pointer branch and cannot promote; ensureQueueProgress calls
+  //      promoteNextInQueue directly to unstick the queue.
+  //   B. Active key evicted before pointer (partial Redis eviction) — now
+  //      handled inside getCurrentActiveSession with promoteNext: true, and
+  //      ensureQueueProgress adds a second safety net.
+  //   C. Session expiresAt is past but key still present — handled inside
+  //      getCurrentActiveSession with promoteNext: true.
+  //
+  // The distributed promotion lock (nx: true, 3 s TTL) guarantees idempotency:
+  // only one concurrent heartbeat wins the lock and promotes; the rest no-op.
+  await ensureQueueProgress(showScopeId);
+
   const rank = await resolveVisibleQueueRank({ showScopeId, ticketId });
 
   if (rank === null) {
