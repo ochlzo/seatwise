@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { TicketData } from '@/lib/types/queue';
 import { isActiveSessionLive } from './activeSessionPolicy';
 import { resolveVisibleQueueRank } from './visibleRank';
+import { touchQueuePresence } from './sessionPresence';
 
 interface JoinQueueParams {
     showScopeId: string; // format: "showId:schedId"
@@ -109,6 +110,11 @@ export async function joinQueue({
             showScopeId,
             ticketId,
         })) ?? 1;
+
+        await touchQueuePresence({
+            showScopeId,
+            userId,
+        });
 
         // 8. Calculate estimated wait time
         const avgServiceMsKey = `seatwise:metrics:avg_service_ms:${showScopeId}`;

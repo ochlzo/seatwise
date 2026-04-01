@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
+import { clearQueuePresence } from "@/lib/queue/sessionPresence";
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest) {
     const promotion = await completeActiveSessionAndPromoteNext({
       showScopeId,
       session: validation.session,
+    });
+    await clearQueuePresence({
+      showScopeId,
+      userId: guestId,
     });
 
     return NextResponse.json({

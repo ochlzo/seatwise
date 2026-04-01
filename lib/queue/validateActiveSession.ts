@@ -2,6 +2,7 @@ import { redis } from "@/lib/clients/redis";
 import type { ActiveSession } from "@/lib/types/queue";
 import { isActiveSessionLive } from "@/lib/queue/activeSessionPolicy";
 import { expireQueueSession } from "@/lib/queue/queueLifecycle";
+import { hasFreshQueuePresence, touchQueuePresence } from "@/lib/queue/sessionPresence";
 
 export interface ValidateActiveSessionParams {
   showScopeId: string;
@@ -60,6 +61,20 @@ export async function validateActiveSession({
     return { valid: false, reason: "missing" };
   }
 
+  const hasPresence = await hasFreshQueuePresence({
+    showScopeId,
+    userId,
+  });
+
+  if (!hasPresence) {
+    await expireQueueSession({
+      showScopeId,
+      ticketId: session.ticketId || ticketId,
+      userId: session.userId || userId,
+    });
+    return { valid: false, reason: "missing", session };
+  }
+
   if (session.userId !== userId || session.ticketId !== ticketId) {
     return { valid: false, reason: "ticket_mismatch", session };
   }
@@ -77,6 +92,11 @@ export async function validateActiveSession({
   if (session.activeToken !== activeToken) {
     return { valid: false, reason: "token_mismatch", session };
   }
+
+  await touchQueuePresence({
+    showScopeId,
+    userId,
+  });
 
   return { valid: true, session };
 }

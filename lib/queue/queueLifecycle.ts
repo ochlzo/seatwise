@@ -3,6 +3,7 @@ import { redis } from "@/lib/clients/redis";
 import { ably } from "@/lib/clients/ably";
 import { isActiveSessionLive, isPersistentActiveSession } from "@/lib/queue/activeSessionPolicy";
 import { clearWalkInPauseState } from "@/lib/queue/closeQueue";
+import { clearQueuePresence, hasFreshQueuePresence, touchQueuePresence } from "@/lib/queue/sessionPresence";
 import {
   getActiveSessionKey,
   getActiveSessionPointerKey,
@@ -108,12 +109,20 @@ const setCurrentActiveSession = async ({
   if (isPersistentActiveSession(session)) {
     await redis.persist(activeKey);
     await redis.set(pointerKey, session.ticketId);
+    await touchQueuePresence({
+      showScopeId,
+      userId: session.userId,
+    });
     return;
   }
 
   await redis.expire(activeKey, ACTIVE_SESSION_TTL_SECONDS);
   await redis.set(pointerKey, session.ticketId, {
     ex: ACTIVE_SESSION_POINTER_TTL_SECONDS,
+  });
+  await touchQueuePresence({
+    showScopeId,
+    userId: session.userId,
   });
 };
 
@@ -158,6 +167,10 @@ const cleanupQueueTicketArtifacts = async ({
     if (currentlyMappedTicketId === ticketId) {
       await redis.hdel(userTicketKey, resolvedUserId);
     }
+    await clearQueuePresence({
+      showScopeId,
+      userId: resolvedUserId,
+    });
   }
 };
 
@@ -252,6 +265,21 @@ export const getCurrentActiveSession = async (
     await expireQueueSession({
       showScopeId,
       ticketId: pointedTicketId,
+      promoteNext: true,
+    });
+    return null;
+  }
+
+  const hasPresence = await hasFreshQueuePresence({
+    showScopeId,
+    userId: active.userId,
+  });
+
+  if (!hasPresence) {
+    await expireQueueSession({
+      showScopeId,
+      ticketId: active.ticketId || pointedTicketId,
+      userId: active.userId,
       promoteNext: true,
     });
     return null;
@@ -353,6 +381,27 @@ export async function promoteNextInQueue({
       if (!ticket || !ticket.userId) {
         await redis.zrem(queueKey, ticketId);
         await redis.del(ticketKey);
+        continue;
+      }
+
+      const hasPresence = await hasFreshQueuePresence({
+        showScopeId,
+        userId: ticket.userId,
+      });
+
+      if (!hasPresence) {
+        await redis.zrem(queueKey, ticketId);
+        await redis.del(ticketKey);
+        await redis.del(getActiveSessionKey(showScopeId, ticketId));
+        const userTicketKey = getUserTicketKey(showScopeId);
+        const mappedTicketId = (await redis.hget(userTicketKey, ticket.userId)) as string | null;
+        if (mappedTicketId === ticketId) {
+          await redis.hdel(userTicketKey, ticket.userId);
+        }
+        await clearQueuePresence({
+          showScopeId,
+          userId: ticket.userId,
+        });
         continue;
       }
 

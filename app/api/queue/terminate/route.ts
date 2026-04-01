@@ -3,6 +3,7 @@ import { redis } from "@/lib/clients/redis";
 import { ably } from "@/lib/clients/ably";
 import type { ActiveSession, QueueMoveEvent } from "@/lib/types/queue";
 import { completeActiveSessionAndPromoteNext, promoteNextInQueue } from "@/lib/queue/queueLifecycle";
+import { clearQueuePresence } from "@/lib/queue/sessionPresence";
 
 const parseJson = <T>(value: unknown): T | null => {
   if (value == null) return null;
@@ -123,6 +124,10 @@ export async function POST(request: NextRequest) {
     if (currentlyMappedTicketId === resolvedTicketId) {
       await redis.hdel(userTicketKey, guestId);
     }
+    await clearQueuePresence({
+      showScopeId,
+      userId: guestId,
+    });
 
     if (removedFromQueue > 0) {
       await publishQueueMoveEvent(showScopeId);

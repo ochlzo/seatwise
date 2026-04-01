@@ -3,6 +3,7 @@ import type { ActiveSession, QueuePauseReason, TicketData } from "@/lib/types/qu
 import { isActiveSessionLive } from "./activeSessionPolicy";
 import { getQueuePauseState } from "./closeQueue";
 import { ensureQueueProgress } from "./queueLifecycle";
+import { touchQueuePresence } from "./sessionPresence";
 import { resolveVisibleQueueRank } from "./visibleRank";
 
 export type QueueHeartbeatStatus =
@@ -69,6 +70,11 @@ export async function getQueueStatus({
   const ticketKey = `seatwise:ticket:${showScopeId}:${ticketId}`;
   const ticketJson = await redis.get(ticketKey);
   const ticket = parseJson<TicketData>(ticketJson);
+
+  await touchQueuePresence({
+    showScopeId,
+    userId,
+  });
 
   const activeKey = `seatwise:active:${showScopeId}:${ticketId}`;
   const activeJson = await redis.get(activeKey);

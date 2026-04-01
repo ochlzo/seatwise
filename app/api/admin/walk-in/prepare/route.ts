@@ -10,6 +10,7 @@ import {
   persistWalkInActiveSession,
   promoteNextInQueue,
 } from "@/lib/queue/queueLifecycle";
+import { clearQueuePresence } from "@/lib/queue/sessionPresence";
 import { prisma } from "@/lib/prisma";
 import {
   getEffectiveSchedStatus,
@@ -37,6 +38,10 @@ const clearStaleAdminTicketArtifacts = async ({
 }) => {
   await redis.hdel(`seatwise:user_ticket:${showScopeId}`, userId);
   await redis.del(`seatwise:ticket:${showScopeId}:${ticketId}`);
+  await clearQueuePresence({
+    showScopeId,
+    userId,
+  });
 };
 
 export async function POST(request: NextRequest) {

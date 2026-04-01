@@ -456,6 +456,71 @@ export function ReserveSeatClient({
   }, [initialScheduleSnapshot, participantId, schedId, showId, showScopeId]);
 
   React.useEffect(() => {
+    if (step === "success" || !!error || (!isWalkInMode && !expiresAt)) {
+      return;
+    }
+
+    const heartbeat = async () => {
+      const stored = getStoredSession(showScopeId);
+      if (!stored) {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/queue/active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            showId,
+            schedId,
+            guestId: participantId,
+            ticketId: stored.ticketId,
+            activeToken: stored.activeToken,
+            scheduleSnapshot: initialScheduleSnapshot,
+          }),
+        });
+
+        const data = (await response.json()) as {
+          success: boolean;
+          valid?: boolean;
+          error?: string;
+        };
+
+        if (!response.ok || !data.success || data.valid === false) {
+          if (data.valid === false) {
+            clearStoredSession(showScopeId);
+            setError(EXPIRED_WINDOW_MESSAGE);
+            return;
+          }
+
+          if (data.error) {
+            setError(data.error);
+          }
+          return;
+        }
+      } catch {
+        // Best effort heartbeat; the next poll or interaction can retry.
+      }
+    };
+
+    const timer = window.setInterval(() => {
+      void heartbeat();
+    }, 15_000);
+
+    return () => window.clearInterval(timer);
+  }, [
+    expiresAt,
+    initialScheduleSnapshot,
+    isWalkInMode,
+    participantId,
+    schedId,
+    showId,
+    showScopeId,
+    step,
+    error,
+  ]);
+
+  React.useEffect(() => {
     if (isWalkInMode || step === "success" || !expiresAt) return;
     if (expiresAt > now) return;
     if (hasHandledExpiryRef.current) return;
