@@ -63,6 +63,7 @@ scripts/**
 !scripts/AGENTS.md
 test/**
 **/*.test.ts
+!lib/reservations/queueCompletionRecovery.test.ts
 **/*.test.tsx
 **/*.test.js
 **/*.test.jsx

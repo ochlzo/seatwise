@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Clock3, Users, CheckCircle2, AlertTriangle } from "lucide-react";
 import { getOrCreateGuestId } from "@/lib/guest";
+import { getProceedWindowDeadline } from "@/lib/queue/proceedWindow";
 
 type QueueStatusResponse = {
   success: boolean;
@@ -31,6 +32,8 @@ type QueueWaitingClientProps = {
 
 const POLL_WAITING_MS = 4000;
 const POLL_OTHER_MS = 8000;
+const PROCEED_WINDOW_EXPIRED_MESSAGE =
+  "It was your turn but you were away, sorry. Rejoin the queue to try again.";
 
 const formatDuration = (ms: number) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -46,14 +49,34 @@ const toDisplayRank = (rank?: number) => {
 
 export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
   const router = useRouter();
+  const showScopeId = `${showId}:${schedId}`;
   const guestId = React.useMemo(() => getOrCreateGuestId(), []);
   const [status, setStatus] = React.useState<QueueStatusResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isDeferring, setIsDeferring] = React.useState(false);
+  const [isRejoining, setIsRejoining] = React.useState(false);
+  const [isProceeding, setIsProceeding] = React.useState(false);
+  const [hasProceedTimedOut, setHasProceedTimedOut] = React.useState(false);
+  const [proceedDeadlineAt, setProceedDeadlineAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [now, setNow] = React.useState<number>(0);
   const hasTerminatedRef = React.useRef(false);
   const allowNavigationRef = React.useRef(false);
+  const hasProceedTimedOutRef = React.useRef(false);
+
+  const clearStoredSession = React.useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i += 1) {
+      const key = window.sessionStorage.key(i);
+      if (key?.startsWith(`seatwise:active:${showScopeId}:`)) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => window.sessionStorage.removeItem(key));
+  }, [showScopeId]);
 
   const hasTerminableTicket =
     !!status?.ticketId &&
@@ -95,6 +118,10 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   );
 
   const fetchStatus = React.useCallback(async () => {
+    if (hasProceedTimedOutRef.current) {
+      return;
+    }
+
     try {
       setError(null);
       const response = await fetch(
@@ -102,6 +129,9 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
         { cache: "no-store" },
       );
       const data = (await response.json()) as QueueStatusResponse;
+      if (hasProceedTimedOutRef.current) {
+        return;
+      }
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Failed to fetch queue status");
       }
@@ -118,12 +148,20 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   }, [fetchStatus]);
 
   React.useEffect(() => {
+    hasProceedTimedOutRef.current = hasProceedTimedOut;
+  }, [hasProceedTimedOut]);
+
+  React.useEffect(() => {
+    if (hasProceedTimedOut) {
+      return;
+    }
+
     const intervalMs = status?.status === "waiting" ? POLL_WAITING_MS : POLL_OTHER_MS;
     const timer = window.setInterval(() => {
       void fetchStatus();
     }, intervalMs);
     return () => window.clearInterval(timer);
-  }, [fetchStatus, status?.status]);
+  }, [fetchStatus, hasProceedTimedOut, status?.status]);
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -151,11 +189,47 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     sessionStorage.setItem(storageKey, JSON.stringify(payload));
   }, [status]);
 
-  const expiresInMs =
-    status?.status === "active" && status.expiresAt ? status.expiresAt - now : undefined;
+  React.useEffect(() => {
+    if (status?.status !== "active") {
+      setProceedDeadlineAt(null);
+      return;
+    }
+
+    setProceedDeadlineAt((current) => current ?? getProceedWindowDeadline(now));
+  }, [now, status?.status, status?.ticketId]);
+
+  const proceedRemainingMs =
+    status?.status === "active" && proceedDeadlineAt ? proceedDeadlineAt - now : undefined;
+
+  React.useEffect(() => {
+    if (hasProceedTimedOut) {
+      return;
+    }
+
+    if (status?.status !== "active" || proceedRemainingMs === undefined || proceedRemainingMs > 0) {
+      return;
+    }
+
+    setHasProceedTimedOut(true);
+    setError(PROCEED_WINDOW_EXPIRED_MESSAGE);
+    clearStoredSession();
+    void terminateTicket(true);
+
+    setStatus((current) =>
+      current
+        ? {
+            ...current,
+            status: "expired",
+            message: PROCEED_WINDOW_EXPIRED_MESSAGE,
+          }
+        : current,
+    );
+  }, [clearStoredSession, hasProceedTimedOut, proceedRemainingMs, status?.status, terminateTicket]);
+
+  const isProceedWindowExpired = hasProceedTimedOut || error === PROCEED_WINDOW_EXPIRED_MESSAGE;
 
   const goBackToShow = () => {
-    if (!hasTerminableTicket) {
+    if (hasProceedTimedOut || !hasTerminableTicket) {
       router.push(`/${showId}`);
       return;
     }
@@ -170,9 +244,151 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     router.push(`/${showId}`);
   };
 
-  const proceedToReservation = () => {
-    allowNavigationRef.current = true;
-    router.push(`/reserve/${showId}/${schedId}`);
+  const proceedToReservation = async () => {
+    if (!status?.ticketId || !status.activeToken || isProceeding || hasProceedTimedOut) {
+      return;
+    }
+
+    setIsProceeding(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/queue/active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          schedId,
+          guestId,
+          ticketId: status.ticketId,
+          activeToken: status.activeToken,
+          proceed: true,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        success: boolean;
+        valid?: boolean;
+        reason?: string;
+        error?: string;
+        session?: {
+          ticketId: string;
+          activeToken: string;
+          expiresAt: number | null;
+          startedAt: number;
+          userId: string;
+          mode: "online" | "walk_in";
+        };
+      };
+
+      if (!response.ok || !data.success || !data.valid || !data.session) {
+        if (data.valid === false || data.reason === "missing" || data.reason === "expired") {
+          setHasProceedTimedOut(true);
+          setError(PROCEED_WINDOW_EXPIRED_MESSAGE);
+          clearStoredSession();
+          void terminateTicket(true);
+          return;
+        }
+
+        throw new Error(data.error || "Failed to prepare your reservation window");
+      }
+
+      const storageKey = `seatwise:active:${showScopeId}:${data.session.ticketId}`;
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          ...data.session,
+          showScopeId,
+        }),
+      );
+      allowNavigationRef.current = true;
+      router.push(`/reserve/${showId}/${schedId}`);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to prepare your reservation window",
+      );
+    } finally {
+      setIsProceeding(false);
+    }
+  };
+
+  const handleRejoinQueue = async () => {
+    if (isRejoining) return;
+
+    setIsRejoining(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/queue/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          schedId,
+          guestId,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        success: boolean;
+        error?: string;
+        showName?: string;
+        status?: "waiting" | "active";
+        ticket?: { ticketId: string };
+        rank?: number;
+        estimatedWaitMinutes?: number;
+        activeToken?: string;
+        expiresAt?: number | null;
+      };
+
+      if (!response.ok || !data.success) {
+        const normalizedError = data.error?.toLowerCase() ?? "";
+        if (normalizedError.includes("already in the queue")) {
+          void fetchStatus();
+          return;
+        }
+        throw new Error(data.error || "Failed to rejoin queue");
+      }
+
+      if (data.ticket?.ticketId) {
+        const storageKey = `seatwise:active:${showScopeId}:${data.ticket.ticketId}`;
+        if (data.status === "active" && data.activeToken && data.expiresAt) {
+          sessionStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              ticketId: data.ticket.ticketId,
+              activeToken: data.activeToken,
+              expiresAt: data.expiresAt,
+              showScopeId,
+            }),
+          );
+        } else {
+          clearStoredSession();
+        }
+      }
+
+      setHasProceedTimedOut(false);
+      setProceedDeadlineAt(
+        data.status === "active" ? getProceedWindowDeadline() : null,
+      );
+      setStatus({
+        success: true,
+        status: data.status ?? "waiting",
+        showScopeId,
+        showName: data.showName ?? status?.showName,
+        ticketId: data.ticket?.ticketId,
+        rank: data.rank,
+        estimatedWaitMinutes: data.estimatedWaitMinutes,
+        activeToken: data.activeToken,
+        expiresAt: data.expiresAt ?? null,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to rejoin queue");
+    } finally {
+      setIsRejoining(false);
+    }
   };
 
   const handleMaybeLater = async () => {
@@ -287,9 +503,43 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
           )}
 
           {error && (
-            <div className="flex items-center gap-2 text-sm text-red-600">
-              <AlertTriangle className="h-4 w-4" />
-              {error}
+            <div
+              className={
+                isProceedWindowExpired
+                  ? "rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20"
+                  : ""
+              }
+            >
+              <div
+                className={
+                  isProceedWindowExpired
+                    ? "mx-auto flex max-w-lg flex-col items-center gap-4 text-center"
+                    : "flex items-center gap-2 text-sm text-red-600"
+                }
+              >
+                <AlertTriangle className={isProceedWindowExpired ? "h-6 w-6" : "h-4 w-4"} />
+                <span className={isProceedWindowExpired ? "text-base font-medium sm:text-lg" : ""}>
+                  {error}
+                </span>
+              </div>
+              {isProceedWindowExpired && (
+                <div className="mt-4 flex w-full max-w-xs items-center justify-center gap-3">
+                  <Button onClick={handleRejoinQueue} disabled={isRejoining} className="flex-1">
+                    {isRejoining ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : null}
+                    Rejoin queue
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={goBackToShow}
+                    disabled={isRejoining}
+                    className="flex-1"
+                  >
+                    Back to show
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -345,20 +595,31 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
                     <Clock3 className="h-4 w-4" />
                     Expires in:{" "}
                     <span className="font-semibold">
-                      {expiresInMs !== undefined ? formatDuration(expiresInMs) : "--:--"}
+                      {proceedRemainingMs !== undefined ? formatDuration(proceedRemainingMs) : "--:--"}
                     </span>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Use this active window to proceed with seat reservation.
                   </div>
                   <div className="flex items-center justify-start gap-2">
-                    <Button onClick={proceedToReservation} className="w-fit" disabled={isDeferring}>
-                      Proceed to seat reservation
+                    <Button
+                      onClick={proceedToReservation}
+                      className="w-fit"
+                      disabled={isDeferring || isProceeding}
+                    >
+                      {isProceeding ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Preparing...
+                        </>
+                      ) : (
+                        "Proceed to seat reservation"
+                      )}
                     </Button>
                     <Button
                       variant="outline"
                       onClick={handleMaybeLater}
-                      disabled={isDeferring}
+                      disabled={isDeferring || isProceeding}
                       className="w-fit"
                     >
                       {isDeferring ? (

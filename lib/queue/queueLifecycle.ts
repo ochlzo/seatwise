@@ -1,9 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { redis } from "@/lib/clients/redis";
 import { ably } from "@/lib/clients/ably";
-import { isActiveSessionLive, isPersistentActiveSession } from "@/lib/queue/activeSessionPolicy";
+import {
+  isActiveSessionLive,
+  isPersistentActiveSession,
+} from "@/lib/queue/activeSessionPolicy";
 import { clearWalkInPauseState } from "@/lib/queue/closeQueue";
-import { clearQueuePresence, hasFreshQueuePresence, touchQueuePresence } from "@/lib/queue/sessionPresence";
+import {
+  clearQueuePresence,
+  hasFreshQueuePresence,
+  touchQueuePresence,
+} from "@/lib/queue/sessionPresence";
+import { renewProceedWindowSession } from "@/lib/queue/proceedWindow";
 import {
   getActiveSessionKey,
   getActiveSessionPointerKey,
@@ -19,7 +27,7 @@ import type {
   TicketData,
 } from "@/lib/types/queue";
 
-const ACTIVE_WINDOW_MS = 1 * 60 * 1000;
+const ACTIVE_WINDOW_MS = 2 * 60 * 1000;
 const PROMOTION_LOCK_TTL_SECONDS = 3;
 const DEFAULT_AVG_SERVICE_MS = 60_000;
 
@@ -61,7 +69,8 @@ const parseJson = <T>(value: unknown): T | null => {
   return null;
 };
 
-const EXPIRED_SESSION_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
+const EXPIRED_SESSION_MESSAGE =
+  "Your active reservation window has expired. Rejoin the queue.";
 const ACTIVE_SESSION_TTL_SECONDS = Math.ceil(ACTIVE_WINDOW_MS / 1000);
 // Pointer key intentionally outlives the active key by a full extra window.
 // When Redis TTL fires on both at the same time, the lazy-janitor in
@@ -163,7 +172,10 @@ const cleanupQueueTicketArtifacts = async ({
   await redis.del(activeKey, ticketKey);
   await clearCurrentActiveSessionPointer({ showScopeId, ticketId });
   if (resolvedUserId) {
-    const currentlyMappedTicketId = (await redis.hget(userTicketKey, resolvedUserId)) as string | null;
+    const currentlyMappedTicketId = (await redis.hget(
+      userTicketKey,
+      resolvedUserId,
+    )) as string | null;
     if (currentlyMappedTicketId === ticketId) {
       await redis.hdel(userTicketKey, resolvedUserId);
     }
@@ -195,7 +207,10 @@ const publishSessionExpiredEvent = async ({
       .get(`seatwise:${showScopeId}:private:${ticketId}`)
       .publish("queue-event", event);
   } catch (error) {
-    console.error(`Failed to publish SESSION_EXPIRED for ${showScopeId}/${ticketId}:`, error);
+    console.error(
+      `Failed to publish SESSION_EXPIRED for ${showScopeId}/${ticketId}:`,
+      error,
+    );
   }
 };
 
@@ -236,6 +251,20 @@ export async function persistWalkInActiveSession({
   });
 
   return persistentSession;
+}
+
+export async function refreshActiveSessionForProceed({
+  showScopeId,
+  session,
+}: CompleteActiveSessionParams): Promise<ActiveSession> {
+  const renewedSession = renewProceedWindowSession(session);
+
+  await setCurrentActiveSession({
+    showScopeId,
+    session: renewedSession,
+  });
+
+  return renewedSession;
 }
 
 export const getCurrentActiveSession = async (
@@ -314,7 +343,9 @@ const publishQueueMoveEvent = async (showScopeId: string) => {
       departedRank: 0,
       seq,
     };
-    await ably.channels.get(`seatwise:${showScopeId}:public`).publish("queue-event", event);
+    await ably.channels
+      .get(`seatwise:${showScopeId}:public`)
+      .publish("queue-event", event);
   } catch (error) {
     console.error(`Failed to publish QUEUE_MOVE for ${showScopeId}:`, error);
   }
@@ -335,7 +366,10 @@ const publishActiveEvent = async (
       .get(`seatwise:${showScopeId}:private:${ticketId}`)
       .publish("queue-event", event);
   } catch (error) {
-    console.error(`Failed to publish ACTIVE for ${showScopeId}/${ticketId}:`, error);
+    console.error(
+      `Failed to publish ACTIVE for ${showScopeId}/${ticketId}:`,
+      error,
+    );
   }
 };
 
@@ -394,7 +428,10 @@ export async function promoteNextInQueue({
         await redis.del(ticketKey);
         await redis.del(getActiveSessionKey(showScopeId, ticketId));
         const userTicketKey = getUserTicketKey(showScopeId);
-        const mappedTicketId = (await redis.hget(userTicketKey, ticket.userId)) as string | null;
+        const mappedTicketId = (await redis.hget(
+          userTicketKey,
+          ticket.userId,
+        )) as string | null;
         if (mappedTicketId === ticketId) {
           await redis.hdel(userTicketKey, ticket.userId);
         }
@@ -497,7 +534,9 @@ export async function completeActiveSessionAndPromoteNext({
         : DEFAULT_AVG_SERVICE_MS;
 
   const safeCurrentAvg =
-    Number.isFinite(currentAvg) && currentAvg > 0 ? currentAvg : DEFAULT_AVG_SERVICE_MS;
+    Number.isFinite(currentAvg) && currentAvg > 0
+      ? currentAvg
+      : DEFAULT_AVG_SERVICE_MS;
   const thisUserTimeMs = Math.max(1000, Date.now() - session.startedAt);
   const newAvg = Math.round(safeCurrentAvg * 0.9 + thisUserTimeMs * 0.1);
   await redis.set(avgServiceMsKey, newAvg);

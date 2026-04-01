@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SchedStatus, ShowStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { refreshActiveSessionForProceed } from "@/lib/queue/queueLifecycle";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { createRouteTimer, isRouteTimingEnabled } from "@/lib/server/timing";
 import {
@@ -20,12 +21,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { showId, schedId, guestId, ticketId, activeToken, scheduleSnapshot } = body as {
+    const { showId, schedId, guestId, ticketId, activeToken, scheduleSnapshot, proceed } = body as {
       showId?: string;
       schedId?: string;
       guestId?: string;
       ticketId?: string;
       activeToken?: string;
+      proceed?: boolean;
       scheduleSnapshot?: {
         schedId?: string;
         schedDate?: string;
@@ -146,10 +148,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const shouldRenewForProceed = proceed === true;
+    const session = shouldRenewForProceed
+      ? await timer.time("redis.renew_proceed_window", () =>
+          refreshActiveSessionForProceed({
+            showScopeId,
+            session: validation.session!,
+          }),
+        )
+      : validation.session;
+
     timer.flush({
       showScopeId,
       valid: true,
       showStatus: effectiveShowStatus,
+      proceed: shouldRenewForProceed,
       usedTrustedScheduleSnapshot: trustedScheduleSnapshot != null,
     });
 
@@ -159,7 +172,7 @@ export async function POST(request: NextRequest) {
       showScopeId,
       showName: schedule.show.show_name,
       showStatus: effectiveShowStatus,
-      session: validation.session,
+      session,
     });
   } catch (error) {
     console.error("Error in /api/queue/active:", error);

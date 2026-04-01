@@ -35,6 +35,10 @@ import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPa
 import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
 import { getOrCreateGuestId } from "@/lib/guest";
 import { clearJoinTransitionState } from "@/lib/queue/joinTransition";
+import {
+  QUEUE_SESSION_RECOVERY_MESSAGE,
+  isQueueCompletionSessionRecovery,
+} from "@/lib/reservations/queueCompletionRecovery";
 import { cn } from "@/lib/utils";
 import {
   getReservationRoomModeConfig,
@@ -1058,10 +1062,22 @@ export function ReserveSeatClient({
       const data = (await response.json()) as {
         success: boolean;
         error?: string;
+        reason?: string;
         reservationNumber?: string;
         warning?: string | null;
       };
       if (!response.ok || !data.success) {
+        if (
+          isQueueCompletionSessionRecovery({
+            status: response.status,
+            reason: data.reason,
+            error: data.error,
+          })
+        ) {
+          setError(QUEUE_SESSION_RECOVERY_MESSAGE);
+          return;
+        }
+
         throw new Error(data.error || "Failed to complete reservation session");
       }
 
@@ -1087,7 +1103,9 @@ export function ReserveSeatClient({
   };
 
   const remaining = !isWalkInMode && expiresAt ? expiresAt - now : 0;
-  const isExpiredWindowError = error === EXPIRED_WINDOW_MESSAGE;
+  const isExpiredWindowError =
+    error === EXPIRED_WINDOW_MESSAGE || error === QUEUE_SESSION_RECOVERY_MESSAGE;
+  const isQueueRecoveryError = error === QUEUE_SESSION_RECOVERY_MESSAGE;
   const isSuccess = step === "success";
   const isWalkInPostFinalize = isWalkInMode && step === "post_finalize";
   const hasActiveRoomAccess = isWalkInMode || !!expiresAt;
@@ -1383,7 +1401,9 @@ export function ReserveSeatClient({
                       }
                     >
                       {isExpiredWindowError
-                        ? "Uh oh! Your time ran out. Rejoin the queue?"
+                        ? isQueueRecoveryError
+                          ? "Your reservation window ended before checkout completed. Rejoin the queue to try again."
+                          : "Your time ran out. Rejoin the queue?"
                         : error}
                     </span>
                   </div>
@@ -1397,7 +1417,7 @@ export function ReserveSeatClient({
                         {isRejoining && (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         )}
-                        Yes
+                        Rejoin queue
                       </Button>
                       <Button
                         variant="outline"
@@ -1405,7 +1425,7 @@ export function ReserveSeatClient({
                         disabled={isRejoining}
                         className="flex-1"
                       >
-                        No
+                        Back to show
                       </Button>
                     </div>
                   ) : (
