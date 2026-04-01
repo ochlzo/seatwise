@@ -18,7 +18,7 @@ import type {
   TicketData,
 } from "@/lib/types/queue";
 
-const ACTIVE_WINDOW_MS = 5 * 60 * 1000;
+const ACTIVE_WINDOW_MS = 1 * 60 * 1000;
 const PROMOTION_LOCK_TTL_SECONDS = 3;
 const DEFAULT_AVG_SERVICE_MS = 60_000;
 
