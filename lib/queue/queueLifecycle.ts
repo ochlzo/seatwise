@@ -62,6 +62,17 @@ const parseJson = <T>(value: unknown): T | null => {
 
 const EXPIRED_SESSION_MESSAGE = "Your active reservation window has expired. Rejoin the queue.";
 const ACTIVE_SESSION_TTL_SECONDS = Math.ceil(ACTIVE_WINDOW_MS / 1000);
+// Pointer key intentionally outlives the active key by a full extra window.
+// When Redis TTL fires on both at the same time, the lazy-janitor in
+// getCurrentActiveSession cannot trace the stale ticketId and clean up the
+// user's ticket / user_ticket hash entry. With a longer pointer TTL, the
+// pointer survives the active key expiry → getCurrentActiveSession finds the
+// pointer, sees the active key is gone, runs expireQueueSession, cleans up
+// the ticket artifacts, and promotes the next user. The pointer is always
+// deleted explicitly by clearCurrentActiveSessionPointer on normal
+// complete/terminate paths, so the extended TTL only matters in the crash/
+// mobile-browser-close scenario.
+const ACTIVE_SESSION_POINTER_TTL_SECONDS = ACTIVE_SESSION_TTL_SECONDS * 2 + 30;
 
 const resolveUserIdForTicket = async ({
   showScopeId,
@@ -102,7 +113,7 @@ const setCurrentActiveSession = async ({
 
   await redis.expire(activeKey, ACTIVE_SESSION_TTL_SECONDS);
   await redis.set(pointerKey, session.ticketId, {
-    ex: ACTIVE_SESSION_TTL_SECONDS,
+    ex: ACTIVE_SESSION_POINTER_TTL_SECONDS,
   });
 };
 

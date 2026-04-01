@@ -108,6 +108,34 @@ export async function getQueueStatus({
   // only one concurrent heartbeat wins the lock and promotes; the rest no-op.
   await ensureQueueProgress(showScopeId);
 
+  // Re-read this user's own active session after ensureQueueProgress.
+  //
+  // WHY: ensureQueueProgress may have just promoted this user — which removes
+  // them from the sorted set. If we proceed straight to resolveVisibleQueueRank,
+  // it will find them absent from the sorted set, return null, and the "expired"
+  // branch below would DELETE the active session that was just created for them.
+  //
+  // By re-reading the active key here, we catch the "just promoted on this very
+  // heartbeat" case and return "active" before resolveVisibleQueueRank runs.
+  const activeJsonAfterProgress = await redis.get(activeKey);
+  const activeSessionAfterProgress = parseJson<ActiveSession>(activeJsonAfterProgress);
+  if (
+    activeSessionAfterProgress &&
+    activeSessionAfterProgress.userId === userId &&
+    isActiveSessionLive(activeSessionAfterProgress)
+  ) {
+    return {
+      success: true,
+      status: "active",
+      showScopeId,
+      ticketId,
+      name: ticket?.name,
+      activeToken: activeSessionAfterProgress.activeToken,
+      expiresAt: activeSessionAfterProgress.expiresAt,
+      message: "Your turn is active.",
+    };
+  }
+
   const rank = await resolveVisibleQueueRank({ showScopeId, ticketId });
 
   if (rank === null) {
