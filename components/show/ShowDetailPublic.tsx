@@ -12,12 +12,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { groupSchedulesByCommonalities } from "@/lib/db/showScheduleGrouping";
+import { CopyShowLinkButton } from "@/components/show/CopyShowLinkButton";
 
 const STATUS_COLORS: Record<string, string> = {
     UPCOMING: "#3B82F6",
@@ -269,9 +270,20 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
                 <div className="lg:col-span-2 space-y-6">
                     {/* About Section */}
                     <Card className="border-sidebar-border shadow-sm">
-                        <CardContent className="pt-6 space-y-4">
+                        <CardHeader className="relative gap-4 pr-40">
+                            <div className="space-y-1">
+                                <CardTitle className="text-2xl font-bold">Show Information</CardTitle>
+                                <CardDescription>
+                                    A quick overview of the production, venue, and run dates.
+                                </CardDescription>
+                            </div>
+                            <CopyShowLinkButton
+                                showId={show.show_id}
+                                className="absolute right-6 top-6 gap-2"
+                            />
+                        </CardHeader>
+                        <CardContent className="space-y-4 pt-0">
                             <div>
-                                <h2 className="text-2xl font-bold mb-2">About This Show</h2>
                                 <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
                                     {show.show_description}
                                 </p>

@@ -75,6 +75,7 @@ import type { SeatmapState } from "@/lib/seatmap/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { groupSchedulesByCommonalities } from "@/lib/db/showScheduleGrouping";
 import { ImageUploadDropzone } from "@/components/ui/image-upload-dropzone";
+import { CopyShowLinkButton } from "@/components/show/CopyShowLinkButton";
 
 const STATUS_COLORS: Record<string, string> = {
   UPCOMING: "#3B82F6",
@@ -1329,13 +1330,19 @@ export function ShowDetailForm({
         {/* 2. Primary Details Section */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="border-sidebar-border shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg md:text-xl font-semibold">
-                Show Information
-              </CardTitle>
-              <CardDescription>
-                Update the primary details of the production.
-              </CardDescription>
+            <CardHeader className="relative gap-4 pr-40">
+              <div className="space-y-1">
+                <CardTitle className="text-lg md:text-xl font-semibold">
+                  Show Information
+                </CardTitle>
+                <CardDescription>
+                  Update the primary details of the production.
+                </CardDescription>
+              </div>
+              <CopyShowLinkButton
+                showId={show.show_id}
+                className="absolute right-6 top-6 gap-2"
+              />
             </CardHeader>
             <CardContent className="space-y-6">
               {isStructuralEditingLocked && (
