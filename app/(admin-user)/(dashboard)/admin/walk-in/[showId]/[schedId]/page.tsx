@@ -46,23 +46,20 @@ export default async function AdminWalkInSchedulePage({
     notFound();
   }
 
-  const scheduleLabel = new Intl.DateTimeFormat("en-PH", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(schedule.sched_start_time);
-
   return (
     <>
       <PageHeader
         title="Walk-In"
-        parentLabel={schedule.show.show_name}
-        parentHref={`/admin/shows/${schedule.show.show_id}`}
-        breadcrumbLabelOverrides={{
-          [schedule.show.show_id]: schedule.show.show_name,
-          [schedule.sched_id]: scheduleLabel,
-        }}
+        breadcrumbs={[
+          { label: "Home", href: "/" },
+          { label: "Admin Dashboard", href: "/admin" },
+          { label: "Shows", href: "/admin/shows" },
+          {
+            label: schedule.show.show_name,
+            href: `/admin/shows/${schedule.show.show_id}`,
+          },
+          { label: "Queue" },
+        ]}
         rightSlot={
           <>
             <ThemeSwithcer />
