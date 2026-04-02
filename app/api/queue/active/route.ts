@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
       ticketId?: string;
       activeToken?: string;
       proceed?: boolean;
+      reservationStep?: "seats" | "contact" | "email_otp" | "ticket_design" | "payment";
       scheduleSnapshot?: {
         schedId?: string;
         schedDate?: string;
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
         ticketId,
         userId: guestId,
         activeToken,
+        reservationStep: body.reservationStep,
       }),
     );
 

@@ -373,10 +373,17 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
 
   React.useEffect(() => {
     let isMounted = true;
+    const ticketTemplateTeamId = isSuperadmin ? selectedTeamId : null;
+
     const loadTicketTemplates = async () => {
       try {
         setIsLoadingTicketTemplates(true);
-        const response = await fetch("/api/ticket-templates");
+        const ticketTemplateUrl = new URL("/api/ticket-templates", window.location.origin);
+        if (ticketTemplateTeamId) {
+          ticketTemplateUrl.searchParams.set("teamId", ticketTemplateTeamId);
+        }
+
+        const response = await fetch(ticketTemplateUrl.toString());
         if (!response.ok) {
           throw new Error("Failed to load ticket templates");
         }
@@ -398,7 +405,31 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isSuperadmin, selectedTeamId]);
+
+  React.useEffect(() => {
+    setFormData((prev) => {
+      if (ticketTemplates.length === 0 || prev.ticket_template_ids.length === 0) {
+        return prev;
+      }
+
+      const allowedTicketTemplateIds = new Set(
+        ticketTemplates.map((template) => template.ticket_template_id),
+      );
+      const filteredTicketTemplateIds = prev.ticket_template_ids.filter((templateId) =>
+        allowedTicketTemplateIds.has(templateId),
+      );
+
+      if (filteredTicketTemplateIds.length === prev.ticket_template_ids.length) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        ticket_template_ids: filteredTicketTemplateIds,
+      };
+    });
+  }, [ticketTemplates]);
 
   React.useEffect(() => {
     let isMounted = true;

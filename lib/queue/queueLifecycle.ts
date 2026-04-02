@@ -7,11 +7,14 @@ import {
 } from "@/lib/queue/activeSessionPolicy";
 import { clearWalkInPauseState } from "@/lib/queue/closeQueue";
 import {
+  ACTIVE_WINDOW_MS,
+  renewActiveWindowSession,
+} from "@/lib/queue/activeWindow";
+import {
   clearQueuePresence,
   hasFreshQueuePresence,
   touchQueuePresence,
 } from "@/lib/queue/sessionPresence";
-import { renewProceedWindowSession } from "@/lib/queue/proceedWindow";
 import {
   getActiveSessionKey,
   getActiveSessionPointerKey,
@@ -19,6 +22,7 @@ import {
   getTicketKey,
   getUserTicketKey,
 } from "@/lib/queue/queueKeys";
+import { clearReservationEmailOtpArtifacts } from "@/lib/reservations/reservationEmailOtpStore";
 import type {
   ActiveSession,
   QueueActiveEvent,
@@ -27,7 +31,6 @@ import type {
   TicketData,
 } from "@/lib/types/queue";
 
-const ACTIVE_WINDOW_MS = 2 * 60 * 1000;
 const PROMOTION_LOCK_TTL_SECONDS = 3;
 const DEFAULT_AVG_SERVICE_MS = 60_000;
 
@@ -184,6 +187,8 @@ const cleanupQueueTicketArtifacts = async ({
       userId: resolvedUserId,
     });
   }
+
+  await clearReservationEmailOtpArtifacts(showScopeId, ticketId);
 };
 
 const publishSessionExpiredEvent = async ({
@@ -257,7 +262,7 @@ export async function refreshActiveSessionForProceed({
   showScopeId,
   session,
 }: CompleteActiveSessionParams): Promise<ActiveSession> {
-  const renewedSession = renewProceedWindowSession(session);
+  const renewedSession = renewActiveWindowSession(session);
 
   await setCurrentActiveSession({
     showScopeId,

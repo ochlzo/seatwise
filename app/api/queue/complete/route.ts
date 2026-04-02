@@ -10,6 +10,11 @@ import { prisma } from "@/lib/prisma";
 import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle";
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { buildCompletionPaymentRecord } from "@/lib/reservations/completionPayment";
+import {
+  clearReservationEmailOtpSession,
+  clearReservationEmailOtpState,
+  getReservationEmailOtpSession,
+} from "@/lib/reservations/reservationEmailOtpStore";
 import { createRouteTimer, isRouteTimingEnabled } from "@/lib/server/timing";
 import {
   getEffectiveSchedStatus,
@@ -283,6 +288,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!isWalkInMode) {
+      const emailOtpSession = await getReservationEmailOtpSession(showScopeId, ticketId);
+      const normalizedEmail = contact.email;
+      if (
+        !emailOtpSession ||
+        emailOtpSession.otpVerified !== true ||
+        emailOtpSession.email !== normalizedEmail ||
+        emailOtpSession.guestId !== participantId ||
+        emailOtpSession.activeToken !== activeToken
+      ) {
+        return NextResponse.json(
+          { success: false, error: "Verify your email before completing the reservation." },
+          { status: 400 },
+        );
+      }
+    }
+
     const assignments = await timer.time("postgres.load_seat_assignments", () =>
       prisma.seatAssignment.findMany({
         where: {
@@ -554,6 +576,13 @@ export async function POST(request: NextRequest) {
 
       followUpTimer.flush();
     });
+
+    if (!isWalkInMode) {
+      await Promise.all([
+        clearReservationEmailOtpSession(showScopeId, ticketId),
+        clearReservationEmailOtpState(showScopeId, ticketId),
+      ]);
+    }
 
     timer.flush({
       mode,

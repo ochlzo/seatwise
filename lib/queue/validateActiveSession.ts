@@ -3,12 +3,14 @@ import type { ActiveSession } from "@/lib/types/queue";
 import { isActiveSessionLive } from "@/lib/queue/activeSessionPolicy";
 import { expireQueueSession } from "@/lib/queue/queueLifecycle";
 import { hasFreshQueuePresence, touchQueuePresence } from "@/lib/queue/sessionPresence";
+import { getQueuePresenceTtlSeconds, type ReservationStep } from "@/lib/queue/presenceTtl";
 
 export interface ValidateActiveSessionParams {
   showScopeId: string;
   ticketId: string;
   userId: string;
   activeToken: string;
+  reservationStep?: ReservationStep;
 }
 
 export interface ValidateActiveSessionResult {
@@ -37,6 +39,7 @@ export async function validateActiveSession({
   ticketId,
   userId,
   activeToken,
+  reservationStep,
 }: ValidateActiveSessionParams): Promise<ValidateActiveSessionResult> {
   const activeKey = `seatwise:active:${showScopeId}:${ticketId}`;
   const activeJson = await redis.get(activeKey);
@@ -96,6 +99,7 @@ export async function validateActiveSession({
   await touchQueuePresence({
     showScopeId,
     userId,
+    ttlSeconds: getQueuePresenceTtlSeconds(reservationStep),
   });
 
   return { valid: true, session };

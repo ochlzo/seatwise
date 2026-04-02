@@ -8,18 +8,25 @@ import {
   AlertTriangle,
   Clock3,
   Loader2,
+  Mail,
   Plus,
   X,
   CheckCircle2,
   CreditCard,
   ChevronLeft,
+  BadgeCheck,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeatmapPreview } from "@/components/seatmap/SeatmapPreview";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Field, FieldError } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -40,6 +47,7 @@ import {
   QUEUE_SESSION_RECOVERY_MESSAGE,
   isQueueCompletionSessionRecovery,
 } from "@/lib/reservations/queueCompletionRecovery";
+import { getReservationEmailOtpInlineError } from "@/lib/reservations/reservationEmailOtpFeedback";
 import { cn } from "@/lib/utils";
 import {
   getReservationRoomModeConfig,
@@ -135,6 +143,7 @@ const EMPTY_CONTACT_ERRORS: ContactFieldErrors = {
 type ReservationStep =
   | "seats"
   | "contact"
+  | "email_otp"
   | "ticket_design"
   | "payment"
   | "post_finalize"
@@ -152,6 +161,13 @@ type TicketDesignResponse = {
   success?: boolean;
   error?: string;
   designs?: TicketDesignOption[];
+};
+
+type EmailOtpResponse = {
+  success?: boolean;
+  error?: string;
+  verified?: boolean;
+  cooldownUntil?: number;
 };
 
 const formatDuration = (ms: number) => {
@@ -252,6 +268,31 @@ const clearPendingTermination = (showScopeId: string) => {
   window.localStorage.removeItem(getPendingTerminationKey(showScopeId));
 };
 
+const getVerifiedEmailKey = (showScopeId: string, ticketId: string) =>
+  `seatwise:reservation-email-verified:${showScopeId}:${ticketId}`;
+
+const getStoredVerifiedEmail = (
+  showScopeId: string,
+  ticketId: string,
+): string | null => {
+  if (typeof window === "undefined") return null;
+  return window.sessionStorage.getItem(getVerifiedEmailKey(showScopeId, ticketId));
+};
+
+const setStoredVerifiedEmail = (
+  showScopeId: string,
+  ticketId: string,
+  email: string,
+) => {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(getVerifiedEmailKey(showScopeId, ticketId), email);
+};
+
+const clearStoredVerifiedEmail = (showScopeId: string, ticketId: string) => {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(getVerifiedEmailKey(showScopeId, ticketId));
+};
+
 export function ReserveSeatClient({
   showId,
   schedId,
@@ -305,9 +346,18 @@ export function ReserveSeatClient({
   const [reservationNumber, setReservationNumber] = React.useState<
     string | null
   >(null);
+  const [emailOtpCode, setEmailOtpCode] = React.useState("");
+  const [verifiedEmail, setVerifiedEmail] = React.useState<string | null>(null);
+  const [otpRecipientEmail, setOtpRecipientEmail] = React.useState<string>("");
+  const [resendCooldownUntil, setResendCooldownUntil] = React.useState(0);
+  const [emailOtpFieldError, setEmailOtpFieldError] = React.useState<string | null>(null);
+  const [isEmailOtpSubmitting, setIsEmailOtpSubmitting] = React.useState(false);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = React.useState(false);
   const [isContactConfirmDialogOpen, setIsContactConfirmDialogOpen] =
     React.useState(false);
+  const [emailOtpMessage, setEmailOtpMessage] = React.useState<string | null>(
+    null,
+  );
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = React.useState(false);
   const [isFinalizeWalkInDialogOpen, setIsFinalizeWalkInDialogOpen] =
     React.useState(false);
@@ -331,6 +381,7 @@ export function ReserveSeatClient({
   >(null);
   const [selectedTicketTemplateVersionId, setSelectedTicketTemplateVersionId] =
     React.useState<string | null>(null);
+  const reservationStepForPresence = step;
 
   const resetWalkInSaleDraft = React.useCallback(() => {
     setSelectedSeatIds([]);
@@ -360,6 +411,26 @@ export function ReserveSeatClient({
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const stored = getStoredSession(showScopeId);
+    if (!stored) return;
+
+    const storedVerifiedEmail = getStoredVerifiedEmail(showScopeId, stored.ticketId);
+    if (!storedVerifiedEmail) return;
+
+    setVerifiedEmail(storedVerifiedEmail);
+    setContactDetails((prev) =>
+      prev.email.trim() ? prev : { ...prev, email: storedVerifiedEmail },
+    );
+  }, [showScopeId]);
+
+  const otpResendWaitSeconds = React.useMemo(() => {
+    if (resendCooldownUntil <= now) return 0;
+    return Math.max(1, Math.ceil((resendCooldownUntil - now) / 1000));
+  }, [now, resendCooldownUntil]);
 
   React.useEffect(() => {
     if (typeof window === "undefined" || !initialActiveSession) return;
@@ -396,6 +467,7 @@ export function ReserveSeatClient({
             guestId: participantId,
             ticketId: stored.ticketId,
             activeToken: stored.activeToken,
+            reservationStep: reservationStepForPresence,
             scheduleSnapshot: initialScheduleSnapshot,
           }),
         });
@@ -458,7 +530,14 @@ export function ReserveSeatClient({
     };
 
     void verify();
-  }, [initialScheduleSnapshot, participantId, schedId, showId, showScopeId]);
+  }, [
+    initialScheduleSnapshot,
+    participantId,
+    reservationStepForPresence,
+    schedId,
+    showId,
+    showScopeId,
+  ]);
 
   React.useEffect(() => {
     if (step === "success" || !!error || (!isWalkInMode && !expiresAt)) {
@@ -481,6 +560,7 @@ export function ReserveSeatClient({
             guestId: participantId,
             ticketId: stored.ticketId,
             activeToken: stored.activeToken,
+            reservationStep: reservationStepForPresence,
             scheduleSnapshot: initialScheduleSnapshot,
           }),
         });
@@ -508,6 +588,7 @@ export function ReserveSeatClient({
       }
     };
 
+    void heartbeat();
     const timer = window.setInterval(() => {
       void heartbeat();
     }, 15_000);
@@ -572,6 +653,12 @@ export function ReserveSeatClient({
     setTicketDesigns([]);
     setTicketDesignsError(null);
     setSelectedTicketTemplateVersionId(null);
+    setEmailOtpCode("");
+    setEmailOtpMessage(null);
+    setVerifiedEmail(null);
+    setOtpRecipientEmail("");
+    setResendCooldownUntil(0);
+    setEmailOtpFieldError(null);
   }, [showId, schedId]);
 
   React.useEffect(() => {
@@ -880,7 +967,7 @@ export function ReserveSeatClient({
     setStep("contact");
   };
 
-  // Step transition: contact -> ticket design
+  // Step transition: contact -> email verification
   const handleProceedToPayment = () => {
     const firstName = contactDetails.firstName.trim();
     const lastName = contactDetails.lastName.trim();
@@ -935,9 +1022,89 @@ export function ReserveSeatClient({
     setIsContactConfirmDialogOpen(open);
   };
 
-  const handleConfirmContactDetails = () => {
+  const sendReservationEmailOtp = React.useCallback(
+    async (nextEmail?: string) => {
+      const stored = getStoredSession(showScopeId);
+      if (!stored) {
+        setError("We couldnâ€™t find your active turn. Rejoin the queue to continue.");
+        return false;
+      }
+
+      const email = (nextEmail ?? contactDetails.email).trim();
+      if (!email) {
+        setError("Email is required.");
+        return false;
+      }
+
+      setIsEmailOtpSubmitting(true);
+      setError(null);
+      setEmailOtpMessage(null);
+      setEmailOtpFieldError(null);
+      try {
+        const response = await fetch("/api/queue/reservation-email-otp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            showId,
+            schedId,
+            guestId: participantId,
+            ticketId: stored.ticketId,
+            activeToken: stored.activeToken,
+            email,
+          }),
+        });
+        const data = (await response.json()) as EmailOtpResponse;
+        if (!response.ok || !data.success) {
+          if (typeof data.cooldownUntil === "number") {
+            setResendCooldownUntil(data.cooldownUntil);
+          }
+          throw new Error(data.error || "Failed to send verification code.");
+        }
+
+        if (data.verified) {
+          setVerifiedEmail(email);
+          setOtpRecipientEmail(email);
+          setStoredVerifiedEmail(showScopeId, stored.ticketId, email);
+          setEmailOtpMessage("Your email is already verified.");
+          setEmailOtpCode("");
+          setResendCooldownUntil(data.cooldownUntil ?? 0);
+          setStep("ticket_design");
+          return true;
+        }
+
+        setVerifiedEmail(null);
+        setOtpRecipientEmail(email);
+        clearStoredVerifiedEmail(showScopeId, stored.ticketId);
+        setEmailOtpMessage(`Verification code sent to ${email}.`);
+        setEmailOtpCode("");
+        setResendCooldownUntil(data.cooldownUntil ?? Date.now() + 30_000);
+        setStep("email_otp");
+        return true;
+      } catch (sendError) {
+        setError(sendError instanceof Error ? sendError.message : "Failed to send verification code.");
+        return false;
+      } finally {
+        setIsEmailOtpSubmitting(false);
+      }
+    },
+    [contactDetails.email, participantId, schedId, showId, showScopeId],
+  );
+
+  const handleConfirmContactDetails = async () => {
     setIsContactConfirmDialogOpen(false);
-    setStep("ticket_design");
+    if (isWalkInMode) {
+      setStep("ticket_design");
+      return;
+    }
+
+    const email = contactDetails.email.trim();
+    if (verifiedEmail && verifiedEmail === email) {
+      setEmailOtpMessage("Your email is already verified.");
+      setStep("ticket_design");
+      return;
+    }
+
+    await sendReservationEmailOtp(email);
   };
 
   const handleBackToSeats = () => {
@@ -945,14 +1112,94 @@ export function ReserveSeatClient({
   };
 
   const handleBackToContact = () => {
+    setEmailOtpCode("");
+    setEmailOtpMessage(null);
+    setEmailOtpFieldError(null);
     setStep("contact");
     setWalkInConfirmationComplete(false);
   };
 
   const handleBackToTicketDesign = () => {
-    setStep("contact");
+    setStep("email_otp");
     setWalkInConfirmationComplete(false);
   };
+
+  const handleVerifyEmailOtp = async () => {
+    const stored = getStoredSession(showScopeId);
+    if (!stored) {
+      setError("We couldnâ€™t find your active turn. Rejoin the queue to continue.");
+      return;
+    }
+
+    const email = contactDetails.email.trim();
+    if (!email) {
+      setError("Email is required.");
+      return;
+    }
+
+    if (emailOtpCode.trim().length < 6) {
+      setEmailOtpFieldError("Enter the 6-digit verification code.");
+      toast.error("Enter the 6-digit verification code.");
+      return;
+    }
+
+    setIsEmailOtpSubmitting(true);
+    setError(null);
+    setEmailOtpMessage(null);
+    setEmailOtpFieldError(null);
+    try {
+      const response = await fetch("/api/queue/reservation-email-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          schedId,
+          guestId: participantId,
+          ticketId: stored.ticketId,
+          activeToken: stored.activeToken,
+          email,
+          otp: emailOtpCode.trim(),
+        }),
+      });
+      const data = (await response.json()) as EmailOtpResponse;
+      if (!response.ok || !data.success) {
+        const inlineError = getReservationEmailOtpInlineError(
+          response.status,
+          data.error ?? null,
+        );
+
+        if (inlineError) {
+          setEmailOtpFieldError(inlineError);
+          toast.error(inlineError);
+          return;
+        }
+
+        throw new Error(data.error || "Failed to verify your email.");
+      }
+
+      setVerifiedEmail(email);
+      setOtpRecipientEmail(email);
+      setStoredVerifiedEmail(showScopeId, stored.ticketId, email);
+      setEmailOtpCode("");
+      setEmailOtpFieldError(null);
+      setEmailOtpMessage("Email verified. Continue to ticket design.");
+      setResendCooldownUntil(0);
+      setStep("ticket_design");
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : "Failed to verify your email.");
+    } finally {
+      setIsEmailOtpSubmitting(false);
+    }
+  };
+
+  const handleResendEmailOtp = async () => {
+    await sendReservationEmailOtp();
+  };
+
+  const handleEmailOtpCodeChange = React.useCallback((value: string) => {
+    setEmailOtpCode(value.replace(/\D/g, "").slice(0, 6));
+    setEmailOtpFieldError(null);
+  }, []);
 
   const handleProceedFromTicketDesign = () => {
     if (!selectedTicketTemplateVersionId) {
@@ -1011,8 +1258,24 @@ export function ReserveSeatClient({
     (field: keyof typeof contactDetails, value: string) => {
       setContactDetails((prev) => ({ ...prev, [field]: value }));
       setContactFieldErrors((prev) => ({ ...prev, [field]: null }));
+      if (field === "email") {
+        const nextEmail = value.trim();
+        if (otpRecipientEmail && otpRecipientEmail !== nextEmail) {
+          const stored = getStoredSession(showScopeId);
+          setVerifiedEmail(null);
+          if (stored?.ticketId) {
+            clearStoredVerifiedEmail(showScopeId, stored.ticketId);
+          }
+        }
+        setEmailOtpCode("");
+        setEmailOtpMessage(null);
+        setEmailOtpFieldError(null);
+        if (!otpRecipientEmail || otpRecipientEmail !== nextEmail) {
+          setResendCooldownUntil(0);
+        }
+      }
     },
-    [],
+    [otpRecipientEmail, showScopeId],
   );
 
   // Callback from GcashUploadPanel when upload completes
@@ -1025,6 +1288,14 @@ export function ReserveSeatClient({
     if (!isWalkInMode && !screenshotUrl) {
       toast.error("Please upload your GCash payment screenshot first.");
       return;
+    }
+    if (!isWalkInMode) {
+      const email = contactDetails.email.trim();
+      if (!verifiedEmail || verifiedEmail !== email) {
+        setError("Verify your email before submitting the reservation.");
+        setStep("email_otp");
+        return;
+      }
     }
     if (!selectedTicketTemplateVersionId) {
       toast.error("Please select a ticket design before submitting.");
@@ -1145,6 +1416,11 @@ export function ReserveSeatClient({
     () => selectedBreakdown.reduce((total, item) => total + item.lineTotal, 0),
     [selectedBreakdown],
   );
+  const isCurrentEmailVerified =
+    !!verifiedEmail && verifiedEmail === contactDetails.email.trim();
+  const contactActionButtonLabel = isCurrentEmailVerified
+    ? modeConfig.contactActionLabel
+    : "Verify email";
 
   const pendingSeatLabel = pendingSeatId
     ? (seatNumbersById[pendingSeatId] ?? pendingSeatId)
@@ -1254,6 +1530,15 @@ export function ReserveSeatClient({
                         className="w-fit gap-1 text-sm"
                       >
                         Contact Details
+                      </Badge>
+                    )}
+                    {step === "email_otp" && (
+                      <Badge
+                        variant="secondary"
+                        className="w-fit gap-1 text-sm"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        Verify Email
                       </Badge>
                     )}
                     {step === "ticket_design" && (
@@ -1864,8 +2149,128 @@ export function ReserveSeatClient({
                       className="w-full gap-2"
                     >
                       <CreditCard className="h-4 w-4" />
-                      {modeConfig.contactActionLabel}
+                      {contactActionButtonLabel}
                     </Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-sidebar-border/70">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Selected Seats</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedSeatIds.map((seatId) => (
+                        <div
+                          key={seatId}
+                          className="inline-flex items-center rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] font-medium"
+                        >
+                          {seatNumbersById[seatId] ?? seatId}
+                        </div>
+                      ))}
+                    </div>
+                    <Separator />
+                    <div className="flex items-center justify-between text-sm font-semibold">
+                      <span>Total</span>
+                      <span>{formatCurrency(subtotal)}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+          {!isSuccess &&
+            !isWalkInPostFinalize &&
+            !isLoading &&
+            !error &&
+            hasActiveRoomAccess &&
+            step === "email_otp" && (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <Card className="border-sidebar-border/70">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleBackToContact}
+                        className="h-8 w-8"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <CardTitle className="text-base">
+                        Verify Email
+                      </CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <Field>
+                      <FieldLabel>Email address</FieldLabel>
+                      <Input
+                        type="email"
+                        inputMode="email"
+                        value={contactDetails.email}
+                        onChange={(event) =>
+                          updateContactField("email", event.target.value)
+                        }
+                        placeholder="name@example.com"
+                      />
+                      <FieldDescription>
+                        You can correct the email here if needed. A new code can be requested after 30 seconds.
+                      </FieldDescription>
+                    </Field>
+
+                    <Field data-invalid={!!emailOtpFieldError}>
+                      <FieldLabel>Verification code</FieldLabel>
+                      <Input
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="6-digit code"
+                        value={emailOtpCode}
+                        onChange={(event) =>
+                          handleEmailOtpCodeChange(event.target.value)
+                        }
+                        aria-invalid={!!emailOtpFieldError}
+                      />
+                      <FieldDescription>
+                        Enter the 6-digit code from the email we just sent.
+                      </FieldDescription>
+                      <FieldError>{emailOtpFieldError}</FieldError>
+                    </Field>
+
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        onClick={() => void handleVerifyEmailOtp()}
+                        disabled={isEmailOtpSubmitting || emailOtpCode.length < 6}
+                        className="gap-2"
+                      >
+                        {isEmailOtpSubmitting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Verifying...
+                          </>
+                        ) : (
+                          <>
+                            <BadgeCheck className="h-4 w-4" />
+                            Verify Code
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleResendEmailOtp()}
+                        disabled={isEmailOtpSubmitting || otpResendWaitSeconds > 0}
+                        className="gap-2"
+                      >
+                        {otpResendWaitSeconds > 0
+                          ? `Resend in ${otpResendWaitSeconds}s`
+                          : "Resend Code"}
+                      </Button>
+                    </div>
+                    {emailOtpMessage ? (
+                      <p className="text-sm text-green-600">{emailOtpMessage}</p>
+                    ) : null}
                   </CardContent>
                 </Card>
 

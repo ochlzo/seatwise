@@ -690,6 +690,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
           badgeLabel={activeStatusLabel}
         >
           {status.status === "waiting" ? (
+            <div className="space-y-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-sidebar-border/70 bg-background/80 p-4">
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Your place</div>
@@ -705,6 +706,12 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
               <div className="rounded-2xl border border-sidebar-border/70 bg-background/80 p-4">
                 <div className="text-xs uppercase tracking-wide text-muted-foreground">Estimated wait</div>
                 <div className="mt-1 text-3xl font-semibold tracking-tight">~{estimatedWaitMinutes} min</div>
+              </div>
+            </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button variant="outline" onClick={goBackToShow} className="sm:min-w-40">
+                  Exit
+                </Button>
               </div>
             </div>
           ) : null}
