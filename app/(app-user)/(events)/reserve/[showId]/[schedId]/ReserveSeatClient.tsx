@@ -1420,7 +1420,9 @@ export function ReserveSeatClient({
     !!verifiedEmail && verifiedEmail === contactDetails.email.trim();
   const contactActionButtonLabel = isCurrentEmailVerified
     ? modeConfig.contactActionLabel
-    : "Verify email";
+    : isWalkInMode
+      ? modeConfig.contactActionLabel
+      : "Verify email";
 
   const pendingSeatLabel = pendingSeatId
     ? (seatNumbersById[pendingSeatId] ?? pendingSeatId)
@@ -1949,7 +1951,7 @@ export function ReserveSeatClient({
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Confirm contact details</DialogTitle>
-                <DialogDescription className="text-xs sm:text-sm">
+                <DialogDescription className="text-justify text-xs sm:text-sm">
                   Please make sure these details are correct before continuing
                   to ticket design selection. Your confirmation and updates will
                   be sent to{" "}
@@ -2184,6 +2186,7 @@ export function ReserveSeatClient({
             !isLoading &&
             !error &&
             hasActiveRoomAccess &&
+            !isWalkInMode &&
             step === "email_otp" && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <Card className="border-sidebar-border/70">
