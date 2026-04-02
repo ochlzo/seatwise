@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -305,7 +305,14 @@ export function ScheduleSelectionDialog({
                 disabled={!selectedSchedId || isSubmitting}
                 className="text-xs sm:text-sm"
               >
-                {confirmButtonLabel}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {confirmButtonLabel}
+                  </>
+                ) : (
+                  confirmButtonLabel
+                )}
               </Button>
             </DialogFooter>
           </>

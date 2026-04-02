@@ -1395,7 +1395,14 @@ export function ReserveSeatClient({
                   {isExpiredWindowError ? (
                     <>
                       <Button onClick={handleRejoinQueue} disabled={isRejoining} className="sm:min-w-40">
-                        Rejoin queue
+                        {isRejoining ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Rejoining...
+                          </>
+                        ) : (
+                          "Rejoin queue"
+                        )}
                       </Button>
                       <Button
                         variant="outline"
@@ -1403,7 +1410,7 @@ export function ReserveSeatClient({
                         disabled={isRejoining}
                         className="sm:min-w-40"
                       >
-                        Back to show
+                        Exit
                       </Button>
                     </>
                   ) : (
@@ -1411,8 +1418,8 @@ export function ReserveSeatClient({
                       <Button variant="outline" onClick={goToQueue} className="sm:min-w-40">
                         Back to queue
                       </Button>
-                      <Button onClick={() => void router.refresh()} className="sm:min-w-40">
-                        Try again
+                      <Button variant="outline" onClick={handleDeclineRejoin} className="sm:min-w-40">
+                        Exit
                       </Button>
                     </>
                   )}

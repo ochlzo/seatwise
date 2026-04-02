@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Loader2, Clock3, Users, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, Clock3, Users, CheckCircle2, AlertTriangle, Volume2, VolumeX } from "lucide-react";
 import { getOrCreateGuestId } from "@/lib/guest";
 import { getProceedWindowDeadline } from "@/lib/queue/proceedWindow";
 import { QueueStatePanel } from "@/components/queue/QueueStatePanel";
@@ -72,15 +72,18 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   const [status, setStatus] = React.useState<QueueStatusResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isDeferring, setIsDeferring] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [isRejoining, setIsRejoining] = React.useState(false);
   const [isProceeding, setIsProceeding] = React.useState(false);
   const [hasProceedTimedOut, setHasProceedTimedOut] = React.useState(false);
   const [proceedDeadlineAt, setProceedDeadlineAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [now, setNow] = React.useState<number>(0);
+  const [isAlertMuted, setIsAlertMuted] = React.useState(false);
   const hasTerminatedRef = React.useRef(false);
   const allowNavigationRef = React.useRef(false);
   const hasProceedTimedOutRef = React.useRef(false);
+  const alertAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
   const clearStoredSession = React.useCallback(() => {
     if (typeof window === "undefined") return;
@@ -161,6 +164,17 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     }
   }, [guestId, showId, schedId]);
 
+  const handleRefreshStatus = async () => {
+    if (isRefreshing) return;
+
+    setIsRefreshing(true);
+    try {
+      await fetchStatus();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   React.useEffect(() => {
     void fetchStatus();
   }, [fetchStatus]);
@@ -186,6 +200,11 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  React.useEffect(() => {
+    // Start each visit with the alert enabled.
+    setIsAlertMuted(false);
+  }, [showScopeId]);
 
   React.useEffect(() => {
     router.prefetch(`/reserve/${showId}/${schedId}`);
@@ -218,6 +237,63 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
 
   const proceedRemainingMs =
     status?.status === "active" && proceedDeadlineAt ? proceedDeadlineAt - now : undefined;
+
+  const stopAlertSound = React.useCallback(() => {
+    const audio = alertAudioRef.current;
+    if (!audio) return;
+    audio.pause();
+    audio.currentTime = 0;
+  }, []);
+
+  const playAlertSound = React.useCallback(async () => {
+    if (typeof window === "undefined" || isAlertMuted) {
+      stopAlertSound();
+      return;
+    }
+
+    let audio = alertAudioRef.current;
+    if (!audio) {
+      audio = new Audio("/sounds/queue-turn-alert.mp3");
+      audio.loop = true;
+      audio.preload = "auto";
+      audio.volume = 0.9;
+      alertAudioRef.current = audio;
+    }
+
+    try {
+      await audio.play();
+    } catch {
+      // If autoplay is blocked, the user can retry by toggling mute or interacting again.
+    }
+  }, [isAlertMuted, stopAlertSound]);
+
+  React.useEffect(() => {
+    if (status?.status === "active" && proceedRemainingMs !== undefined && proceedRemainingMs > 0) {
+      void playAlertSound();
+      return;
+    }
+
+    stopAlertSound();
+  }, [playAlertSound, proceedRemainingMs, status?.status, stopAlertSound]);
+
+  React.useEffect(() => {
+    return () => {
+      stopAlertSound();
+    };
+  }, [stopAlertSound]);
+
+  const toggleAlertMute = () => {
+    const nextMuted = !isAlertMuted;
+    setIsAlertMuted(nextMuted);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(`seatwise:queue-alert-muted:${showScopeId}`, nextMuted ? "1" : "0");
+    }
+    if (nextMuted) {
+      stopAlertSound();
+    } else {
+      void playAlertSound();
+    }
+  };
 
   React.useEffect(() => {
     if (hasProceedTimedOut) {
@@ -269,6 +345,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
 
     setIsProceeding(true);
     setError(null);
+    stopAlertSound();
 
     try {
       const response = await fetch("/api/queue/active", {
@@ -415,7 +492,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     setIsDeferring(true);
     setError(null);
     allowNavigationRef.current = true;
-    void terminateTicket(true);
+    await terminateTicket(true);
     router.push(`/${showId}`);
   };
 
@@ -552,20 +629,34 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
             <div className="flex flex-col gap-3 sm:flex-row">
               {isProceedWindowExpired ? (
                 <>
-                  <Button onClick={handleRejoinQueue} disabled={isRejoining} className="sm:min-w-40">
-                    Rejoin queue
-                  </Button>
+                      <Button onClick={handleRejoinQueue} disabled={isRejoining} className="sm:min-w-40">
+                        {isRejoining ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Rejoining...
+                          </>
+                        ) : (
+                          "Rejoin queue"
+                        )}
+                      </Button>
                   <Button variant="outline" onClick={goBackToShow} disabled={isRejoining} className="sm:min-w-40">
-                    Back to show
+                        Exit
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button onClick={fetchStatus} className="sm:min-w-40">
-                    Try again
-                  </Button>
+                      <Button onClick={() => void handleRefreshStatus()} disabled={isRefreshing} className="sm:min-w-40">
+                        {isRefreshing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Refreshing...
+                          </>
+                        ) : (
+                          "Try again"
+                        )}
+                      </Button>
                   <Button variant="outline" onClick={goBackToShow} className="sm:min-w-40">
-                    Back to show
+                    Exit
                   </Button>
                 </>
               )}
@@ -629,21 +720,52 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
                   </span>
                 </div>
               </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button onClick={proceedToReservation} disabled={isDeferring || isProceeding} className="sm:min-w-56">
-                  Proceed to seats
-                </Button>
-                <Button
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <Button onClick={proceedToReservation} disabled={isDeferring || isProceeding} className="sm:min-w-56">
+                      {isProceeding ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Proceeding...
+                        </>
+                      ) : (
+                        "Proceed to seats"
+                      )}
+                    </Button>
+                    <Button
                   variant="outline"
                   onClick={handleMaybeLater}
                   disabled={isDeferring || isProceeding}
                   className="sm:min-w-40"
-                >
-                  Not now
-                </Button>
-              </div>
-            </div>
-          ) : null}
+                      >
+                        {isDeferring ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Going back...
+                          </>
+                        ) : (
+                          "Not now"
+                        )}
+                      </Button>
+                    <Button
+                      variant="outline"
+                      onClick={toggleAlertMute}
+                      className="sm:min-w-44"
+                    >
+                      {isAlertMuted ? (
+                        <>
+                          <VolumeX className="mr-2 h-4 w-4" />
+                          Unmute alert
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="mr-2 h-4 w-4" />
+                          Mute alert
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
 
           {status.status === "paused" ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -661,10 +783,17 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
           {(status.status === "closed" || status.status === "expired" || status.status === "not_joined") ? (
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button onClick={handleRejoinQueue} disabled={isRejoining} className="sm:min-w-40">
-                Rejoin queue
+                {isRejoining ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Rejoining...
+                  </>
+                ) : (
+                  "Rejoin queue"
+                )}
               </Button>
               <Button variant="outline" onClick={goBackToShow} disabled={isRejoining} className="sm:min-w-40">
-                Back to show
+                Exit
               </Button>
             </div>
           ) : null}
