@@ -50,7 +50,6 @@ export function AdminWalkInButton({
         showName={showName}
         schedules={schedules}
         confirmButtonLabel="Confirm & Start Walk-In"
-        confirmLoadingLabel="Opening walk-in room..."
         onConfirm={handleConfirm}
       />
     </>

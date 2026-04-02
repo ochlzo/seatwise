@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,6 @@ type Step = "date" | "time";
 
 interface ScheduleSelectionDialogProps {
   confirmButtonLabel: string;
-  confirmLoadingLabel: string;
   onConfirm: (schedId: string) => Promise<void> | void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -45,7 +44,6 @@ interface ScheduleSelectionDialogProps {
 
 export function ScheduleSelectionDialog({
   confirmButtonLabel,
-  confirmLoadingLabel,
   onConfirm,
   onOpenChange,
   open,
@@ -305,10 +303,9 @@ export function ScheduleSelectionDialog({
               <Button
                 onClick={() => void handleConfirmClick()}
                 disabled={!selectedSchedId || isSubmitting}
-                className="gap-2 text-xs sm:text-sm"
+                className="text-xs sm:text-sm"
               >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {isSubmitting ? confirmLoadingLabel : confirmButtonLabel}
+                {confirmButtonLabel}
               </Button>
             </DialogFooter>
           </>

@@ -2,12 +2,11 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, Clock3, Users, CheckCircle2, AlertTriangle } from "lucide-react";
 import { getOrCreateGuestId } from "@/lib/guest";
 import { getProceedWindowDeadline } from "@/lib/queue/proceedWindow";
+import { QueueStatePanel } from "@/components/queue/QueueStatePanel";
 
 type QueueStatusResponse = {
   success: boolean;
@@ -45,6 +44,25 @@ const formatDuration = (ms: number) => {
 const toDisplayRank = (rank?: number) => {
   if (typeof rank !== "number" || !Number.isFinite(rank)) return null;
   return rank;
+};
+
+const getQueueBadgeLabel = (status?: QueueStatusResponse["status"]) => {
+  switch (status) {
+    case "waiting":
+      return "Waiting";
+    case "active":
+      return "Ready";
+    case "paused":
+      return "Paused";
+    case "expired":
+      return "Turn missed";
+    case "closed":
+      return "Closed";
+    case "not_joined":
+      return "Not joined";
+    default:
+      return undefined;
+  }
 };
 
 export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
@@ -482,199 +500,176 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     };
   }, [hasTerminableTicket, schedId, showId]);
 
-  return (
-    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 p-4 md:p-8">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Queue Status
-          </CardTitle>
-          <CardDescription>
-            {status?.showName ? `${status.showName}` : "Loading show..."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading queue status...
-            </div>
-          )}
+  const activeStatusLabel = getQueueBadgeLabel(status?.status);
+  const rankValue = toDisplayRank(status?.rank);
+  const estimatedWaitMinutes =
+    status?.estimatedWaitMinutes ?? Math.ceil((status?.etaMs ?? 0) / 60000);
+  const queueTitle =
+    status?.status === "active"
+      ? "Your turn is ready"
+      : status?.status === "paused"
+        ? "The queue is paused"
+        : status?.status === "expired" || status?.status === "not_joined"
+          ? "You missed your turn"
+          : "You're in line";
+  const queueDescription =
+    status?.status === "active"
+      ? "You have one minute to move into the reservation room."
+      : status?.status === "paused"
+        ? status.message || "We’ll keep your place and update you when the queue resumes."
+        : status?.status === "expired" || status?.status === "not_joined"
+          ? PROCEED_WINDOW_EXPIRED_MESSAGE
+          : status?.showName
+            ? `We’ll keep this page updated while you wait for ${status.showName}.`
+            : "We’ll keep this page updated while you wait.";
 
-          {error && (
-            <div
-              className={
-                isProceedWindowExpired
-                  ? "rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/60 dark:bg-amber-950/20"
-                  : ""
-              }
-            >
-              <div
-                className={
-                  isProceedWindowExpired
-                    ? "mx-auto flex max-w-lg flex-col items-center gap-4 text-center"
-                    : "flex items-center gap-2 text-sm text-red-600"
-                }
-              >
-                <AlertTriangle className={isProceedWindowExpired ? "h-6 w-6" : "h-4 w-4"} />
-                <span className={isProceedWindowExpired ? "text-base font-medium sm:text-lg" : ""}>
-                  {error}
-                </span>
-              </div>
-              {isProceedWindowExpired && (
-                <div className="mt-4 flex w-full max-w-xs items-center justify-center gap-3">
-                  <Button onClick={handleRejoinQueue} disabled={isRejoining} className="flex-1">
-                    {isRejoining ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : null}
+  return (
+    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 lg:p-8">
+      {isLoading ? (
+        <QueueStatePanel
+          tone="neutral"
+          icon={<Loader2 className="h-5 w-5 animate-spin" />}
+          title="Checking your place"
+          description="Please wait a moment while we load your queue status."
+          badgeLabel="Queue"
+        >
+          <div className="text-sm text-muted-foreground">This usually takes just a moment.</div>
+        </QueueStatePanel>
+      ) : null}
+
+      {!isLoading && error ? (
+        <QueueStatePanel
+          tone={isProceedWindowExpired ? "warning" : "danger"}
+          icon={<AlertTriangle className="h-5 w-5" />}
+          title={isProceedWindowExpired ? "You missed your turn" : "We couldn’t load your queue status"}
+          description={
+            isProceedWindowExpired
+              ? PROCEED_WINDOW_EXPIRED_MESSAGE
+              : "Something interrupted the update. You can try again or return to the show."
+          }
+          badgeLabel={isProceedWindowExpired ? "Missed turn" : "Try again"}
+          footer={
+            <div className="flex flex-col gap-3 sm:flex-row">
+              {isProceedWindowExpired ? (
+                <>
+                  <Button onClick={handleRejoinQueue} disabled={isRejoining} className="sm:min-w-40">
                     Rejoin queue
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={goBackToShow}
-                    disabled={isRejoining}
-                    className="flex-1"
-                  >
+                  <Button variant="outline" onClick={goBackToShow} disabled={isRejoining} className="sm:min-w-40">
                     Back to show
                   </Button>
-                </div>
+                </>
+              ) : (
+                <>
+                  <Button onClick={fetchStatus} className="sm:min-w-40">
+                    Try again
+                  </Button>
+                  <Button variant="outline" onClick={goBackToShow} className="sm:min-w-40">
+                    Back to show
+                  </Button>
+                </>
               )}
             </div>
-          )}
+          }
+        />
+      ) : null}
 
-          {!isLoading && !error && status && (
-            <>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{status.status.toUpperCase()}</Badge>
-                {status.ticketId && (
-                  <span className="text-xs text-muted-foreground">Ticket: {status.ticketId}</span>
-                )}
-              </div>
-
-              {status.message && (
-                <p className="text-sm text-muted-foreground">{status.message}</p>
-              )}
-
-              {status.status === "waiting" && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-md border p-3">
-                      <div className="text-xs text-muted-foreground">You&apos;re in</div>
-                      <div className="text-2xl font-semibold">
-                        {toDisplayRank(status.rank) ? `#${toDisplayRank(status.rank)}` : "-"}
-                      </div>
-                      {status.rank === 1 && (
-                        <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                          Almost there - someone is still finalizing their seat, and you&apos;re next in line.
-                        </p>
-                      )}
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <div className="text-xs text-muted-foreground">Estimated wait</div>
-                      <div className="text-2xl font-semibold">
-                        ~{status.estimatedWaitMinutes ?? Math.ceil((status.etaMs ?? 0) / 60000)} min
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-start gap-2">
-                    <Button variant="outline" onClick={goBackToShow}>
-                      Exit queue
-                    </Button>
-                  </div>
+      {!isLoading && !error && status ? (
+        <QueueStatePanel
+          tone={
+            status.status === "active"
+              ? "success"
+              : status.status === "paused"
+                ? "warning"
+                : status.status === "expired" || status.status === "not_joined"
+                  ? "danger"
+                  : "neutral"
+          }
+          icon={
+            status.status === "active" ? (
+              <CheckCircle2 className="h-5 w-5" />
+            ) : status.status === "paused" || status.status === "expired" || status.status === "not_joined" ? (
+              <AlertTriangle className="h-5 w-5" />
+            ) : (
+              <Users className="h-5 w-5" />
+            )
+          }
+          title={queueTitle}
+          description={queueDescription}
+          badgeLabel={activeStatusLabel}
+        >
+          {status.status === "waiting" ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-sidebar-border/70 bg-background/80 p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Your place</div>
+                <div className="mt-1 text-3xl font-semibold tracking-tight">
+                  {rankValue ? `#${rankValue}` : "—"}
                 </div>
-              )}
-
-              {status.status === "active" && (
-                <div className="space-y-3 rounded-md border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/30">
-                  <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
-                    <CheckCircle2 className="h-5 w-5" />
-                    <span className="font-medium">Your turn is active</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Clock3 className="h-4 w-4" />
-                    Expires in:{" "}
-                    <span className="font-semibold">
-                      {proceedRemainingMs !== undefined ? formatDuration(proceedRemainingMs) : "--:--"}
-                    </span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Use this active window to proceed with seat reservation.
-                  </div>
-                  <div className="flex items-center justify-start gap-2">
-                    <Button
-                      onClick={proceedToReservation}
-                      className="w-fit"
-                      disabled={isDeferring || isProceeding}
-                    >
-                      {isProceeding ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Preparing...
-                        </>
-                      ) : (
-                        "Proceed to seat reservation"
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleMaybeLater}
-                      disabled={isDeferring || isProceeding}
-                      className="w-fit"
-                    >
-                      {isDeferring ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Leaving...
-                        </>
-                      ) : (
-                        "Maybe later"
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {status.status === "paused" && (
-                <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-                  <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-                    <AlertTriangle className="h-5 w-5" />
-                    <span className="font-medium">Queue temporarily paused</span>
-                  </div>
-                  <p className="text-sm text-amber-900/80 dark:text-amber-100/80">
-                    {status.message}
+                {status.rank === 1 ? (
+                  <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+                    You&apos;re next once the current turn clears.
                   </p>
-                  {typeof status.rank === "number" && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-md border border-amber-200/70 bg-background/70 p-3 dark:border-amber-900/60">
-                        <div className="text-xs text-muted-foreground">Your spot</div>
-                        <div className="text-2xl font-semibold">#{status.rank}</div>
-                      </div>
-                      <div className="rounded-md border border-amber-200/70 bg-background/70 p-3 dark:border-amber-900/60">
-                        <div className="text-xs text-muted-foreground">Estimated wait</div>
-                        <div className="text-2xl font-semibold">
-                          ~{status.estimatedWaitMinutes ?? Math.ceil((status.etaMs ?? 0) / 60000)} min
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-start gap-2">
-                    <Button variant="outline" onClick={goBackToShow}>
-                      Leave queue and go back
-                    </Button>
-                  </div>
-                </div>
-              )}
+                ) : null}
+              </div>
+              <div className="rounded-2xl border border-sidebar-border/70 bg-background/80 p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Estimated wait</div>
+                <div className="mt-1 text-3xl font-semibold tracking-tight">~{estimatedWaitMinutes} min</div>
+              </div>
+            </div>
+          ) : null}
 
-              {(status.status === "closed" || status.status === "expired" || status.status === "not_joined") && (
-                <Button variant="outline" onClick={goBackToShow}>
-                  Back to show
+          {status.status === "active" ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-sidebar-border/70 bg-background px-3 py-2 text-sm font-medium">
+                  <Clock3 className="h-4 w-4" />
+                  Proceed within{" "}
+                  <span className="font-semibold">
+                    {proceedRemainingMs !== undefined ? formatDuration(proceedRemainingMs) : "--:--"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button onClick={proceedToReservation} disabled={isDeferring || isProceeding} className="sm:min-w-56">
+                  Proceed to seats
                 </Button>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+                <Button
+                  variant="outline"
+                  onClick={handleMaybeLater}
+                  disabled={isDeferring || isProceeding}
+                  className="sm:min-w-40"
+                >
+                  Not now
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {status.status === "paused" ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-sidebar-border/70 bg-background/80 p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Your place</div>
+                <div className="mt-1 text-3xl font-semibold tracking-tight">{rankValue ? `#${rankValue}` : "—"}</div>
+              </div>
+              <div className="rounded-2xl border border-sidebar-border/70 bg-background/80 p-4">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Estimated wait</div>
+                <div className="mt-1 text-3xl font-semibold tracking-tight">~{estimatedWaitMinutes} min</div>
+              </div>
+            </div>
+          ) : null}
+
+          {(status.status === "closed" || status.status === "expired" || status.status === "not_joined") ? (
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button onClick={handleRejoinQueue} disabled={isRejoining} className="sm:min-w-40">
+                Rejoin queue
+              </Button>
+              <Button variant="outline" onClick={goBackToShow} disabled={isRejoining} className="sm:min-w-40">
+                Back to show
+              </Button>
+            </div>
+          ) : null}
+        </QueueStatePanel>
+      ) : null}
     </div>
   );
 }

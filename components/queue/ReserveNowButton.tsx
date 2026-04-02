@@ -17,13 +17,6 @@ interface ReserveNowButtonProps {
   schedules: SchedulePickerOption[];
 }
 
-type JoinPhase =
-  | "idle"
-  | "joining_queue"
-  | "processing_response"
-  | "saving_session"
-  | "redirecting";
-
 export function ReserveNowButton({
   showId,
   showName,
@@ -31,11 +24,10 @@ export function ReserveNowButton({
 }: ReserveNowButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [joinPhase, setJoinPhase] = useState<JoinPhase>("idle");
-  const isJoining = joinPhase !== "idle";
+  const [isJoining, setIsJoining] = useState(false);
 
   const handleJoinQueue = async (selectedSchedId: string) => {
-    setJoinPhase("joining_queue");
+    setIsJoining(true);
     try {
       const guestId = getOrCreateGuestId();
       const response = await fetch("/api/queue/join", {
@@ -44,7 +36,6 @@ export function ReserveNowButton({
         body: JSON.stringify({ showId, schedId: selectedSchedId, guestId }),
       });
 
-      setJoinPhase("processing_response");
       const data = await response.json();
 
       if (!response.ok || !data.success) {
@@ -54,7 +45,6 @@ export function ReserveNowButton({
           toast.warning("Queue temporarily paused", {
             description: message,
           });
-          setJoinPhase("idle");
           return;
         }
 
@@ -67,7 +57,6 @@ export function ReserveNowButton({
         data.activeToken &&
         data.expiresAt
       ) {
-        setJoinPhase("saving_session");
         const showScopeId = `${showId}:${selectedSchedId}`;
         const storageKey = `seatwise:active:${showScopeId}:${data.ticket.ticketId}`;
         sessionStorage.setItem(
@@ -81,10 +70,9 @@ export function ReserveNowButton({
         );
 
         toast.success("Your reservation window is active!", {
-          description: "Proceeding to reservation room...",
+          description: "Taking you to the reservation room.",
         });
 
-        setJoinPhase("redirecting");
         setJoinTransitionState(showScopeId);
         setIsOpen(false);
         router.push(`/reserve/${showId}/${selectedSchedId}`);
@@ -95,7 +83,6 @@ export function ReserveNowButton({
         description: `You're #${data.rank} in line. Estimated wait: ~${data.estimatedWaitMinutes} min`,
       });
 
-      setJoinPhase("redirecting");
       setIsOpen(false);
       router.push(`/queue/${showId}/${selectedSchedId}`);
     } catch (error) {
@@ -103,8 +90,9 @@ export function ReserveNowButton({
         description:
           error instanceof Error ? error.message : "Please try again",
       });
-      setJoinPhase("idle");
       throw error;
+    } finally {
+      setIsJoining(false);
     }
   };
 
@@ -124,22 +112,10 @@ export function ReserveNowButton({
         onOpenChange={(open) => {
           if (isJoining) return;
           setIsOpen(open);
-          if (!open) {
-            setJoinPhase("idle");
-          }
         }}
         showName={showName}
         schedules={schedules}
         confirmButtonLabel="Confirm & Join Queue"
-        confirmLoadingLabel={
-          joinPhase === "joining_queue"
-            ? "Joining queue..."
-            : joinPhase === "processing_response"
-              ? "Processing response..."
-              : joinPhase === "saving_session"
-                ? "Preparing reservation room..."
-                : "Redirecting..."
-        }
         onConfirm={handleJoinQueue}
       />
     </>

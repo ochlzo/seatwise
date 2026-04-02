@@ -32,6 +32,7 @@ import {
 import { type SeatmapPreviewCategory } from "@/components/seatmap/CategoryAssignPanel";
 import { toast } from "@/components/ui/sonner";
 import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPanel";
+import { QueueStatePanel } from "@/components/queue/QueueStatePanel";
 import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
 import { getOrCreateGuestId } from "@/lib/guest";
 import { clearJoinTransitionState } from "@/lib/queue/joinTransition";
@@ -412,7 +413,7 @@ export function ReserveSeatClient({
 
       const stored = getStoredSession(showScopeId);
       if (!stored) {
-        setError("No active queue session found. Join the queue first.");
+        setError("We couldn’t find your active turn. Rejoin the queue to continue.");
         setIsLoading(false);
         return;
       }
@@ -1032,7 +1033,7 @@ export function ReserveSeatClient({
 
     const stored = getStoredSession(showScopeId);
     if (!stored) {
-      setError("No active queue session found. Join the queue first.");
+      setError("We couldn’t find your active turn. Rejoin the queue to continue.");
       return;
     }
 
@@ -1234,7 +1235,7 @@ export function ReserveSeatClient({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                   <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
-                    {showName || "Validating your queue access token..."}
+                    {showName || "Getting your reservation room ready..."}
                   </CardTitle>
                 </div>
                 {!isLoading && !error && !isWalkInMode && expiresAt && (
@@ -1361,81 +1362,63 @@ export function ReserveSeatClient({
           )}
 
           {!isSuccess && !isWalkInPostFinalize && isLoading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Verifying active session...
-            </div>
+            <QueueStatePanel
+              tone="neutral"
+              icon={<Loader2 className="h-5 w-5 animate-spin" />}
+              title="Checking your place"
+              description="Please keep this tab open while we confirm your turn."
+              badgeLabel="Loading"
+            >
+              <div className="text-sm text-muted-foreground">This usually takes just a moment.</div>
+            </QueueStatePanel>
           )}
 
           {!isSuccess && !isWalkInPostFinalize && !isLoading && error && (
-            <div
-              className={
+            <QueueStatePanel
+              tone={isExpiredWindowError ? "warning" : "danger"}
+              icon={<AlertTriangle className="h-5 w-5" />}
+              title={
                 isExpiredWindowError
-                  ? "rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20"
-                  : ""
+                  ? "Your turn ended"
+                  : "We couldn’t open the reservation room"
               }
-            >
-              <div
-                className={
-                  isExpiredWindowError
-                    ? "flex min-h-[50vh] items-center justify-center px-4 py-8"
-                    : ""
-                }
-              >
-                <div
-                  className={
-                    isExpiredWindowError
-                      ? "mx-auto flex max-w-lg flex-col items-center gap-4 text-center"
-                      : "space-y-3"
-                  }
-                >
-                  <div className="flex items-center gap-2 text-sm text-red-600">
-                    <AlertTriangle
-                      className={isExpiredWindowError ? "h-6 w-6" : "h-4 w-4"}
-                    />
-                    <span
-                      className={
-                        isExpiredWindowError
-                          ? "text-base font-medium sm:text-lg"
-                          : ""
-                      }
-                    >
-                      {isExpiredWindowError
-                        ? isQueueRecoveryError
-                          ? "Your reservation window ended before checkout completed. Rejoin the queue to try again."
-                          : "Your time ran out. Rejoin the queue?"
-                        : error}
-                    </span>
-                  </div>
+              description={
+                isExpiredWindowError
+                  ? isQueueRecoveryError
+                    ? "Your reservation window ended before checkout was finished."
+                    : "Your turn expired before you could continue."
+                  : error
+              }
+              badgeLabel={isExpiredWindowError ? "Rejoin queue" : "Try again"}
+              footer={
+                <div className="flex flex-col gap-3 sm:flex-row">
                   {isExpiredWindowError ? (
-                    <div className="flex w-full max-w-xs items-center justify-center gap-3">
-                      <Button
-                        onClick={handleRejoinQueue}
-                        disabled={isRejoining}
-                        className="flex-1"
-                      >
-                        {isRejoining && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
+                    <>
+                      <Button onClick={handleRejoinQueue} disabled={isRejoining} className="sm:min-w-40">
                         Rejoin queue
                       </Button>
                       <Button
                         variant="outline"
                         onClick={handleDeclineRejoin}
                         disabled={isRejoining}
-                        className="flex-1"
+                        className="sm:min-w-40"
                       >
                         Back to show
                       </Button>
-                    </div>
+                    </>
                   ) : (
-                    <Button variant="outline" onClick={goToQueue}>
-                      Back to queue
-                    </Button>
+                    <>
+                      <Button variant="outline" onClick={goToQueue} className="sm:min-w-40">
+                        Back to queue
+                      </Button>
+                      <Button onClick={() => void router.refresh()} className="sm:min-w-40">
+                        Try again
+                      </Button>
+                    </>
                   )}
                 </div>
-              </div>
-            </div>
+              }
+            />
           )}
 
           {!isSuccess &&
