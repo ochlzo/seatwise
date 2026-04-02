@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { type SeatmapPreviewCategory, COLOR_CODE_TO_HEX } from "./CategoryAssignPanel";
 import { useTheme } from "next-themes";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 
 
@@ -107,6 +108,15 @@ export function SeatmapPreview({
   const lastStagePointerPosRef = React.useRef<{ x: number; y: number } | null>(null);
   const stageRef = React.useRef<KonvaStage | null>(null);
   const marqueeStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const touchGestureRef = React.useRef<{
+    mode: "pinch" | "pan";
+    startScale: number;
+    startPosition: { x: number; y: number };
+    startCenter: { x: number; y: number };
+    startDistance: number;
+    startTouchPoint?: { x: number; y: number };
+    isActive?: boolean;
+  } | null>(null);
   const [marqueeRect, setMarqueeRect] = React.useState({
     x: 0,
     y: 0,
@@ -114,6 +124,7 @@ export function SeatmapPreview({
     height: 0,
     visible: false,
   });
+  const isMobile = useIsMobile();
 
   React.useEffect(() => {
     if (!seatmapId) {
@@ -263,6 +274,127 @@ export function SeatmapPreview({
     return t.point(p);
   };
 
+  const getTouchPoint = React.useCallback((touch: Touch, stage: KonvaStage) => {
+    const rect = stage.container().getBoundingClientRect();
+    return {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    };
+  }, []);
+
+  const getTwoTouchGesture = React.useCallback(
+    (touches: TouchList | Touch[]) => {
+      const [touchA, touchB] = Array.from(touches).slice(0, 2);
+      const stage = stageRef.current;
+      if (!stage || !touchA || !touchB) return null;
+
+      const pointA = getTouchPoint(touchA, stage);
+      const pointB = getTouchPoint(touchB, stage);
+      const center = {
+        x: (pointA.x + pointB.x) / 2,
+        y: (pointA.y + pointB.y) / 2,
+      };
+      const distance = Math.hypot(pointB.x - pointA.x, pointB.y - pointA.y);
+
+      return { center, distance };
+    },
+    [getTouchPoint],
+  );
+
+  const clampScale = React.useCallback((value: number) => {
+    return Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
+  }, []);
+
+  const applyTouchGesture = React.useCallback(
+    (evt: TouchEvent) => {
+      const stage = stageRef.current;
+      if (!stage) return;
+
+      const gesture = touchGestureRef.current;
+      if (evt.touches.length >= 2) {
+        const next = getTwoTouchGesture(evt.touches);
+        if (!next) return;
+
+        if (!gesture || gesture.mode !== "pinch") {
+          const startScale = viewport.scale;
+          const startPosition = { ...viewport.position };
+          const startDistance = Math.max(next.distance, 1);
+          touchGestureRef.current = {
+            mode: "pinch",
+            startScale,
+            startPosition,
+            startCenter: next.center,
+            startDistance,
+            isActive: true,
+          };
+          return;
+        }
+
+        evt.preventDefault();
+        const nextScale = clampScale(
+          gesture.startScale * (next.distance / gesture.startDistance),
+        );
+        const anchorWorld = {
+          x: (gesture.startCenter.x - gesture.startPosition.x) / gesture.startScale,
+          y: (gesture.startCenter.y - gesture.startPosition.y) / gesture.startScale,
+        };
+        const nextPosition = {
+          x: next.center.x - anchorWorld.x * nextScale,
+          y: next.center.y - anchorWorld.y * nextScale,
+        };
+        setViewport({ position: nextPosition, scale: nextScale });
+        return;
+      }
+
+      if (evt.touches.length === 1) {
+        const touch = evt.touches[0];
+        if (!touch) return;
+
+        if (!gesture || gesture.mode !== "pan") {
+          const startTouchPoint = getTouchPoint(touch, stage);
+          touchGestureRef.current = {
+            mode: "pan",
+            startScale: viewport.scale,
+            startPosition: { ...viewport.position },
+            startCenter: startTouchPoint,
+            startDistance: 0,
+            startTouchPoint,
+            isActive: false,
+          };
+          return;
+        }
+
+        if (!gesture.startTouchPoint) return;
+
+        const currentPoint = getTouchPoint(touch, stage);
+        const dx = currentPoint.x - gesture.startTouchPoint.x;
+        const dy = currentPoint.y - gesture.startTouchPoint.y;
+        const movedEnough = Math.hypot(dx, dy) >= 6;
+
+        if (!gesture.isActive && !movedEnough) {
+          return;
+        }
+
+        evt.preventDefault();
+        touchGestureRef.current = {
+          ...gesture,
+          isActive: true,
+        };
+        setViewport({
+          position: {
+            x: gesture.startPosition.x + dx,
+            y: gesture.startPosition.y + dy,
+          },
+          scale: gesture.startScale,
+        });
+        return;
+      }
+
+      touchGestureRef.current = null;
+    },
+    [clampScale, getTouchPoint, getTwoTouchGesture, viewport.position, viewport.scale],
+  );
+
   const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
     if (mode === "pan") {
       setIsPanning(true);
@@ -360,34 +492,93 @@ export function SeatmapPreview({
     }
   };
 
+  const handleTouchStart = (e: KonvaEventObject<TouchEvent>) => {
+    if (e.evt.touches.length >= 2) {
+      e.evt.preventDefault();
+      applyTouchGesture(e.evt);
+      return;
+    }
+
+    const stage = e.target.getStage();
+    if (!stage) return;
+    const touch = e.evt.touches[0];
+    if (!touch) return;
+
+    touchGestureRef.current = {
+      mode: "pan",
+      startScale: viewport.scale,
+      startPosition: { ...viewport.position },
+      startCenter: getTouchPoint(touch, stage),
+      startDistance: 0,
+      startTouchPoint: getTouchPoint(touch, stage),
+      isActive: false,
+    };
+  };
+
+  const handleTouchMove = (e: KonvaEventObject<TouchEvent>) => {
+    applyTouchGesture(e.evt);
+  };
+
+  const handleTouchEnd = (e: KonvaEventObject<TouchEvent>) => {
+    if (e.evt.touches.length === 0) {
+      touchGestureRef.current = null;
+      return;
+    }
+
+    if (e.evt.touches.length === 1 && touchGestureRef.current?.mode === "pinch") {
+      const stage = e.target.getStage();
+      const touch = e.evt.touches[0];
+      if (!stage || !touch) {
+        touchGestureRef.current = null;
+        return;
+      }
+
+      const point = getTouchPoint(touch, stage);
+      touchGestureRef.current = {
+        mode: "pan",
+        startScale: viewport.scale,
+        startPosition: { ...viewport.position },
+        startCenter: point,
+        startDistance: 0,
+        startTouchPoint: point,
+        isActive: true,
+      };
+    }
+  };
+
   return (
     <div
       ref={containerRef}
-      className={`relative w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white dark:bg-zinc-950 ${heightClassName ?? "h-[320px]"} ${className ?? ""}`.trim()}
+      className={`relative w-full overflow-hidden rounded-md border border-sidebar-border/60 bg-white dark:bg-zinc-950 touch-none overscroll-contain ${heightClassName ?? "h-[320px]"} ${className ?? ""}`.trim()}
+      style={{ touchAction: "none", overscrollBehavior: "contain" }}
     >
       <div className={cn(
         "absolute z-10 flex flex-col gap-2 bg-white dark:bg-zinc-900 shadow-lg border border-zinc-200 dark:border-zinc-800",
         "left-2 top-2 p-1 rounded-md gap-1"
       )}>
-        <Button
-          variant={mode === "select" ? "default" : "ghost"}
-          size="icon"
-          onClick={() => setMode("select")}
-          title="Select Mode"
-          className="h-7 w-7"
-        >
-          <MousePointer2 className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant={mode === "pan" ? "default" : "ghost"}
-          size="icon"
-          onClick={() => setMode("pan")}
-          title="Pan Mode"
-          className="h-7 w-7"
-        >
-          <Move className="h-3.5 w-3.5" />
-        </Button>
-        <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 my-0.5" />
+        {!isMobile ? (
+          <>
+            <Button
+              variant={mode === "select" ? "default" : "ghost"}
+              size="icon"
+              onClick={() => setMode("select")}
+              title="Select Mode"
+              className="h-7 w-7"
+            >
+              <MousePointer2 className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant={mode === "pan" ? "default" : "ghost"}
+              size="icon"
+              onClick={() => setMode("pan")}
+              title="Pan Mode"
+              className="h-7 w-7"
+            >
+              <Move className="h-3.5 w-3.5" />
+            </Button>
+            <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700 my-0.5" />
+          </>
+        ) : null}
         <Button
           variant={zoomLocked ? "default" : "ghost"}
           size="icon"
@@ -481,6 +672,10 @@ export function SeatmapPreview({
           onMouseDown={handleStageMouseDown}
           onMouseMove={handleStageMouseMove}
           onMouseUp={handleStageMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
           onClick={handleStageClick}
           onTap={handleStageClick}
           x={viewport.position.x}
