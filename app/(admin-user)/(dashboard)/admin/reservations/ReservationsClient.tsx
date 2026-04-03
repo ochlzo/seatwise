@@ -53,6 +53,9 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { useAppSelector } from "@/lib/hooks";
 import { getAdminPaymentDisplay } from "@/lib/reservations/adminPaymentDisplay";
@@ -159,6 +162,16 @@ type PendingMove = {
   targetStatus: "CONFIRMED" | "REJECTED";
   source: "drag" | "portal";
 };
+
+type ReservationEditDraft = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+  address: string;
+};
+
+type ResendAction = "payment" | "ticket";
 
 type StageUpdateResponse = {
   success: boolean;
@@ -313,6 +326,59 @@ const getCustomerName = (user: UserReservationRow["user"]) =>
 const getDisplayValue = (value: string | null | undefined) => {
   const normalized = value?.trim();
   return normalized ? normalized : "-";
+};
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const buildReservationEditDraft = (
+  reservation: Pick<
+    ReservationData,
+    "first_name" | "last_name" | "email" | "phone_number" | "address"
+  >,
+): ReservationEditDraft => ({
+  first_name: reservation.first_name,
+  last_name: reservation.last_name,
+  email: reservation.email,
+  phone_number: reservation.phone_number,
+  address: reservation.address,
+});
+
+const getReservationEditErrors = (draft: ReservationEditDraft) => {
+  const errors: Partial<Record<keyof ReservationEditDraft, string>> = {};
+
+  if (!draft.first_name.trim()) {
+    errors.first_name = "First name is required.";
+  }
+
+  if (!draft.last_name.trim()) {
+    errors.last_name = "Last name is required.";
+  }
+
+  if (!draft.email.trim()) {
+    errors.email = "Email is required.";
+  } else if (!EMAIL_REGEX.test(draft.email.trim().toLowerCase())) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  if (!draft.phone_number.trim()) {
+    errors.phone_number = "Phone number is required.";
+  }
+
+  if (!draft.address.trim()) {
+    errors.address = "Address is required.";
+  }
+
+  return errors;
+};
+
+const getReservedEmail = (value: string) => value.trim().toLowerCase();
+
+const getReservationResendEmail = (
+  selectedCard: KanbanCard | null,
+  reservationEditDraft: ReservationEditDraft | null,
+) => {
+  if (!selectedCard) return "";
+  return reservationEditDraft ? getReservedEmail(reservationEditDraft.email) : selectedCard.row.user.email.trim().toLowerCase();
 };
 
 const isWalkInRow = (row: UserReservationRow) =>
@@ -697,6 +763,20 @@ export function ReservationsClient() {
   const [isPortalVisible, setIsPortalVisible] = React.useState(false);
   const [isPortalScrollReady, setIsPortalScrollReady] = React.useState(false);
   const [isImageExpanded, setIsImageExpanded] = React.useState(false);
+  const [isEditingReservation, setIsEditingReservation] = React.useState(false);
+  const [reservationEditDraft, setReservationEditDraft] =
+    React.useState<ReservationEditDraft | null>(null);
+  const [reservationEditErrors, setReservationEditErrors] = React.useState<
+    Partial<Record<keyof ReservationEditDraft, string>>
+  >({});
+  const [isSavingReservationEdits, setIsSavingReservationEdits] =
+    React.useState(false);
+  const [resendCooldowns, setResendCooldowns] = React.useState<
+    Partial<Record<ResendAction, number>>
+  >({});
+  const [resendLoadingAction, setResendLoadingAction] =
+    React.useState<ResendAction | null>(null);
+  const [resendCooldownTick, setResendCooldownTick] = React.useState(0);
   const [optimisticCardStatuses, setOptimisticCardStatuses] = React.useState<
     Partial<Record<string, KanbanStatus>>
   >({});
@@ -711,6 +791,7 @@ export function ReservationsClient() {
   const rollbackTimeoutRef = React.useRef<number | null>(null);
   const portalTimeoutRef = React.useRef<number | null>(null);
   const portalScrollTimeoutRef = React.useRef<number | null>(null);
+  const resendCooldownIntervalRef = React.useRef<number | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -737,6 +818,9 @@ export function ReservationsClient() {
       }
       if (portalScrollTimeoutRef.current !== null) {
         window.clearTimeout(portalScrollTimeoutRef.current);
+      }
+      if (resendCooldownIntervalRef.current !== null) {
+        window.clearInterval(resendCooldownIntervalRef.current);
       }
     };
   }, []);
@@ -794,6 +878,28 @@ export function ReservationsClient() {
       setIsImageExpanded(false);
     }
   }, [selectedCardId]);
+
+  React.useEffect(() => {
+    const hasActiveCooldown = Object.values(resendCooldowns).some(
+      (cooldownUntil) => typeof cooldownUntil === "number" && cooldownUntil > Date.now(),
+    );
+
+    if (!hasActiveCooldown) {
+      if (resendCooldownIntervalRef.current !== null) {
+        window.clearInterval(resendCooldownIntervalRef.current);
+        resendCooldownIntervalRef.current = null;
+      }
+      return;
+    }
+
+    if (resendCooldownIntervalRef.current !== null) {
+      return;
+    }
+
+    resendCooldownIntervalRef.current = window.setInterval(() => {
+      setResendCooldownTick((value) => value + 1);
+    }, 1000);
+  }, [resendCooldowns]);
 
   React.useEffect(() => {
     if (!isPendingMoveSubmitting || !pendingMove) {
@@ -1322,6 +1428,221 @@ export function ReservationsClient() {
   const selectedCardAdminNickname = selectedCard
     ? getDisplayValue(selectedCard.row.user.admin_nickname)
     : "-";
+  const selectedCardUser = selectedCard?.row.user ?? null;
+
+  React.useEffect(() => {
+    if (!selectedCardUser) {
+      setIsEditingReservation(false);
+      setReservationEditDraft(null);
+      setReservationEditErrors({});
+      return;
+    }
+
+    setReservationEditDraft(buildReservationEditDraft(selectedCardUser));
+    setReservationEditErrors({});
+    setIsEditingReservation(false);
+  }, [selectedCardUser]);
+
+  const selectedCardResendEmail = getReservationResendEmail(
+    selectedCard ?? null,
+    reservationEditDraft,
+  );
+
+  const getResendCooldownRemaining = React.useCallback(
+    (action: ResendAction) => {
+      void resendCooldownTick;
+      const cooldownUntil = resendCooldowns[action];
+      if (!cooldownUntil) return 0;
+
+      return Math.max(
+        0,
+        Math.ceil((cooldownUntil - Date.now()) / 1000),
+      );
+    },
+    [resendCooldownTick, resendCooldowns],
+  );
+
+  const isResendCoolingDown = React.useCallback(
+    (action: ResendAction) => getResendCooldownRemaining(action) > 0,
+    [getResendCooldownRemaining],
+  );
+
+  const selectedCardHasWalkInPayment = Boolean(
+    selectedCard?.row.reservations.some(
+      (reservation) => reservation.payment?.method === "WALK_IN",
+    ),
+  );
+
+  const showPaymentCopyResend =
+    Boolean(selectedCard) &&
+    !selectedCardHasWalkInPayment &&
+    (selectedCard?.status === "PENDING" ||
+      selectedCard?.status === "CONFIRMED" ||
+      selectedCard?.status === "REJECTED");
+
+  const showTicketResend =
+    Boolean(selectedCard) &&
+    (selectedCardHasWalkInPayment || selectedCard?.status === "CONFIRMED");
+
+  const updateReservationInShows = React.useCallback(
+    (reservationId: string, nextReservation: Partial<ReservationData>) => {
+      setShows((prev) =>
+        prev.map((show) => ({
+          ...show,
+          reservations: show.reservations.map((reservation) =>
+            reservation.reservation_id === reservationId
+              ? { ...reservation, ...nextReservation }
+              : reservation,
+          ),
+        })),
+      );
+    },
+    [],
+  );
+
+  const handleStartEditingReservation = React.useCallback(() => {
+    if (!selectedCard) return;
+    setReservationEditDraft(buildReservationEditDraft(selectedCard.row.user));
+    setReservationEditErrors({});
+    setIsEditingReservation(true);
+  }, [selectedCard]);
+
+  const handleCancelEditingReservation = React.useCallback(() => {
+    if (!selectedCard) return;
+
+    setReservationEditDraft(buildReservationEditDraft(selectedCard.row.user));
+    setReservationEditErrors({});
+    setIsEditingReservation(false);
+  }, [selectedCard]);
+
+  const applyResendCooldown = React.useCallback(
+    (action: ResendAction, cooldownUntil: number | null | undefined) => {
+      if (!cooldownUntil) return;
+
+      setResendCooldowns((prev) => ({
+        ...prev,
+        [action]: cooldownUntil,
+      }));
+    },
+    [],
+  );
+
+  const handleSaveReservationEdits = React.useCallback(async () => {
+    if (!selectedCard || !reservationEditDraft) return;
+
+    const nextErrors = getReservationEditErrors(reservationEditDraft);
+    setReservationEditErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
+      toast.error("Please fix the highlighted customer details.");
+      return;
+    }
+
+    const reservationId = selectedCard.row.reservations[0]?.reservation_id;
+    if (!reservationId) {
+      toast.error("Reservation record could not be loaded.");
+      return;
+    }
+
+    setIsSavingReservationEdits(true);
+
+    try {
+      const response = await fetch(`/api/reservations/${reservationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: reservationEditDraft.first_name.trim(),
+          last_name: reservationEditDraft.last_name.trim(),
+          email: getReservedEmail(reservationEditDraft.email),
+          phone_number: reservationEditDraft.phone_number.trim(),
+          address: reservationEditDraft.address.trim(),
+        }),
+      });
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+        reservation?: Partial<ReservationData>;
+      };
+
+      if (!response.ok || !data.success || !data.reservation) {
+        throw new Error(data.error || "Failed to update reservation.");
+      }
+
+      updateReservationInShows(reservationId, data.reservation);
+      setReservationEditDraft({
+        first_name: data.reservation.first_name ?? reservationEditDraft.first_name.trim(),
+        last_name: data.reservation.last_name ?? reservationEditDraft.last_name.trim(),
+        email: data.reservation.email ?? getReservedEmail(reservationEditDraft.email),
+        phone_number:
+          data.reservation.phone_number ?? reservationEditDraft.phone_number.trim(),
+        address: data.reservation.address ?? reservationEditDraft.address.trim(),
+      });
+      setIsEditingReservation(false);
+      toast.success("Customer details updated.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update reservation.",
+      );
+    } finally {
+      setIsSavingReservationEdits(false);
+    }
+  }, [reservationEditDraft, selectedCard, updateReservationInShows]);
+
+  const handleResendReservationEmail = React.useCallback(
+    async (action: ResendAction) => {
+      if (!selectedCard || !selectedCardResendEmail) return;
+
+      const cooldownRemaining = getResendCooldownRemaining(action);
+      if (cooldownRemaining > 0) {
+        toast.notification(`Please wait ${cooldownRemaining}s before trying again.`);
+        return;
+      }
+
+      const endpoint =
+        action === "ticket"
+          ? "/api/reservations/resend-ticket"
+          : "/api/reservations/resend-email";
+
+      setResendLoadingAction(action);
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            showId: selectedCard.showId,
+            reservationNumber: selectedCard.row.reservationNumber,
+            email: selectedCardResendEmail,
+          }),
+        });
+
+        const data = (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          cooldownUntil?: number;
+        };
+
+        if (!response.ok || !data.success) {
+          if (typeof data.cooldownUntil === "number") {
+            applyResendCooldown(action, data.cooldownUntil);
+          }
+          throw new Error(data.error || "Failed to resend email.");
+        }
+
+        applyResendCooldown(action, data.cooldownUntil);
+        toast.success(
+          action === "ticket"
+            ? "E-ticket resent successfully."
+            : "Payment copy resent successfully.",
+        );
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to resend email.");
+      } finally {
+        setResendLoadingAction((prev) => (prev === action ? null : prev));
+      }
+    },
+    [applyResendCooldown, getResendCooldownRemaining, selectedCard, selectedCardResendEmail],
+  );
 
   const resolveDropTarget = React.useCallback(
     (overId: string): KanbanStatus | null => {
@@ -1714,13 +2035,31 @@ export function ReservationsClient() {
                   </>
                 ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedCardId(null)}
-                className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-black px-3 text-xs font-medium text-white shadow-sm sm:h-10 sm:text-sm"
-              >
-                Close
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 px-3 text-xs sm:h-10 sm:text-sm"
+                  disabled={!selectedCard || isSavingReservationEdits}
+                  onClick={() => {
+                    if (isEditingReservation) {
+                      handleCancelEditingReservation();
+                      return;
+                    }
+
+                    handleStartEditingReservation();
+                  }}
+                >
+                  {isEditingReservation ? "Cancel edit" : "Edit details"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCardId(null)}
+                  className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md bg-black px-3 text-xs font-medium text-white shadow-sm sm:h-10 sm:text-sm"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(420px,0.9fr)_minmax(0,1.1fr)]">
@@ -1747,44 +2086,191 @@ export function ReservationsClient() {
                   </div>
 
                   <section className="space-y-3 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
-                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
-                    <Mail className="h-3.5 w-3.5" />
-                    Customer Details
-                  </div>
-                  <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Customer Name
-                      </p>
-                      <p className="text-xs font-medium sm:text-sm">
-                        {getDisplayValue(selectedCardCustomerName)}
-                      </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
+                        <Mail className="h-3.5 w-3.5" />
+                        Customer Details
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Email
-                      </p>
-                      <p className="break-all text-xs font-medium sm:text-sm">
-                        {getDisplayValue(selectedCard.row.user.email)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Phone
-                      </p>
-                      <p className="text-xs font-medium sm:text-sm">
-                        {getDisplayValue(selectedCard.row.user.phone_number)}
-                      </p>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Address
-                      </p>
-                      <p className="text-xs font-medium sm:text-sm">
-                        {getDisplayValue(selectedCard.row.user.address)}
-                      </p>
-                    </div>
-                  </div>
+
+                    {isEditingReservation && reservationEditDraft ? (
+                      <div className="space-y-4 rounded-xl border border-amber-300 bg-amber-50/70 p-4 text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                        <div className="flex items-start gap-2 text-sm">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+                          <p>
+                            Changing the email updates where resend emails and the e-ticket will
+                            be delivered. Double-check the address before saving.
+                          </p>
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="reservation-first-name">First name</Label>
+                            <Input
+                              id="reservation-first-name"
+                              value={reservationEditDraft.first_name}
+                              onChange={(event) =>
+                                setReservationEditDraft((prev) =>
+                                  prev
+                                    ? { ...prev, first_name: event.target.value }
+                                    : prev,
+                                )
+                              }
+                              aria-invalid={!!reservationEditErrors.first_name}
+                            />
+                            {reservationEditErrors.first_name ? (
+                              <p className="text-xs text-destructive">
+                                {reservationEditErrors.first_name}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="reservation-last-name">Last name</Label>
+                            <Input
+                              id="reservation-last-name"
+                              value={reservationEditDraft.last_name}
+                              onChange={(event) =>
+                                setReservationEditDraft((prev) =>
+                                  prev ? { ...prev, last_name: event.target.value } : prev,
+                                )
+                              }
+                              aria-invalid={!!reservationEditErrors.last_name}
+                            />
+                            {reservationEditErrors.last_name ? (
+                              <p className="text-xs text-destructive">
+                                {reservationEditErrors.last_name}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="reservation-email">Email</Label>
+                            <Input
+                              id="reservation-email"
+                              type="email"
+                              value={reservationEditDraft.email}
+                              onChange={(event) =>
+                                setReservationEditDraft((prev) =>
+                                  prev ? { ...prev, email: event.target.value } : prev,
+                                )
+                              }
+                              aria-invalid={!!reservationEditErrors.email}
+                            />
+                            {reservationEditErrors.email ? (
+                              <p className="text-xs text-destructive">
+                                {reservationEditErrors.email}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="reservation-phone">Phone</Label>
+                            <Input
+                              id="reservation-phone"
+                              value={reservationEditDraft.phone_number}
+                              onChange={(event) =>
+                                setReservationEditDraft((prev) =>
+                                  prev
+                                    ? { ...prev, phone_number: event.target.value }
+                                    : prev,
+                                )
+                              }
+                              aria-invalid={!!reservationEditErrors.phone_number}
+                            />
+                            {reservationEditErrors.phone_number ? (
+                              <p className="text-xs text-destructive">
+                                {reservationEditErrors.phone_number}
+                              </p>
+                            ) : null}
+                          </div>
+
+                          <div className="space-y-2 sm:col-span-2">
+                            <Label htmlFor="reservation-address">Address</Label>
+                            <Textarea
+                              id="reservation-address"
+                              value={reservationEditDraft.address}
+                              onChange={(event) =>
+                                setReservationEditDraft((prev) =>
+                                  prev ? { ...prev, address: event.target.value } : prev,
+                                )
+                              }
+                              aria-invalid={!!reservationEditErrors.address}
+                              className="min-h-[96px]"
+                            />
+                            {reservationEditErrors.address ? (
+                              <p className="text-xs text-destructive">
+                                {reservationEditErrors.address}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap justify-end gap-2 pt-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-9 px-4 text-xs sm:text-sm"
+                            disabled={isSavingReservationEdits}
+                            onClick={handleCancelEditingReservation}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            className="h-9 px-4 text-xs sm:text-sm"
+                            disabled={isSavingReservationEdits}
+                            onClick={() => {
+                              void handleSaveReservationEdits();
+                            }}
+                          >
+                            {isSavingReservationEdits ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              "Save changes"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                        <div className="sm:col-span-2">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                            Customer Name
+                          </p>
+                          <p className="text-xs font-medium sm:text-sm">
+                            {getDisplayValue(selectedCardCustomerName)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                            Email
+                          </p>
+                          <p className="break-all text-xs font-medium sm:text-sm">
+                            {getDisplayValue(selectedCard.row.user.email)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                            Phone
+                          </p>
+                          <p className="text-xs font-medium sm:text-sm">
+                            {getDisplayValue(selectedCard.row.user.phone_number)}
+                          </p>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                            Address
+                          </p>
+                          <p className="text-xs font-medium sm:text-sm">
+                            {getDisplayValue(selectedCard.row.user.address)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </section>
 
                   <section className="space-y-4 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
@@ -1911,6 +2397,65 @@ export function ReservationsClient() {
                             ) : null}
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2">
+                            {showPaymentCopyResend ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-9 px-3 text-[11px] sm:text-xs"
+                                disabled={
+                                  isEditingReservation ||
+                                  isSavingReservationEdits ||
+                                  resendLoadingAction === "payment" ||
+                                  isResendCoolingDown("payment")
+                                }
+                                onClick={() => {
+                                  void handleResendReservationEmail("payment");
+                                }}
+                              >
+                                {resendLoadingAction === "payment" ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : isResendCoolingDown("payment") ? (
+                                  `Resend payment copy (${getResendCooldownRemaining("payment")}s)`
+                                ) : (
+                                  <>
+                                    <Mail className="mr-2 h-4 w-4" />
+                                    Resend payment copy
+                                  </>
+                                )}
+                              </Button>
+                            ) : null}
+                            {showTicketResend ? (
+                              <Button
+                                type="button"
+                                className="h-9 px-3 text-[11px] sm:text-xs"
+                                disabled={
+                                  isEditingReservation ||
+                                  isSavingReservationEdits ||
+                                  resendLoadingAction === "ticket" ||
+                                  isResendCoolingDown("ticket")
+                                }
+                                onClick={() => {
+                                  void handleResendReservationEmail("ticket");
+                                }}
+                              >
+                                {resendLoadingAction === "ticket" ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : isResendCoolingDown("ticket") ? (
+                                  `Resend e-ticket (${getResendCooldownRemaining("ticket")}s)`
+                                ) : (
+                                  <>
+                                    <Ticket className="mr-2 h-4 w-4" />
+                                    Resend e-ticket
+                                  </>
+                                )}
+                              </Button>
+                            ) : null}
                             {selectedCard.status !== "PENDING" ? (
                               <span
                                 className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-xs ${selectedCardStatusBadgeClassName}`}
@@ -1922,6 +2467,9 @@ export function ReservationsClient() {
                             ) : null}
                           </div>
                         </div>
+                        <p className="break-all text-xs text-muted-foreground">
+                          Recipient: {selectedCardResendEmail || "Email unavailable"}
+                        </p>
 
                         <div className="relative flex min-h-[60vh] items-center justify-center overflow-hidden bg-background">
                           {primaryPayment?.screenshot_url ? (

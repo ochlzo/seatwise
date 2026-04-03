@@ -178,6 +178,17 @@ type ResendTicketResponse = {
   cooldownUntil?: number;
 };
 
+type QueueJoinResponse = {
+  success: boolean;
+  error?: string;
+  ticket?: { ticketId?: string };
+  rank?: number;
+  estimatedWaitMinutes?: number;
+  status?: "waiting" | "active";
+  activeToken?: string;
+  expiresAt?: number;
+};
+
 const formatDuration = (ms: number) => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -224,6 +235,13 @@ const getStoredSession = (showScopeId: string): StoredActiveSession | null => {
   }
 
   return null;
+};
+
+const setStoredSession = (showScopeId: string, session: StoredActiveSession) => {
+  if (typeof window === "undefined") return;
+
+  const storageKey = `seatwise:active:${showScopeId}:${session.ticketId}`;
+  window.sessionStorage.setItem(storageKey, JSON.stringify(session));
 };
 
 const clearStoredSession = (showScopeId: string) => {
@@ -405,7 +423,14 @@ export function ReserveSeatClient({
   >(null);
   const [selectedTicketTemplateVersionId, setSelectedTicketTemplateVersionId] =
     React.useState<string | null>(null);
+  const [displaySeatStatusById, setDisplaySeatStatusById] = React.useState(
+    seatStatusById,
+  );
   const reservationStepForPresence = step;
+
+  React.useEffect(() => {
+    setDisplaySeatStatusById(seatStatusById);
+  }, [seatStatusById]);
 
   const resetWalkInSaleDraft = React.useCallback(() => {
     router.refresh();
@@ -861,8 +886,9 @@ export function ReserveSeatClient({
 
     const handleOffline = () => {
       if (!shouldGuard()) return;
-      void terminateQueueSession(false);
-      setError("Connection lost. Your queue session has been closed.");
+      const message = "Connection lost. Your active reservation room will stay open.";
+      setError(message);
+      toast.error(message);
     };
 
     const handleOnline = () => {
@@ -959,22 +985,7 @@ export function ReserveSeatClient({
     void terminateQueueSession(false);
   }, [showScopeId, terminateQueueSession]);
 
-  const goToQueue = () => {
-    if (isWalkInMode) {
-      router.push(returnHref ?? `/admin/shows/${showId}`);
-      return;
-    }
-
-    router.push(`/queue/${showId}/${schedId}`);
-  };
-
   const handleRejoinQueue = async () => {
-    if (isWalkInMode) {
-      setIsRejoining(true);
-      router.refresh();
-      return;
-    }
-
     setIsRejoining(true);
     try {
       const response = await fetch("/api/queue/join", {
@@ -984,20 +995,42 @@ export function ReserveSeatClient({
           showId,
           schedId,
           guestId: participantId,
+          displayName: isWalkInMode ? adminNickname.trim() || undefined : undefined,
         }),
       });
 
-      const data = (await response.json()) as {
-        success: boolean;
-        error?: string;
-      };
+      const data = (await response.json()) as QueueJoinResponse;
       if (!response.ok || !data.success) {
         const normalizedError = data.error?.toLowerCase() ?? "";
         if (normalizedError.includes("already in the queue")) {
-          router.push(`/queue/${showId}/${schedId}`);
+          if (isWalkInMode) {
+            allowNavigationRef.current = true;
+            router.push(returnHref ?? `/admin/shows/${showId}`);
+          } else {
+            router.push(`/queue/${showId}/${schedId}`);
+          }
           return;
         }
         throw new Error(data.error || "Failed to rejoin queue");
+      }
+
+      if (isWalkInMode) {
+        const ticketId = data.ticket?.ticketId;
+        if (data.status === "active" && data.activeToken && data.expiresAt && ticketId) {
+          setStoredSession(showScopeId, {
+            ticketId,
+            activeToken: data.activeToken,
+            expiresAt: data.expiresAt,
+            showScopeId,
+          });
+          allowNavigationRef.current = true;
+          router.refresh();
+          return;
+        }
+
+        allowNavigationRef.current = true;
+        router.push(returnHref ?? `/admin/shows/${showId}`);
+        return;
       }
 
       router.push(`/queue/${showId}/${schedId}`);
@@ -1448,6 +1481,13 @@ export function ReserveSeatClient({
         toast.warning(data.warning);
       }
       if (isWalkInMode) {
+        setDisplaySeatStatusById((current) => {
+          const nextStatusById = { ...current };
+          for (const seatId of selectedSeatIds) {
+            nextStatusById[seatId] = "CONSUMED";
+          }
+          return nextStatusById;
+        });
         setStep("post_finalize");
       } else {
         clearStoredSession(showScopeId);
@@ -1890,7 +1930,7 @@ export function ReserveSeatClient({
                     <>
                       <Button
                         variant="outline"
-                        onClick={goToQueue}
+                        onClick={handleRejoinQueue}
                         className="sm:min-w-40"
                       >
                         Back to queue
@@ -1926,7 +1966,7 @@ export function ReserveSeatClient({
                     onSelectionChange={handleSeatSelectionChange}
                     categories={seatmapCategories}
                     seatCategories={seatCategoryAssignments}
-                    seatStatusById={seatStatusById}
+                    seatStatusById={displaySeatStatusById}
                     showReservationOverlay
                   />
 
