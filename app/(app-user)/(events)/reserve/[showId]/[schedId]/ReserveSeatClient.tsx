@@ -43,7 +43,10 @@ import { ReservationSuccessPanel } from "@/components/queue/ReservationSuccessPa
 import { QueueStatePanel } from "@/components/queue/QueueStatePanel";
 import { GcashUploadPanel } from "@/components/queue/GcashUploadPanel";
 import { getOrCreateGuestId } from "@/lib/guest";
-import { clearJoinTransitionState } from "@/lib/queue/joinTransition";
+import {
+  clearJoinTransitionState,
+  setJoinTransitionState,
+} from "@/lib/queue/joinTransition";
 import {
   QUEUE_SESSION_RECOVERY_MESSAGE,
   isQueueCompletionSessionRecovery,
@@ -202,6 +205,33 @@ const formatCurrency = (value: number) =>
     currency: "PHP",
     maximumFractionDigits: 2,
   }).format(value);
+
+const formatScheduleDate = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+};
+
+const formatScheduleTime = (value: string) => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(parsed);
+};
 
 const parseCurrency = (value: string) => {
   const parsed = Number.parseFloat(value);
@@ -556,7 +586,7 @@ export function ReserveSeatClient({
         // Best effort cleanup request; UI fallback still handles local session reset.
       }
     },
-    [initialScheduleSnapshot, participantId, schedId, showId],
+    [initialScheduleSnapshot, participantId, reservationStepForPresence, schedId, showId],
   );
 
   React.useEffect(() => {
@@ -682,6 +712,7 @@ export function ReserveSeatClient({
     initialScheduleSnapshot,
     isWalkInMode,
     participantId,
+    reservationStepForPresence,
     schedId,
     showId,
     showScopeId,
@@ -988,6 +1019,55 @@ export function ReserveSeatClient({
   const handleRejoinQueue = async () => {
     setIsRejoining(true);
     try {
+      await terminateQueueSession(false);
+
+      if (isWalkInMode) {
+        const response = await fetch("/api/admin/walk-in/prepare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            showId,
+            schedId,
+          }),
+        });
+
+        const data = (await response.json()) as
+          | {
+              success: true;
+              state: "queued" | "active_and_paused";
+              showScopeId: string;
+              ticketId?: string;
+              activeToken?: string;
+              expiresAt?: number | null;
+            }
+          | { success?: false; error?: string };
+
+        if (!response.ok || !("success" in data) || data.success !== true) {
+          throw new Error(("error" in data ? data.error : undefined) || "Failed to rejoin queue");
+        }
+
+        if (
+          data.state === "active_and_paused" &&
+          data.ticketId &&
+          data.activeToken &&
+          typeof data.expiresAt === "number"
+        ) {
+          setStoredSession(showScopeId, {
+            ticketId: data.ticketId,
+            activeToken: data.activeToken,
+            expiresAt: data.expiresAt,
+            showScopeId,
+          });
+          allowNavigationRef.current = true;
+          router.push(`/admin/walk-in/${showId}/${schedId}/room`);
+          return;
+        }
+
+        allowNavigationRef.current = true;
+        router.push(`/admin/walk-in/${showId}/${schedId}`);
+        return;
+      }
+
       const response = await fetch("/api/queue/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -995,7 +1075,6 @@ export function ReserveSeatClient({
           showId,
           schedId,
           guestId: participantId,
-          displayName: isWalkInMode ? adminNickname.trim() || undefined : undefined,
         }),
       });
 
@@ -1003,34 +1082,30 @@ export function ReserveSeatClient({
       if (!response.ok || !data.success) {
         const normalizedError = data.error?.toLowerCase() ?? "";
         if (normalizedError.includes("already in the queue")) {
-          if (isWalkInMode) {
-            allowNavigationRef.current = true;
-            router.push(returnHref ?? `/admin/shows/${showId}`);
-          } else {
-            router.push(`/queue/${showId}/${schedId}`);
-          }
+          router.push(`/queue/${showId}/${schedId}`);
           return;
         }
         throw new Error(data.error || "Failed to rejoin queue");
       }
 
-      if (isWalkInMode) {
-        const ticketId = data.ticket?.ticketId;
-        if (data.status === "active" && data.activeToken && data.expiresAt && ticketId) {
-          setStoredSession(showScopeId, {
-            ticketId,
-            activeToken: data.activeToken,
-            expiresAt: data.expiresAt,
-            showScopeId,
-          });
+      if (data.ticket?.ticketId) {
+        const ticketId = data.ticket.ticketId;
+        const storageKey = `seatwise:active:${showScopeId}:${ticketId}`;
+        if (data.status === "active" && data.activeToken && data.expiresAt) {
+          sessionStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              ticketId,
+              activeToken: data.activeToken,
+              expiresAt: data.expiresAt,
+              showScopeId,
+            }),
+          );
+          setJoinTransitionState(showScopeId);
           allowNavigationRef.current = true;
-          router.refresh();
+          router.push(`/reserve/${showId}/${schedId}`);
           return;
         }
-
-        allowNavigationRef.current = true;
-        router.push(returnHref ?? `/admin/shows/${showId}`);
-        return;
       }
 
       router.push(`/queue/${showId}/${schedId}`);
@@ -1556,6 +1631,17 @@ export function ReserveSeatClient({
     0,
     Math.ceil((walkInResendCooldownUntil - now) / 1000),
   );
+  const scheduleSummary = React.useMemo(() => {
+    if (!initialScheduleSnapshot) {
+      return "";
+    }
+
+    const dateLabel = formatScheduleDate(initialScheduleSnapshot.schedDate);
+    const startLabel = formatScheduleTime(initialScheduleSnapshot.schedStartTime);
+    const endLabel = formatScheduleTime(initialScheduleSnapshot.schedEndTime);
+
+    return `Schedule: ${dateLabel}, ${startLabel} - ${endLabel}`;
+  }, [initialScheduleSnapshot]);
   const canResendWalkInTicket =
     isWalkInMode &&
     step === "post_finalize" &&
@@ -1701,6 +1787,11 @@ export function ReserveSeatClient({
                   <CardTitle className="text-2xl font-bold tracking-tight sm:text-3xl">
                     {showName || "Getting your reservation room ready..."}
                   </CardTitle>
+                  {scheduleSummary ? (
+                    <p className="mt-1 block text-sm font-medium leading-tight text-foreground/70 sm:text-base">
+                      {scheduleSummary}
+                    </p>
+                  ) : null}
                 </div>
                 {!isLoading && !error && !isWalkInMode && expiresAt && (
                   <div className="flex items-center gap-2">

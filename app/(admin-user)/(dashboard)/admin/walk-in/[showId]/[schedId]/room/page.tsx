@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import type { SeatStatus } from "@prisma/client";
+import type { SeatStatus, ShowStatus, SchedStatus } from "@prisma/client";
 
 import AdminShield from "@/components/AdminShield";
 import { PageHeader } from "@/components/page-header";
@@ -21,6 +21,16 @@ type SeatmapCategoryPayload = {
 
 type SeatStatusPayload = SeatStatus;
 
+type ReserveScheduleSnapshot = {
+  schedId: string;
+  schedDate: string;
+  schedStartTime: string;
+  schedEndTime: string;
+  schedStatus: SchedStatus | null;
+  showName: string;
+  showStatus: ShowStatus;
+};
+
 export default async function AdminWalkInRoomPage({
   params,
 }: {
@@ -38,13 +48,14 @@ export default async function AdminWalkInRoomPage({
         : { team_id: adminContext.teamId ?? "__NO_TEAM__" },
     },
     include: {
-      show: {
-        select: {
-          show_id: true,
-          show_name: true,
-          seatmap_id: true,
+        show: {
+          select: {
+            show_id: true,
+            show_name: true,
+            show_status: true,
+            seatmap_id: true,
+          },
         },
-      },
       seatAssignments: {
         select: {
           seat_id: true,
@@ -97,6 +108,15 @@ export default async function AdminWalkInRoomPage({
   }
 
   const seatmapCategories = Array.from(categoriesById.values());
+  const scheduleSnapshot: ReserveScheduleSnapshot = {
+    schedId: schedule.sched_id,
+    schedDate: schedule.sched_date.toISOString(),
+    schedStartTime: schedule.sched_start_time.toISOString(),
+    schedEndTime: schedule.sched_end_time.toISOString(),
+    schedStatus: schedule.status,
+    showName: schedule.show.show_name,
+    showStatus: schedule.show.show_status,
+  };
 
   return (
     <>
@@ -131,6 +151,8 @@ export default async function AdminWalkInRoomPage({
           seatCategoryAssignments={seatCategoryAssignments}
           seatNumbersById={seatNumbersById}
           seatStatusById={seatStatusById}
+          initialShowName={schedule.show.show_name}
+          initialScheduleSnapshot={scheduleSnapshot}
         />
       </div>
     </>
