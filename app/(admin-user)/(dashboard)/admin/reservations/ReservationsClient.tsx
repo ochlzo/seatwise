@@ -1454,6 +1454,9 @@ export function ReservationsClient() {
     : "-";
   const selectedCardUser = selectedCard?.row.user ?? null;
   const selectedCardReservation = selectedCard?.row.reservations[0] ?? null;
+  const selectedCardSeatCount = selectedCard?.row.seatNumbers.length ?? 0;
+  const selectedCardReservationCount = selectedCard?.row.reservations.length ?? 0;
+  const selectedCardSchedule = selectedCardReservation?.seatAssignments[0]?.sched ?? null;
   const selectedCardReservationSubmittedAt = selectedCardReservation
     ? selectedCardReservation.payment?.createdAt ?? selectedCardReservation.createdAt
     : null;
@@ -1710,6 +1713,12 @@ export function ReservationsClient() {
       : selectedCard?.status === "REJECTED"
         ? "bg-red-100 text-red-700"
         : "bg-amber-100 text-amber-700";
+  const selectedCardStatusLabel =
+    selectedCard?.status === "CONFIRMED"
+      ? "Confirmed"
+      : selectedCard?.status === "REJECTED"
+        ? "Rejected"
+        : "Pending";
 
   const clearRollbackPreview = React.useCallback(() => {
     if (rollbackTimeoutRef.current !== null) {
@@ -2101,21 +2110,55 @@ export function ReservationsClient() {
                 className={`min-h-0 border-b border-sidebar-border/70 px-6 py-5 dark:border-white/10 lg:border-b-0 lg:border-r ${isPortalScrollReady ? "overflow-y-auto" : "overflow-hidden"}`}
               >
                 <div className="mx-auto max-w-2xl space-y-8">
-                  <div className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                      {selectedCardIsWalkIn
-                        ? "Walk-In Payment Record"
-                        : "Payment Record"}
-                    </p>
-                    <div>
-                      <h2 className="text-lg font-semibold tracking-tight sm:text-2xl">
-                        {selectedCardIsWalkIn
-                          ? `Accomodated by: ${selectedCardAdminNickname}`
-                          : selectedCardCustomerName}
-                      </h2>
-                      <p className="text-xs text-muted-foreground sm:text-sm">
-                        {selectedCard.showName}
-                      </p>
+                  <div className="rounded-2xl border border-sidebar-border/70 bg-muted/20 p-5 shadow-sm dark:border-white/10">
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                          {selectedCardIsWalkIn
+                            ? "Walk-In Payment Record"
+                            : "Payment Record"}
+                        </p>
+                        <div className="space-y-2">
+                          <h2 className="text-lg font-semibold tracking-tight sm:text-2xl">
+                            {selectedCardIsWalkIn
+                              ? `Accomodated by: ${selectedCardAdminNickname}`
+                              : selectedCardCustomerName}
+                          </h2>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground sm:text-sm">
+                            <span className="inline-flex items-center rounded-full bg-background px-2.5 py-1 font-medium text-foreground shadow-sm">
+                              {selectedCard.showName}
+                            </span>
+                            <span>{selectedCard.showVenue}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl border border-sidebar-border/70 bg-background/90 p-3 dark:border-white/10">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                            Reservation No.
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">
+                            {selectedCard.row.reservationNumber}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-sidebar-border/70 bg-background/90 p-3 dark:border-white/10">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                            Total amount
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">
+                            {formatCurrency(selectedCard.row.totalAmount)}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-sidebar-border/70 bg-background/90 p-3 dark:border-white/10">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                            Seats in record
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">
+                            {selectedCardSeatCount}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -2270,38 +2313,40 @@ export function ReservationsClient() {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-                        <div className="sm:col-span-2">
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                            Customer Name
-                          </p>
-                          <p className="text-xs font-medium sm:text-sm">
-                            {getDisplayValue(selectedCardCustomerName)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                            Email
-                          </p>
-                          <p className="break-all text-xs font-medium sm:text-sm">
-                            {getDisplayValue(selectedCard.row.user.email)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                            Phone
-                          </p>
-                          <p className="text-xs font-medium sm:text-sm">
-                            {getDisplayValue(selectedCard.row.user.phone_number)}
-                          </p>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                            Address
-                          </p>
-                          <p className="text-xs font-medium sm:text-sm">
-                            {getDisplayValue(selectedCard.row.user.address)}
-                          </p>
+                      <div className="rounded-xl border border-sidebar-border/70 bg-muted/20 p-4 dark:border-white/10">
+                        <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                          <div className="sm:col-span-2">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                              Customer Name
+                            </p>
+                            <p className="text-xs font-medium sm:text-sm">
+                              {getDisplayValue(selectedCardCustomerName)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                              Email
+                            </p>
+                            <p className="break-all text-xs font-medium sm:text-sm">
+                              {getDisplayValue(selectedCard.row.user.email)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                              Phone
+                            </p>
+                            <p className="text-xs font-medium sm:text-sm">
+                              {getDisplayValue(selectedCard.row.user.phone_number)}
+                            </p>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                              Address
+                            </p>
+                            <p className="text-xs font-medium sm:text-sm">
+                              {getDisplayValue(selectedCard.row.user.address)}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2321,38 +2366,29 @@ export function ReservationsClient() {
                             <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
                               <div>
                                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                                  Show
-                                </p>
-                                <p className="text-xs font-medium sm:text-sm">{selectedCard.showName}</p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
                                   Venue
                                 </p>
                                 <p className="text-xs font-medium sm:text-sm">{selectedCard.showVenue}</p>
                               </div>
                               <div>
                                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                                  Reservation No.
+                                  Reservations in record
                                 </p>
                                 <p className="text-xs font-medium sm:text-sm">
-                                  {selectedCard.row.reservationNumber}
+                                  {selectedCardReservationCount}
                                 </p>
                               </div>
-                              <div>
+                              <div className="sm:col-span-2">
                                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                                  Total Amount
-                                </p>
-                                <p className="text-lg font-semibold sm:text-xl">
-                                  {formatCurrency(selectedCard.row.totalAmount)}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                                  Seats
+                                  Show schedule
                                 </p>
                                 <p className="text-xs font-medium sm:text-sm">
-                                  {selectedCard.row.seatNumbers.join(", ")}
+                                  {selectedCardSchedule
+                                    ? `${formatDate(selectedCardSchedule.sched_date)}, ${formatTimeRange(
+                                        selectedCardSchedule.sched_start_time,
+                                        selectedCardSchedule.sched_end_time,
+                                      )}`
+                                    : "Schedule unavailable"}
                                 </p>
                               </div>
                             </div>
@@ -2410,11 +2446,11 @@ export function ReservationsClient() {
                           </span>
                         </AccordionTrigger>
                         <AccordionContent>
-                          <div className="divide-y divide-sidebar-border/70 border-t border-sidebar-border/70 dark:divide-white/10 dark:border-white/10">
+                          <div className="space-y-3">
                             {selectedCard.row.reservations.map((reservation) => (
                               <div
                                 key={reservation.reservation_id}
-                                className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto]"
+                                className="grid gap-3 rounded-xl border border-sidebar-border/70 bg-muted/20 p-4 sm:grid-cols-[minmax(0,1fr)_auto] dark:border-white/10"
                               >
                                 <div className="space-y-2">
                                   <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground sm:text-sm">
@@ -2550,20 +2586,25 @@ export function ReservationsClient() {
                                 )}
                               </Button>
                             ) : null}
-                            {selectedCard.status !== "PENDING" ? (
-                              <span
-                                className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-xs ${selectedCardStatusBadgeClassName}`}
-                              >
-                                {selectedCard.status === "CONFIRMED"
-                                  ? "Confirmed"
-                                  : "Rejected"}
-                              </span>
-                            ) : null}
                           </div>
                         </div>
-                        <p className="break-all text-xs text-muted-foreground">
-                          Recipient: {selectedCardResendEmail || "Email unavailable"}
-                        </p>
+                        <div className="rounded-2xl border border-sidebar-border/70 bg-background/90 p-4 shadow-sm dark:border-white/10">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="space-y-1">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                Manual email actions
+                              </p>
+                              <p className="text-sm text-foreground">
+                                Resends use the saved customer email from the details panel.
+                              </p>
+                            </div>
+                            <span
+                              className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] sm:text-xs ${selectedCardStatusBadgeClassName}`}
+                            >
+                              {selectedCardStatusLabel}
+                            </span>
+                          </div>
+                        </div>
 
                         <div className="relative flex min-h-[60vh] items-center justify-center overflow-hidden bg-background">
                           {primaryPayment?.screenshot_url ? (
