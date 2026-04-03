@@ -55,6 +55,7 @@ export async function GET(request: NextRequest) {
           email: true,
           phone_number: true,
           status: true,
+          reservation_status_changed_at: true,
           createdAt: true,
           show: {
             select: {

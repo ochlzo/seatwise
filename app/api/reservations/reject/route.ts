@@ -103,12 +103,17 @@ export async function POST(request: NextRequest) {
     );
     const schedIds = Array.from(new Set(reservations.map((reservation) => reservation.sched_id)));
 
+    const statusChangedAt = new Date();
+
     await timer.time("postgres.reject_reservations", () =>
       prisma.$transaction(async (tx) => {
         for (const reservation of reservations) {
           await tx.reservation.update({
             where: { reservation_id: reservation.reservation_id },
-            data: { status: "CANCELLED" },
+            data: {
+              status: "CANCELLED",
+              reservation_status_changed_at: statusChangedAt,
+            },
           });
 
           if (reservation.payment) {
@@ -171,6 +176,7 @@ export async function POST(request: NextRequest) {
       success: true,
       reservationIds,
       newStatus: "CANCELLED",
+      reservationStatusChangedAt: statusChangedAt.toISOString(),
     });
   } catch (error) {
     console.error("[reservations/reject] Error:", error);

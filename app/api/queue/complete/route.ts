@@ -407,6 +407,7 @@ export async function POST(request: NextRequest) {
                 email: contact.email,
                 phone_number: contact.phoneNumber,
                 status: isWalkInMode ? "CONFIRMED" : "PENDING",
+                reservation_status_changed_at: isWalkInMode ? paymentRecordedAt : null,
                 ticket_template_version_id: ticketTemplateVersionId,
               },
             })) as { reservation_id: string; reservation_number: string };

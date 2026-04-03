@@ -251,6 +251,7 @@ model Reservation {
   show_id        String
   sched_id       String
   status         ReservationStatus @default(PENDING)
+  reservation_status_changed_at DateTime?
   ticket_template_version_id String?
   ticket_issued_at DateTime?
   ticket_consumed_at DateTime?

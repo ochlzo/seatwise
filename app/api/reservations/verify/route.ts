@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
             where: { reservation_id: reservation.reservation_id },
             data: {
               status: "CONFIRMED",
+              reservation_status_changed_at: paidAt,
               ticket_delivery_error: null,
             },
           });
@@ -193,6 +194,7 @@ export async function POST(request: NextRequest) {
       success: true,
       reservationIds,
       newStatus: "CONFIRMED",
+      reservationStatusChangedAt: paidAt.toISOString(),
       email: {
         attemptedCount: reservationIds.length,
         sentCount: 0,

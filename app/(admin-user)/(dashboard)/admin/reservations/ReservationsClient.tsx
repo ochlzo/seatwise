@@ -53,6 +53,12 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -84,6 +90,7 @@ type ReservationData = {
   phone_number: string;
   status: string;
   createdAt: string;
+  reservation_status_changed_at: string | null;
   payment: PaymentData | null;
   seatAssignments: Array<{
     seat_assignment_id: string;
@@ -178,6 +185,7 @@ type StageUpdateResponse = {
   error?: string;
   message?: string;
   details?: string;
+  reservationStatusChangedAt?: string;
   email?: {
     attemptedCount: number;
     sentCount: number;
@@ -268,6 +276,21 @@ const formatDate = (value: string) => {
     month: "short",
     day: "numeric",
     year: "numeric",
+  }).format(date);
+};
+
+const formatDateTime = (value: string | null | undefined) => {
+  if (!value) return "Pending";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   }).format(date);
 };
 
@@ -776,7 +799,7 @@ export function ReservationsClient() {
   >({});
   const [resendLoadingAction, setResendLoadingAction] =
     React.useState<ResendAction | null>(null);
-  const [resendCooldownTick, setResendCooldownTick] = React.useState(0);
+  const [, setResendCooldownTick] = React.useState(0);
   const [optimisticCardStatuses, setOptimisticCardStatuses] = React.useState<
     Partial<Record<string, KanbanStatus>>
   >({});
@@ -1049,7 +1072,7 @@ export function ReservationsClient() {
           throw new Error(getApiErrorMessage(data, fallbackError));
         }
 
-        const paidAt = new Date().toISOString();
+        const statusChangedAt = data.reservationStatusChangedAt ?? new Date().toISOString();
         setShows((prev) =>
           prev.map((show) => ({
             ...show,
@@ -1058,6 +1081,7 @@ export function ReservationsClient() {
                 ? {
                     ...reservation,
                     status: targetStatus,
+                    reservation_status_changed_at: statusChangedAt,
                     payment: reservation.payment
                       ? {
                           ...reservation.payment,
@@ -1069,7 +1093,7 @@ export function ReservationsClient() {
                                 : "FAILED",
                           paid_at:
                             targetStatus === "CONFIRMED"
-                              ? paidAt
+                              ? statusChangedAt
                               : reservation.payment.status === "PAID"
                                 ? reservation.payment.paid_at
                                 : null,
@@ -1429,6 +1453,22 @@ export function ReservationsClient() {
     ? getDisplayValue(selectedCard.row.user.admin_nickname)
     : "-";
   const selectedCardUser = selectedCard?.row.user ?? null;
+  const selectedCardReservation = selectedCard?.row.reservations[0] ?? null;
+  const selectedCardReservationSubmittedAt = selectedCardReservation
+    ? selectedCardReservation.payment?.createdAt ?? selectedCardReservation.createdAt
+    : null;
+  const selectedCardReservationStatusChangedAt = selectedCardReservation?.reservation_status_changed_at ?? null;
+  const selectedCardReservationMethod = selectedCardReservation?.payment?.method ?? null;
+  const selectedCardReservationIsWalkIn = selectedCardReservationMethod === "WALK_IN";
+  const selectedCardReservationTransitionLabel = selectedCard
+    ? selectedCard.status === "PENDING"
+      ? "Reservation payment conversion pending"
+      : selectedCardReservationIsWalkIn
+        ? "Walk-in reservation confirmed"
+        : selectedCard.status === "CONFIRMED"
+          ? "Reservation payment converted to Confirmed"
+          : "Reservation payment converted to Rejected"
+    : "";
 
   React.useEffect(() => {
     if (!selectedCardUser) {
@@ -1450,22 +1490,16 @@ export function ReservationsClient() {
 
   const getResendCooldownRemaining = React.useCallback(
     (action: ResendAction) => {
-      void resendCooldownTick;
       const cooldownUntil = resendCooldowns[action];
       if (!cooldownUntil) return 0;
 
-      return Math.max(
-        0,
-        Math.ceil((cooldownUntil - Date.now()) / 1000),
-      );
+      return Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
     },
-    [resendCooldownTick, resendCooldowns],
+    [resendCooldowns],
   );
 
-  const isResendCoolingDown = React.useCallback(
-    (action: ResendAction) => getResendCooldownRemaining(action) > 0,
-    [getResendCooldownRemaining],
-  );
+  const isResendCoolingDown = (action: ResendAction) =>
+    getResendCooldownRemaining(action) > 0;
 
   const selectedCardHasWalkInPayment = Boolean(
     selectedCard?.row.reservations.some(
@@ -2274,106 +2308,166 @@ export function ReservationsClient() {
                   </section>
 
                   <section className="space-y-4 border-t border-sidebar-border/70 pt-6 dark:border-white/10">
-                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
-                    <Ticket className="h-3.5 w-3.5" />
-                    Reservation Details
-                  </div>
-
-                  <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Show
-                      </p>
-                      <p className="text-xs font-medium sm:text-sm">{selectedCard.showName}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Venue
-                      </p>
-                      <p className="text-xs font-medium sm:text-sm">{selectedCard.showVenue}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Reservation No.
-                      </p>
-                      <p className="text-xs font-medium sm:text-sm">
-                        {selectedCard.row.reservationNumber}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Total Amount
-                      </p>
-                      <p className="text-lg font-semibold sm:text-xl">
-                        {formatCurrency(selectedCard.row.totalAmount)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                        Seats
-                      </p>
-                      <p className="text-xs font-medium sm:text-sm">
-                        {selectedCard.row.seatNumbers.join(", ")}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="divide-y divide-sidebar-border/70 border-t border-sidebar-border/70 dark:divide-white/10 dark:border-white/10">
-                    {selectedCard.row.reservations.map((reservation) => (
-                      <div
-                        key={reservation.reservation_id}
-                        className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto]"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground sm:text-sm">
-                            <span className="inline-flex items-center gap-1.5">
-                              <Ticket className="h-3.5 w-3.5" />
-                              Reservation No. {reservation.reservation_number}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <Armchair className="h-3.5 w-3.5" />
-                              {reservation.seatAssignments[0]?.set.seatCategory.category_name ??
-                                "N/A"}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <CalendarCheck className="h-3.5 w-3.5" />
-                              {formatDate(
-                                reservation.seatAssignments[0]?.sched.sched_date ?? "",
-                              )}
-                              ,{" "}
-                              {formatTimeRange(
-                                reservation.seatAssignments[0]?.sched.sched_start_time ?? "",
-                                reservation.seatAssignments[0]?.sched.sched_end_time ?? "",
-                              )}
-                            </span>
+                    <Accordion type="single" collapsible defaultValue="reservation-details" className="w-full">
+                      <AccordionItem value="reservation-details" className="border-none">
+                        <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground hover:no-underline">
+                          <span className="flex items-center gap-2">
+                            <Ticket className="h-3.5 w-3.5" />
+                            Reservation Details
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="rounded-xl border border-sidebar-border/70 bg-muted/20 p-4 dark:border-white/10">
+                            <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                                  Show
+                                </p>
+                                <p className="text-xs font-medium sm:text-sm">{selectedCard.showName}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                                  Venue
+                                </p>
+                                <p className="text-xs font-medium sm:text-sm">{selectedCard.showVenue}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                                  Reservation No.
+                                </p>
+                                <p className="text-xs font-medium sm:text-sm">
+                                  {selectedCard.row.reservationNumber}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                                  Total Amount
+                                </p>
+                                <p className="text-lg font-semibold sm:text-xl">
+                                  {formatCurrency(selectedCard.row.totalAmount)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                                  Seats
+                                </p>
+                                <p className="text-xs font-medium sm:text-sm">
+                                  {selectedCard.row.seatNumbers.join(", ")}
+                                </p>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {reservation.seatAssignments.map((seatAssignment) => (
-                              <span
-                                key={seatAssignment.seat_assignment_id}
-                                className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] text-foreground"
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+
+                    {selectedCardReservation ? (
+                      <Accordion type="single" collapsible className="w-full">
+                        <AccordionItem value="timeline" className="border-none">
+                          <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground hover:no-underline">
+                            <span className="flex items-center gap-2">
+                              <Clock className="h-3.5 w-3.5" />
+                              Customer timeline
+                            </span>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="space-y-3 rounded-xl border border-sidebar-border/70 bg-muted/20 p-4 dark:border-white/10">
+                              <div className="space-y-1">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                                  {selectedCardReservationIsWalkIn
+                                    ? "Walk-in payment recorded"
+                                    : "Reservation payment submitted"}
+                                </p>
+                                <p className="text-xs font-medium text-foreground sm:text-sm">
+                                  {formatDateTime(selectedCardReservationSubmittedAt)}
+                                </p>
+                              </div>
+
+                              <div className="space-y-1">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                                  {selectedCardReservationTransitionLabel}
+                                </p>
+                                <p className="text-xs font-medium text-foreground sm:text-sm">
+                                  {selectedCard.status === "PENDING"
+                                    ? "Awaiting conversion"
+                                    : formatDateTime(
+                                        selectedCardReservationStatusChangedAt,
+                                      )}
+                                </p>
+                              </div>
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    ) : null}
+
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="seat-reservations" className="border-none">
+                        <AccordionTrigger className="py-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground hover:no-underline">
+                          <span className="flex items-center gap-2">
+                            <Armchair className="h-3.5 w-3.5" />
+                            Seat reservations
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="divide-y divide-sidebar-border/70 border-t border-sidebar-border/70 dark:divide-white/10 dark:border-white/10">
+                            {selectedCard.row.reservations.map((reservation) => (
+                              <div
+                                key={reservation.reservation_id}
+                                className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto]"
                               >
-                                <Ticket className="h-3 w-3" />
-                                Seat {seatAssignment.seat.seat_number}
-                              </span>
+                                <div className="space-y-2">
+                                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground sm:text-sm">
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <Ticket className="h-3.5 w-3.5" />
+                                      Reservation No. {reservation.reservation_number}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <Armchair className="h-3.5 w-3.5" />
+                                      {reservation.seatAssignments[0]?.set.seatCategory.category_name ??
+                                        "N/A"}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <CalendarCheck className="h-3.5 w-3.5" />
+                                      {formatDate(
+                                        reservation.seatAssignments[0]?.sched.sched_date ?? "",
+                                      )}
+                                      ,{" "}
+                                      {formatTimeRange(
+                                        reservation.seatAssignments[0]?.sched.sched_start_time ?? "",
+                                        reservation.seatAssignments[0]?.sched.sched_end_time ?? "",
+                                      )}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {reservation.seatAssignments.map((seatAssignment) => (
+                                      <span
+                                        key={seatAssignment.seat_assignment_id}
+                                        className="inline-flex items-center gap-1 rounded-md border border-sidebar-border/70 bg-muted/30 px-2 py-1 text-[11px] text-foreground"
+                                      >
+                                        <Ticket className="h-3 w-3" />
+                                        Seat {seatAssignment.seat.seat_number}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="sm:text-right">
+                                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                                    Amount
+                                  </p>
+                                  <p className="text-xs font-semibold sm:text-sm">
+                                    {formatCurrency(
+                                      reservation.payment?.amount ??
+                                        reservation.seatAssignments[0]?.set.seatCategory.price,
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
                             ))}
                           </div>
-                        </div>
-                        <div className="sm:text-right">
-                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
-                            Amount
-                          </p>
-                          <p className="text-xs font-semibold sm:text-sm">
-                            {formatCurrency(
-                              reservation.payment?.amount ??
-                                reservation.seatAssignments[0]?.set.seatCategory
-                                  .price,
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
                   </section>
                 </div>
               </div>
