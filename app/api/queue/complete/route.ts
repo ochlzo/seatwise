@@ -53,6 +53,7 @@ type CompletionRequestBody = {
   seatIds?: string[];
   ticketTemplateVersionId?: string;
   screenshotUrl?: string;
+  adminNickname?: string;
   firstName?: string;
   lastName?: string;
   address?: string;
@@ -150,24 +151,34 @@ export async function POST(request: NextRequest) {
     }
 
     const contact = buildContact(body);
-    if (
-      !contact.firstName ||
-      !contact.lastName ||
-      !contact.address ||
-      !contact.email ||
-      !contact.phoneNumber
-    ) {
-      return NextResponse.json(
-        { success: false, error: "Complete contact details are required." },
-        { status: 400 },
-      );
+    const adminNickname = normalize(body.adminNickname);
+    if (isWalkInMode) {
+      if (!adminNickname) {
+        return NextResponse.json(
+          { success: false, error: "Admin nickname is required for walk-in sales." },
+          { status: 400 },
+        );
+      }
+    } else {
+      if (
+        !contact.firstName ||
+        !contact.lastName ||
+        !contact.address ||
+        !contact.email ||
+        !contact.phoneNumber
+      ) {
+        return NextResponse.json(
+          { success: false, error: "Complete contact details are required." },
+          { status: 400 },
+        );
+      }
     }
 
-    if (!EMAIL_REGEX.test(contact.email)) {
+    if (contact.email && !EMAIL_REGEX.test(contact.email)) {
       return NextResponse.json({ success: false, error: "Invalid email address." }, { status: 400 });
     }
 
-    if (!PH_PHONE_REGEX.test(contact.phoneNumber)) {
+    if (contact.phoneNumber && !PH_PHONE_REGEX.test(contact.phoneNumber)) {
       return NextResponse.json(
         { success: false, error: "Phone number must start with 09 and be 11 digits." },
         { status: 400 },
@@ -389,6 +400,7 @@ export async function POST(request: NextRequest) {
                 guest_id: participantId,
                 show_id: showId,
                 sched_id: schedId,
+                admin_nickname: isWalkInMode ? adminNickname : null,
                 first_name: contact.firstName,
                 last_name: contact.lastName,
                 address: contact.address,
@@ -497,22 +509,24 @@ export async function POST(request: NextRequest) {
             }),
           );
 
-          await followUpTimer.time("email.send_issued_ticket", () =>
-            sendIssuedTicketEmail({
-              to: issuedTicket.email,
-              customerName: issuedTicket.customerName,
-              reservationNumber: issuedTicket.reservationNumber,
-              showName: issuedTicket.showName,
-              venue: issuedTicket.venue,
-              scheduleLabel: issuedTicket.scheduleLabel,
-              seatLabels: issuedTicket.seatLabels,
-              ticketAttachments: issuedTicket.ticketPdfs.map((ticket) => ({
-                filename: ticket.ticketPdfFilename,
-                contentType: "application/pdf",
-                content: ticket.ticketPdf,
-              })),
-            }),
-          );
+          if (issuedTicket.email.trim()) {
+            await followUpTimer.time("email.send_issued_ticket", () =>
+              sendIssuedTicketEmail({
+                to: issuedTicket.email,
+                customerName: issuedTicket.customerName,
+                reservationNumber: issuedTicket.reservationNumber,
+                showName: issuedTicket.showName,
+                venue: issuedTicket.venue,
+                scheduleLabel: issuedTicket.scheduleLabel,
+                seatLabels: issuedTicket.seatLabels,
+                ticketAttachments: issuedTicket.ticketPdfs.map((ticket) => ({
+                  filename: ticket.ticketPdfFilename,
+                  contentType: "application/pdf",
+                  content: ticket.ticketPdf,
+                })),
+              }),
+            );
+          }
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : "Ticket delivery failed.";

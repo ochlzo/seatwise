@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
           reservation_id: true,
           reservation_number: true,
           guest_id: true,
+          admin_nickname: true,
           first_name: true,
           last_name: true,
           address: true,

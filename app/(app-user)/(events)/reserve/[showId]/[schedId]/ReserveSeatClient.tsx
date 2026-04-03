@@ -28,6 +28,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -131,6 +132,7 @@ const EXPIRED_WINDOW_MESSAGE =
 const MAX_SELECTED_SEATS = 10;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PH_PHONE_REGEX = /^09\d{9}$/;
+const WALK_IN_ADMIN_NICKNAME_STORAGE_KEY = "seatwise:walk-in-admin-nickname";
 
 const EMPTY_CONTACT_ERRORS: ContactFieldErrors = {
   firstName: null,
@@ -167,6 +169,12 @@ type EmailOtpResponse = {
   success?: boolean;
   error?: string;
   verified?: boolean;
+  cooldownUntil?: number;
+};
+
+type ResendTicketResponse = {
+  success?: boolean;
+  error?: string;
   cooldownUntil?: number;
 };
 
@@ -276,7 +284,9 @@ const getStoredVerifiedEmail = (
   ticketId: string,
 ): string | null => {
   if (typeof window === "undefined") return null;
-  return window.sessionStorage.getItem(getVerifiedEmailKey(showScopeId, ticketId));
+  return window.sessionStorage.getItem(
+    getVerifiedEmailKey(showScopeId, ticketId),
+  );
 };
 
 const setStoredVerifiedEmail = (
@@ -285,7 +295,10 @@ const setStoredVerifiedEmail = (
   email: string,
 ) => {
   if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(getVerifiedEmailKey(showScopeId, ticketId), email);
+  window.sessionStorage.setItem(
+    getVerifiedEmailKey(showScopeId, ticketId),
+    email,
+  );
 };
 
 const clearStoredVerifiedEmail = (showScopeId: string, ticketId: string) => {
@@ -350,7 +363,9 @@ export function ReserveSeatClient({
   const [verifiedEmail, setVerifiedEmail] = React.useState<string | null>(null);
   const [otpRecipientEmail, setOtpRecipientEmail] = React.useState<string>("");
   const [resendCooldownUntil, setResendCooldownUntil] = React.useState(0);
-  const [emailOtpFieldError, setEmailOtpFieldError] = React.useState<string | null>(null);
+  const [emailOtpFieldError, setEmailOtpFieldError] = React.useState<
+    string | null
+  >(null);
   const [isEmailOtpSubmitting, setIsEmailOtpSubmitting] = React.useState(false);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = React.useState(false);
   const [isContactConfirmDialogOpen, setIsContactConfirmDialogOpen] =
@@ -363,6 +378,15 @@ export function ReserveSeatClient({
     React.useState(false);
   const [walkInConfirmationComplete, setWalkInConfirmationComplete] =
     React.useState(false);
+  const [adminNickname, setAdminNickname] = React.useState("");
+  const [rememberAdminNickname, setRememberAdminNickname] =
+    React.useState(false);
+  const [adminNicknameError, setAdminNicknameError] = React.useState<
+    string | null
+  >(null);
+  const [isWalkInResending, setIsWalkInResending] = React.useState(false);
+  const [walkInResendCooldownUntil, setWalkInResendCooldownUntil] =
+    React.useState(0);
   const [contactDetails, setContactDetails] = React.useState({
     firstName: "",
     lastName: "",
@@ -384,6 +408,7 @@ export function ReserveSeatClient({
   const reservationStepForPresence = step;
 
   const resetWalkInSaleDraft = React.useCallback(() => {
+    router.refresh();
     setSelectedSeatIds([]);
     setPendingSeatId(null);
     setSelectionMessage(null);
@@ -391,6 +416,8 @@ export function ReserveSeatClient({
     setScreenshotUrl("");
     setReservationNumber(null);
     setWalkInConfirmationComplete(false);
+    setAdminNickname((prev) => (rememberAdminNickname ? prev : ""));
+    setAdminNicknameError(null);
     setContactDetails({
       firstName: "",
       lastName: "",
@@ -403,8 +430,34 @@ export function ReserveSeatClient({
     setTicketDesignsError(null);
     setSelectedTicketTemplateVersionId(null);
     setError(null);
-    router.refresh();
-  }, [initialTicketDesigns, router]);
+  }, [initialTicketDesigns, rememberAdminNickname, router]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !isWalkInMode) return;
+
+    const storedNickname = window.localStorage.getItem(
+      WALK_IN_ADMIN_NICKNAME_STORAGE_KEY,
+    );
+
+    if (storedNickname?.trim()) {
+      setAdminNickname(storedNickname);
+      setRememberAdminNickname(true);
+    }
+  }, [isWalkInMode]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !isWalkInMode) return;
+
+    if (rememberAdminNickname && adminNickname.trim()) {
+      window.localStorage.setItem(
+        WALK_IN_ADMIN_NICKNAME_STORAGE_KEY,
+        adminNickname.trim(),
+      );
+      return;
+    }
+
+    window.localStorage.removeItem(WALK_IN_ADMIN_NICKNAME_STORAGE_KEY);
+  }, [adminNickname, isWalkInMode, rememberAdminNickname]);
 
   React.useEffect(() => {
     setNow(Date.now());
@@ -418,7 +471,10 @@ export function ReserveSeatClient({
     const stored = getStoredSession(showScopeId);
     if (!stored) return;
 
-    const storedVerifiedEmail = getStoredVerifiedEmail(showScopeId, stored.ticketId);
+    const storedVerifiedEmail = getStoredVerifiedEmail(
+      showScopeId,
+      stored.ticketId,
+    );
     if (!storedVerifiedEmail) return;
 
     setVerifiedEmail(storedVerifiedEmail);
@@ -485,7 +541,9 @@ export function ReserveSeatClient({
 
       const stored = getStoredSession(showScopeId);
       if (!stored) {
-        setError("We couldn’t find your active turn. Rejoin the queue to continue.");
+        setError(
+          "We couldn’t find your active turn. Rejoin the queue to continue.",
+        );
         setIsLoading(false);
         return;
       }
@@ -778,7 +836,9 @@ export function ReserveSeatClient({
 
     const confirmLeaveMessage =
       "Leaving this page will remove you from the queue. Continue?";
-    const reservePath = isWalkInMode ? `/admin/walk-in/${showId}/${schedId}/room` : `/reserve/${showId}/${schedId}`;
+    const reservePath = isWalkInMode
+      ? `/admin/walk-in/${showId}/${schedId}/room`
+      : `/reserve/${showId}/${schedId}`;
     const queuePath = `/queue/${showId}/${schedId}`;
 
     const shouldGuard = () => {
@@ -853,7 +913,15 @@ export function ReserveSeatClient({
       window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, [isWalkInMode, router, schedId, showId, showScopeId, step, terminateQueueSession]);
+  }, [
+    isWalkInMode,
+    router,
+    schedId,
+    showId,
+    showScopeId,
+    step,
+    terminateQueueSession,
+  ]);
 
   React.useEffect(() => {
     if (step === "success") return;
@@ -865,7 +933,8 @@ export function ReserveSeatClient({
       );
     };
 
-    const backGuardMessage = "Leaving this page will remove you from the queue.";
+    const backGuardMessage =
+      "Leaving this page will remove you from the queue.";
     const guardState = { __seatwiseQueueGuard: true, showId, schedId };
 
     if (shouldGuard()) {
@@ -977,33 +1046,33 @@ export function ReserveSeatClient({
     const nextErrors: ContactFieldErrors = { ...EMPTY_CONTACT_ERRORS };
     let hasErrors = false;
 
-    if (!firstName) {
+    if (!isWalkInMode && !firstName) {
       nextErrors.firstName = "First name is required.";
       hasErrors = true;
     }
 
-    if (!lastName) {
+    if (!isWalkInMode && !lastName) {
       nextErrors.lastName = "Last name is required.";
       hasErrors = true;
     }
 
-    if (!address) {
+    if (!isWalkInMode && !address) {
       nextErrors.address = "Address is required.";
       hasErrors = true;
     }
 
-    if (!email) {
+    if (!isWalkInMode && !email) {
       nextErrors.email = "Email is required.";
       hasErrors = true;
-    } else if (!EMAIL_REGEX.test(email)) {
+    } else if (email && !EMAIL_REGEX.test(email)) {
       nextErrors.email = "Please provide a valid email address.";
       hasErrors = true;
     }
 
-    if (!phoneNumber) {
+    if (!isWalkInMode && !phoneNumber) {
       nextErrors.phoneNumber = "Phone number is required.";
       hasErrors = true;
-    } else if (!PH_PHONE_REGEX.test(phoneNumber)) {
+    } else if (phoneNumber && !PH_PHONE_REGEX.test(phoneNumber)) {
       nextErrors.phoneNumber =
         "Phone number must start with 09 and be 11 digits.";
       hasErrors = true;
@@ -1026,7 +1095,9 @@ export function ReserveSeatClient({
     async (nextEmail?: string) => {
       const stored = getStoredSession(showScopeId);
       if (!stored) {
-        setError("We couldnâ€™t find your active turn. Rejoin the queue to continue.");
+        setError(
+          "We couldnâ€™t find your active turn. Rejoin the queue to continue.",
+        );
         return false;
       }
 
@@ -1081,7 +1152,11 @@ export function ReserveSeatClient({
         setStep("email_otp");
         return true;
       } catch (sendError) {
-        setError(sendError instanceof Error ? sendError.message : "Failed to send verification code.");
+        setError(
+          sendError instanceof Error
+            ? sendError.message
+            : "Failed to send verification code.",
+        );
         return false;
       } finally {
         setIsEmailOtpSubmitting(false);
@@ -1127,7 +1202,9 @@ export function ReserveSeatClient({
   const handleVerifyEmailOtp = async () => {
     const stored = getStoredSession(showScopeId);
     if (!stored) {
-      setError("We couldnâ€™t find your active turn. Rejoin the queue to continue.");
+      setError(
+        "We couldnâ€™t find your active turn. Rejoin the queue to continue.",
+      );
       return;
     }
 
@@ -1186,7 +1263,11 @@ export function ReserveSeatClient({
       setResendCooldownUntil(0);
       setStep("ticket_design");
     } catch (verifyError) {
-      setError(verifyError instanceof Error ? verifyError.message : "Failed to verify your email.");
+      setError(
+        verifyError instanceof Error
+          ? verifyError.message
+          : "Failed to verify your email.",
+      );
     } finally {
       setIsEmailOtpSubmitting(false);
     }
@@ -1231,6 +1312,12 @@ export function ReserveSeatClient({
   const handleOpenSubmitDialog = () => {
     if (isLeaving || isCompleting) return;
     if (modeConfig.requiresScreenshotUpload && !screenshotUrl) return;
+    if (isWalkInMode && !adminNickname.trim()) {
+      setAdminNicknameError("Admin nickname is required.");
+      toast.error("Enter the admin nickname before finalizing.");
+      return;
+    }
+    setAdminNicknameError(null);
     setIsSubmitDialogOpen(true);
   };
 
@@ -1304,7 +1391,9 @@ export function ReserveSeatClient({
 
     const stored = getStoredSession(showScopeId);
     if (!stored) {
-      setError("We couldn’t find your active turn. Rejoin the queue to continue.");
+      setError(
+        "We couldn’t find your active turn. Rejoin the queue to continue.",
+      );
       return;
     }
 
@@ -1323,6 +1412,7 @@ export function ReserveSeatClient({
           seatIds: selectedSeatIds,
           ticketTemplateVersionId: selectedTicketTemplateVersionId,
           screenshotUrl,
+          adminNickname,
           firstName: contactDetails.firstName,
           lastName: contactDetails.lastName,
           address: contactDetails.address,
@@ -1376,7 +1466,8 @@ export function ReserveSeatClient({
 
   const remaining = !isWalkInMode && expiresAt ? expiresAt - now : 0;
   const isExpiredWindowError =
-    error === EXPIRED_WINDOW_MESSAGE || error === QUEUE_SESSION_RECOVERY_MESSAGE;
+    error === EXPIRED_WINDOW_MESSAGE ||
+    error === QUEUE_SESSION_RECOVERY_MESSAGE;
   const isQueueRecoveryError = error === QUEUE_SESSION_RECOVERY_MESSAGE;
   const isSuccess = step === "success";
   const isWalkInPostFinalize = isWalkInMode && step === "post_finalize";
@@ -1416,6 +1507,20 @@ export function ReserveSeatClient({
     () => selectedBreakdown.reduce((total, item) => total + item.lineTotal, 0),
     [selectedBreakdown],
   );
+  const customerDisplayName =
+    `${contactDetails.firstName.trim()} ${contactDetails.lastName.trim()}`.trim();
+  const customerEmailDisplay = contactDetails.email.trim() || "-";
+  const customerPhoneDisplay = contactDetails.phoneNumber.trim() || "-";
+  const customerAddressDisplay = contactDetails.address.trim() || "-";
+  const walkInResendWaitSeconds = Math.max(
+    0,
+    Math.ceil((walkInResendCooldownUntil - now) / 1000),
+  );
+  const canResendWalkInTicket =
+    isWalkInMode &&
+    step === "post_finalize" &&
+    !!contactDetails.email.trim() &&
+    !!reservationNumber;
   const isCurrentEmailVerified =
     !!verifiedEmail && verifiedEmail === contactDetails.email.trim();
   const contactActionButtonLabel = isCurrentEmailVerified
@@ -1503,6 +1608,47 @@ export function ReserveSeatClient({
     setSelectionMessage(null);
     setPendingSeatId(null);
   }, []);
+
+  const handleResendWalkInTicket = async () => {
+    if (
+      !canResendWalkInTicket ||
+      isWalkInResending ||
+      walkInResendWaitSeconds > 0
+    ) {
+      return;
+    }
+
+    setIsWalkInResending(true);
+    try {
+      const response = await fetch("/api/reservations/resend-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          showId,
+          reservationNumber,
+          email: contactDetails.email.trim(),
+        }),
+      });
+
+      const data = (await response.json()) as ResendTicketResponse;
+      if (!response.ok || !data.success) {
+        if (typeof data.cooldownUntil === "number") {
+          setWalkInResendCooldownUntil(data.cooldownUntil);
+        }
+
+        throw new Error(data.error || "Failed to resend e-ticket.");
+      }
+
+      setWalkInResendCooldownUntil(data.cooldownUntil ?? Date.now() + 30_000);
+      toast.success("E-ticket resent.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to resend e-ticket.",
+      );
+    } finally {
+      setIsWalkInResending(false);
+    }
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 p-3 sm:p-4 md:p-6 lg:p-8">
@@ -1627,6 +1773,40 @@ export function ReserveSeatClient({
                     ))}
                   </div>
                 </div>
+                {contactDetails.email.trim() ? (
+                  <div className="rounded-xl border border-sidebar-border/70 bg-background p-5 text-left shadow-sm">
+                    <p className="text-sm font-semibold text-foreground">
+                      Didn&apos;t get the email? Send again
+                    </p>
+                    <Separator className="my-4" />
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="truncate text-sm text-muted-foreground">
+                        {contactDetails.email.trim()}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void handleResendWalkInTicket()}
+                        disabled={
+                          isWalkInResending || walkInResendWaitSeconds > 0
+                        }
+                        className="sm:min-w-[180px]"
+                      >
+                        {isWalkInResending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Sending...
+                          </>
+                        ) : walkInResendWaitSeconds > 0 ? (
+                          `Resend in ${walkInResendWaitSeconds}s`
+                        ) : (
+                          "Resend"
+                        )}
+                      </Button>
+                    </div>
+                    <Separator className="mt-4" />
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
                   <Button
                     onClick={resetWalkInSaleDraft}
@@ -1656,7 +1836,9 @@ export function ReserveSeatClient({
               description="Please keep this tab open while we confirm your turn."
               badgeLabel="Loading"
             >
-              <div className="text-sm text-muted-foreground">This usually takes just a moment.</div>
+              <div className="text-sm text-muted-foreground">
+                This usually takes just a moment.
+              </div>
             </QueueStatePanel>
           )}
 
@@ -1681,7 +1863,11 @@ export function ReserveSeatClient({
                 <div className="flex flex-col gap-3 sm:flex-row">
                   {isExpiredWindowError ? (
                     <>
-                      <Button onClick={handleRejoinQueue} disabled={isRejoining} className="sm:min-w-40">
+                      <Button
+                        onClick={handleRejoinQueue}
+                        disabled={isRejoining}
+                        className="sm:min-w-40"
+                      >
                         {isRejoining ? (
                           <>
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1702,10 +1888,18 @@ export function ReserveSeatClient({
                     </>
                   ) : (
                     <>
-                      <Button variant="outline" onClick={goToQueue} className="sm:min-w-40">
+                      <Button
+                        variant="outline"
+                        onClick={goToQueue}
+                        className="sm:min-w-40"
+                      >
                         Back to queue
                       </Button>
-                      <Button variant="outline" onClick={handleDeclineRejoin} className="sm:min-w-40">
+                      <Button
+                        variant="outline"
+                        onClick={handleDeclineRejoin}
+                        className="sm:min-w-40"
+                      >
                         Exit
                       </Button>
                     </>
@@ -2073,8 +2267,15 @@ export function ReserveSeatClient({
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    {isWalkInMode ? (
+                      <p className="text-sm text-muted-foreground">
+                        Customer details are optional. Enter an email if the
+                        customer wants an e-ticket copy sent.
+                      </p>
+                    ) : null}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field data-invalid={!!contactFieldErrors.firstName}>
+                        <FieldLabel>First name (optional)</FieldLabel>
                         <Input
                           className="h-10 border-sidebar-border/70 bg-background"
                           placeholder="First name"
@@ -2087,6 +2288,7 @@ export function ReserveSeatClient({
                         <FieldError>{contactFieldErrors.firstName}</FieldError>
                       </Field>
                       <Field data-invalid={!!contactFieldErrors.lastName}>
+                        <FieldLabel>Last name (optional)</FieldLabel>
                         <Input
                           className="h-10 border-sidebar-border/70 bg-background"
                           placeholder="Last name"
@@ -2100,6 +2302,7 @@ export function ReserveSeatClient({
                       </Field>
                     </div>
                     <Field data-invalid={!!contactFieldErrors.address}>
+                      <FieldLabel>Address (optional)</FieldLabel>
                       <Input
                         className="h-10 w-full border-sidebar-border/70 bg-background"
                         placeholder="Address"
@@ -2113,6 +2316,7 @@ export function ReserveSeatClient({
                     </Field>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field data-invalid={!!contactFieldErrors.email}>
+                        <FieldLabel>Email (optional)</FieldLabel>
                         <Input
                           className="h-10 border-sidebar-border/70 bg-background"
                           placeholder="Email"
@@ -2127,6 +2331,7 @@ export function ReserveSeatClient({
                         <FieldError>{contactFieldErrors.email}</FieldError>
                       </Field>
                       <Field data-invalid={!!contactFieldErrors.phoneNumber}>
+                        <FieldLabel>Phone number (optional)</FieldLabel>
                         <Input
                           className="h-10 border-sidebar-border/70 bg-background"
                           placeholder="Phone number"
@@ -2200,9 +2405,7 @@ export function ReserveSeatClient({
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </Button>
-                      <CardTitle className="text-base">
-                        Verify Email
-                      </CardTitle>
+                      <CardTitle className="text-base">Verify Email</CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -2218,7 +2421,8 @@ export function ReserveSeatClient({
                         placeholder="name@example.com"
                       />
                       <FieldDescription>
-                        You can correct the email here if needed. A new code can be requested after 30 seconds.
+                        You can correct the email here if needed. A new code can
+                        be requested after 30 seconds.
                       </FieldDescription>
                     </Field>
 
@@ -2244,7 +2448,9 @@ export function ReserveSeatClient({
                       <Button
                         type="button"
                         onClick={() => void handleVerifyEmailOtp()}
-                        disabled={isEmailOtpSubmitting || emailOtpCode.length < 6}
+                        disabled={
+                          isEmailOtpSubmitting || emailOtpCode.length < 6
+                        }
                         className="gap-2"
                       >
                         {isEmailOtpSubmitting ? (
@@ -2263,7 +2469,9 @@ export function ReserveSeatClient({
                         type="button"
                         variant="outline"
                         onClick={() => void handleResendEmailOtp()}
-                        disabled={isEmailOtpSubmitting || otpResendWaitSeconds > 0}
+                        disabled={
+                          isEmailOtpSubmitting || otpResendWaitSeconds > 0
+                        }
                         className="gap-2"
                       >
                         {otpResendWaitSeconds > 0
@@ -2272,7 +2480,9 @@ export function ReserveSeatClient({
                       </Button>
                     </div>
                     {emailOtpMessage ? (
-                      <p className="text-sm text-green-600">{emailOtpMessage}</p>
+                      <p className="text-sm text-green-600">
+                        {emailOtpMessage}
+                      </p>
                     ) : null}
                   </CardContent>
                 </Card>
@@ -2477,20 +2687,68 @@ export function ReserveSeatClient({
                           </p>
                           <div className="mt-2 space-y-1">
                             <p className="font-medium">
-                              {contactDetails.firstName.trim()}{" "}
-                              {contactDetails.lastName.trim()}
+                              {customerDisplayName || "-"}
                             </p>
                             <p className="text-muted-foreground">
-                              {contactDetails.email.trim()}
+                              {customerEmailDisplay}
                             </p>
                             <p className="text-muted-foreground">
-                              {contactDetails.phoneNumber.trim()}
+                              {customerPhoneDisplay}
                             </p>
                             <p className="text-muted-foreground">
-                              {contactDetails.address.trim()}
+                              {customerAddressDisplay}
                             </p>
                           </div>
                         </div>
+                        <Field data-invalid={!!adminNicknameError}>
+                          <FieldLabel
+                            className={cn(
+                              "w-full items-center justify-between",
+                              adminNicknameError ? "text-destructive" : undefined,
+                            )}
+                          >
+                            <span>Admin Name (Nickname)</span>
+                            <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                              <span
+                                className={cn(
+                                  adminNicknameError
+                                    ? "text-destructive"
+                                    : "text-muted-foreground",
+                                )}
+                              >
+                                Remember me
+                              </span>
+                              <Switch
+                                checked={rememberAdminNickname}
+                                onCheckedChange={setRememberAdminNickname}
+                                aria-label="Remember admin nickname"
+                              />
+                            </span>
+                          </FieldLabel>
+                          <Input
+                            value={adminNickname}
+                            onChange={(event) => {
+                              setAdminNickname(event.target.value);
+                              setAdminNicknameError(null);
+                            }}
+                            placeholder="Who accommodated this customer?"
+                            aria-invalid={!!adminNicknameError}
+                            className={cn(
+                              "h-10 bg-background",
+                              adminNicknameError
+                                ? "border-destructive focus-visible:border-destructive"
+                                : "border-sidebar-border/70",
+                            )}
+                          />
+                          <FieldDescription
+                            className={cn(
+                              adminNicknameError ? "text-destructive" : undefined,
+                            )}
+                          >
+                            Required. This will be shown on the reservation
+                            record for this walk-in sale.
+                          </FieldDescription>
+                        </Field>
                         <div className="rounded-xl border border-sidebar-border/70 bg-background p-4">
                           <p className="text-xs uppercase tracking-wide text-muted-foreground">
                             Point-of-sale total

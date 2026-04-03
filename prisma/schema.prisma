@@ -242,6 +242,7 @@ model Reservation {
   reservation_id String            @id @default(cuid())
   reservation_number String
   guest_id       String
+  admin_nickname String?
   first_name     String
   last_name      String
   address        String

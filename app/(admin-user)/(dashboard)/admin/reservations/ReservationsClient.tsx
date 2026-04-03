@@ -73,6 +73,7 @@ type ReservationData = {
   reservation_id: string;
   reservation_number: string;
   guest_id: string;
+  admin_nickname: string | null;
   first_name: string;
   last_name: string;
   address: string;
@@ -124,6 +125,7 @@ type UserReservationRow = {
   userId: string;
   reservationNumber: string;
   user: {
+    admin_nickname: string | null;
     first_name: string;
     last_name: string;
     email: string;
@@ -305,6 +307,17 @@ const formatTimeRange = (start: string, end: string) => {
   return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
 };
 
+const getCustomerName = (user: UserReservationRow["user"]) =>
+  `${user.first_name} ${user.last_name}`.trim();
+
+const getDisplayValue = (value: string | null | undefined) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : "-";
+};
+
+const isWalkInRow = (row: UserReservationRow) =>
+  row.reservations.some((reservation) => reservation.payment?.method === "WALK_IN");
+
 const getApiErrorMessage = (
   payload: unknown,
   fallback: string,
@@ -340,6 +353,7 @@ const buildUserRows = (
       userId: reservation.payment?.payment_id ?? reservation.reservation_id,
       reservationNumber: reservation.reservation_number,
       user: {
+        admin_nickname: reservation.admin_nickname,
         first_name: reservation.first_name,
         last_name: reservation.last_name,
         email: reservation.email,
@@ -381,6 +395,8 @@ function SortableCard({
   progressLabel = null,
   onOpenDetails,
 }: SortableCardProps) {
+  const isWalkIn = isWalkInRow(card.row);
+  const customerName = getCustomerName(card.row.user);
   const primaryPayment =
     card.row.reservations.find((reservation) => reservation.payment?.screenshot_url)?.payment ??
     card.row.reservations.find((reservation) => reservation.payment)?.payment ??
@@ -434,9 +450,28 @@ function SortableCard({
             <p className="text-base font-bold leading-tight text-foreground">
               {card.showName}
             </p>
-            <p className="text-sm font-medium text-foreground">
-              {card.row.user.first_name} {card.row.user.last_name}
-            </p>
+            {isWalkIn ? (
+              <>
+                <p className="text-sm font-medium text-foreground">
+                  {getDisplayValue(card.row.user.admin_nickname)}
+                </p>
+                {customerName ? (
+                  <p className="text-sm font-medium text-foreground">
+                    {customerName}
+                  </p>
+                ) : null}
+                {card.row.user.email.trim() ? (
+                  <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-foreground">
+                  {customerName}
+                </p>
+                <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+              </>
+            )}
           </button>
           <div className="group hidden w-fit cursor-pointer space-y-1 lg:block">
             <button
@@ -451,10 +486,19 @@ function SortableCard({
               onClick={() => onOpenDetails(card)}
               className="block cursor-pointer text-left text-sm font-medium text-foreground transition-colors group-hover:text-blue-600 group-hover:underline group-hover:underline-offset-4 hover:text-blue-600 hover:underline hover:underline-offset-4"
             >
-              {card.row.user.first_name} {card.row.user.last_name}
+              {isWalkIn
+                ? getDisplayValue(card.row.user.admin_nickname)
+                : customerName}
             </button>
           </div>
-          <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+          {isWalkIn ? (
+            customerName ? (
+              <p className="text-sm font-medium text-foreground">{customerName}</p>
+            ) : null
+          ) : null}
+          {(!isWalkIn || card.row.user.email.trim()) ? (
+            <p className="text-sm text-muted-foreground">{card.row.user.email}</p>
+          ) : null}
           {paymentDisplay.cardTagLabel ? (
             <span className="inline-flex w-fit items-center rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-700">
               {paymentDisplay.cardTagLabel}
@@ -490,6 +534,8 @@ function PreviewPlaceholderCard({
   rollbackAnchorId?: string;
 }) {
   const isRollbackAnchor = Boolean(rollbackAnchorId);
+  const isWalkIn = isWalkInRow(card.row);
+  const customerName = getCustomerName(card.row.user);
 
   return (
     <Card
@@ -502,9 +548,14 @@ function PreviewPlaceholderCard({
       <CardContent className="space-y-2 p-4 pr-10 opacity-0">
         <p className="text-base font-bold leading-tight">{card.showName}</p>
         <p className="text-sm font-medium">
-          {card.row.user.first_name} {card.row.user.last_name}
+          {isWalkIn ? getDisplayValue(card.row.user.admin_nickname) : customerName}
         </p>
-        <p className="text-sm">{card.row.user.email}</p>
+        {isWalkIn && customerName ? (
+          <p className="text-sm font-medium">{customerName}</p>
+        ) : null}
+        {(!isWalkIn || card.row.user.email.trim()) ? (
+          <p className="text-sm">{card.row.user.email}</p>
+        ) : null}
         <p className="text-xs">Reservation No: {card.row.reservationNumber}</p>
         <p className="text-sm">
           {card.row.seatNumbers.length} seat
@@ -1028,6 +1079,7 @@ export function ReservationsClient() {
         ...show,
         reservations: show.reservations.filter(
           (reservation) =>
+            (reservation.admin_nickname ?? "").toLowerCase().includes(q) ||
             reservation.first_name.toLowerCase().includes(q) ||
             reservation.last_name.toLowerCase().includes(q) ||
             reservation.email.toLowerCase().includes(q) ||
@@ -1260,6 +1312,16 @@ export function ReservationsClient() {
       ?.payment ??
     null;
   const selectedPaymentDisplay = getAdminPaymentDisplay(primaryPayment?.method);
+  const pendingMoveCustomerName = pendingMoveCard
+    ? getCustomerName(pendingMoveCard.row.user)
+    : "";
+  const selectedCardIsWalkIn = selectedCard ? isWalkInRow(selectedCard.row) : false;
+  const selectedCardCustomerName = selectedCard
+    ? getCustomerName(selectedCard.row.user)
+    : "";
+  const selectedCardAdminNickname = selectedCard
+    ? getDisplayValue(selectedCard.row.user.admin_nickname)
+    : "-";
 
   const resolveDropTarget = React.useCallback(
     (overId: string): KanbanStatus | null => {
@@ -1545,10 +1607,8 @@ export function ReservationsClient() {
                   "We're accepting this payment. Be sure you have confirmed that the payment was received before continuing."
                 ) : (
                   <>
-                    Move {pendingMoveCard.row.user.first_name}{" "}
-                    {pendingMoveCard.row.user.last_name} for{" "}
-                    {pendingMoveCard.showName} to {pendingMoveLabel}? This action
-                    cannot be undone or changed.
+                    Move {pendingMoveCustomerName || pendingMoveCard.row.user.admin_nickname || "this reservation"} for{" "}
+                    {pendingMoveCard.showName} to {pendingMoveLabel}? This action cannot be undone or changed.
                   </>
                 )
               ) : (
@@ -1670,12 +1730,15 @@ export function ReservationsClient() {
                 <div className="mx-auto max-w-2xl space-y-8">
                   <div className="space-y-2">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                      Payment Record
+                      {selectedCardIsWalkIn
+                        ? "Walk-In Payment Record"
+                        : "Payment Record"}
                     </p>
                     <div>
                       <h2 className="text-lg font-semibold tracking-tight sm:text-2xl">
-                        {selectedCard.row.user.first_name}{" "}
-                        {selectedCard.row.user.last_name}
+                        {selectedCardIsWalkIn
+                          ? `Accomodated by: ${selectedCardAdminNickname}`
+                          : selectedCardCustomerName}
                       </h2>
                       <p className="text-xs text-muted-foreground sm:text-sm">
                         {selectedCard.showName}
@@ -1689,12 +1752,20 @@ export function ReservationsClient() {
                     Customer Details
                   </div>
                   <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                    <div className="sm:col-span-2">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                        Customer Name
+                      </p>
+                      <p className="text-xs font-medium sm:text-sm">
+                        {getDisplayValue(selectedCardCustomerName)}
+                      </p>
+                    </div>
                     <div>
                       <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
                         Email
                       </p>
                       <p className="break-all text-xs font-medium sm:text-sm">
-                        {selectedCard.row.user.email}
+                        {getDisplayValue(selectedCard.row.user.email)}
                       </p>
                     </div>
                     <div>
@@ -1702,7 +1773,7 @@ export function ReservationsClient() {
                         Phone
                       </p>
                       <p className="text-xs font-medium sm:text-sm">
-                        {selectedCard.row.user.phone_number}
+                        {getDisplayValue(selectedCard.row.user.phone_number)}
                       </p>
                     </div>
                     <div className="sm:col-span-2">
@@ -1710,7 +1781,7 @@ export function ReservationsClient() {
                         Address
                       </p>
                       <p className="text-xs font-medium sm:text-sm">
-                        {selectedCard.row.user.address}
+                        {getDisplayValue(selectedCard.row.user.address)}
                       </p>
                     </div>
                   </div>
@@ -1858,7 +1929,9 @@ export function ReservationsClient() {
                               <Image
                                 src={primaryPayment.screenshot_url}
                                 alt={selectedPaymentDisplay.imageAlt(
-                                  `${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`,
+                                  selectedCardIsWalkIn
+                                    ? selectedCardAdminNickname
+                                    : selectedCardCustomerName,
                                 )}
                                 width={1600}
                                 height={1600}
@@ -1912,7 +1985,9 @@ export function ReservationsClient() {
             <Image
               src={primaryPayment.screenshot_url}
               alt={selectedPaymentDisplay.expandedImageAlt(
-                `${selectedCard.row.user.first_name} ${selectedCard.row.user.last_name}`,
+                selectedCardIsWalkIn
+                  ? selectedCardAdminNickname
+                  : selectedCardCustomerName,
               )}
               width={2000}
               height={2000}
@@ -2181,26 +2256,41 @@ export function ReservationsClient() {
             </div>
             <DragOverlay>
               {activeDragCard ? (
-                <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
-                  <CardContent className="space-y-2 p-4 pr-10">
-                    <p className="text-base font-bold leading-tight">
-                      {activeDragCard.showName}
-                    </p>
-                    <p className="text-sm font-medium text-foreground">
-                      {activeDragCard.row.user.first_name}{" "}
-                      {activeDragCard.row.user.last_name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {activeDragCard.row.user.email}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {activeDragCard.row.seatNumbers.length} seat
-                      {activeDragCard.row.seatNumbers.length !== 1
-                        ? "s"
-                        : ""} - {formatCurrency(activeDragCard.row.totalAmount)}
-                    </p>
-                  </CardContent>
-                </Card>
+                (() => {
+                  const isWalkIn = isWalkInRow(activeDragCard.row);
+                  const customerName = getCustomerName(activeDragCard.row.user);
+
+                  return (
+                    <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
+                      <CardContent className="space-y-2 p-4 pr-10">
+                        <p className="text-base font-bold leading-tight">
+                          {activeDragCard.showName}
+                        </p>
+                        <p className="text-sm font-medium text-foreground">
+                          {isWalkIn
+                            ? getDisplayValue(activeDragCard.row.user.admin_nickname)
+                            : customerName}
+                        </p>
+                        {isWalkIn && customerName ? (
+                          <p className="text-sm font-medium text-foreground">
+                            {customerName}
+                          </p>
+                        ) : null}
+                        {(!isWalkIn || activeDragCard.row.user.email.trim()) ? (
+                          <p className="text-sm text-muted-foreground">
+                            {activeDragCard.row.user.email}
+                          </p>
+                        ) : null}
+                        <p className="text-sm text-muted-foreground">
+                          {activeDragCard.row.seatNumbers.length} seat
+                          {activeDragCard.row.seatNumbers.length !== 1
+                            ? "s"
+                            : ""} - {formatCurrency(activeDragCard.row.totalAmount)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                })()
               ) : null}
             </DragOverlay>
             {rollbackGhost ? (
@@ -2216,27 +2306,42 @@ export function ReservationsClient() {
                   transition: `transform ${ROLLBACK_PREVIEW_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`,
                 }}
               >
-                <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
-                  <CardContent className="space-y-2 p-4 pr-10">
-                    <p className="text-base font-bold leading-tight">
-                      {rollbackGhost.card.showName}
-                    </p>
-                    <p className="text-sm font-medium text-foreground">
-                      {rollbackGhost.card.row.user.first_name}{" "}
-                      {rollbackGhost.card.row.user.last_name}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {rollbackGhost.card.row.user.email}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {rollbackGhost.card.row.seatNumbers.length} seat
-                      {rollbackGhost.card.row.seatNumbers.length !== 1
-                        ? "s"
-                        : ""}{" "}
-                      - {formatCurrency(rollbackGhost.card.row.totalAmount)}
-                    </p>
-                  </CardContent>
-                </Card>
+                {(() => {
+                  const isWalkIn = isWalkInRow(rollbackGhost.card.row);
+                  const customerName = getCustomerName(rollbackGhost.card.row.user);
+
+                  return (
+                    <Card className="border-sidebar-border/70 dark:border-white/20 shadow-lg">
+                      <CardContent className="space-y-2 p-4 pr-10">
+                        <p className="text-base font-bold leading-tight">
+                          {rollbackGhost.card.showName}
+                        </p>
+                        <p className="text-sm font-medium text-foreground">
+                          {isWalkIn
+                            ? getDisplayValue(rollbackGhost.card.row.user.admin_nickname)
+                            : customerName}
+                        </p>
+                        {isWalkIn && customerName ? (
+                          <p className="text-sm font-medium text-foreground">
+                            {customerName}
+                          </p>
+                        ) : null}
+                        {(!isWalkIn || rollbackGhost.card.row.user.email.trim()) ? (
+                          <p className="text-sm text-muted-foreground">
+                            {rollbackGhost.card.row.user.email}
+                          </p>
+                        ) : null}
+                        <p className="text-sm text-muted-foreground">
+                          {rollbackGhost.card.row.seatNumbers.length} seat
+                          {rollbackGhost.card.row.seatNumbers.length !== 1
+                            ? "s"
+                            : ""}{" "}
+                          - {formatCurrency(rollbackGhost.card.row.totalAmount)}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                })()}
               </div>
             ) : null}
           </DndContext>
