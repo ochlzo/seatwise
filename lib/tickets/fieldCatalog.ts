@@ -4,6 +4,7 @@ export const TICKET_FIELD_CATALOG = [
   { key: "show_date", label: "Show Date" },
   { key: "show_time", label: "Show Time" },
   { key: "seat_category", label: "Seat Category" },
+  { key: "price", label: "Price" },
   { key: "seat", label: "Seat" },
   { key: "reservation_number", label: "Booking Ref" },
   { key: "customer_name", label: "Customer Name" },

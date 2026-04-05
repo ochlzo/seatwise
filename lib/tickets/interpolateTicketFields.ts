@@ -7,6 +7,7 @@ const MANILA_TIME_ZONE = "Asia/Manila";
 
 type TicketInterpolationSeat = {
   seatCategory?: string | null;
+  price?: number | string | { toString(): string } | null;
   seat?: string | null;
 };
 
@@ -72,6 +73,27 @@ function buildSeatLabel(seat: TicketInterpolationSeat) {
     .join(" / ");
 }
 
+function formatSeatPrice(value?: number | string | { toString(): string } | null) {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value)
+        : value && typeof value.toString === "function"
+          ? Number.parseFloat(value.toString())
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return "";
+  }
+
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 2,
+  }).format(numericValue);
+}
+
 export function interpolateTicketFields(
   input: TicketInterpolationInput,
 ): InterpolatedTicketFields {
@@ -83,6 +105,7 @@ export function interpolateTicketFields(
   fields.show_date = formatShowDate(input.schedule.schedDate);
   fields.show_time = formatShowTime(input.schedule.schedStartTime);
   fields.seat_category = joinUnique(input.seats.map((seat) => seat.seatCategory));
+  fields.price = joinUnique(input.seats.map((seat) => formatSeatPrice(seat.price)));
   fields.seat = joinUnique(input.seats.map((seat) => seat.seat));
   fields.reservation_number = input.reservation.reservationNumber.trim();
   fields.customer_name = [input.reservation.firstName, input.reservation.lastName]

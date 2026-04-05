@@ -2406,7 +2406,9 @@ export function ReserveSeatClient({
                     ) : null}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field data-invalid={!!contactFieldErrors.firstName}>
-                        <FieldLabel>First name (optional)</FieldLabel>
+                        <FieldLabel>
+                          {isWalkInMode ? "First name (optional)" : "First name"}
+                        </FieldLabel>
                         <Input
                           className="h-10 border-sidebar-border/70 bg-background"
                           placeholder="First name"
@@ -2419,7 +2421,9 @@ export function ReserveSeatClient({
                         <FieldError>{contactFieldErrors.firstName}</FieldError>
                       </Field>
                       <Field data-invalid={!!contactFieldErrors.lastName}>
-                        <FieldLabel>Last name (optional)</FieldLabel>
+                        <FieldLabel>
+                          {isWalkInMode ? "Last name (optional)" : "Last name"}
+                        </FieldLabel>
                         <Input
                           className="h-10 border-sidebar-border/70 bg-background"
                           placeholder="Last name"
@@ -2433,7 +2437,9 @@ export function ReserveSeatClient({
                       </Field>
                     </div>
                     <Field data-invalid={!!contactFieldErrors.address}>
-                      <FieldLabel>Address (optional)</FieldLabel>
+                      <FieldLabel>
+                        {isWalkInMode ? "Address (optional)" : "Address"}
+                      </FieldLabel>
                       <Input
                         className="h-10 w-full border-sidebar-border/70 bg-background"
                         placeholder="Address"
@@ -2447,7 +2453,9 @@ export function ReserveSeatClient({
                     </Field>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <Field data-invalid={!!contactFieldErrors.email}>
-                        <FieldLabel>Email (optional)</FieldLabel>
+                        <FieldLabel>
+                          {isWalkInMode ? "Email (optional)" : "Email"}
+                        </FieldLabel>
                         <Input
                           className="h-10 border-sidebar-border/70 bg-background"
                           placeholder="Email"
@@ -2462,7 +2470,11 @@ export function ReserveSeatClient({
                         <FieldError>{contactFieldErrors.email}</FieldError>
                       </Field>
                       <Field data-invalid={!!contactFieldErrors.phoneNumber}>
-                        <FieldLabel>Phone number (optional)</FieldLabel>
+                        <FieldLabel>
+                          {isWalkInMode
+                            ? "Phone number (optional)"
+                            : "Phone number"}
+                        </FieldLabel>
                         <Input
                           className="h-10 border-sidebar-border/70 bg-background"
                           placeholder="Phone number"

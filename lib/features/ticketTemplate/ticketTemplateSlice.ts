@@ -27,6 +27,7 @@ export const TICKET_TEMPLATE_FIELD_OPTIONS = [
   { key: "show_date", label: "Show Date" },
   { key: "show_time", label: "Show Time" },
   { key: "seat_category", label: "Seat Category" },
+  { key: "price", label: "Price" },
   { key: "seat", label: "Seat" },
   { key: "reservation_number", label: "Booking Ref" },
   { key: "customer_name", label: "Customer Name" },

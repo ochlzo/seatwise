@@ -39,6 +39,7 @@ type LoadedReservation = {
       set?: {
         seatCategory?: {
           category_name: string;
+          price: number;
         };
       };
       seat: {
@@ -223,6 +224,7 @@ async function loadReservation(
                   seatCategory: {
                     select: {
                       category_name: true,
+                      price: true,
                     },
                   },
                 },
@@ -327,6 +329,7 @@ export async function issueReservationTicket(
     },
     seats: reservation.reservedSeats.map(({ seatAssignment }) => ({
       seatCategory: seatAssignment.set?.seatCategory?.category_name,
+      price: seatAssignment.set?.seatCategory?.price,
       seat: seatAssignment.seat.seat_number,
     })),
     qrToken: "",
