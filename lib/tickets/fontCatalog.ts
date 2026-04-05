@@ -15,7 +15,6 @@ type LocalTicketFontSource = {
 };
 
 const LOCAL_TICKET_FONT_SOURCES: LocalTicketFontSource[] = [
-  { family: "Georgia", category: "serif" },
   {
     family: "Inter",
     category: "sans",

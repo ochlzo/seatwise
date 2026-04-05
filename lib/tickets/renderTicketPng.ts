@@ -24,12 +24,24 @@ async function buildQrDataUrl(qrValue: string, size: number) {
 export async function renderTicketPng(input: RenderTicketPngParams) {
   const fontConfigPath = await getTicketFontConfigPath();
   process.env.FONTCONFIG_FILE = fontConfigPath;
-  const qrDataUrl = await buildQrDataUrl(input.qrValue, 1024);
+
+  const qrNodeSizes = Array.from(
+    new Set(
+      input.template.nodes
+        .filter((node): node is Extract<typeof node, { kind: "qr" }> => node.kind === "qr")
+        .map((node) => Math.max(Math.round(node.size), 1)),
+    ),
+  );
+  const qrDataUrls = Object.fromEntries(
+    await Promise.all(
+      qrNodeSizes.map(async (size) => [String(size), await buildQrDataUrl(input.qrValue, size)] as const),
+    ),
+  );
 
   const { renderTicketPngRuntime } = await import("./renderTicketPng.runtime.mjs");
   const ticketPng = await renderTicketPngRuntime({
     ...input,
-    qrDataUrl,
+    qrDataUrls,
   });
 
   return Buffer.from(ticketPng);

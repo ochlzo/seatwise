@@ -89,7 +89,7 @@ function normalizeFieldNode(
     width: toFiniteNumber(node.width, 420),
     height: toFiniteNumber(node.height, Math.ceil(fontSize * 1.4)),
     fontSize,
-    fontFamily: toStringValue(node.fontFamily, "Georgia"),
+    fontFamily: toStringValue(node.fontFamily, "Merriweather"),
     fontWeight: toFiniteNumber(node.fontWeight, 700),
     fill: toStringValue(node.fill, "#111827"),
     align: toAlignValue(node.align),

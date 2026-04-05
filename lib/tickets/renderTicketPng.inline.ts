@@ -376,7 +376,7 @@ function buildFieldOverlay(node: TicketTemplateFieldNode, value: string) {
   const lineHeight = fontSize * LINE_HEIGHT_RATIO;
   const opacity = node.opacity ?? 1;
   const fill = node.fill ?? "#111827";
-  const fontFamily = resolveTicketRenderFontFamily(node.fontFamily ?? "Georgia");
+  const fontFamily = resolveTicketRenderFontFamily(node.fontFamily ?? "Merriweather");
   const fontWeight = node.fontWeight ?? 700;
   const rotation =
     typeof node.rotation === "number" && Number.isFinite(node.rotation)
