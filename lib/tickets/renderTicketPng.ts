@@ -33,7 +33,11 @@ export async function renderTicketPng(input: RenderTicketPngParams) {
   return new Promise<Uint8Array>((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      ["--experimental-strip-types", renderTicketWorkerPath],
+      [
+        "--experimental-strip-types",
+        "--experimental-default-type=module",
+        renderTicketWorkerPath,
+      ],
       {
         env: {
           ...process.env,

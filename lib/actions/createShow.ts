@@ -7,6 +7,10 @@ import { Prisma, type ColorCodes, type ShowStatus } from "@prisma/client";
 import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
 import { getCurrentAdminContext } from "@/lib/auth/adminContext";
 import { validateShowPayload } from "@/lib/actions/showValidation";
+import {
+  CREATE_SHOW_TICKET_TEMPLATE_REQUIRED_MESSAGE,
+  normalizeCreateShowTicketTemplateIds,
+} from "@/lib/actions/createShowRequirements";
 
 type CreateShowPayload = {
   team_id?: string;
@@ -175,18 +179,21 @@ export async function createShowAction(data: CreateShowPayload) {
     const uniqueCategories = Array.from(uniqueCategoryMap.values());
 
     const trimmedSeatmapId = seatmap_id?.trim();
-    const normalizedTicketTemplateIds = Array.from(
-      new Set(
-        (Array.isArray(ticket_template_ids)
+    const normalizedTicketTemplateIds =
+      normalizeCreateShowTicketTemplateIds(
+        Array.isArray(ticket_template_ids)
           ? ticket_template_ids
           : ticket_template_id
             ? [ticket_template_id]
-            : []
-        )
-          .map((value) => value?.trim())
-          .filter((value): value is string => Boolean(value)),
-      ),
-    );
+            : [],
+      );
+
+    if (normalizedTicketTemplateIds.length === 0) {
+      return {
+        success: false,
+        error: CREATE_SHOW_TICKET_TEMPLATE_REQUIRED_MESSAGE,
+      };
+    }
     const legacyTicketTemplateId = normalizedTicketTemplateIds[0];
     const seatmap = trimmedSeatmapId
       ? await prisma.seatmap.findUnique({

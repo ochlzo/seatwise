@@ -52,6 +52,9 @@ import type { SeatmapState } from "@/lib/seatmap/types";
 import { uploadImageToCloudinary } from "@/lib/clients/cloudinary-upload";
 import { useAppDispatch } from "@/lib/hooks";
 import { setLoading } from "@/lib/features/loading/isLoadingSlice";
+import {
+  CREATE_SHOW_TICKET_TEMPLATE_REQUIRED_MESSAGE,
+} from "@/lib/actions/createShowRequirements";
 // import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const STATUS_OPTIONS = [
@@ -863,6 +866,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       startDate: !formData.show_start_date || dateRangeInvalid,
       endDate: !formData.show_end_date || dateRangeInvalid,
       seatmap: requiresSeatmap && !formData.seatmap_id,
+      ticketTemplates: !isLoadingTicketTemplates && selectedTicketTemplates.length === 0,
     };
 
     const seatmapDetailsError =
@@ -895,6 +899,8 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
     seatAssignmentIssues.length,
     scheduleCoverage.missingDates.length,
     hasOverlappingSchedules,
+    isLoadingTicketTemplates,
+    selectedTicketTemplates.length,
   ]);
 
   const seatAssignmentIssueMessage = React.useMemo(() => {
@@ -1823,7 +1829,7 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
               Presentation Setup
             </CardTitle>
             <CardDescription>
-              Select a seatmap template and optional ticket templates for this production.
+              Select a seatmap template and at least one ticket template for this production.
             </CardDescription>
           </div>
         </CardHeader>
@@ -1932,8 +1938,12 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
                 }}
               />
               <p className="text-[11px] text-muted-foreground">
-                {selectedTicketTemplates.length === 0
-                  ? "No ticket templates selected. Customers must choose from selected designs during reservation."
+                {isLoadingTicketTemplates
+                  ? "Loading ticket templates..."
+                  : selectedTicketTemplates.length === 0
+                    ? ticketTemplates.length === 0
+                      ? "Create at least one ticket template before creating the show."
+                      : CREATE_SHOW_TICKET_TEMPLATE_REQUIRED_MESSAGE
                   : `${selectedTicketTemplates.length} ticket template${selectedTicketTemplates.length === 1 ? "" : "s"} selected.`}
               </p>
             </div>
