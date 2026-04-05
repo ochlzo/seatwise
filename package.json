@@ -13,6 +13,7 @@
     "tickets:consumed": "node --experimental-strip-types scripts/list-consumed-tickets.ts",
     "reservations:clear": "node --experimental-strip-types scripts/clear-reservations.ts",
     "bookings:clear": "node --experimental-strip-types scripts/clear-booking-domain.ts",
+    "db:clean-preserve-admin": "node --experimental-strip-types scripts/clean-db-preserve-admin.ts",
     "reservations:seed-test": "node --experimental-strip-types scripts/seed-test-reservations.ts",
     "reservations:seed-show": "node --experimental-strip-types scripts/seed-show-reservations.ts",
     "reservations:clear-test": "node --experimental-strip-types scripts/clear-test-reservations.ts",
