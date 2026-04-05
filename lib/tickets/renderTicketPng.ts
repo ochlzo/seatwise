@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import { getTicketFontConfigPath } from "./fontConfig.server.ts";
 import type { TicketTemplateVersion } from "./types.ts";
@@ -23,24 +23,17 @@ type WorkerFailure = {
 
 type WorkerResponse = WorkerSuccess | WorkerFailure;
 
-const renderTicketWorkerPath = fileURLToPath(
-  new URL("./renderTicketPng.worker.ts", import.meta.url),
+const renderTicketRuntimePath = fileURLToPath(
+  new URL("./renderTicketPng.runtime.mjs", import.meta.url),
 );
 
 export async function renderTicketPng(input: RenderTicketPngParams) {
   const fontConfigPath = await getTicketFontConfigPath();
-  const renderTicketWorkerUrl = pathToFileURL(renderTicketWorkerPath).href;
 
   return new Promise<Uint8Array>((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [
-        "--experimental-strip-types",
-        "--input-type=module",
-        "--eval",
-        "await import(process.argv[1]);",
-        renderTicketWorkerUrl,
-      ],
+      [renderTicketRuntimePath],
       {
         env: {
           ...process.env,
@@ -72,8 +65,9 @@ export async function renderTicketPng(input: RenderTicketPngParams) {
       if (!stdout) {
         reject(
           new Error(
-            stderr ||
-              `Ticket renderer exited before producing output (code ${code ?? "unknown"}).`,
+            stderr
+              ? `Ticket renderer exited without output (code ${code ?? "unknown"}): ${stderr}`
+              : `Ticket renderer exited before producing output (code ${code ?? "unknown"}).`,
           ),
         );
         return;
