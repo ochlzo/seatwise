@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import "qrcode";
+import QRCode from "qrcode";
 import { getTicketFontConfigPath } from "./fontConfig.server.ts";
 import type { TicketTemplateVersion } from "./types.ts";
 
@@ -11,6 +11,17 @@ type RenderTicketPngParams = {
   fields: Partial<Record<string, string>>;
   qrValue: string;
 };
+
+async function buildQrDataUrl(qrValue: string, size: number) {
+  return QRCode.toDataURL(qrValue, {
+    width: size,
+    margin: 0,
+    color: {
+      dark: "#000000ff",
+      light: "#ffffffff",
+    },
+  });
+}
 
 type WorkerSuccess = {
   ok: true;
@@ -30,6 +41,7 @@ const renderTicketRuntimePath = fileURLToPath(
 
 export async function renderTicketPng(input: RenderTicketPngParams) {
   const fontConfigPath = await getTicketFontConfigPath();
+  const qrDataUrl = await buildQrDataUrl(input.qrValue, 1024);
 
   return new Promise<Uint8Array>((resolve, reject) => {
     const child = spawn(
@@ -94,6 +106,11 @@ export async function renderTicketPng(input: RenderTicketPngParams) {
       resolve(Buffer.from(response.ticketPngBase64, "base64"));
     });
 
-    child.stdin.end(JSON.stringify(input));
+    child.stdin.end(
+      JSON.stringify({
+        ...input,
+        qrDataUrl,
+      }),
+    );
   });
 }
