@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import "qrcode";
 import { getTicketFontConfigPath } from "./fontConfig.server.ts";
 import type { TicketTemplateVersion } from "./types.ts";
 
