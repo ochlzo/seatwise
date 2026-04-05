@@ -1339,10 +1339,12 @@ export function ShowDetailForm({
                   Update the primary details of the production.
                 </CardDescription>
               </div>
-              <CopyShowLinkButton
-                showId={show.show_id}
-                className="absolute right-6 top-6 gap-2"
-              />
+              {show.show_status === "OPEN" ? (
+                <CopyShowLinkButton
+                  showId={show.show_id}
+                  className="absolute right-6 top-6 gap-2"
+                />
+              ) : null}
             </CardHeader>
             <CardContent className="space-y-6">
               {isStructuralEditingLocked && (
