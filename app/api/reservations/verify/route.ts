@@ -1,4 +1,4 @@
-import { after, NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/prisma";
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
@@ -106,83 +106,81 @@ export async function POST(request: NextRequest) {
       }),
     );
 
-    after(async () => {
-      const followUpTimer = createRouteTimer("/api/reservations/verify:after", {
-        enabled: isRouteTimingEnabled(request),
-        context: { reservationCount: reservationIds.length },
-      });
+    const followUpTimer = createRouteTimer("/api/reservations/verify:after", {
+      enabled: isRouteTimingEnabled(request),
+      context: { reservationCount: reservationIds.length },
+    });
 
-      const baseUrl =
-        process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
-        request.nextUrl.origin ||
-        "http://localhost:3000";
+    const baseUrl =
+      process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+      request.nextUrl.origin ||
+      "http://localhost:3000";
 
-      const results = await Promise.allSettled(
-        reservationIds.map(async (reservationId) => {
-          const issuedTicket = await followUpTimer.time("ticket.issue", () =>
-            issueReservationTicket({
-              reservationId,
-              baseUrl,
-            }),
-          );
+    const results = await Promise.allSettled(
+      reservationIds.map(async (reservationId) => {
+        const issuedTicket = await followUpTimer.time("ticket.issue", () =>
+          issueReservationTicket({
+            reservationId,
+            baseUrl,
+          }),
+        );
 
-          await followUpTimer.time("email.send_issued_ticket", () =>
-            sendIssuedTicketEmail({
-              to: issuedTicket.email,
-              customerName: issuedTicket.customerName,
-              reservationNumber: issuedTicket.reservationNumber,
-              showName: issuedTicket.showName,
-              venue: issuedTicket.venue,
-              scheduleLabel: issuedTicket.scheduleLabel,
-              seatLabels: issuedTicket.seatLabels,
-              ticketAttachments: issuedTicket.ticketPdfs.map((ticket) => ({
-                filename: ticket.ticketPdfFilename,
-                contentType: "application/pdf",
-                content: ticket.ticketPdf,
-              })),
-            }),
-          );
-        }),
+        await followUpTimer.time("email.send_issued_ticket", () =>
+          sendIssuedTicketEmail({
+            to: issuedTicket.email,
+            customerName: issuedTicket.customerName,
+            reservationNumber: issuedTicket.reservationNumber,
+            showName: issuedTicket.showName,
+            venue: issuedTicket.venue,
+            scheduleLabel: issuedTicket.scheduleLabel,
+            seatLabels: issuedTicket.seatLabels,
+            ticketAttachments: issuedTicket.ticketPdfs.map((ticket) => ({
+              filename: ticket.ticketPdfFilename,
+              contentType: "application/pdf",
+              content: ticket.ticketPdf,
+            })),
+          }),
+        );
+      }),
+    );
+
+    const failures = results
+      .map((result, index) => ({ result, reservationId: reservationIds[index] }))
+      .filter(
+        (
+          item,
+        ): item is {
+          result: PromiseRejectedResult;
+          reservationId: string;
+        } => item.result.status === "rejected",
       );
 
-      const failures = results
-        .map((result, index) => ({ result, reservationId: reservationIds[index] }))
-        .filter(
-          (
-            item,
-          ): item is {
-            result: PromiseRejectedResult;
-            reservationId: string;
-          } => item.result.status === "rejected",
-        );
+    await Promise.all(
+      failures.map(({ reservationId, result }) =>
+        prisma.reservation.update({
+          where: { reservation_id: reservationId },
+          data: {
+            ticket_delivery_error:
+              result.reason instanceof Error
+                ? result.reason.message
+                : "Ticket delivery failed.",
+          },
+        }),
+      ),
+    ).catch((error) => {
+      console.error(
+        "[reservations/verify] failed to persist post-response delivery error:",
+        error,
+      );
+    });
 
-      await Promise.all(
-        failures.map(({ reservationId, result }) =>
-          prisma.reservation.update({
-            where: { reservation_id: reservationId },
-            data: {
-              ticket_delivery_error:
-                result.reason instanceof Error
-                  ? result.reason.message
-                  : "Ticket delivery failed.",
-            },
-          }),
-        ),
-      ).catch((error) => {
-        console.error(
-          "[reservations/verify] failed to persist post-response delivery error:",
-          error,
-        );
-      });
+    if (failures.length > 0) {
+      console.error("[reservations/verify] post-response delivery failures:", failures);
+    }
 
-      if (failures.length > 0) {
-        console.error("[reservations/verify] post-response delivery failures:", failures);
-      }
-
-      followUpTimer.flush({
-        deliveredCount: reservationIds.length - failures.length,
-        failedCount: failures.length,
-      });
+    followUpTimer.flush({
+      deliveredCount: reservationIds.length - failures.length,
+      failedCount: failures.length,
     });
 
     timer.flush({
