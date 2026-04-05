@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 
 import QRCode from "qrcode";
+import { getTicketFontConfigPath } from "./fontConfig.server.ts";
 import type { TicketTemplateVersion } from "./types.ts";
 
 type RenderTicketPngParams = {
@@ -21,6 +22,8 @@ async function buildQrDataUrl(qrValue: string, size: number) {
 }
 
 export async function renderTicketPng(input: RenderTicketPngParams) {
+  const fontConfigPath = await getTicketFontConfigPath();
+  process.env.FONTCONFIG_FILE = fontConfigPath;
   const qrDataUrl = await buildQrDataUrl(input.qrValue, 1024);
 
   const { renderTicketPngRuntime } = await import("./renderTicketPng.runtime.mjs");
