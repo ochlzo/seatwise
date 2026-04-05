@@ -836,6 +836,14 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       }>;
   }, [categorySets, seatNodeIds]);
 
+  const selectedTicketTemplates = React.useMemo(
+    () =>
+      ticketTemplates.filter((template) =>
+        formData.ticket_template_ids.includes(template.ticket_template_id),
+      ),
+    [formData.ticket_template_ids, ticketTemplates],
+  );
+
   const validationState = React.useMemo(() => {
     const requiresSeatmap = formData.show_status === "UPCOMING" || formData.show_status === "OPEN";
     const dateRangeInvalid =
@@ -1029,14 +1037,6 @@ export function CreateShowForm({ teamId }: CreateShowFormProps) {
       setSeatmapQuery(match.seatmap_name);
     }
   }, [formData.seatmap_id, seatmapQuery, seatmaps]);
-
-  const selectedTicketTemplates = React.useMemo(
-    () =>
-      ticketTemplates.filter((template) =>
-        formData.ticket_template_ids.includes(template.ticket_template_id),
-      ),
-    [formData.ticket_template_ids, ticketTemplates],
-  );
 
   const selectedTicketTemplateOptions = React.useMemo<MultipleSelectorOption[]>(
     () =>
