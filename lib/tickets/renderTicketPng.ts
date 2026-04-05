@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { getTicketFontConfigPath } from "./fontConfig.server.ts";
 import type { TicketTemplateVersion } from "./types.ts";
@@ -29,14 +29,17 @@ const renderTicketWorkerPath = fileURLToPath(
 
 export async function renderTicketPng(input: RenderTicketPngParams) {
   const fontConfigPath = await getTicketFontConfigPath();
+  const renderTicketWorkerUrl = pathToFileURL(renderTicketWorkerPath).href;
 
   return new Promise<Uint8Array>((resolve, reject) => {
     const child = spawn(
       process.execPath,
       [
         "--experimental-strip-types",
-        "--experimental-default-type=module",
-        renderTicketWorkerPath,
+        "--input-type=module",
+        "--eval",
+        "await import(process.argv[1]);",
+        renderTicketWorkerUrl,
       ],
       {
         env: {
