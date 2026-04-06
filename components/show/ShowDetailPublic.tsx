@@ -147,6 +147,11 @@ interface ShowDetailPublicProps {
 export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps) {
     const [seatmapId] = React.useState(show.seatmap_id || "");
     const [activeSetId, setActiveSetId] = React.useState<string | null>(null);
+    const isOpenShow = show.show_status === "OPEN";
+    const statusNotice =
+        show.show_status === "ON_GOING"
+            ? "Reservations are not available right now. This show is already on going, so please proceed to walk-in at the venue."
+            : "Reservations are not available for this show at the moment.";
 
     // Convert categorySets from DB format to draft format
     const categorySets: CategorySetDraft[] = React.useMemo(() => {
@@ -258,12 +263,16 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
                 </div>
             </div>
 
-            {/* Reserve Button (Mobile) */}
-            {reserveButton && (
-                <div className="lg:hidden w-full -mt-2 [&>*]:w-full">
-                    {reserveButton}
-                </div>
-            )}
+            {/* Reserve Button / Status Notice (Mobile) */}
+            <div className="lg:hidden w-full -mt-2">
+                {isOpenShow && reserveButton ? (
+                    <div className="[&>*]:w-full">{reserveButton}</div>
+                ) : (
+                    <div className="rounded-lg border border-sidebar-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                        {statusNotice}
+                    </div>
+                )}
+            </div>
 
             <div className="grid gap-6 md:gap-8 grid-cols-1 lg:grid-cols-3">
                 {/* Main Content */}
@@ -616,12 +625,16 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
                         </CardContent>
                     </Card>
 
-                    {/* Reserve Button (Desktop) */}
-                    {reserveButton && (
-                        <div className="hidden lg:block w-full [&>*]:w-full">
-                            {reserveButton}
-                        </div>
-                    )}
+                    {/* Reserve Button / Status Notice (Desktop) */}
+                    <div className="hidden lg:block w-full">
+                        {isOpenShow && reserveButton ? (
+                            <div className="[&>*]:w-full">{reserveButton}</div>
+                        ) : (
+                            <div className="rounded-lg border border-sidebar-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                                {statusNotice}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
