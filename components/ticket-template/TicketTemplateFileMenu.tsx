@@ -38,6 +38,7 @@ import {
 } from "@/lib/features/ticketTemplate/ticketTemplateSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/hooks";
 import { cn } from "@/lib/utils";
+import { clearTicketTemplateSelectionBeforeSave } from "@/components/ticket-template/ticketTemplateSave";
 
 function slugify(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -181,6 +182,8 @@ export function TicketTemplateFileMenu({
     setIsSavingTemplate(true);
 
     try {
+      clearTicketTemplateSelectionBeforeSave(dispatch);
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
       const previewDataUrl = await capturePreviewPngDataUrl();
       const templateSchema = await resolveTicketTemplateAssetRefsForSave(
         serializeTicketTemplateEditor(ticketTemplateState),
