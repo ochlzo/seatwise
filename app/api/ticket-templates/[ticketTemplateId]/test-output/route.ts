@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 import { NextResponse } from "next/server";
 
 import { AdminContextError, getCurrentAdminContext } from "@/lib/auth/adminContext";
@@ -78,13 +80,9 @@ export async function POST(
       qrValue: `test-output:${version.ticket_template_version_id}:${body.referenceNumber ?? ""}`,
     });
     const ticketPdf = await buildTicketPdf({ ticketPng });
-    const ticketPdfBuffer = ticketPdf.buffer.slice(
-      ticketPdf.byteOffset,
-      ticketPdf.byteOffset + ticketPdf.byteLength,
-    );
     const fileName = `Test Ticket Output - ${sanitizeFileName(template.template_name) || "ticket-template"}.pdf`;
 
-    return new NextResponse(ticketPdfBuffer, {
+    return new NextResponse(Buffer.from(ticketPdf), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
