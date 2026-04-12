@@ -10,12 +10,14 @@ interface CopyShowLinkButtonProps {
   showId: string;
   className?: string;
   label?: string;
+  hrefPath?: string;
 }
 
 export function CopyShowLinkButton({
   showId,
   className,
   label = "Copy show link",
+  hrefPath,
 }: CopyShowLinkButtonProps) {
   const [isCopying, setIsCopying] = React.useState(false);
 
@@ -24,14 +26,19 @@ export function CopyShowLinkButton({
 
     setIsCopying(true);
     try {
-      await navigator.clipboard.writeText(`https://seatwiseapp.vercel.app/${showId}`);
-      toast.success("Show link copied to clipboard.");
+      const baseUrl = window.location.origin;
+      const resolvedPath = hrefPath ?? `/${showId}`;
+      const normalizedPath = resolvedPath.startsWith("/")
+        ? resolvedPath
+        : `/${resolvedPath}`;
+      await navigator.clipboard.writeText(`${baseUrl}${normalizedPath}`);
+      toast.success("Link copied to clipboard.");
     } catch {
-      toast.error("Failed to copy show link.");
+      toast.error("Failed to copy link.");
     } finally {
       setIsCopying(false);
     }
-  }, [isCopying, showId]);
+  }, [hrefPath, isCopying, showId]);
 
   return (
     <Button

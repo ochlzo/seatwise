@@ -1452,9 +1452,19 @@ export function ShowDetailForm({
                   Update the primary details of the production.
                 </CardDescription>
               </div>
-              {show.show_status === "OPEN" ? (
+              {show.show_status === "OPEN" || show.show_status === "DRY_RUN" ? (
                 <CopyShowLinkButton
                   showId={show.show_id}
+                  label={
+                    show.show_status === "DRY_RUN"
+                      ? "Copy dry run link"
+                      : "Copy show link"
+                  }
+                  hrefPath={
+                    show.show_status === "DRY_RUN"
+                      ? `/dry-run/${show.show_id}`
+                      : `/${show.show_id}`
+                  }
                   className="absolute right-6 top-6 gap-2"
                 />
               ) : null}

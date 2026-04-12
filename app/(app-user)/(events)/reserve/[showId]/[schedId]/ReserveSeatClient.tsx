@@ -9,7 +9,6 @@ import {
   Clock3,
   Loader2,
   Mail,
-  Plus,
   X,
   CheckCircle2,
   CreditCard,
@@ -403,7 +402,6 @@ export function ReserveSeatClient({
   const [expiresAt, setExpiresAt] = React.useState<number | null>(null);
   const [now, setNow] = React.useState<number>(0);
   const [selectedSeatIds, setSelectedSeatIds] = React.useState<string[]>([]);
-  const [pendingSeatId, setPendingSeatId] = React.useState<string | null>(null);
   const [selectionMessage, setSelectionMessage] = React.useState<string | null>(
     null,
   );
@@ -471,7 +469,6 @@ export function ReserveSeatClient({
   const resetWalkInSaleDraft = React.useCallback(() => {
     router.refresh();
     setSelectedSeatIds([]);
-    setPendingSeatId(null);
     setSelectionMessage(null);
     setStep("seats");
     setScreenshotUrl("");
@@ -768,7 +765,6 @@ export function ReserveSeatClient({
 
   React.useEffect(() => {
     setSelectedSeatIds([]);
-    setPendingSeatId(null);
     setSelectionMessage(null);
     setTicketDesigns([]);
     setTicketDesignsError(null);
@@ -1662,40 +1658,6 @@ export function ReserveSeatClient({
       ? modeConfig.contactActionLabel
       : "Verify email";
 
-  const pendingSeatLabel = pendingSeatId
-    ? (seatNumbersById[pendingSeatId] ?? pendingSeatId)
-    : "";
-
-  const previewSelectedSeatIds = React.useMemo(() => {
-    if (!pendingSeatId) {
-      return selectedSeatIds;
-    }
-
-    return selectedSeatIds.includes(pendingSeatId)
-      ? selectedSeatIds
-      : [...selectedSeatIds, pendingSeatId];
-  }, [pendingSeatId, selectedSeatIds]);
-
-  const handleAddPendingSeat = React.useCallback(() => {
-    if (!pendingSeatId) return;
-
-    if (selectedSeatIds.includes(pendingSeatId)) {
-      setPendingSeatId(null);
-      return;
-    }
-
-    if (selectedSeatIds.length >= MAX_SELECTED_SEATS) {
-      setSelectionMessage(
-        `You can select up to ${MAX_SELECTED_SEATS} seats only.`,
-      );
-      return;
-    }
-
-    setSelectedSeatIds([...selectedSeatIds, pendingSeatId]);
-    setPendingSeatId(null);
-    setSelectionMessage(null);
-  }, [pendingSeatId, selectedSeatIds]);
-
   const handleSeatSelectionChange = React.useCallback(
     (ids: string[]) => {
       const clickedSeatId = ids[ids.length - 1];
@@ -1706,13 +1668,12 @@ export function ReserveSeatClient({
         setSelectionMessage(
           `${seatNumbersById[clickedSeatId] ?? clickedSeatId} is already taken.`,
         );
-        setPendingSeatId(null);
         return;
       }
 
       if (selectedSeatIds.includes(clickedSeatId)) {
-        setPendingSeatId(null);
-        setSelectionMessage("Seat already in your cart.");
+        setSelectedSeatIds((prev) => prev.filter((id) => id !== clickedSeatId));
+        setSelectionMessage(null);
         return;
       }
 
@@ -1720,11 +1681,10 @@ export function ReserveSeatClient({
         setSelectionMessage(
           `You can select up to ${MAX_SELECTED_SEATS} seats only.`,
         );
-        setPendingSeatId(null);
         return;
       }
 
-      setPendingSeatId(clickedSeatId);
+      setSelectedSeatIds((prev) => [...prev, clickedSeatId]);
       setSelectionMessage(null);
     },
     [seatNumbersById, seatStatusById, selectedSeatIds],
@@ -1733,13 +1693,11 @@ export function ReserveSeatClient({
   const handleRemoveSeat = React.useCallback((seatId: string) => {
     setSelectedSeatIds((prev) => prev.filter((id) => id !== seatId));
     setSelectionMessage(null);
-    setPendingSeatId((prev) => (prev === seatId ? null : prev));
   }, []);
 
   const handleClearSelection = React.useCallback(() => {
     setSelectedSeatIds([]);
     setSelectionMessage(null);
-    setPendingSeatId(null);
   }, []);
 
   const handleResendWalkInTicket = async () => {
@@ -2059,7 +2017,7 @@ export function ReserveSeatClient({
                     seatmapId={seatmapId ?? undefined}
                     heightClassName="h-[52vh] min-h-[340px] max-h-[560px] md:h-[560px]"
                     allowMarqueeSelection={false}
-                    selectedSeatIds={previewSelectedSeatIds}
+                    selectedSeatIds={selectedSeatIds}
                     cartSeatIds={selectedSeatIds}
                     onSelectionChange={handleSeatSelectionChange}
                     categories={seatmapCategories}
@@ -2094,21 +2052,6 @@ export function ReserveSeatClient({
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm">
-                      {pendingSeatId && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="default"
-                          onClick={handleAddPendingSeat}
-                          disabled={
-                            selectedSeatIds.length >= MAX_SELECTED_SEATS
-                          }
-                          className="w-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Plus className="mr-1.5 h-4 w-4" />
-                          {`Seat ${pendingSeatLabel}`}
-                        </Button>
-                      )}
                       <Separator />
                       {selectedBreakdown.length === 0 ? (
                         <p className="text-xs text-muted-foreground">

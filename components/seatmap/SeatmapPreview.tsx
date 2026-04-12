@@ -940,6 +940,7 @@ function ShapeNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
               fill={shape.fill}
               stroke={shape.stroke}
               strokeWidth={shape.strokeWidth ?? 2}
+              strokeScaleEnabled={false}
               dash={shape.dash}
               cornerRadius={shape.shape === "rect" ? 4 : 2}
             />
@@ -955,6 +956,7 @@ function ShapeNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
               fill={shape.fill}
               stroke={shape.stroke}
               strokeWidth={shape.strokeWidth ?? 2}
+              strokeScaleEnabled={false}
               dash={shape.dash}
             />
           );
@@ -970,6 +972,7 @@ function ShapeNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
               fill={shape.fill}
               stroke={shape.stroke}
               strokeWidth={shape.strokeWidth ?? 2}
+              strokeScaleEnabled={false}
               dash={shape.dash}
             />
           );
@@ -983,6 +986,7 @@ function ShapeNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
               points={shape.points ?? [0, 0, 100, 0]}
               stroke={shape.stroke ?? "#64748b"}
               strokeWidth={shape.strokeWidth ?? 2}
+              strokeScaleEnabled={false}
               dash={shape.dash}
               lineCap="round"
               lineJoin="round"
@@ -1006,6 +1010,7 @@ function ShapeNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
                 fill={shape.fill}
                 stroke={shape.stroke}
                 strokeWidth={shape.strokeWidth ?? 2}
+                strokeScaleEnabled={false}
                 dash={shape.dash}
                 cornerRadius={4}
               />
@@ -1044,6 +1049,7 @@ function GuidePathNodes({ nodes }: { nodes: Record<string, SeatmapNode> }) {
           points={guide.points ?? []}
           stroke={guide.stroke ?? "#9ca3af"}
           strokeWidth={guide.strokeWidth ?? 2}
+          strokeScaleEnabled={false}
           dash={guide.dash ?? [6, 4]}
           lineCap="round"
           lineJoin="round"
