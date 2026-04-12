@@ -66,6 +66,7 @@ import MultipleSelector, {
   type Option as MultipleSelectorOption,
 } from "@/components/ui/multiple-selector";
 import { updateShowAction } from "@/lib/actions/updateShow";
+import { deleteShowAction } from "@/lib/actions/deleteShow";
 import { toast } from "@/components/ui/sonner";
 import { useRouter } from "next/navigation";
 import type { SeatStatus, ShowStatus } from "@prisma/client";
@@ -286,6 +287,7 @@ type ShowDetail = {
 interface ShowDetailFormProps {
   show: ShowDetail;
   allowEdit?: boolean;
+  isSuperadmin?: boolean;
   reserveButton?: React.ReactNode;
 }
 
@@ -315,10 +317,14 @@ type SchedDraft = Omit<
 export function ShowDetailForm({
   show,
   allowEdit = true,
+  isSuperadmin = false,
   reserveButton,
 }: ShowDetailFormProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = React.useState(false);
+  const [deleteConfirmValue, setDeleteConfirmValue] = React.useState("");
   const [isEditing, setIsEditing] = React.useState(false);
   const [isScannerScheduleDialogOpen, setIsScannerScheduleDialogOpen] =
     React.useState(false);
@@ -332,6 +338,7 @@ export function ShowDetailForm({
   const [blockedStatus, setBlockedStatus] = React.useState<ShowStatus | null>(
     null,
   );
+  const requiredDeletePhrase = `delete-${show.show_name}`;
 
   // Schedule Editor State
   const [isScheduleOpen, setIsScheduleOpen] = React.useState(false);
@@ -1319,6 +1326,36 @@ export function ShowDetailForm({
       setIsSaving(false);
     }
   };
+
+  const handleDeleteShow = React.useCallback(async () => {
+    if (!isSuperadmin) return;
+    if (deleteConfirmValue !== requiredDeletePhrase) return;
+
+    setIsDeleting(true);
+    try {
+      const result = await deleteShowAction(show.show_id);
+      if (!result.success) {
+        toast.error(result.error || "Failed to delete show.");
+        return;
+      }
+
+      toast.success("Show deleted successfully.");
+      setIsDeleteConfirmOpen(false);
+      setDeleteConfirmValue("");
+      router.push("/admin/shows");
+      router.refresh();
+    } catch {
+      toast.error("Failed to delete show.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [
+    deleteConfirmValue,
+    isSuperadmin,
+    requiredDeletePhrase,
+    router,
+    show.show_id,
+  ]);
 
   const getAvailableScheds = (currentSetId: string) => {
     return formData.scheds.filter((s) => {
@@ -3161,6 +3198,20 @@ export function ShowDetailForm({
               </Button>
             </div>
           ) : null}
+
+          {allowEdit && isSuperadmin ? (
+            <div className="pt-1">
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full h-11 font-semibold uppercase tracking-widest text-sm"
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                disabled={isSaving || isDeleting}
+              >
+                Delete Show
+              </Button>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -3381,6 +3432,59 @@ export function ShowDetailForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {allowEdit && isSuperadmin ? (
+        <Dialog
+          open={isDeleteConfirmOpen}
+          onOpenChange={(open) => {
+            setIsDeleteConfirmOpen(open);
+            if (!open) setDeleteConfirmValue("");
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete show</DialogTitle>
+              <DialogDescription>
+                This action is permanent. Type{" "}
+                <span className="font-semibold">{requiredDeletePhrase}</span> to
+                confirm.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-2">
+              <Label htmlFor="delete-show-confirm" className="text-xs">
+                Confirmation phrase
+              </Label>
+              <Input
+                id="delete-show-confirm"
+                value={deleteConfirmValue}
+                onChange={(event) => setDeleteConfirmValue(event.target.value)}
+                placeholder={requiredDeletePhrase}
+                autoComplete="off"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteShow}
+                disabled={
+                  isDeleting || deleteConfirmValue !== requiredDeletePhrase
+                }
+              >
+                {isDeleting ? "Deleting..." : "Delete Show"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </div>
   );
 }

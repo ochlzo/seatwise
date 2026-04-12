@@ -95,6 +95,7 @@ type ShowsClientProps = {
   headerSubtitle?: string;
   visibility?: "user" | "admin";
   statusFilterValues?: string[];
+  statusLabelOverrides?: Partial<Record<string, string>>;
 };
 
 export default function ShowsPage({
@@ -109,6 +110,7 @@ export default function ShowsPage({
   headerSubtitle,
   visibility = "admin",
   statusFilterValues,
+  statusLabelOverrides,
 }: ShowsClientProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -325,6 +327,7 @@ export default function ShowsPage({
                 <ShowFilters
                   hideStatusFilter={false}
                   allowedStatusValues={statusFilterValues}
+                  statusLabelOverrides={statusLabelOverrides}
                 />
               </div>
             )}

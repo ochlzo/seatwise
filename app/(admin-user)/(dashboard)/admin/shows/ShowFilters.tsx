@@ -31,9 +31,11 @@ const sorts = [
 export function ShowFilters({
     hideStatusFilter = false,
     allowedStatusValues,
+    statusLabelOverrides,
 }: {
     hideStatusFilter?: boolean;
     allowedStatusValues?: string[];
+    statusLabelOverrides?: Partial<Record<string, string>>;
 }) {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -59,6 +61,10 @@ export function ShowFilters({
     const availableStatuses = allowedStatusValues
         ? statuses.filter((status) => allowedStatusValues.includes(status.value))
         : statuses;
+    const resolvedStatuses = availableStatuses.map((status) => ({
+        ...status,
+        label: statusLabelOverrides?.[status.value] ?? status.label,
+    }));
 
     if (!isMounted) {
         return (
@@ -86,7 +92,7 @@ export function ShowFilters({
                         <Button variant="outline" size="sm" className="h-9 w-1/2 gap-2 border-sidebar-border bg-background shadow-sm hover:bg-sidebar-accent transition-colors md:w-auto">
                             <Filter className="h-4 w-4 text-muted-foreground" />
                         <span className="font-semibold text-xs">
-                            {availableStatuses.find(s => s.value === currentStatus)?.label || "Filter"}
+                            {resolvedStatuses.find(s => s.value === currentStatus)?.label || "Filter"}
                         </span>
                     </Button>
                 </DropdownMenuTrigger>
@@ -95,7 +101,7 @@ export function ShowFilters({
                             Filter by Status
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
-                    {availableStatuses.map((status) => (
+                    {resolvedStatuses.map((status) => (
                         <DropdownMenuItem
                             key={status.value}
                             onClick={() => updateQuery("status", status.value)}

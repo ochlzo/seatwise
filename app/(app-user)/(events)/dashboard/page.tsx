@@ -14,7 +14,8 @@ export default async function Page() {
         showHeader={false}
         statusGroup="active"
         visibility="user"
-        statusFilterValues={["ALL", "UPCOMING", "OPEN", "ON_GOING"]}
+        statusFilterValues={["ALL", "UPCOMING", "OPEN", "ON_GOING", "CLOSED"]}
+        statusLabelOverrides={{ CLOSED: "Past Shows" }}
         headerTitle="What’s On Deck"
         headerSubtitle="Upcoming, open, and ongoing shows that are ready for your seat."
       />

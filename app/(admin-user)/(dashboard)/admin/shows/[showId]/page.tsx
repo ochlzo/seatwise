@@ -6,6 +6,7 @@ import { ThemeSwithcer } from "@/components/theme-swithcer";
 import { ShowDetailForm } from "./ShowDetailForm";
 import StopLoadingOnMount from "@/components/stop-loading-on-mount";
 import { AdminWalkInButton } from "@/components/queue/AdminWalkInButton";
+import { getCurrentAdminContext } from "@/lib/auth/adminContext";
 import {
     hasSelectableSchedules,
     serializeSchedulesForPicker,
@@ -20,6 +21,7 @@ export default async function ShowIdPage({
 }: {
     params: Promise<{ showId: string }>;
 }) {
+    const adminContext = await getCurrentAdminContext();
     const { showId } = await params;
     const show = await getShowById(showId);
 
@@ -89,6 +91,7 @@ export default async function ShowIdPage({
 
                     <ShowDetailForm
                         show={serializedShow}
+                        isSuperadmin={adminContext.isSuperadmin}
                         reserveButton={
                             hasWalkInSchedules && serializedSchedules.length > 0 ? (
                                 <AdminWalkInButton
