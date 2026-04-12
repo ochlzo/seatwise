@@ -5,14 +5,7 @@ import { closeQueueChannel } from "@/lib/queue/closeQueue";
 import { initializeQueueChannel } from "@/lib/queue/initializeQueue";
 import {
   countBlockingReservations,
-  hasShowReachedFinalScheduleEnd,
 } from "@/lib/shows/effectiveStatus";
-
-const isReservationBlockingStatus = (status: ShowStatus) =>
-  status === "CLOSED" ||
-  status === "CANCELLED" ||
-  status === "DRAFT" ||
-  status === "UPCOMING";
 
 const isCloseLikeStatus = (status: ShowStatus) =>
   status === "CLOSED" || status === "CANCELLED";
@@ -28,41 +21,37 @@ export async function assertShowCanMoveToRestrictedStatus(
   currentStatus: ShowStatus | null | undefined,
   nextStatus: ShowStatus,
 ) {
-  if (!isReservationBlockingStatus(nextStatus)) {
-    return;
+  if (nextStatus === "CLOSED") {
+    throw new Error(
+      "You cannot manually set this show to CLOSED. Closed status is managed automatically.",
+    );
   }
 
-  if (nextStatus === "CLOSED") {
-    const hasReachedFinalScheduleEnd = await hasShowReachedFinalScheduleEnd(db, showId);
-    if (!hasReachedFinalScheduleEnd) {
-      throw new Error("You cannot change this OPEN production to CLOSED before the show even starts.");
-    }
+  // Booking-based restriction only applies when leaving OPEN.
+  // Transitions from CANCELLED/DRAFT/UPCOMING back to other statuses are allowed.
+  const isLeavingOpen = currentStatus === "OPEN" && nextStatus !== "OPEN";
+  if (!isLeavingOpen) {
     return;
   }
 
   const blockingReservationCount = await countBlockingReservations(db, showId);
 
   if (blockingReservationCount > 0) {
-    if (currentStatus === "OPEN") {
-      if (nextStatus === "DRAFT") {
-        throw new Error(
-          `You cannot change this OPEN production back to DRAFT because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
-        );
-      }
-      if (nextStatus === "UPCOMING") {
-        throw new Error(
-          `You cannot change this OPEN production back to UPCOMING because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
-        );
-      }
-      if (nextStatus === "CANCELLED") {
-        throw new Error(
-          `You cannot change this OPEN production to CANCELLED because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
-        );
-      }
+    if (nextStatus === "DRAFT") {
+      throw new Error(
+        `You cannot change this OPEN production back to DRAFT because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
+      );
     }
-    throw new Error(
-      `This show has ${blockingReservationCount} pending or confirmed reservation(s). Resolve those bookings before changing the status to ${nextStatus}.`,
-    );
+    if (nextStatus === "UPCOMING") {
+      throw new Error(
+        `You cannot change this OPEN production back to UPCOMING because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
+      );
+    }
+    if (nextStatus === "CANCELLED") {
+      throw new Error(
+        `You cannot change this OPEN production to CANCELLED because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
+      );
+    }
   }
 }
 

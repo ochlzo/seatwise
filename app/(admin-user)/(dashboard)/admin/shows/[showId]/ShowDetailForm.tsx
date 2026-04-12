@@ -967,6 +967,8 @@ export function ShowDetailForm({
 
   const unassignedSchedCount = React.useMemo(() => {
     if (formData.scheds.length === 0) return 0;
+    // A set marked "apply_to_all" covers every schedule by definition.
+    if (categorySets.some((setItem) => setItem.apply_to_all)) return 0;
     const used = new Set<string>();
     categorySets.forEach((setItem) => {
       setItem.sched_ids.forEach((id) => used.add(id));
@@ -1100,12 +1102,6 @@ export function ShowDetailForm({
     (nextStatus: ShowStatus) => {
       if (nextStatus === formData.show_status) return;
 
-      if (formData.show_status === "OPEN" && nextStatus === "CLOSED") {
-        setBlockedStatus(nextStatus);
-        setIsStatusBlockedOpen(true);
-        return;
-      }
-
       if (
         formData.show_status === "OPEN" &&
         (nextStatus === "DRAFT" ||
@@ -1187,6 +1183,61 @@ export function ShowDetailForm({
     if (!isEditing) setIsEditing(true);
   };
 
+  const removeSchedule = React.useCallback((clientId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      scheds: prev.scheds.filter((sched) => sched.client_id !== clientId),
+    }));
+
+    // Keep manually targeted sets clean when a schedule is removed.
+    setCategorySets((prev) =>
+      prev.map((setItem) =>
+        setItem.apply_to_all
+          ? setItem
+          : {
+              ...setItem,
+              sched_ids: setItem.sched_ids.filter((schedId) => schedId !== clientId),
+            },
+      ),
+    );
+  }, []);
+
+  // Keep sched_ids in sync for "apply_to_all" sets when schedules/assignments change.
+  React.useEffect(() => {
+    setCategorySets((prev) => {
+      let hasChanges = false;
+      const next = prev.map((setItem) => {
+        if (!setItem.apply_to_all) return setItem;
+
+        const assignedToOtherSets = new Set<string>();
+        prev.forEach((otherSet) => {
+          if (otherSet.id === setItem.id) return;
+          otherSet.sched_ids.forEach((schedId) =>
+            assignedToOtherSets.add(schedId),
+          );
+        });
+
+        const effectiveSchedIds = formData.scheds
+          .map((sched) => sched.client_id)
+          .filter((schedId) => !assignedToOtherSets.has(schedId));
+
+        const sameLength =
+          effectiveSchedIds.length === setItem.sched_ids.length;
+        const sameValues =
+          sameLength &&
+          effectiveSchedIds.every(
+            (schedId, index) => schedId === setItem.sched_ids[index],
+          );
+
+        if (sameValues) return setItem;
+        hasChanges = true;
+        return { ...setItem, sched_ids: effectiveSchedIds };
+      });
+
+      return hasChanges ? next : prev;
+    });
+  }, [formData.scheds]);
+
   const handleSave = async () => {
     if (!isFormValid) return;
     setIsSaving(true);
@@ -1212,6 +1263,19 @@ export function ShowDetailForm({
           sched_end_time: s.sched_end_time,
         })),
         category_sets: categorySets.map((setItem, index) => {
+          const assignedToOtherSets = new Set<string>();
+          categorySets.forEach((otherSet) => {
+            if (otherSet.id === setItem.id) return;
+            otherSet.sched_ids.forEach((schedId) =>
+              assignedToOtherSets.add(schedId),
+            );
+          });
+          const normalizedSchedIds = setItem.apply_to_all
+            ? formData.scheds
+                .map((sched) => sched.client_id)
+                .filter((schedId) => !assignedToOtherSets.has(schedId))
+            : setItem.sched_ids;
+
           // Map seatAssignments (seatId -> categoryId) to (seatId -> categoryName)
           const assignmentsByName: Record<string, string> = {};
           if (setItem.seatAssignments) {
@@ -1231,7 +1295,7 @@ export function ShowDetailForm({
           return {
             set_name: setItem.set_name.trim() || `Set ${index + 1}`,
             apply_to_all: setItem.apply_to_all,
-            sched_ids: setItem.sched_ids,
+            sched_ids: normalizedSchedIds,
             categories: setItem.categories.map((category) => ({
               category_name: category.category_name.trim() || "Untitled",
               price: category.price,
@@ -1897,14 +1961,9 @@ export function ShowDetailForm({
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                      onClick={() => {
-                                        setFormData((prev) => ({
-                                          ...prev,
-                                          scheds: prev.scheds.filter(
-                                            (s) => s !== sched,
-                                          ),
-                                        }));
-                                      }}
+                                      onClick={() =>
+                                        removeSchedule(sched.client_id)
+                                      }
                                       disabled={isStructuralEditingLocked}
                                     >
                                       <Trash2 className="h-4 w-4" />
@@ -2360,20 +2419,6 @@ export function ShowDetailForm({
                   />
                 )}
               </div>
-
-              {!isEditing ? (
-                <div className="md:col-span-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleOpenTicketScanner}
-                    className="w-full justify-center md:w-auto"
-                  >
-                    <Ticket className="mr-2 h-4 w-4" />
-                    Open Ticket Scanner
-                  </Button>
-                </div>
-              ) : null}
-
               {!formData.seatmap_id ? (
                 <div className="rounded-lg border border-dashed border-sidebar-border px-4 py-8 text-center">
                   <p className="text-sm text-muted-foreground">
