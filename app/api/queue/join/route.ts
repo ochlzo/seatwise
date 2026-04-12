@@ -17,11 +17,12 @@ export async function POST(request: NextRequest) {
     try {
         // 1. Parse request body
         const body = await request.json();
-        const { showId, schedId, guestId, displayName } = body as {
+        const { showId, schedId, guestId, displayName, accessMode } = body as {
             showId?: string;
             schedId?: string;
             guestId?: string;
             displayName?: string;
+            accessMode?: string;
         };
 
         if (!showId || !schedId || !guestId) {
@@ -65,10 +66,24 @@ export async function POST(request: NextRequest) {
         });
         const effectiveSchedStatus = getEffectiveSchedStatus(schedule);
 
-        if (effectiveShowStatus !== 'OPEN' && effectiveShowStatus !== 'ON_GOING') {
+        if (
+            effectiveShowStatus !== 'OPEN' &&
+            effectiveShowStatus !== 'ON_GOING' &&
+            effectiveShowStatus !== 'DRY_RUN'
+        ) {
             return NextResponse.json(
                 { success: false, error: 'This show is not currently accepting reservations' },
                 { status: 400 }
+            );
+        }
+
+        if (effectiveShowStatus === "DRY_RUN" && accessMode !== "dry-run") {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "This show is currently in dry run mode. Join from the dry-run page only.",
+                },
+                { status: 403 },
             );
         }
 

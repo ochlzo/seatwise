@@ -542,11 +542,11 @@ export async function createShowAction(data: CreateShowPayload) {
     );
 
     // 🎯 QUEUE LIFECYCLE MANAGEMENT (After database transaction)
-    // Initialize queues if show is created with OPEN status
+    // Initialize queues if show is created with OPEN or DRY_RUN status
     const queueResults: Array<Awaited<ReturnType<typeof initializeQueueChannel>>> = [];
     const allSchedIds = Array.from(schedIdMap.values());
 
-    if (show_status === 'OPEN' && allSchedIds.length > 0) {
+    if ((show_status === "OPEN" || show_status === "DRY_RUN") && allSchedIds.length > 0) {
       const queueInitResults = await Promise.allSettled(
         allSchedIds.map((schedId) => {
           const showScopeId = `${show.show_id}:${schedId}`;

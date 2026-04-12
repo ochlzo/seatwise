@@ -66,7 +66,11 @@ export async function GET(request: NextRequest) {
     });
     const effectiveSchedStatus = getEffectiveSchedStatus(schedule);
 
-    if (effectiveShowStatus !== "OPEN" && effectiveShowStatus !== "ON_GOING") {
+    if (
+      effectiveShowStatus !== "OPEN" &&
+      effectiveShowStatus !== "ON_GOING" &&
+      effectiveShowStatus !== "DRY_RUN"
+    ) {
       return NextResponse.json({
         success: true,
         status: "closed",

@@ -113,6 +113,7 @@ type ContactFieldErrors = {
 type ReserveSeatClientProps = {
   showId: string;
   schedId: string;
+  accessMode?: "default" | "dry-run";
   mode?: ReservationRoomMode;
   queueParticipantId?: string;
   initialActiveSession?: StoredActiveSession | null;
@@ -357,6 +358,7 @@ const clearStoredVerifiedEmail = (showScopeId: string, ticketId: string) => {
 export function ReserveSeatClient({
   showId,
   schedId,
+  accessMode = "default",
   mode = "online",
   queueParticipantId,
   initialActiveSession = null,
@@ -379,6 +381,10 @@ export function ReserveSeatClient({
     [queueParticipantId],
   );
   const showScopeId = `${showId}:${schedId}`;
+  const querySuffix = accessMode === "dry-run" ? "?accessMode=dry-run" : "";
+  const showHref = accessMode === "dry-run" ? `/dry-run/${showId}` : `/${showId}`;
+  const queueHref = `/queue/${showId}/${schedId}${querySuffix}`;
+  const reserveHref = `/reserve/${showId}/${schedId}${querySuffix}`;
   const modeConfig = React.useMemo(
     () => getReservationRoomModeConfig(mode),
     [mode],
@@ -883,9 +889,9 @@ export function ReserveSeatClient({
       return;
     }
 
-    router.prefetch(`/queue/${showId}/${schedId}`);
-    router.prefetch(`/${showId}`);
-  }, [isWalkInMode, returnHref, router, schedId, showId]);
+    router.prefetch(queueHref);
+    router.prefetch(showHref);
+  }, [isWalkInMode, queueHref, returnHref, router, showHref]);
 
   React.useEffect(() => {
     if (step === "success") return;
@@ -1075,6 +1081,7 @@ export function ReserveSeatClient({
           showId,
           schedId,
           guestId: participantId,
+          accessMode,
         }),
       });
 
@@ -1082,7 +1089,7 @@ export function ReserveSeatClient({
       if (!response.ok || !data.success) {
         const normalizedError = data.error?.toLowerCase() ?? "";
         if (normalizedError.includes("already in the queue")) {
-          router.push(`/queue/${showId}/${schedId}`);
+          router.push(queueHref);
           return;
         }
         throw new Error(data.error || "Failed to rejoin queue");
@@ -1103,12 +1110,12 @@ export function ReserveSeatClient({
           );
           setJoinTransitionState(showScopeId);
           allowNavigationRef.current = true;
-          router.push(`/reserve/${showId}/${schedId}`);
+          router.push(reserveHref);
           return;
         }
       }
 
-      router.push(`/queue/${showId}/${schedId}`);
+      router.push(queueHref);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to rejoin queue");
     } finally {
@@ -1122,7 +1129,7 @@ export function ReserveSeatClient({
       return;
     }
 
-    router.push(`/${showId}`);
+    router.push(showHref);
   };
 
   const handleLeaveReservationRoom = async () => {
@@ -1130,7 +1137,7 @@ export function ReserveSeatClient({
     allowNavigationRef.current = true;
     await terminateQueueSession(true);
     router.push(
-      isWalkInMode ? (returnHref ?? `/admin/shows/${showId}`) : `/${showId}`,
+      isWalkInMode ? (returnHref ?? `/admin/shows/${showId}`) : showHref,
     );
   };
 

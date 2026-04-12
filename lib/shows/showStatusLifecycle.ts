@@ -10,6 +10,9 @@ import {
 const isCloseLikeStatus = (status: ShowStatus) =>
   status === "CLOSED" || status === "CANCELLED";
 
+const isQueueReservableStatus = (status: ShowStatus | null | undefined) =>
+  status === "OPEN" || status === "DRY_RUN";
+
 const isTransitioningToClosedStatus = (
   oldStatus: ShowStatus | null | undefined,
   newStatus: ShowStatus,
@@ -21,6 +24,15 @@ export async function assertShowCanMoveToRestrictedStatus(
   currentStatus: ShowStatus | null | undefined,
   nextStatus: ShowStatus,
 ) {
+  if (nextStatus === "DRY_RUN") {
+    const blockingReservationCount = await countBlockingReservations(db, showId);
+    if (blockingReservationCount > 0) {
+      throw new Error(
+        `You cannot change this show to DRY_RUN because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`,
+      );
+    }
+  }
+
   if (nextStatus === "CLOSED") {
     throw new Error(
       "You cannot manually set this show to CLOSED. Closed status is managed automatically.",
@@ -73,9 +85,20 @@ export async function runShowQueueStatusTransition({
     const showScopeId = `${showId}:${schedId}`;
 
     try {
-      if (newStatus === "OPEN" && oldStatus !== "OPEN") {
+      if (isQueueReservableStatus(newStatus) && !isQueueReservableStatus(oldStatus)) {
         const result = await initializeQueueChannel(showScopeId);
         queueResults.push(result);
+        continue;
+      }
+
+      if (oldStatus === "DRY_RUN" && newStatus !== "DRY_RUN") {
+        const closeResult = await closeQueueChannel(showScopeId, "closed");
+        queueResults.push(closeResult);
+
+        if (newStatus === "OPEN") {
+          const initResult = await initializeQueueChannel(showScopeId);
+          queueResults.push(initResult);
+        }
         continue;
       }
 

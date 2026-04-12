@@ -10,10 +10,15 @@ export const preferredRegion = "sin1";
 
 export default async function QueueWaitingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ showId: string; schedId: string }>;
+  searchParams?: Promise<{ accessMode?: string }>;
 }) {
   const { showId, schedId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const accessMode =
+    resolvedSearchParams?.accessMode === "dry-run" ? "dry-run" : "default";
   const show = await getShowById(showId);
 
   if (!show) {
@@ -25,11 +30,15 @@ export default async function QueueWaitingPage({
       <PageHeader
         title="Queue"
         parentLabel={show.show_name}
-        parentHref={`/${showId}`}
+        parentHref={accessMode === "dry-run" ? `/dry-run/${showId}` : `/${showId}`}
         rightSlot={<ThemeSwithcer />}
       />
       <div className="relative flex flex-1 flex-col bg-background">
-        <QueueWaitingClient showId={showId} schedId={schedId} />
+        <QueueWaitingClient
+          showId={showId}
+          schedId={schedId}
+          accessMode={accessMode}
+        />
       </div>
     </>
   );

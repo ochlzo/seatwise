@@ -561,6 +561,8 @@ export async function updateShowAction(
     });
     const uniqueCategories = Array.from(uniqueCategoryMap.values());
     const hasReservationHistory = currentShow._count.reservations > 0;
+    const shouldPurgeReservationData =
+      oldStatus === "DRY_RUN" && newStatus !== "DRY_RUN";
     const incomingStructuralSnapshot = buildIncomingStructuralSnapshot({
       seatmapId: trimmedSeatmapId,
       gcashQrImageKey: finalGcashQrImageUrl?.trim() ?? null,
@@ -584,6 +586,32 @@ export async function updateShowAction(
 
     await prisma.$transaction(
       async (tx) => {
+        if (shouldPurgeReservationData) {
+          await tx.reservedSeat.deleteMany({
+            where: {
+              reservation: { show_id: showId },
+            },
+          });
+          await tx.payment.deleteMany({
+            where: {
+              reservation: { show_id: showId },
+            },
+          });
+          await tx.reservation.deleteMany({
+            where: { show_id: showId },
+          });
+          await tx.seatAssignment.updateMany({
+            where: {
+              sched: { show_id: showId },
+            },
+            data: { seat_status: "OPEN" },
+          });
+          await tx.sched.updateMany({
+            where: { show_id: showId },
+            data: { status: null },
+          });
+        }
+
         // 1. Update Show details
         await tx.show.update({
           where: { show_id: showId },

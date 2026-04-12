@@ -146,6 +146,7 @@ const DEFAULT_SHOW_STATUS_TOTALS: DashboardShowStatusTotals = {
   DRAFT: 0,
   UPCOMING: 0,
   OPEN: 0,
+  DRY_RUN: 0,
   ON_GOING: 0,
   CLOSED: 0,
   CANCELLED: 0,

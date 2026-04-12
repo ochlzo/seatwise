@@ -315,6 +315,7 @@ enum ShowStatus {
   UPCOMING
   DRAFT
   OPEN
+  DRY_RUN
   CLOSED
   ON_GOING
   CANCELLED

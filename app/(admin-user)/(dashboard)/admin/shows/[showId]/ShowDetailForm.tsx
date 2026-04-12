@@ -82,6 +82,7 @@ const STATUS_COLORS: Record<string, string> = {
   UPCOMING: "#3B82F6",
   DRAFT: "#64748B",
   OPEN: "#22C55E",
+  DRY_RUN: "#0EA5E9",
   CLOSED: "#6B7280",
   ON_GOING: "#F59E0B",
   CANCELLED: "#EF4444",
@@ -91,6 +92,7 @@ const MANUAL_STATUS_OPTIONS: ShowStatus[] = [
   "DRAFT",
   "UPCOMING",
   "OPEN",
+  "DRY_RUN",
   "CANCELLED",
 ];
 
@@ -1082,6 +1084,9 @@ export function ShowDetailForm({
     if (pendingStatus === "OPEN") {
       return "Setting this show to OPEN will launch it and enable customers to book reservations.";
     }
+    if (pendingStatus === "DRY_RUN") {
+      return "Setting this show to DRY RUN enables reservation testing from the /dry-run route only.";
+    }
     return "";
   }, [pendingStatus]);
 
@@ -1100,6 +1105,8 @@ export function ShowDetailForm({
         return `You cannot change this OPEN production to CANCELLED because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`;
       case "CLOSED":
         return "You cannot change this OPEN production to CLOSED before the show even starts.";
+      case "DRY_RUN":
+        return `You cannot change this show to DRY_RUN because it already has ${blockingReservationCount} active reservations (only pending / confirmed)`;
       default:
         return "Status change not allowed.";
     }
@@ -1110,18 +1117,23 @@ export function ShowDetailForm({
       if (nextStatus === formData.show_status) return;
 
       if (
-        formData.show_status === "OPEN" &&
-        (nextStatus === "DRAFT" ||
-          nextStatus === "UPCOMING" ||
-          nextStatus === "CANCELLED") &&
-        hasBlockingReservations
+        ((formData.show_status === "OPEN" &&
+          (nextStatus === "DRAFT" ||
+            nextStatus === "UPCOMING" ||
+            nextStatus === "CANCELLED") &&
+          hasBlockingReservations) ||
+          (nextStatus === "DRY_RUN" && hasBlockingReservations))
       ) {
         setBlockedStatus(nextStatus);
         setIsStatusBlockedOpen(true);
         return;
       }
 
-      if (nextStatus === "UPCOMING" || nextStatus === "OPEN") {
+      if (
+        nextStatus === "UPCOMING" ||
+        nextStatus === "OPEN" ||
+        nextStatus === "DRY_RUN"
+      ) {
         setPendingStatus(nextStatus);
         setIsStatusConfirmOpen(true);
         return;

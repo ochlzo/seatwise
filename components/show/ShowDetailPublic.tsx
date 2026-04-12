@@ -147,7 +147,8 @@ interface ShowDetailPublicProps {
 export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps) {
     const [seatmapId] = React.useState(show.seatmap_id || "");
     const [activeSetId, setActiveSetId] = React.useState<string | null>(null);
-    const isOpenShow = show.show_status === "OPEN";
+    const isReservableShow =
+        show.show_status === "OPEN" || show.show_status === "DRY_RUN";
     const statusNotice =
         show.show_status === "ON_GOING"
             ? "Reservations are not available right now. This show is already on going, so please proceed to walk-in at the venue."
@@ -265,7 +266,7 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
 
             {/* Reserve Button / Status Notice (Mobile) */}
             <div className="lg:hidden w-full -mt-2">
-                {isOpenShow && reserveButton ? (
+                {isReservableShow && reserveButton ? (
                     <div className="[&>*]:w-full">{reserveButton}</div>
                 ) : (
                     <div className="rounded-lg border border-sidebar-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -627,7 +628,7 @@ export function ShowDetailPublic({ show, reserveButton }: ShowDetailPublicProps)
 
                     {/* Reserve Button / Status Notice (Desktop) */}
                     <div className="hidden lg:block w-full">
-                        {isOpenShow && reserveButton ? (
+                        {isReservableShow && reserveButton ? (
                             <div className="[&>*]:w-full">{reserveButton}</div>
                         ) : (
                             <div className="rounded-lg border border-sidebar-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">

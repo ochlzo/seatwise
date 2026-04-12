@@ -44,6 +44,7 @@ const STATUS_COLORS: Record<string, string> = {
   UPCOMING: "#3B82F6",
   DRAFT: "#64748B",
   OPEN: "#22C55E",
+  DRY_RUN: "#0EA5E9",
   CLOSED: "#6B7280",
   ON_GOING: "#F59E0B",
   CANCELLED: "#EF4444",

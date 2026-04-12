@@ -23,7 +23,7 @@ export async function getShows(params?: {
   if (params?.status && params.status !== "ALL") {
     where.show_status = params.status as never;
   } else if (params?.statusGroup === "active") {
-    where.show_status = { in: ["UPCOMING", "OPEN", "ON_GOING"] };
+    where.show_status = { in: ["UPCOMING", "OPEN", "DRY_RUN", "ON_GOING"] };
   }
   if (params?.visibility === "user") {
     const hiddenStatuses: ShowStatus[] = ["DRAFT", "CANCELLED"];
@@ -99,7 +99,7 @@ export async function getShows(params?: {
 
   if (params?.statusGroup === "active") {
     return derivedShows.filter((show) =>
-      ["UPCOMING", "OPEN", "ON_GOING"].includes(show.show_status),
+      ["UPCOMING", "OPEN", "DRY_RUN", "ON_GOING"].includes(show.show_status),
     );
   }
 

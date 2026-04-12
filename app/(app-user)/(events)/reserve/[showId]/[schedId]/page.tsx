@@ -31,10 +31,15 @@ type ReserveScheduleSnapshot = {
 
 export default async function ReserveSeatPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ showId: string; schedId: string }>;
+  searchParams?: Promise<{ accessMode?: string }>;
 }) {
   const { showId, schedId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const accessMode =
+    resolvedSearchParams?.accessMode === "dry-run" ? "dry-run" : "default";
 
   const [schedule, initialTicketDesigns] = await Promise.all([
     prisma.sched.findFirst({
@@ -122,7 +127,7 @@ export default async function ReserveSeatPage({
       <PageHeader
         title="Reserve Seats"
         parentLabel={schedule.show.show_name}
-        parentHref={`/${showId}`}
+        parentHref={accessMode === "dry-run" ? `/dry-run/${showId}` : `/${showId}`}
         rightSlot={<ThemeSwithcer />}
       />
       <div className="relative flex flex-1 flex-col bg-background">
@@ -140,6 +145,7 @@ export default async function ReserveSeatPage({
           initialShowName={schedule.show.show_name}
           initialScheduleSnapshot={scheduleSnapshot}
           initialTicketDesigns={initialTicketDesigns as ShowTicketDesign[]}
+          accessMode={accessMode}
         />
       </div>
     </>

@@ -27,6 +27,7 @@ type QueueStatusResponse = {
 type QueueWaitingClientProps = {
   showId: string;
   schedId: string;
+  accessMode?: "default" | "dry-run";
 };
 
 const POLL_WAITING_MS = 4000;
@@ -65,9 +66,17 @@ const getQueueBadgeLabel = (status?: QueueStatusResponse["status"]) => {
   }
 };
 
-export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps) {
+export function QueueWaitingClient({
+  showId,
+  schedId,
+  accessMode = "default",
+}: QueueWaitingClientProps) {
   const router = useRouter();
   const showScopeId = `${showId}:${schedId}`;
+  const querySuffix = accessMode === "dry-run" ? "?accessMode=dry-run" : "";
+  const showHref = accessMode === "dry-run" ? `/dry-run/${showId}` : `/${showId}`;
+  const queueHref = `/queue/${showId}/${schedId}${querySuffix}`;
+  const reserveHref = `/reserve/${showId}/${schedId}${querySuffix}`;
   const guestId = React.useMemo(() => getOrCreateGuestId(), []);
   const [status, setStatus] = React.useState<QueueStatusResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -207,9 +216,9 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
   }, [showScopeId]);
 
   React.useEffect(() => {
-    router.prefetch(`/reserve/${showId}/${schedId}`);
-    router.prefetch(`/${showId}`);
-  }, [router, schedId, showId]);
+    router.prefetch(reserveHref);
+    router.prefetch(showHref);
+  }, [reserveHref, router, showHref]);
 
   React.useEffect(() => {
     if (!status || status.status !== "active" || !status.ticketId || !status.activeToken || !status.expiresAt) {
@@ -324,7 +333,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
 
   const goBackToShow = () => {
     if (hasProceedTimedOut || !hasTerminableTicket) {
-      router.push(`/${showId}`);
+      router.push(showHref);
       return;
     }
 
@@ -335,7 +344,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
 
     allowNavigationRef.current = true;
     void terminateTicket(true);
-    router.push(`/${showId}`);
+    router.push(showHref);
   };
 
   const proceedToReservation = async () => {
@@ -397,7 +406,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
         }),
       );
       allowNavigationRef.current = true;
-      router.push(`/reserve/${showId}/${schedId}`);
+      router.push(reserveHref);
     } catch (err) {
       setError(
         err instanceof Error
@@ -423,6 +432,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
           showId,
           schedId,
           guestId,
+          accessMode,
         }),
       });
 
@@ -441,7 +451,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
       if (!response.ok || !data.success) {
         const normalizedError = data.error?.toLowerCase() ?? "";
         if (normalizedError.includes("already in the queue")) {
-          void fetchStatus();
+          router.push(queueHref);
           return;
         }
         throw new Error(data.error || "Failed to rejoin queue");
@@ -493,7 +503,7 @@ export function QueueWaitingClient({ showId, schedId }: QueueWaitingClientProps)
     setError(null);
     allowNavigationRef.current = true;
     await terminateTicket(true);
-    router.push(`/${showId}`);
+    router.push(showHref);
   };
 
   React.useEffect(() => {

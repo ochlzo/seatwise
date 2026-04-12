@@ -13,7 +13,7 @@ export default async function Page() {
         enableLinks
         showHeader={false}
         visibility="user"
-        statusFilterValues={["ALL", "UPCOMING", "OPEN", "ON_GOING", "CLOSED"]}
+        statusFilterValues={["ALL", "UPCOMING", "OPEN", "DRY_RUN", "ON_GOING", "CLOSED"]}
         headerTitle="Everything On Stage"
         headerSubtitle="Past, present, and upcoming—browse the full lineup."
       />

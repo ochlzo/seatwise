@@ -18,6 +18,7 @@ const statuses = [
     { label: "Draft", value: "DRAFT" },
     { label: "Upcoming", value: "UPCOMING" },
     { label: "Open", value: "OPEN" },
+    { label: "Dry Run", value: "DRY_RUN" },
     { label: "On Going", value: "ON_GOING" },
     { label: "Closed", value: "CLOSED" },
     { label: "Cancelled", value: "CANCELLED" },

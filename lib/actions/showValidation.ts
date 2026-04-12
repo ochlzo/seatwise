@@ -147,7 +147,7 @@ const buildValidationMessage = (validation: ValidationState) => {
     return "A valid show date range is required.";
   }
   if (fieldErrors.ticket_template_id) return "One or more selected ticket templates were not found.";
-  if (fieldErrors.seatmap_id) return "A seatmap is required for UPCOMING or OPEN shows.";
+  if (fieldErrors.seatmap_id) return "A seatmap is required for UPCOMING, OPEN, or DRY_RUN shows.";
   if (cardErrors.schedule) {
     return "Schedules must cover every show date without overlapping time ranges.";
   }
@@ -194,7 +194,10 @@ export function validateShowPayload(args: ValidateShowPayloadArgs) {
   const dateRangeInvalid = hasDateRange
     ? toDateOnly(show_start_date).getTime() > toDateOnly(show_end_date).getTime()
     : false;
-  const requiresSeatmap = show_status === "UPCOMING" || show_status === "OPEN";
+  const requiresSeatmap =
+    show_status === "UPCOMING" ||
+    show_status === "OPEN" ||
+    show_status === "DRY_RUN";
 
   const normalizedSetNames = categorySets.map(
     (setItem, index) => setItem.set_name?.trim() || `Set ${index + 1}`,

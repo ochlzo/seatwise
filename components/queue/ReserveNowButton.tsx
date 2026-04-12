@@ -15,12 +15,14 @@ interface ReserveNowButtonProps {
   showId: string;
   showName: string;
   schedules: SchedulePickerOption[];
+  accessMode?: "default" | "dry-run";
 }
 
 export function ReserveNowButton({
   showId,
   showName,
   schedules,
+  accessMode = "default",
 }: ReserveNowButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
@@ -33,7 +35,12 @@ export function ReserveNowButton({
       const response = await fetch("/api/queue/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ showId, schedId: selectedSchedId, guestId }),
+        body: JSON.stringify({
+          showId,
+          schedId: selectedSchedId,
+          guestId,
+          accessMode,
+        }),
       });
 
       const data = await response.json();
@@ -75,7 +82,8 @@ export function ReserveNowButton({
 
         setJoinTransitionState(showScopeId);
         setIsOpen(false);
-        router.push(`/reserve/${showId}/${selectedSchedId}`);
+        const suffix = accessMode === "dry-run" ? "?accessMode=dry-run" : "";
+        router.push(`/reserve/${showId}/${selectedSchedId}${suffix}`);
         return;
       }
 
@@ -84,7 +92,8 @@ export function ReserveNowButton({
       });
 
       setIsOpen(false);
-      router.push(`/queue/${showId}/${selectedSchedId}`);
+      const suffix = accessMode === "dry-run" ? "?accessMode=dry-run" : "";
+      router.push(`/queue/${showId}/${selectedSchedId}${suffix}`);
     } catch (error) {
       toast.error("Failed to join queue", {
         description:
