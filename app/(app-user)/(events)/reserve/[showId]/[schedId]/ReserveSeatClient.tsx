@@ -267,13 +267,6 @@ const getStoredSession = (showScopeId: string): StoredActiveSession | null => {
   return null;
 };
 
-const setStoredSession = (showScopeId: string, session: StoredActiveSession) => {
-  if (typeof window === "undefined") return;
-
-  const storageKey = `seatwise:active:${showScopeId}:${session.ticketId}`;
-  window.sessionStorage.setItem(storageKey, JSON.stringify(session));
-};
-
 const clearStoredSession = (showScopeId: string) => {
   if (typeof window === "undefined") return;
 
@@ -597,6 +590,11 @@ export function ReserveSeatClient({
       setIsLoading(true);
       setError(null);
 
+      if (isWalkInMode) {
+        setIsLoading(false);
+        return;
+      }
+
       const stored = getStoredSession(showScopeId);
       if (!stored) {
         setError(
@@ -647,6 +645,7 @@ export function ReserveSeatClient({
 
     void verify();
   }, [
+    isWalkInMode,
     initialScheduleSnapshot,
     participantId,
     reservationStepForPresence,
@@ -820,6 +819,10 @@ export function ReserveSeatClient({
 
   const terminateQueueSession = React.useCallback(
     async (preferBeacon: boolean) => {
+      if (isWalkInMode) {
+        return;
+      }
+
       const pending = getPendingTermination(showScopeId);
       const stored = getStoredSession(showScopeId);
       const payload =
@@ -869,7 +872,7 @@ export function ReserveSeatClient({
         // Best effort termination during navigation.
       }
     },
-    [participantId, schedId, showId, showScopeId],
+    [isWalkInMode, participantId, schedId, showId, showScopeId],
   );
 
   React.useEffect(() => {
@@ -1021,54 +1024,13 @@ export function ReserveSeatClient({
   const handleRejoinQueue = async () => {
     setIsRejoining(true);
     try {
-      await terminateQueueSession(false);
-
       if (isWalkInMode) {
-        const response = await fetch("/api/admin/walk-in/prepare", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            showId,
-            schedId,
-          }),
-        });
-
-        const data = (await response.json()) as
-          | {
-              success: true;
-              state: "queued" | "active_and_paused";
-              showScopeId: string;
-              ticketId?: string;
-              activeToken?: string;
-              expiresAt?: number | null;
-            }
-          | { success?: false; error?: string };
-
-        if (!response.ok || !("success" in data) || data.success !== true) {
-          throw new Error(("error" in data ? data.error : undefined) || "Failed to rejoin queue");
-        }
-
-        if (
-          data.state === "active_and_paused" &&
-          data.ticketId &&
-          data.activeToken &&
-          typeof data.expiresAt === "number"
-        ) {
-          setStoredSession(showScopeId, {
-            ticketId: data.ticketId,
-            activeToken: data.activeToken,
-            expiresAt: data.expiresAt,
-            showScopeId,
-          });
-          allowNavigationRef.current = true;
-          router.push(`/admin/walk-in/${showId}/${schedId}/room`);
-          return;
-        }
-
         allowNavigationRef.current = true;
         router.push(`/admin/walk-in/${showId}/${schedId}`);
         return;
       }
+
+      await terminateQueueSession(false);
 
       const response = await fetch("/api/queue/join", {
         method: "POST",
@@ -1131,7 +1093,9 @@ export function ReserveSeatClient({
   const handleLeaveReservationRoom = async () => {
     setIsLeaving(true);
     allowNavigationRef.current = true;
-    await terminateQueueSession(true);
+    if (!isWalkInMode) {
+      await terminateQueueSession(true);
+    }
     router.push(
       isWalkInMode ? (returnHref ?? `/admin/shows/${showId}`) : showHref,
     );
@@ -1306,13 +1270,13 @@ export function ReserveSeatClient({
   };
 
   const handleBackToTicketDesign = () => {
-    setStep("email_otp");
+    setStep(isWalkInMode ? "contact" : "email_otp");
     setWalkInConfirmationComplete(false);
   };
 
   const handleVerifyEmailOtp = async () => {
     const stored = getStoredSession(showScopeId);
-    if (!stored) {
+    if (!isWalkInMode && !stored) {
       setError(
         "We couldnâ€™t find your active turn. Rejoin the queue to continue.",
       );
@@ -1481,6 +1445,25 @@ export function ReserveSeatClient({
     setScreenshotUrl(url);
   }, []);
 
+  const refreshSeatStatuses = React.useCallback(async () => {
+    const response = await fetch(
+      `/api/queue/seat-status?showId=${encodeURIComponent(showId)}&schedId=${encodeURIComponent(schedId)}`,
+      { cache: "no-store" },
+    );
+
+    const data = (await response.json()) as {
+      success?: boolean;
+      seatStatusById?: Record<string, SeatStatus>;
+      error?: string;
+    };
+
+    if (!response.ok || !data.success || !data.seatStatusById) {
+      throw new Error(data.error || "Failed to refresh seat statuses.");
+    }
+
+    setDisplaySeatStatusById(data.seatStatusById);
+  }, [schedId, showId]);
+
   // Final confirmation: complete reservation
   const handleConfirmReservation = async () => {
     if (!isWalkInMode && !screenshotUrl) {
@@ -1501,7 +1484,7 @@ export function ReserveSeatClient({
     }
 
     const stored = getStoredSession(showScopeId);
-    if (!stored) {
+    if (!isWalkInMode && !stored) {
       setError(
         "We couldn’t find your active turn. Rejoin the queue to continue.",
       );
@@ -1518,8 +1501,8 @@ export function ReserveSeatClient({
           schedId,
           guestId: participantId,
           mode,
-          ticketId: stored.ticketId,
-          activeToken: stored.activeToken,
+          ticketId: stored?.ticketId,
+          activeToken: stored?.activeToken,
           seatIds: selectedSeatIds,
           ticketTemplateVersionId: selectedTicketTemplateVersionId,
           screenshotUrl,
@@ -1534,12 +1517,58 @@ export function ReserveSeatClient({
 
       const data = (await response.json()) as {
         success: boolean;
+        code?: string;
         error?: string;
         reason?: string;
         reservationNumber?: string;
         warning?: string | null;
+        conflictingSeatIds?: string[];
+        conflictingSeatNumbers?: string[];
       };
       if (!response.ok || !data.success) {
+        if (data.code === "submission_in_progress") {
+          toast.error("Reservation is currently being submitted", {
+            description:
+              data.error ??
+              "Someone is submitting their reservation. Please try again.",
+          });
+          return;
+        }
+
+        if (data.code === "seats_unavailable") {
+          const conflictingSeatIds = Array.isArray(data.conflictingSeatIds)
+            ? data.conflictingSeatIds
+            : [];
+          const conflictingSeatNumbers = Array.isArray(data.conflictingSeatNumbers)
+            ? data.conflictingSeatNumbers
+            : [];
+
+          toast.error("Seat already taken", {
+            description:
+              conflictingSeatNumbers.length > 0
+                ? `${conflictingSeatNumbers.join(", ")} were already taken. Please pick again.`
+                : "One or more selected seats were already taken. Please pick again.",
+          });
+
+          setStep("seats");
+          setSelectionMessage(
+            "One or more selected seats were already taken. Please choose different seats.",
+          );
+          setError(null);
+          setSelectedSeatIds((prev) =>
+            conflictingSeatIds.length > 0
+              ? prev.filter((seatId) => !conflictingSeatIds.includes(seatId))
+              : [],
+          );
+          try {
+            await refreshSeatStatuses();
+          } catch {
+            // Fallback to an RSC refresh when the lightweight seat-status call fails.
+            router.refresh();
+          }
+          return;
+        }
+
         if (
           isQueueCompletionSessionRecovery({
             status: response.status,
@@ -1627,9 +1656,15 @@ export function ReserveSeatClient({
   );
   const customerDisplayName =
     `${contactDetails.firstName.trim()} ${contactDetails.lastName.trim()}`.trim();
-  const customerEmailDisplay = contactDetails.email.trim() || "-";
-  const customerPhoneDisplay = contactDetails.phoneNumber.trim() || "-";
-  const customerAddressDisplay = contactDetails.address.trim() || "-";
+  const customerEmailDisplay = contactDetails.email.trim();
+  const customerPhoneDisplay = contactDetails.phoneNumber.trim();
+  const customerAddressDisplay = contactDetails.address.trim();
+  const walkInCustomerDetails = [
+    customerDisplayName,
+    customerEmailDisplay,
+    customerPhoneDisplay,
+    customerAddressDisplay,
+  ].filter((value) => value.length > 0);
   const walkInResendWaitSeconds = Math.max(
     0,
     Math.ceil((walkInResendCooldownUntil - now) / 1000),
@@ -1657,13 +1692,42 @@ export function ReserveSeatClient({
     : isWalkInMode
       ? modeConfig.contactActionLabel
       : "Verify email";
+  const contactEmail = contactDetails.email.trim();
+  const walkInContactConfirmDescription = React.useMemo(() => {
+    if (contactEmail.length === 0) {
+      return (
+        <>
+          No email was provided. Continue only if the customer does not want an
+          e-ticket copy sent.
+        </>
+      );
+    }
+
+    return (
+      <>
+        Ticket will be sent to{" "}
+        <span className="font-semibold text-foreground">{contactEmail}</span>.
+      </>
+    );
+  }, [contactEmail]);
+  const contactConfirmDescription = isWalkInMode ? (
+    walkInContactConfirmDescription
+  ) : (
+    <>
+      Please make sure these details are correct before continuing to ticket
+      design selection. Your confirmation and updates will be sent to{" "}
+      <span className="font-semibold text-foreground">{contactEmail}</span> and{" "}
+      <span className="font-semibold text-foreground">{contactPhoneNumber}</span>
+      .
+    </>
+  );
 
   const handleSeatSelectionChange = React.useCallback(
     (ids: string[]) => {
       const clickedSeatId = ids[ids.length - 1];
       if (!clickedSeatId) return;
 
-      const seatStatus = seatStatusById[clickedSeatId];
+      const seatStatus = displaySeatStatusById[clickedSeatId];
       if (seatStatus && seatStatus !== "OPEN") {
         setSelectionMessage(
           `${seatNumbersById[clickedSeatId] ?? clickedSeatId} is already taken.`,
@@ -1687,7 +1751,7 @@ export function ReserveSeatClient({
       setSelectedSeatIds((prev) => [...prev, clickedSeatId]);
       setSelectionMessage(null);
     },
-    [seatNumbersById, seatStatusById, selectedSeatIds],
+    [displaySeatStatusById, seatNumbersById, selectedSeatIds],
   );
 
   const handleRemoveSeat = React.useCallback((seatId: string) => {
@@ -2227,17 +2291,7 @@ export function ReserveSeatClient({
               <DialogHeader>
                 <DialogTitle>Confirm contact details</DialogTitle>
                 <DialogDescription className="text-justify text-xs sm:text-sm">
-                  Please make sure these details are correct before continuing
-                  to ticket design selection. Your confirmation and updates will
-                  be sent to{" "}
-                  <span className="font-semibold text-foreground">
-                    {contactDetails.email.trim()}
-                  </span>{" "}
-                  and{" "}
-                  <span className="font-semibold text-foreground">
-                    {contactDetails.phoneNumber.trim()}
-                  </span>
-                  .
+                  {contactConfirmDescription}
                 </DialogDescription>
               </DialogHeader>
               <DialogFooter className="flex-row justify-end gap-2">
@@ -2778,20 +2832,26 @@ export function ReserveSeatClient({
                           <p className="text-xs uppercase tracking-wide text-muted-foreground">
                             Customer
                           </p>
-                          <div className="mt-2 space-y-1">
-                            <p className="font-medium">
-                              {customerDisplayName || "-"}
-                            </p>
-                            <p className="text-muted-foreground">
-                              {customerEmailDisplay}
-                            </p>
-                            <p className="text-muted-foreground">
-                              {customerPhoneDisplay}
-                            </p>
-                            <p className="text-muted-foreground">
-                              {customerAddressDisplay}
-                            </p>
-                          </div>
+                          {walkInCustomerDetails.length === 0 ? (
+                            <div className="mt-3 text-center text-sm text-muted-foreground">
+                              No customer details provided yet.
+                            </div>
+                          ) : (
+                            <div className="mt-2 space-y-1">
+                              {walkInCustomerDetails.map((detail, index) => (
+                                <p
+                                  key={`${detail}-${index}`}
+                                  className={
+                                    index === 0
+                                      ? "font-medium"
+                                      : "text-muted-foreground"
+                                  }
+                                >
+                                  {detail}
+                                </p>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <Field data-invalid={!!adminNicknameError}>
                           <FieldLabel

@@ -67,6 +67,7 @@ import MultipleSelector, {
 } from "@/components/ui/multiple-selector";
 import { updateShowAction } from "@/lib/actions/updateShow";
 import { deleteShowAction } from "@/lib/actions/deleteShow";
+import { clearShowReservationsAction } from "@/lib/actions/clearShowReservations";
 import { toast } from "@/components/ui/sonner";
 import { useRouter } from "next/navigation";
 import type { SeatStatus, ShowStatus } from "@prisma/client";
@@ -327,6 +328,9 @@ export function ShowDetailForm({
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = React.useState(false);
   const [deleteConfirmValue, setDeleteConfirmValue] = React.useState("");
+  const [isClearingReservations, setIsClearingReservations] = React.useState(false);
+  const [isClearReservationsConfirmOpen, setIsClearReservationsConfirmOpen] =
+    React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [isScannerScheduleDialogOpen, setIsScannerScheduleDialogOpen] =
     React.useState(false);
@@ -1368,6 +1372,27 @@ export function ShowDetailForm({
     router,
     show.show_id,
   ]);
+
+  const handleClearReservations = React.useCallback(async () => {
+    if (!isSuperadmin) return;
+
+    setIsClearingReservations(true);
+    try {
+      const result = await clearShowReservationsAction(show.show_id);
+      if (!result.success) {
+        toast.error(result.error || "Failed to clear reservation records.");
+        return;
+      }
+
+      toast.success("Reservation records cleared successfully.");
+      setIsClearReservationsConfirmOpen(false);
+      router.refresh();
+    } catch {
+      toast.error("Failed to clear reservation records.");
+    } finally {
+      setIsClearingReservations(false);
+    }
+  }, [isSuperadmin, router, show.show_id]);
 
   const getAvailableScheds = (currentSetId: string) => {
     return formData.scheds.filter((s) => {
@@ -3232,6 +3257,16 @@ export function ShowDetailForm({
               >
                 Delete Show
               </Button>
+              <Button
+                type="button"
+                className="mt-2 w-full h-11 font-semibold uppercase tracking-widest text-sm bg-amber-400 text-white hover:bg-amber-500"
+                onClick={() => setIsClearReservationsConfirmOpen(true)}
+                disabled={isSaving || isDeleting || isClearingReservations}
+              >
+                {isClearingReservations
+                  ? "Clearing Reservation Records..."
+                  : "Clear Reservation Records"}
+              </Button>
             </div>
           ) : null}
         </div>
@@ -3454,6 +3489,43 @@ export function ShowDetailForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {allowEdit && isSuperadmin ? (
+        <Dialog
+          open={isClearReservationsConfirmOpen}
+          onOpenChange={setIsClearReservationsConfirmOpen}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+              </div>
+              <DialogTitle>Clear reservation records</DialogTitle>
+              <DialogDescription>
+                This will permanently delete all reservations and payments for
+                this show and reopen all assigned seats.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsClearReservationsConfirmOpen(false)}
+                disabled={isClearingReservations}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="bg-amber-400 text-white hover:bg-amber-500"
+                onClick={handleClearReservations}
+                disabled={isClearingReservations}
+              >
+                {isClearingReservations ? "Clearing..." : "Confirm Clear"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
 
       {allowEdit && isSuperadmin ? (
         <Dialog

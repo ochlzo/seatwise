@@ -11,6 +11,10 @@ import { completeActiveSessionAndPromoteNext } from "@/lib/queue/queueLifecycle"
 import { validateActiveSession } from "@/lib/queue/validateActiveSession";
 import { buildCompletionPaymentRecord } from "@/lib/reservations/completionPayment";
 import {
+  acquireSubmissionLock,
+  releaseSubmissionLock,
+} from "@/lib/reservations/submissionLock";
+import {
   clearReservationEmailOtpSession,
   clearReservationEmailOtpState,
   getReservationEmailOtpSession,
@@ -69,6 +73,24 @@ type ReservationDraft = {
   totalAmount: number;
 };
 
+class SeatsUnavailableError extends Error {
+  readonly seatIds: string[];
+  readonly seatNumbers: string[];
+
+  constructor({
+    seatIds,
+    seatNumbers,
+  }: {
+    seatIds: string[];
+    seatNumbers: string[];
+  }) {
+    super("One or more selected seats are already reserved.");
+    this.name = "SeatsUnavailableError";
+    this.seatIds = seatIds;
+    this.seatNumbers = seatNumbers;
+  }
+}
+
 const generateReservationNumber = () =>
   Math.floor(Math.random() * 10_000)
     .toString()
@@ -89,6 +111,8 @@ export async function POST(request: NextRequest) {
   const timer = createRouteTimer("/api/queue/complete", {
     enabled: isRouteTimingEnabled(request),
   });
+  let submitLockToken: string | null = null;
+  let submitLockScopeId: string | null = null;
 
   try {
     const body = (await request.json()) as CompletionRequestBody;
@@ -118,12 +142,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!showId || !schedId || !participantId || !ticketId || !activeToken) {
+    if (
+      !showId ||
+      !schedId ||
+      !participantId ||
+      (!isWalkInMode && (!ticketId || !activeToken))
+    ) {
       return NextResponse.json(
         { success: false, error: "Missing queue session identifiers." },
         { status: 400 },
       );
     }
+
+    const showScopeId = `${showId}:${schedId}`;
+    submitLockScopeId = showScopeId;
+    const lock = await acquireSubmissionLock(showScopeId);
+    if (!lock.acquired) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "submission_in_progress",
+          error:
+            "Someone is currently submitting a reservation. Please try again.",
+        },
+        { status: 409 },
+      );
+    }
+    submitLockToken = lock.token;
 
     const seatIds = Array.isArray(body.seatIds) ? body.seatIds : [];
     if (seatIds.length === 0) {
@@ -275,26 +320,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!isSchedStatusReservable(getEffectiveSchedStatus(schedule))) {
+    const effectiveSchedStatus = getEffectiveSchedStatus(schedule);
+    const walkInBlockedBySchedule = isWalkInMode && effectiveSchedStatus === "FULLY_BOOKED";
+    const onlineBlockedBySchedule =
+      !isWalkInMode && !isSchedStatusReservable(effectiveSchedStatus);
+
+    if (walkInBlockedBySchedule || onlineBlockedBySchedule) {
       return NextResponse.json(
         { success: false, error: "This schedule is not currently accepting reservations." },
         { status: 400 },
       );
     }
 
-    const showScopeId = `${showId}:${schedId}`;
-    const validation = await timer.time("redis.validate_active_session", () =>
-      validateActiveSession({
-        showScopeId,
-        ticketId,
-        userId: participantId,
-        activeToken,
-      }),
-    );
+    const validation = isWalkInMode
+      ? { valid: true, session: null, reason: undefined as string | undefined }
+      : await timer.time("redis.validate_active_session", () =>
+          validateActiveSession({
+            showScopeId,
+            ticketId,
+            userId: participantId,
+            activeToken,
+          }),
+        );
 
-    if (!validation.valid || !validation.session) {
+    if (!isWalkInMode && (!validation.valid || !validation.session)) {
       return NextResponse.json(
-        { success: false, error: "Active session is invalid or expired", reason: validation.reason },
+        {
+          success: false,
+          error: "Active session is invalid or expired",
+          reason: validation.reason,
+        },
         { status: 400 },
       );
     }
@@ -382,6 +437,28 @@ export async function POST(request: NextRequest) {
 
         reservation = await timer.time("postgres.create_reservation_transaction", () =>
           prisma.$transaction(async (tx) => {
+            const preflightConflicts = await tx.seatAssignment.findMany({
+              where: {
+                seat_assignment_id: { in: seatAssignmentIds },
+                NOT: { seat_status: "OPEN" },
+              },
+              select: {
+                seat_id: true,
+                seat: {
+                  select: {
+                    seat_number: true,
+                  },
+                },
+              },
+            });
+
+            if (preflightConflicts.length > 0) {
+              throw new SeatsUnavailableError({
+                seatIds: preflightConflicts.map((item) => item.seat_id),
+                seatNumbers: preflightConflicts.map((item) => item.seat.seat_number),
+              });
+            }
+
             const reservedSeats = await tx.seatAssignment.updateMany({
               where: {
                 seat_assignment_id: { in: seatAssignmentIds },
@@ -391,7 +468,12 @@ export async function POST(request: NextRequest) {
             });
 
             if (reservedSeats.count !== seatAssignmentIds.length) {
-              throw new Error("One or more selected seats are already reserved.");
+              // Another submit likely won a race after preflight checks.
+              // Avoid over-reporting seat labels from this in-flight attempt.
+              throw new SeatsUnavailableError({
+                seatIds: [],
+                seatNumbers: [],
+              });
             }
 
             const created = (await tx.reservation.create({
@@ -459,6 +541,10 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
+        if (error instanceof SeatsUnavailableError) {
+          throw error;
+        }
+
         throw error;
       }
     }
@@ -468,7 +554,7 @@ export async function POST(request: NextRequest) {
     }
 
     const promotion = isWalkInMode
-      ? { promoted: false, activeSession: validation.session, ticket: undefined }
+      ? { promoted: false, activeSession: null, ticket: undefined }
       : await timer.time("redis.complete_and_promote_next", () =>
           completeActiveSessionAndPromoteNext({
             showScopeId,
@@ -625,11 +711,33 @@ export async function POST(request: NextRequest) {
         : null,
     });
   } catch (error) {
+    if (error instanceof SeatsUnavailableError) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "seats_unavailable",
+          error: "One or more selected seats were already taken.",
+          conflictingSeatIds: error.seatIds,
+          conflictingSeatNumbers: error.seatNumbers,
+        },
+        { status: 409 },
+      );
+    }
+
     console.error("[queue/complete] Error:", error);
     timer.flush({ error: error instanceof Error ? error.message : "unknown" });
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 },
     );
+  } finally {
+    if (submitLockToken && submitLockScopeId) {
+      await releaseSubmissionLock({
+        showScopeId: submitLockScopeId,
+        token: submitLockToken,
+      }).catch((releaseError) => {
+        console.error("[queue/complete] Failed to release submission lock:", releaseError);
+      });
+    }
   }
 }
