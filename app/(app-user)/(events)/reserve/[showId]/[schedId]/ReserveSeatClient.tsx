@@ -598,7 +598,7 @@ export function ReserveSeatClient({
       const stored = getStoredSession(showScopeId);
       if (!stored) {
         setError(
-          "We couldn’t find your active turn. Rejoin the queue to continue.",
+          "We couldn't find your active turn. Rejoin the queue to continue.",
         );
         setIsLoading(false);
         return;
@@ -1171,7 +1171,7 @@ export function ReserveSeatClient({
       const stored = getStoredSession(showScopeId);
       if (!stored) {
         setError(
-          "We couldnâ€™t find your active turn. Rejoin the queue to continue.",
+          "We couldn't find your active turn. Rejoin the queue to continue.",
         );
         return false;
       }
@@ -1276,9 +1276,9 @@ export function ReserveSeatClient({
 
   const handleVerifyEmailOtp = async () => {
     const stored = getStoredSession(showScopeId);
-    if (!isWalkInMode && !stored) {
+    if (!stored) {
       setError(
-        "We couldnâ€™t find your active turn. Rejoin the queue to continue.",
+        "We couldn't find your active turn. Rejoin the queue to continue.",
       );
       return;
     }
@@ -1484,9 +1484,9 @@ export function ReserveSeatClient({
     }
 
     const stored = getStoredSession(showScopeId);
-    if (!isWalkInMode && !stored) {
+    if (!stored) {
       setError(
-        "We couldn’t find your active turn. Rejoin the queue to continue.",
+        "We couldn't find your active turn. Rejoin the queue to continue.",
       );
       return;
     }
@@ -1717,7 +1717,7 @@ export function ReserveSeatClient({
       Please make sure these details are correct before continuing to ticket
       design selection. Your confirmation and updates will be sent to{" "}
       <span className="font-semibold text-foreground">{contactEmail}</span> and{" "}
-      <span className="font-semibold text-foreground">{contactPhoneNumber}</span>
+      <span className="font-semibold text-foreground">{customerPhoneDisplay}</span>
       .
     </>
   );
@@ -2009,7 +2009,7 @@ export function ReserveSeatClient({
               title={
                 isExpiredWindowError
                   ? "Your turn ended"
-                  : "We couldn’t open the reservation room"
+                  : "We couldn't open the reservation room"
               }
               description={
                 isExpiredWindowError
@@ -2241,7 +2241,7 @@ export function ReserveSeatClient({
               </div>
             )}
 
-          {/* ── Payment Step ── */}
+          {/* Payment Step */}
           <Dialog
             open={isLeaveDialogOpen}
             onOpenChange={handleLeaveDialogChange}

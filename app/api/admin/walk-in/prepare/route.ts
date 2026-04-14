@@ -45,6 +45,9 @@ export async function POST(request: NextRequest) {
       },
       select: {
         sched_id: true,
+        sched_date: true,
+        sched_start_time: true,
+        sched_end_time: true,
         status: true,
         show: {
           select: {
