@@ -162,6 +162,27 @@ function buildIssuedTicketFilename(seatLabel: string, reservationNumber: string)
   return `seatwise-ticket-${seatLabel}-${reservationNumber}.pdf`;
 }
 
+function formatSeatPrice(value: number | string | { toString(): string } | null | undefined) {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value)
+        : value && typeof value.toString === "function"
+          ? Number.parseFloat(value.toString())
+          : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return "";
+  }
+
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 2,
+  }).format(numericValue);
+}
+
 function mapTemplateVersion(
   version: StoredTicketTemplateVersion,
 ): ResolvedTicketTemplateVersion {
@@ -356,6 +377,8 @@ export async function issueReservationTicket(
         fields: {
           ...interpolated.fields,
           seat: seatLabel,
+          seat_category: seatAssignment.set?.seatCategory?.category_name ?? "",
+          price: formatSeatPrice(seatAssignment.set?.seatCategory?.price),
         },
         qrValue: verificationUrl,
       });
