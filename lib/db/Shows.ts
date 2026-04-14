@@ -4,6 +4,7 @@ import {
   getEffectiveSchedStatus,
   getEffectiveShowStatus,
 } from "@/lib/shows/effectiveStatus";
+import { ACTIVE_SHOW_STATUSES } from "./showStatusGroups.ts";
 
 type AdminScope = {
   teamId: string | null;
@@ -23,7 +24,7 @@ export async function getShows(params?: {
   if (params?.status && params.status !== "ALL") {
     where.show_status = params.status as never;
   } else if (params?.statusGroup === "active") {
-    where.show_status = { in: ["UPCOMING", "OPEN", "DRY_RUN", "ON_GOING"] };
+    where.show_status = { in: ACTIVE_SHOW_STATUSES };
   }
   if (params?.visibility === "user") {
     const hiddenStatuses: ShowStatus[] = ["DRAFT", "CANCELLED"];
@@ -99,7 +100,7 @@ export async function getShows(params?: {
 
   if (params?.statusGroup === "active") {
     return derivedShows.filter((show) =>
-      ["UPCOMING", "OPEN", "DRY_RUN", "ON_GOING"].includes(show.show_status),
+      ACTIVE_SHOW_STATUSES.includes(show.show_status),
     );
   }
 
