@@ -1483,8 +1483,8 @@ export function ReserveSeatClient({
       return;
     }
 
-    const stored = getStoredSession(showScopeId);
-    if (!stored) {
+    const stored = isWalkInMode ? null : getStoredSession(showScopeId);
+    if (!isWalkInMode && !stored) {
       setError(
         "We couldn't find your active turn. Rejoin the queue to continue.",
       );

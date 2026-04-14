@@ -2,24 +2,18 @@
 
 import "server-only";
 import type { Prisma } from "@prisma/client";
-import type { SeatmapNode, SeatmapSeatNode } from "@/lib/seatmap/types";
+import type { SeatmapSeatNode } from "@/lib/seatmap/types";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+import {
+  extractSeatNodes,
+  remapSeatIdsForSeatmapSave,
+} from "@/lib/actions/saveSeatmapTemplateUtils";
 
 type SaveSeatmapPayload = {
   seatmap_name: string;
   seatmap_json: Prisma.InputJsonValue;
   seatmap_id?: string;
-};
-
-const extractSeatNodes = (seatmapJson: Prisma.InputJsonValue): SeatmapSeatNode[] => {
-  if (!seatmapJson || typeof seatmapJson !== "object") return [];
-  const nodes = (seatmapJson as { nodes?: Record<string, SeatmapNode> }).nodes;
-  if (!nodes || typeof nodes !== "object") return [];
-  return Object.values(nodes).filter(
-    (node): node is SeatmapSeatNode =>
-      Boolean(node) && typeof node === "object" && node.type === "seat",
-  );
 };
 
 const buildSeatNumber = (seat: SeatmapSeatNode) => {
@@ -73,8 +67,18 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
 
     const { seatmap_name, seatmap_json, seatmap_id } = payload;
 
+    let seatmapJsonToSave = seatmap_json;
+    const shouldRemapSeatIds =
+      !seatmap_id ||
+      (await prisma.seat.count({ where: { seatmap_id } })) !==
+        extractSeatNodes(seatmap_json).length;
+
+    if (shouldRemapSeatIds) {
+      seatmapJsonToSave = remapSeatIdsForSeatmapSave(seatmapJsonToSave);
+    }
+
     // 1. Pre-calculate seat data outside the transaction
-    const seatNodes = extractSeatNodes(seatmap_json);
+    const seatNodes = extractSeatNodes(seatmapJsonToSave);
     const seatDataForCreate = seatNodes.map((seat) => ({
       seat_id: seat.id,
       seat_number: buildSeatNumber(seat),
@@ -83,10 +87,11 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
 
     // Check if updating an existing seatmap that has seat assignments for related seats
     if (seatmap_id && seatDataForCreate.length > 0) {
-      const seatIds = seatDataForCreate.map((seat) => seat.seat_id);
       const assignments = await prisma.seatAssignment.findMany({
         where: {
-          seat_id: { in: seatIds },
+          seat: {
+            seatmap_id,
+          },
         },
         include: {
           sched: {
@@ -137,7 +142,7 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
             where: { seatmap_id },
             data: {
               seatmap_name,
-              seatmap_json,
+              seatmap_json: seatmapJsonToSave,
             },
           });
 
@@ -158,7 +163,7 @@ export async function saveSeatmapTemplateAction(payload: SaveSeatmapPayload) {
         const seatmap = await tx.seatmap.create({
           data: {
             seatmap_name,
-            seatmap_json,
+            seatmap_json: seatmapJsonToSave,
           },
         });
 

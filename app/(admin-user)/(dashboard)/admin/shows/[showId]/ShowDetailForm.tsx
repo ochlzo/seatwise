@@ -689,6 +689,12 @@ export function ShowDetailForm({
     [ticketTemplateSelectorOptions],
   );
 
+  const clearCategorySetsForSeatmapChange = React.useCallback(() => {
+    setCategorySets([]);
+    setActiveSetId(null);
+    setSelectedSeatIds([]);
+  }, []);
+
   // Fetch seatmap data when seatmap is selected
   React.useEffect(() => {
     if (!formData.seatmap_id) {
@@ -1316,6 +1322,7 @@ export function ShowDetailForm({
           }
 
           return {
+            id: setItem.id,
             set_name: setItem.set_name.trim() || `Set ${index + 1}`,
             apply_to_all: setItem.apply_to_all,
             sched_ids: normalizedSchedIds,
@@ -2447,7 +2454,13 @@ export function ShowDetailForm({
                     onValueChange={(value) => {
                       if (isStructuralEditingLocked) return;
                       const nextValue = value ?? "";
-                      setFormData({ ...formData, seatmap_id: nextValue });
+                      setFormData((prev) => ({
+                        ...prev,
+                        seatmap_id: nextValue,
+                      }));
+                      if (nextValue !== formData.seatmap_id) {
+                        clearCategorySetsForSeatmapChange();
+                      }
                       const match = seatmaps.find(
                         (seatmap) => seatmap.seatmap_id === nextValue,
                       );
@@ -2455,7 +2468,7 @@ export function ShowDetailForm({
                         setSeatmapQuery(match.seatmap_name);
                       }
                     }}
-                  >
+                    >
                     <ComboboxInput
                       id="seatmap"
                       placeholder="Select a seatmap"

@@ -10,6 +10,13 @@ import {
   assertShowCanMoveToRestrictedStatus,
   runShowQueueStatusTransition,
 } from "@/lib/shows/showStatusLifecycle";
+import {
+  buildShowStructureCategoryKey,
+  collectAffectedScheduleIdsForDerivedRows,
+  collectRemovedCategorySetIds,
+  type ShowStructureCategorySetState,
+  type ShowStructureScheduleState,
+} from "@/lib/actions/showStructureSync";
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -73,6 +80,7 @@ type UpdateCategorySetCategory = {
 };
 
 type UpdateCategorySet = {
+  id: string;
   set_name: string;
   apply_to_all: boolean;
   sched_ids: string[];
@@ -106,6 +114,7 @@ type NormalizedCategory = {
 };
 
 type NormalizedCategorySet = {
+  id: string;
   set_name: string;
   sched_ids: string[];
   categories: NormalizedCategory[];
@@ -401,6 +410,11 @@ export async function updateShowAction(
         show_status: true,
         seatmap_id: true,
         ticket_template_id: true,
+        ticketTemplateLinks: {
+          select: {
+            ticket_template_id: true,
+          },
+        },
         gcash_qr_image_key: true,
         gcash_number: true,
         gcash_account_name: true,
@@ -540,6 +554,7 @@ export async function updateShowAction(
 
     const normalizedCategorySets: NormalizedCategorySet[] = category_sets.map(
       (setItem, index) => ({
+        id: setItem.id,
         set_name: setItem.set_name?.trim() || `Set ${index + 1}`,
         sched_ids: setItem.sched_ids,
         categories: setItem.categories.map((category) => ({
@@ -582,6 +597,44 @@ export async function updateShowAction(
       );
     }
 
+    const previousScheduleStates: ShowStructureScheduleState[] =
+      currentShow.scheds.map((sched) => ({
+        sched_id: sched.sched_id,
+        category_set_id: sched.category_set_id,
+      }));
+    const previousCategorySetStates: ShowStructureCategorySetState[] =
+      currentShow.categorySets.map((categorySet) => {
+        const firstSched = currentShow.scheds.find(
+          (sched) => sched.category_set_id === categorySet.category_set_id,
+        );
+        const seatAssignments: Record<string, string> = {};
+
+        firstSched?.seatAssignments?.forEach((assignment) => {
+          seatAssignments[assignment.seat_id] =
+            assignment.set.seatCategory.category_name;
+        });
+
+        return {
+          category_set_id: categorySet.category_set_id,
+          seatmap_id: currentShow.seatmap_id,
+          categories: categorySet.items.map((item) => ({
+            category_name: item.seatCategory.category_name,
+            price: item.seatCategory.price.toString(),
+            color_code: item.seatCategory.color_code,
+          })),
+          seat_assignments: seatAssignments,
+        };
+      });
+
+    const removedCategorySetIds = collectRemovedCategorySetIds({
+      existingCategorySets: currentShow.categorySets.map((categorySet) => ({
+        category_set_id: categorySet.category_set_id,
+      })),
+      nextCategorySets: normalizedCategorySets.map((setItem) => ({
+        id: setItem.id,
+      })),
+    });
+
     const schedIdMap = new Map<string, string>(); // temp_id -> db_sched_id
 
     await prisma.$transaction(
@@ -613,11 +666,11 @@ export async function updateShowAction(
         }
 
         // 1. Update Show details
-        await tx.show.update({
-          where: { show_id: showId },
-          data: {
-            show_name,
-            show_description,
+          await tx.show.update({
+            where: { show_id: showId },
+            data: {
+              show_name,
+              show_description,
             venue,
             address,
             show_status,
@@ -628,12 +681,36 @@ export async function updateShowAction(
             gcash_account_name: gcash_account_name?.trim() || undefined,
             seatmap_id: trimmedSeatmapId || undefined,
             ticket_template_id: legacyTicketTemplateId,
-          },
-        });
-        await tx.$executeRaw(
-          Prisma.sql`DELETE FROM "ShowTicketTemplate" WHERE "show_id" = ${showId}`,
+            },
+          });
+        const existingTicketTemplateIds = currentShow.ticketTemplateLinks?.length
+          ? currentShow.ticketTemplateLinks.map(
+              (link) => link.ticket_template_id,
+            )
+          : currentShow.ticket_template_id
+            ? [currentShow.ticket_template_id]
+            : [];
+        const desiredTicketTemplateIds = normalizedTicketTemplateIds;
+        const existingTicketTemplateIdSet = new Set(existingTicketTemplateIds);
+        const desiredTicketTemplateIdSet = new Set(desiredTicketTemplateIds);
+        const ticketTemplateIdsToRemove = existingTicketTemplateIds.filter(
+          (ticketTemplateId) =>
+            !desiredTicketTemplateIdSet.has(ticketTemplateId),
         );
-        for (const ticketTemplateId of normalizedTicketTemplateIds) {
+        const ticketTemplateIdsToAdd = desiredTicketTemplateIds.filter(
+          (ticketTemplateId) => !existingTicketTemplateIdSet.has(ticketTemplateId),
+        );
+
+        if (ticketTemplateIdsToRemove.length > 0) {
+          await tx.$executeRaw(
+            Prisma.sql`
+              DELETE FROM "ShowTicketTemplate"
+              WHERE "show_id" = ${showId}
+                AND "ticket_template_id" IN (${Prisma.join(ticketTemplateIdsToRemove)})
+            `,
+          );
+        }
+        for (const ticketTemplateId of ticketTemplateIdsToAdd) {
           await tx.$executeRaw(
             Prisma.sql`
               INSERT INTO "ShowTicketTemplate" ("show_id", "ticket_template_id", "team_id")
@@ -650,163 +727,355 @@ export async function updateShowAction(
           return;
         }
 
-        // 2. Clear existing schedules, category sets, and related data
-        await tx.seatAssignment.deleteMany({
-          where: { sched: { show_id: showId } },
-        });
-        await tx.set.deleteMany({
-          where: { sched: { show_id: showId } },
-        });
-        await tx.categorySetItem.deleteMany({
-          where: { categorySet: { show_id: showId } },
-        });
-        await tx.categorySet.deleteMany({
-          where: { show_id: showId },
-        });
-        await tx.sched.deleteMany({
-          where: { show_id: showId },
+        if (removedCategorySetIds.length > 0) {
+          await tx.categorySetItem.deleteMany({
+            where: { category_set_id: { in: removedCategorySetIds } },
+          });
+          await tx.sched.updateMany({
+            where: { category_set_id: { in: removedCategorySetIds } },
+            data: { category_set_id: null },
+          });
+          await tx.categorySet.deleteMany({
+            where: { category_set_id: { in: removedCategorySetIds } },
+          });
+        }
+
+        const existingSchedById = new Map<
+          string,
+          (typeof currentShow.scheds)[number]
+        >(
+          currentShow.scheds.map((sched) => [sched.sched_id, sched]),
+        );
+        const existingCategorySetById = new Map<
+          string,
+          (typeof currentShow.categorySets)[number]
+        >(
+          currentShow.categorySets.map((categorySet) => [
+            categorySet.category_set_id,
+            categorySet,
+          ]),
+        );
+        const nextCategorySetStates: ShowStructureCategorySetState[] = [];
+        const nextScheduleStates: ShowStructureScheduleState[] = [];
+        const nextCategorySetIdBySchedId = new Map<string, string | null>();
+
+        const existingCategories = trimmedSeatmapId
+          ? await tx.seatCategory.findMany({
+              where: {
+                seatmap_id: trimmedSeatmapId,
+                OR: uniqueCategories.map((c) => ({
+                  category_name: c.category_name,
+                  price: c.price,
+                  color_code: c.color_code,
+                })),
+              },
+            })
+          : [];
+        const existingCategoryMap = new Map<string, string>();
+        existingCategories.forEach((category) => {
+          existingCategoryMap.set(
+            buildShowStructureCategoryKey({
+              category_name: category.category_name,
+              price: category.price.toString(),
+              color_code: category.color_code,
+            }),
+            category.seat_category_id,
+          );
         });
 
-        // 3. Create new schedules
-        if (scheds.length > 0) {
-          const createdScheds = await Promise.all(
-            scheds.map((sched) =>
-              tx.sched.create({
+        const missingCategories = uniqueCategories.filter(
+          (category) => !existingCategoryMap.has(buildShowStructureCategoryKey(category)),
+        );
+        if (missingCategories.length > 0 && trimmedSeatmapId) {
+          await tx.seatCategory.createMany({
+            data: missingCategories.map((category) => ({
+              category_name: category.category_name,
+              price: category.price,
+              color_code: category.color_code,
+              seatmap_id: trimmedSeatmapId,
+            })),
+            skipDuplicates: true,
+          });
+        }
+
+        const allCategories = trimmedSeatmapId
+          ? await tx.seatCategory.findMany({
+              where: {
+                seatmap_id: trimmedSeatmapId,
+                OR: uniqueCategories.map((category) => ({
+                  category_name: category.category_name,
+                  price: category.price,
+                  color_code: category.color_code,
+                })),
+              },
+            })
+          : [];
+        const categoryIdLookup = new Map<string, string>();
+        allCategories.forEach((category) => {
+          categoryIdLookup.set(
+            buildShowStructureCategoryKey({
+              category_name: category.category_name,
+              price: category.price.toString(),
+              color_code: category.color_code,
+            }),
+            category.seat_category_id,
+          );
+        });
+
+        for (const sched of scheds) {
+          const existingSched = existingSchedById.get(sched.client_id);
+          if (existingSched) {
+            await tx.sched.update({
+              where: { sched_id: existingSched.sched_id },
               data: {
-                show_id: showId,
                 sched_date: toDateOnly(sched.sched_date),
                 sched_start_time: toTime(sched.sched_start_time),
                 sched_end_time: toTime(sched.sched_end_time),
               },
-              }),
-            ),
-          );
+            });
+            schedIdMap.set(sched.client_id, existingSched.sched_id);
+            nextScheduleStates.push({
+              sched_id: existingSched.sched_id,
+              category_set_id: null,
+            });
+            continue;
+          }
 
-          createdScheds.forEach((createdSched, index) => {
-            schedIdMap.set(scheds[index].client_id, createdSched.sched_id);
+          const createdSched = await tx.sched.create({
+            data: {
+              show_id: showId,
+              sched_date: toDateOnly(sched.sched_date),
+              sched_start_time: toTime(sched.sched_start_time),
+              sched_end_time: toTime(sched.sched_end_time),
+            },
+          });
+          schedIdMap.set(sched.client_id, createdSched.sched_id);
+          nextScheduleStates.push({
+            sched_id: createdSched.sched_id,
+            category_set_id: null,
           });
         }
 
-        // 4. Create category sets if provided
-        if (normalizedCategorySets.length > 0 && trimmedSeatmapId) {
-          const allDbSchedIds = Array.from(schedIdMap.values());
-
-          // Find existing categories that match name, price, AND color
-          const existingCategories = await tx.seatCategory.findMany({
-            where: {
-              seatmap_id: trimmedSeatmapId,
-              OR: uniqueCategories.map((c) => ({
-                category_name: c.category_name,
-                price: c.price,
-                color_code: c.color_code,
-              })),
-            },
-          });
-
-          const existingMap = new Map<string, string>();
-          existingCategories.forEach((c) => {
-            const key = `${c.category_name.trim().toLowerCase()}|${Number(c.price).toString()}|${c.color_code}`;
-            existingMap.set(key, c.seat_category_id);
-          });
-
-          // Create missing
-          const missing = uniqueCategories.filter((c) => {
-            const key = `${c.category_name.trim().toLowerCase()}|${Number(c.price).toString()}|${c.color_code}`;
-            return !existingMap.has(key);
-          });
-          if (missing.length > 0) {
-            await tx.seatCategory.createMany({
-              data: missing.map((c) => ({
-                category_name: c.category_name,
-                price: c.price,
-                color_code: c.color_code,
-                seatmap_id: trimmedSeatmapId,
-              })),
-              skipDuplicates: true,
-            });
+        for (const setItem of normalizedCategorySets) {
+          const resolvedCategorySetId = existingCategorySetById.has(setItem.id)
+            ? setItem.id
+            : (
+                await tx.categorySet.create({
+                  data: {
+                    set_name: setItem.set_name,
+                    show_id: showId,
+                  },
+                })
+              ).category_set_id;
+          if (existingCategorySetById.has(resolvedCategorySetId)) {
+            const existingSet = existingCategorySetById.get(resolvedCategorySetId)!;
+            if (existingSet.set_name !== setItem.set_name) {
+              await tx.categorySet.update({
+                where: { category_set_id: resolvedCategorySetId },
+                data: { set_name: setItem.set_name },
+              });
+            }
           }
 
-          // Re-fetch all to get IDs for the ones we need
-          const allCategories = await tx.seatCategory.findMany({
-            where: {
-              seatmap_id: trimmedSeatmapId,
-              OR: uniqueCategories.map((c) => ({
-                category_name: c.category_name,
-                price: c.price,
-                color_code: c.color_code,
-              })),
-            },
-          });
-          const categoryIdLookup = new Map<string, string>();
-          allCategories.forEach((c) => {
-            const key = `${c.category_name.trim().toLowerCase()}|${Number(c.price).toString()}|${c.color_code}`;
-            categoryIdLookup.set(key, c.seat_category_id);
-          });
+          const normalizedSeatAssignments = { ...setItem.seat_assignments };
+          const nextCategorySetState: ShowStructureCategorySetState = {
+            category_set_id: resolvedCategorySetId,
+            seatmap_id: trimmedSeatmapId,
+            categories: setItem.categories.map((category) => ({
+              category_name: category.category_name.trim(),
+              price: category.price,
+              color_code: category.color_code,
+            })),
+            seat_assignments: normalizedSeatAssignments,
+          };
+          nextCategorySetStates.push(nextCategorySetState);
 
-          const categorySetItemRows: Array<{
-            category_set_id: string;
-            seat_category_id: string;
-          }> = [];
-          const setRows: Array<{ sched_id: string; seat_category_id: string }> =
-            [];
+          for (const clientId of setItem.sched_ids) {
+            const schedId = schedIdMap.get(clientId);
+            if (!schedId) continue;
+            nextCategorySetIdBySchedId.set(schedId, resolvedCategorySetId);
+          }
 
-          // Create Category Sets
-          for (let index = 0; index < normalizedCategorySets.length; index += 1) {
-            const setItem = normalizedCategorySets[index];
-            const setName = setItem.set_name;
+          const existingSetState = existingCategorySetById.has(resolvedCategorySetId)
+            ? {
+                category_set_id: resolvedCategorySetId,
+                seatmap_id: currentShow.seatmap_id,
+                categories: existingCategorySetById
+                  .get(resolvedCategorySetId)!
+                  .items.map((item) => ({
+                    category_name: item.seatCategory.category_name,
+                    price: item.seatCategory.price.toString(),
+                    color_code: item.seatCategory.color_code,
+                  })),
+                seat_assignments: (() => {
+                  const seatAssignments: Record<string, string> = {};
+                  const firstSched = currentShow.scheds.find(
+                    (sched) => sched.category_set_id === resolvedCategorySetId,
+                  );
+                  firstSched?.seatAssignments?.forEach((assignment) => {
+                    seatAssignments[assignment.seat_id] =
+                      assignment.set.seatCategory.category_name;
+                  });
+                  return seatAssignments;
+                })(),
+              }
+            : null;
 
-            const createdSet = await tx.categorySet.create({
-              data: {
-                set_name: setName,
-                show_id: showId,
-              },
-            });
+          const existingCategoryItemSignature = existingSetState
+            ? existingSetState.categories
+                .map((category) => buildShowStructureCategoryKey(category))
+                .sort()
+                .join("|")
+            : null;
+          const nextCategoryItemSignature = nextCategorySetState.categories
+            .map((category) => buildShowStructureCategoryKey(category))
+            .sort()
+            .join("|");
 
-            // Determine target schedules
-            const targetSchedIds = setItem.sched_ids
-              .map((clientId) => schedIdMap.get(clientId))
-              .filter(Boolean) as string[];
-
-            if (targetSchedIds.length > 0) {
-              await tx.sched.updateMany({
-                where: { sched_id: { in: targetSchedIds } },
-                data: { category_set_id: createdSet.category_set_id },
+          if (
+            !existingSetState ||
+            existingCategoryItemSignature !== nextCategoryItemSignature
+          ) {
+            if (existingCategorySetById.has(resolvedCategorySetId)) {
+              await tx.categorySetItem.deleteMany({
+                where: { category_set_id: resolvedCategorySetId },
               });
             }
 
-            setItem.categories.forEach((category) => {
-              const key = `${category.category_name.trim().toLowerCase()}|${Number(category.price).toString()}|${category.color_code}`;
-              const seat_category_id = categoryIdLookup.get(key);
-              if (!seat_category_id) return;
+            const desiredItemRows = setItem.categories
+              .map((category) => {
+                const seatCategoryId = categoryIdLookup.get(
+                  buildShowStructureCategoryKey({
+                    category_name: category.category_name.trim(),
+                    price: category.price,
+                    color_code: category.color_code,
+                  }),
+                );
+                return seatCategoryId
+                  ? {
+                      category_set_id: resolvedCategorySetId,
+                      seat_category_id: seatCategoryId,
+                    }
+                  : null;
+              })
+              .filter(
+                (
+                  item,
+                ): item is {
+                  category_set_id: string;
+                  seat_category_id: string;
+                } => Boolean(item),
+              );
 
-              categorySetItemRows.push({
-                category_set_id: createdSet.category_set_id,
-                seat_category_id,
+            if (desiredItemRows.length > 0) {
+              await tx.categorySetItem.createMany({
+                data: desiredItemRows,
+                skipDuplicates: true,
               });
+            }
+          }
+        }
 
-              targetSchedIds.forEach((sched_id) => {
-                setRows.push({ sched_id, seat_category_id });
-              });
-            });
+        const schedIdsByCategorySetId = new Map<string, string[]>();
+        const schedIdsWithoutCategorySet: string[] = [];
+        for (const [schedId, categorySetId] of nextCategorySetIdBySchedId.entries()) {
+          if (categorySetId) {
+            const schedIds = schedIdsByCategorySetId.get(categorySetId) ?? [];
+            schedIds.push(schedId);
+            schedIdsByCategorySetId.set(categorySetId, schedIds);
+          } else {
+            schedIdsWithoutCategorySet.push(schedId);
+          }
+        }
+
+        for (const [categorySetId, schedIds] of schedIdsByCategorySetId.entries()) {
+          await tx.sched.updateMany({
+            where: { sched_id: { in: schedIds } },
+            data: { category_set_id: categorySetId },
+          });
+        }
+        if (schedIdsWithoutCategorySet.length > 0) {
+          await tx.sched.updateMany({
+            where: { sched_id: { in: schedIdsWithoutCategorySet } },
+            data: { category_set_id: null },
+          });
+        }
+
+        const removedSchedIds = currentShow.scheds
+          .map((sched) => sched.sched_id)
+          .filter((schedId) => !schedIdMap.has(schedId));
+
+        for (const schedId of schedIdMap.values()) {
+          if (!nextCategorySetIdBySchedId.has(schedId)) {
+            nextCategorySetIdBySchedId.set(schedId, null);
+          }
+        }
+
+        nextScheduleStates.forEach((state) => {
+          state.category_set_id =
+            nextCategorySetIdBySchedId.get(state.sched_id) ?? null;
+        });
+
+        const nextScheduleStatesById = new Map<string, ShowStructureScheduleState>(
+          nextScheduleStates.map((state) => [state.sched_id, state]),
+        );
+        const nextCategorySetStatesById = new Map<
+          string,
+          ShowStructureCategorySetState
+        >(
+          nextCategorySetStates.map((state) => [
+            state.category_set_id,
+            state,
+          ]),
+        );
+
+        const affectedSchedIds = collectAffectedScheduleIdsForDerivedRows({
+          previousSchedules: previousScheduleStates,
+          nextSchedules: [...nextScheduleStatesById.values()],
+          previousCategorySets: previousCategorySetStates,
+          nextCategorySets: nextCategorySetStates,
+        });
+
+        if (affectedSchedIds.length > 0) {
+          await tx.seatAssignment.deleteMany({
+            where: { sched_id: { in: affectedSchedIds } },
+          });
+          await tx.set.deleteMany({
+            where: { sched_id: { in: affectedSchedIds } },
+          });
+
+          const setRows: Array<{ sched_id: string; seat_category_id: string }> = [];
+          for (const schedId of affectedSchedIds) {
+            const nextSchedule = nextScheduleStatesById.get(schedId);
+            if (!nextSchedule?.category_set_id) continue;
+
+            const nextCategorySetState = nextCategorySetStatesById.get(
+              nextSchedule.category_set_id,
+            );
+            if (!nextCategorySetState) continue;
+
+            for (const category of nextCategorySetState.categories) {
+              const seatCategoryId = categoryIdLookup.get(
+                buildShowStructureCategoryKey(category),
+              );
+              if (!seatCategoryId) continue;
+              setRows.push({ sched_id: schedId, seat_category_id: seatCategoryId });
+            }
           }
 
-          if (categorySetItemRows.length > 0) {
-            await tx.categorySetItem.createMany({
-              data: categorySetItemRows,
+          if (setRows.length > 0) {
+            await tx.set.createMany({
+              data: setRows,
               skipDuplicates: true,
             });
           }
-          if (setRows.length > 0) {
-            await tx.set.createMany({ data: setRows, skipDuplicates: true });
-          }
 
-          // Create Seat Assignments
           const createdSets = await tx.set.findMany({
-            where: { sched_id: { in: allDbSchedIds } },
+            where: { sched_id: { in: affectedSchedIds } },
           });
           const setLookup = new Map<string, string>();
-          createdSets.forEach((r) => {
-            setLookup.set(`${r.sched_id}:${r.seat_category_id}`, r.set_id);
+          createdSets.forEach((row) => {
+            setLookup.set(`${row.sched_id}:${row.seat_category_id}`, row.set_id);
           });
 
           const seatAssignmentRows: Array<{
@@ -816,37 +1085,40 @@ export async function updateShowAction(
             seat_status: "OPEN";
           }> = [];
 
-          for (const setItem of normalizedCategorySets) {
-            const targetSchedIds = setItem.sched_ids
-              .map((id) => schedIdMap.get(id))
-              .filter(Boolean) as string[];
+          for (const schedId of affectedSchedIds) {
+            const nextSchedule = nextScheduleStatesById.get(schedId);
+            if (!nextSchedule?.category_set_id) continue;
 
-            for (const [seatId, catName] of Object.entries(
-              setItem.seat_assignments,
+            const nextCategorySetState = nextCategorySetStatesById.get(
+              nextSchedule.category_set_id,
+            );
+            if (!nextCategorySetState) continue;
+
+            for (const [seatId, categoryName] of Object.entries(
+              nextCategorySetState.seat_assignments,
             )) {
-              const normalizedCategoryName = catName.trim().toLowerCase();
-              const matchedCategory = setItem.categories.find(
+              const normalizedCategoryName = categoryName.trim().toLowerCase();
+              const matchedCategory = nextCategorySetState.categories.find(
                 (category) =>
-                  category.category_name.trim().toLowerCase() === normalizedCategoryName,
+                  category.category_name.trim().toLowerCase() ===
+                  normalizedCategoryName,
               );
               if (!matchedCategory) continue;
 
-              const key = `${normalizedCategoryName}|${Number(matchedCategory.price).toString()}|${matchedCategory.color_code}`;
-              const seat_category_id = categoryIdLookup.get(key);
-              if (!seat_category_id) continue;
+              const seatCategoryId = categoryIdLookup.get(
+                buildShowStructureCategoryKey(matchedCategory),
+              );
+              if (!seatCategoryId) continue;
 
-              for (const schedId of targetSchedIds) {
-                const lookupKey = `${schedId}:${seat_category_id}`;
-                const set_id = setLookup.get(lookupKey);
-                if (set_id) {
-                  seatAssignmentRows.push({
-                    seat_id: seatId,
-                    sched_id: schedId,
-                    set_id: set_id,
-                    seat_status: "OPEN",
-                  });
-                }
-              }
+              const setId = setLookup.get(`${schedId}:${seatCategoryId}`);
+              if (!setId) continue;
+
+              seatAssignmentRows.push({
+                seat_id: seatId,
+                sched_id: schedId,
+                set_id: setId,
+                seat_status: "OPEN",
+              });
             }
           }
 
@@ -860,6 +1132,19 @@ export async function updateShowAction(
             }
           }
         }
+
+        if (removedSchedIds.length > 0) {
+          await tx.seatAssignment.deleteMany({
+            where: { sched_id: { in: removedSchedIds } },
+          });
+          await tx.set.deleteMany({
+            where: { sched_id: { in: removedSchedIds } },
+          });
+          await tx.sched.deleteMany({
+            where: { sched_id: { in: removedSchedIds } },
+          });
+        }
+
       },
       {
         maxWait: 5000,
