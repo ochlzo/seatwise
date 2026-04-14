@@ -66,6 +66,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { useAppSelector } from "@/lib/hooks";
 import { getAdminPaymentDisplay } from "@/lib/reservations/adminPaymentDisplay";
+import {
+  buildReservationScheduleFilterOptions,
+  filterReservationShowsBySchedule,
+  isReservationScheduleFilterDisabled,
+} from "@/lib/reservations/reservationScheduleFilters";
 import type { RootState } from "@/lib/store";
 
 type PaymentData = {
@@ -752,6 +757,11 @@ export function ReservationsClient() {
   const [selectedShowId, setSelectedShowId] = React.useState("all");
   const [showFilterQuery, setShowFilterQuery] = React.useState("All Shows");
   const [isShowComboboxOpen, setIsShowComboboxOpen] = React.useState(false);
+  const [selectedScheduleId, setSelectedScheduleId] = React.useState("all");
+  const [scheduleFilterQuery, setScheduleFilterQuery] =
+    React.useState("All Schedules");
+  const [isScheduleComboboxOpen, setIsScheduleComboboxOpen] =
+    React.useState(false);
   const [selectedTeamId, setSelectedTeamId] = React.useState("all");
   const [teamFilterQuery, setTeamFilterQuery] = React.useState("All Teams");
   const [isTeamComboboxOpen, setIsTeamComboboxOpen] = React.useState(false);
@@ -1179,6 +1189,12 @@ export function ReservationsClient() {
   }, [selectedShowId, showFilterOptions]);
 
   React.useEffect(() => {
+    setSelectedScheduleId("all");
+    setScheduleFilterQuery("All Schedules");
+    setIsScheduleComboboxOpen(false);
+  }, [selectedShowId]);
+
+  React.useEffect(() => {
     if (!isSuperadmin) return;
 
     if (
@@ -1190,16 +1206,32 @@ export function ReservationsClient() {
     }
   }, [isSuperadmin, selectedTeamId, teamFilterOptions]);
 
+  const scheduleFilterOptions = React.useMemo(
+    () => buildReservationScheduleFilterOptions(shows, selectedShowId),
+    [selectedShowId, shows],
+  );
+
+  const filteredScheduleFilterOptions = React.useMemo(() => {
+    const query = scheduleFilterQuery.trim().toLowerCase();
+    if (!query || query === "all schedules") return scheduleFilterOptions;
+    return scheduleFilterOptions.filter((schedule) =>
+      schedule.label.toLowerCase().includes(query),
+    );
+  }, [scheduleFilterOptions, scheduleFilterQuery]);
+
+  const scheduleFilterDisabled = isReservationScheduleFilterDisabled(selectedShowId);
+
   const filteredShows = React.useMemo(() => {
     const teamScopedShows =
       selectedTeamId === "all"
         ? shows
         : shows.filter((show) => show.teamId === selectedTeamId);
 
-    const showScopedShows =
-      selectedShowId === "all"
-        ? teamScopedShows
-        : teamScopedShows.filter((show) => show.showId === selectedShowId);
+    const showScopedShows = filterReservationShowsBySchedule(
+      teamScopedShows,
+      selectedShowId,
+      selectedScheduleId,
+    );
 
     if (!searchQuery.trim()) return showScopedShows;
 
@@ -1225,7 +1257,7 @@ export function ReservationsClient() {
         ),
       }))
       .filter((show) => show.reservations.length > 0);
-  }, [searchQuery, selectedShowId, selectedTeamId, shows]);
+  }, [searchQuery, selectedScheduleId, selectedShowId, selectedTeamId, shows]);
 
   const kanbanCards = React.useMemo(() => {
     const cards: KanbanCard[] = [];
@@ -2775,8 +2807,8 @@ export function ReservationsClient() {
         <div
           className={`grid gap-3 ${
             isSuperadmin
-              ? "md:grid-cols-[minmax(0,1fr)_220px_220px]"
-              : "md:grid-cols-[minmax(0,1fr)_240px]"
+              ? "md:grid-cols-[minmax(0,1fr)_220px_220px_220px]"
+              : "md:grid-cols-[minmax(0,1fr)_240px_240px]"
           }`}
         >
           <div className="relative">
@@ -2875,6 +2907,53 @@ export function ReservationsClient() {
                   ))
                 ) : (
                   <ComboboxEmpty>No shows found.</ComboboxEmpty>
+                )}
+              </ComboboxList>
+            </ComboboxContent>
+          </Combobox>
+
+          <Combobox
+            open={isScheduleComboboxOpen}
+            onOpenChange={setIsScheduleComboboxOpen}
+            openOnInputClick
+            autoHighlight
+            value={selectedScheduleId}
+            onValueChange={(value) => {
+              const nextValue = value ?? "all";
+              setSelectedScheduleId(nextValue);
+              const selectedSchedule = scheduleFilterOptions.find(
+                (schedule) => schedule.id === nextValue,
+              );
+              setScheduleFilterQuery(selectedSchedule?.label ?? "All Schedules");
+              setIsScheduleComboboxOpen(false);
+            }}
+          >
+            <ComboboxInput
+              aria-label="Filter schedules"
+              placeholder={scheduleFilterDisabled ? "Select a show first" : "All Schedules"}
+              value={
+                scheduleFilterDisabled ? "Select a show first" : scheduleFilterQuery
+              }
+              disabled={scheduleFilterDisabled}
+              onFocus={() => setIsScheduleComboboxOpen(true)}
+              onChange={(event) => {
+                setScheduleFilterQuery(event.target.value);
+                setSelectedScheduleId("all");
+                setIsScheduleComboboxOpen(true);
+              }}
+              className="w-full border-sidebar-border/70 dark:border-white/20 bg-background"
+            />
+            <ComboboxContent>
+              <ComboboxList className="max-h-72">
+                <ComboboxItem value="all">All Schedules</ComboboxItem>
+                {filteredScheduleFilterOptions.length > 0 ? (
+                  filteredScheduleFilterOptions.map((schedule) => (
+                    <ComboboxItem key={schedule.id} value={schedule.id}>
+                      {schedule.label}
+                    </ComboboxItem>
+                  ))
+                ) : (
+                  <ComboboxEmpty>No schedules found.</ComboboxEmpty>
                 )}
               </ComboboxList>
             </ComboboxContent>
