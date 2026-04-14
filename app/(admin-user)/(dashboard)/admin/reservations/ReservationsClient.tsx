@@ -37,6 +37,7 @@ import {
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ReservationTicketDownloadButton } from "@/components/reservations/ReservationTicketDownloadButton";
 import {
   Dialog,
   DialogContent,
@@ -1463,6 +1464,12 @@ export function ReservationsClient() {
   const selectedCardReservationStatusChangedAt = selectedCardReservation?.reservation_status_changed_at ?? null;
   const selectedCardReservationMethod = selectedCardReservation?.payment?.method ?? null;
   const selectedCardReservationIsWalkIn = selectedCardReservationMethod === "WALK_IN";
+  const selectedCardTicketDownloads = selectedCardReservation
+    ? selectedCardReservation.seatAssignments.map((seatAssignment) => ({
+        seatAssignmentId: seatAssignment.seat_assignment_id,
+        seatLabel: seatAssignment.seat.seat_number,
+      }))
+    : [];
   const selectedCardReservationTransitionLabel = selectedCard
     ? selectedCard.status === "PENDING"
       ? "Reservation payment conversion pending"
@@ -2527,6 +2534,14 @@ export function ReservationsClient() {
                             ) : null}
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2">
+                            {showTicketResend && selectedCardReservation ? (
+                              <ReservationTicketDownloadButton
+                                reservationId={selectedCardReservation.reservation_id}
+                                reservationNumber={selectedCard.row.reservationNumber}
+                                seatDownloads={selectedCardTicketDownloads}
+                                className="h-9 px-3 text-[11px] sm:text-xs"
+                              />
+                            ) : null}
                             {showPaymentCopyResend ? (
                               <Button
                                 type="button"
