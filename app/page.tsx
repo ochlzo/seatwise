@@ -416,21 +416,16 @@ export default function Home() {
             >
               View Events Now!
             </button>
-            <div className="flex flex-row items-center gap-4 md:gap-8">
-              <Image
-                src="/bu-logo.png"
-                alt="Bicol University Logo"
-                width={128}
-                height={128}
-                className="h-20 md:h-32 w-auto object-contain drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
-              />
-              <Image
-                src="/icon.png"
-                alt="BUCAL Logo"
-                width={128}
-                height={128}
-                className="h-20 md:h-32 w-auto object-contain drop-shadow-[0_2px_10px_rgba(255,255,255,0.5)]"
-              />
+            <div className="flex flex-row items-center">
+              <div className="h-20 w-20 md:h-32 md:w-32 overflow-hidden rounded-full bg-white shadow-[0_2px_10px_rgba(255,255,255,0.5)]">
+                <Image
+                  src="/damdam.jpg"
+                  alt="Dam Dám Productions Logo"
+                  width={128}
+                  height={128}
+                  className="h-full w-full object-cover"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -486,7 +481,10 @@ export default function Home() {
 
       {/* Footer (small) */}
       <footer className="relative py-10 px-6 md:px-32 border-t border-zinc-100 dark:border-zinc-800 z-20 flex flex-col md:flex-row justify-between items-center text-zinc-500 dark:text-zinc-400 text-xs uppercase tracking-widest gap-4">
-        <p>&copy; 2026 SEATWISE • CHOLO CANDELARIA • SEAN ARMENTA • BUCAL</p>
+        <p>
+          &copy; 2026 SEATWISE • CHOLO CANDELARIA • SEAN ARMENTA • Dam DÁM
+          PRODUCTIONS
+        </p>
         <div className="flex gap-8">
           <Link
             href="/privacy-policy"

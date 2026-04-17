@@ -15,7 +15,7 @@ export const runtime = "nodejs";
 // Keep compute close to Neon (Singapore) to reduce DB latency on Vercel
 export const preferredRegion = "sin1";
 
-const SITE_URL = "https://seatwiseapp.vercel.app";
+const SITE_URL = "https://seatwise-tanghal-tickethouse.vercel.app";
 const FALLBACK_OG_IMAGE = new URL("/logo.png", SITE_URL).toString();
 
 const resolvePreviewImage = (showImageKey?: string | null) => {
